@@ -11,8 +11,8 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, and the monorepo directory skeleton.
-The backend, frontend, and CI scaffold fill in over subsequent Phase 0 tickets.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, and an initial FastAPI app factory (`backend/app/main.py`) with an empty API router.
+The rest of the backend, the frontend, and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
 
@@ -66,7 +66,7 @@ Developer instructions:
 
 ## Development
 
-Backend and frontend scaffolds do not exist yet; the commands below apply once they land.
+The backend has an initial FastAPI app factory; the rest of the backend tooling (`pyproject.toml`, config, database) and the frontend scaffold do not exist yet, so the commands below apply once they land.
 
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
