@@ -1,0 +1,284 @@
+# Job-Search Intelligence - Groundwork & Architecture Spec
+
+> **Status:** Draft for review · **Owner:** you (solo) · **Build style:** AI-agent-assisted ("vibe-coding")
+> **This is the keystone document.** Every ticket, every scaffold file, and every coding agent reads from here.
+> Nothing gets built until this is approved.
+
+---
+
+## 0. What this app is
+
+A **local-first web app** that connects to your email (Gmail first), mines your entire job-search history, and answers 54 questions about it - from "how many jobs did I apply to" up to "why am I getting rejected and what should I fix" - through a **dashboard** and a **conversational RAG agent**.
+
+**Core principle:** every question is a *read* against one clean `applications` table. Get ingestion + classification right, and 40+ questions become nearly free. That's why Phases 0–2 are make-or-break.
+
+---
+
+## 1. Locked architecture decisions (ADR-lite)
+
+| Area | Decision | Why |
+|---|---|---|
+| Backend | **FastAPI**, Python 3.12, async | Your stack; async fits I/O-bound email + LLM work |
+| Frontend | **React + TypeScript + Vite** | Your stack; fast dev loop |
+| Database | **SQLite** (single file) | Local-first, zero-ops, portable |
+| Vector store | **sqlite-vec** | Embeddings live in the *same* SQLite file → whole app is one file |
+| LLM | **Pluggable provider** (Azure OpenAI / Ollama first, OpenAI / Anthropic later) | Chosen in setup wizard; not locked to one vendor |
+| Deployment | **Local-only** (localhost), coded hosting-ready | Gmail Testing mode = no verification/CASA; remote/phone access is a later phase |
+| API style | **REST**, resource-oriented, FastAPI auto-OpenAPI | Simple, well-understood |
+| Wire type-safety | **Typed TS client generated from OpenAPI** (openapi-typescript/orval) | Frontend + backend contracts can't silently drift |
+| Stage contracts | **Pydantic v2** DTOs at every boundary | One source of truth for shapes |
+| Config/secrets | **pydantic-settings** + `.env` + first-run wizard; keyring default with Fernet fallback; keys **encrypted at rest** | Safe defaults for eventual open-source |
+| Migrations | **Alembic** (batch mode; vec/virtual tables hand-written) | Schema will churn (aggregation, versioning, later phases); reversible revision graph supports idempotent re-runs |
+| Background sync | **APScheduler** in-process while backend is running | "sync on open" / "sync now" without extra infra |
+| Python tooling | **uv** + **ruff** + **mypy** + **pre-commit** | Modern, fast, low-friction |
+| RAG agent | **LangGraph** hybrid (router → structured-query tool + semantic retrieval) | Correct *counts* and semantic recall |
+| Ticketing | **GitHub Issues** via reviewed manifest and `gh` CLI | Free, trackable, agent-readable via `gh`, ties into future OSS repo |
+| Testing | **Minimal smoke tests** + **golden-set classification eval** + tiny Playwright smoke suite | Speed, but don't trust unverified classification or critical UI paths |
+
+### Design-pattern set
+
+- **Repository** - all DB access behind repository classes (no raw SQL scattered in services).
+- **Strategy** - `EmailProvider` and `LLMProvider` interfaces with swappable adapters.
+- **Pipeline** - `ingest -> filter -> classify -> aggregate`, each stage a pure-ish function taking/returning Pydantic DTOs.
+- **Service layer** - business logic in services; API routes stay thin.
+- **Dependency Injection** - FastAPI `Depends` for repos, providers, config.
+- **DTOs** - Pydantic models cross every boundary (never pass raw dicts).
+- **Typed errors** - explicit error types, no bare exceptions leaking to the API.
+
+---
+
+## 2. Repository layout (monorepo)
+
+```text
+job-search-intelligence/
+├── backend/
+│   ├── app/
+│   │   ├── main.py                 # FastAPI app factory, router registration
+│   │   ├── config.py               # pydantic-settings, provider selection, env overrides
+│   │   ├── db/
+│   │   │   ├── engine.py           # SQLite connection, sqlite-vec load
+│   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
+│   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo
+│   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
+│   │   ├── providers/
+│   │   │   ├── email/              # EmailProvider ABC + gmail.py (+ future outlook/imap)
+│   │   │   └── llm/                # LLMProvider ABC + azure_openai.py/ollama.py (+ future openai/anthropic)
+│   │   ├── pipeline/
+│   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords)
+│   │   │   ├── classify.py         # LLM classify + structured extract
+│   │   │   └── aggregate.py        # emails → applications + event timeline (dedup)
+│   │   ├── services/               # sync_service, metrics_service, insights_service, chat_service
+│   │   ├── scripts/                # generate_openapi.py
+│   │   ├── agent/                  # LangGraph graph, tools (structured_query, semantic_search)
+│   │   ├── api/                    # routers: setup, auth, sync, applications, metrics, insights, chat
+│   │   └── setup/                  # first-run wizard logic
+│   ├── evals/
+│   │   ├── golden_set.jsonl        # ~30 hand-labeled emails
+│   │   └── run_eval.py             # classification accuracy report
+│   ├── tests/                      # minimal pytest (pipeline + metrics smoke)
+│   ├── pyproject.toml              # uv, ruff, mypy config
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   │   ├── api/                    # generated TS client (from OpenAPI)
+│   │   ├── pages/                  # Dashboard, Insights, Chat, Setup
+│   │   ├── components/             # charts, filters, cards, chat UI
+│   │   └── lib/
+│   ├── package.json
+│   └── vite.config.ts
+├── tickets/
+│   ├── manifest.yaml               # source of truth for all issues
+│   └── issue_template.md
+├── scripts/
+│   └── create_github_issues.py     # gh CLI: labels + milestones + issues from manifest
+├── docs/
+│   ├── groundwork-spec.md          # this file
+│   ├── questions.md                # the 54 questions, tiered
+│   ├── backlog-decisions.md        # approved backlog and product decisions
+│   ├── github-backlog-plan.md      # approved issue list before manifest generation
+│   └── conventions.md              # coding standards for agents
+├── .pre-commit-config.yaml
+├── .github/workflows/ci.yml        # lint + typecheck (minimal)
+└── README.md
+```
+
+---
+
+## 3. Data model (the crux)
+
+### Tables
+
+- **`raw_emails`** - `id` (provider msg id), `thread_id`, `from_addr`, `to_addr`, `subject`, `sent_at`, `body_text`, `body_retention_state`, `labels`, `provider`, `ingested_at`.
+- **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
+- **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
+- **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
+- **`application_corrections`** - `id`, `application_id`, `correction_type` (`merge | split | status_edit | event_edit | reset_lock`), `before_json`, `after_json`, `reason`, `created_at`.
+- **`insights`** - `id`, `type` (`why_rejected | skill_gaps | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
+- **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, `embedding`.
+- **`chat_messages`** - `id`, `conversation_id`, `role`, `content`, `citations_json`, `tool_outputs_json`, `created_at`.
+
+### Aggregation rule (the hard part)
+
+An **application** is reconstructed from *many* emails: a confirmation + later a rejection = **one** application whose `current_status` = `rejected`, with two `application_events`.
+Grouping key is approximately `(normalized_company, normalized_role, thread/time-window)`.
+`ghosted` is **inferred** when an application has an `applied` event but no response after your personal ghost-threshold (default 30 days, tunable).
+Aggregation must be **idempotent** - re-runs never duplicate.
+Manual corrections are audited, lock affected grouping/status from automatic overwrite by default, and surface conflicts when new evidence disagrees.
+
+---
+
+## 4. Pipeline
+
+```text
+Gmail API -> raw_emails
+                 │
+                 ▼
+   1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
+     - known ATS/recruiter sender domains (greenhouse, lever, workday,
+       ashby, icims, workable, smartrecruiters, myworkday, ...)
+     - keyword signals ("application", "unfortunately", "interview",
+       "next steps", "offer", "assessment", "regret to inform")
+                 │  candidates only
+                 ▼
+   2. classify.py  LLM classify + structured extract  (LLMProvider)
+     - one structured call per candidate -> Pydantic model
+     - fields: company, role, status, dates, salary, location,
+       work_mode, seniority, sponsorship, tech_stack, rejection_reason
+     - store model + prompt_version per row (reproducible re-runs)
+                 │
+                 ▼
+   3. aggregate.py  emails -> applications + application_events (dedup)
+                 │
+                 ▼
+         applications  (single source of truth)
+            │            │             │
+   deterministic     cached LLM     vector index
+     metrics         insights       (sqlite-vec)
+     (dashboard)     (insights)      (chat agent)
+```
+
+**Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
+
+**Cost control:** `classification_mode` config - `hybrid` (filter -> LLM), `llm` (LLM on everything), `local` (Ollama, offline/free).
+Setup asks explicitly and preselects `hybrid` when Azure OpenAI credentials are configured, or `local` when only Ollama is configured.
+Show a **pre-run cost estimate** and track tokens per run.
+
+---
+
+## 5. API surface (REST)
+
+- **Setup/auth:** `GET /setup/status`, `POST /setup`, `GET /auth/gmail`, `GET /auth/gmail/callback`, `GET|PUT /config/providers`
+- **Sync:** `POST /sync`, `GET /sync/status`
+- **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit
+- **Metrics (deterministic):** `GET /metrics/summary`, `/metrics/rates`, `/metrics/funnel`, `/metrics/timeseries`, `/metrics/breakdown?dimension=role|source|salary|tech|sponsorship|seniority|work_mode`, `/metrics/diagnostics`
+- **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
+- **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
+
+OpenAPI schema -> `backend/scripts/generate_openapi.py` -> frontend TypeScript client in `frontend/src/api/`.
+
+---
+
+## 6. RAG agent (LangGraph)
+
+```text
+question -> router -> quantitative -> structured_query tool -> synthesize -> answer (+ citations)
+question -> router -> content -> semantic_search tool -> synthesize -> answer (+ citations)
+question -> router -> mixed -> both tools -> synthesize -> answer (+ citations)
+```
+
+- **`structured_query`** - answers counts/rates/breakdowns. **Security: the LLM never emits raw SQL.** It fills parameters on a **constrained query builder / whitelisted templates** over `applications`/`metrics`. Guarantees dashboard-consistent numbers.
+- **`semantic_search`** - sqlite-vec retrieval over `email_chunks` for "what did the recruiter say" style questions; returns citations to real emails/applications.
+- **synthesize** - composes the final answer, always grounded in tool output (no free-floating claims).
+
+This is why counts are right (vectors can't count) *and* content recall works.
+
+---
+
+## 7. The 54 questions -> phases (acceptance criteria)
+
+Full list in `docs/questions.md`. Mapping:
+
+| Tier | Questions | Capability | Phase |
+|---|---|---|---|
+| 1 - Foundational counts | 1-10 | `COUNT` on classified emails | **3** Dashboard |
+| 2 - Rates, funnels, time | 11-21 | ratios + date math | **3** Dashboard |
+| 3 - Segmentation | 22-31 | `GROUP BY` | **3** Dashboard |
+| 4 - Diagnostic/comparative | 32-39 | deterministic/light-statistics diagnostics | **3.5** Diagnostics |
+| 5 - Narrative "why" | 40-46 | LLM synthesis, cached | **4** Insights |
+| 6 - Conversational recall | 47-50 | hybrid RAG | **5** Chat |
+| 7 - Predictive/external | 51-54 | external data / APIs | **Future** |
+
+**Each question becomes a ticket** whose acceptance criterion is: *"the app answers this question on screen (or in chat), and the answer reconciles with the underlying data."*
+
+---
+
+## 8. Phase roadmap (with Definition of Done)
+
+**Phase 0 - Groundwork / scaffold**
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` ABCs (stubs), OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+**DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
+
+**Phase 1 - Gmail ingestion**
+Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, retained body text for candidate messages, incremental sync via `historyId`, `raw_emails` populated.
+**DoD:** your inbox backfilled; incremental pulls only new messages; local count reconciles with Gmail.
+
+**Phase 2 - Classify + extract + aggregate** *(make-or-break)*
+Heuristic filter, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
+**DoD:** `applications` populated; golden-set classification ≥90% precision AND ≥85% recall on job-vs-not; re-runs idempotent.
+
+**Phase 3 - Dashboard (deterministic)** -> Tiers 1-3 (+ 3.5 diagnostics -> Tier 4)
+Metrics endpoints + React dashboard (Recharts + small accessible component layer) + URL-backed filters (incl. sponsorship).
+**DoD:** every Tier 1–3 question is answered on screen; numbers reconcile with the DB.
+
+**Phase 4 - Insights (cached LLM narrative)** -> Tier 5
+Insights service + page (why-rejected, skill-gaps, role-fit, weekly actions, story); cached with `regenerate`, stale detection, and user-triggered regeneration.
+**DoD:** insights render and cite the applications/emails they're drawn from.
+
+**Phase 5 - RAG chat (LangGraph)** -> Tier 6
+Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, persisted chat history, streaming chat UI in the web app.
+**DoD:** quantitative questions return numbers matching the dashboard; content questions cite real emails.
+
+**Later phases:** more providers (Outlook/Graph, IMAP for Yahoo/iCloud) · draft-writing (review-then-send, never autonomous) · hosting + phone/voice access · auto-apply · benchmarking (Tier 7) · open-source hardening (ship-no-data, bring-your-own-credentials).
+
+---
+
+## 9. Testing (minimal + one carve-out)
+
+- **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Vitest only for non-trivial frontend logic.
+- **Tiny Playwright smoke suite:** setup, sync status, dashboard fixture load, and chat citation smoke paths.
+- **Carve-out - the golden set:** ~30 hand-labeled emails in `evals/golden_set.jsonl`; `evals/run_eval.py` reports classification precision/recall. Run it whenever the classify prompt/model changes. *This is the one thing that keeps the dashboard honest.*
+
+---
+
+## 10. Ticketing plan (GitHub Issues)
+
+- **Repository:** create a new private personal repository named `job-search-intelligence`.
+- **Milestones:** Phase 0-5, `Phase 3.5 - Diagnostics`, and `Future`.
+- **Labels:** `phase:*`, `type:*`, `tier:*`, `area:*`, `priority:*`, `size:*`, and `status:blocked`.
+- **Issues:** one per atomic task plus one per question, labeled with its tier/phase.
+- **Source of truth:** `tickets/manifest.yaml` plus generated issue-body files.
+- **Creation path:** use the local `gh` CLI to create the repository, labels, milestones, and issues idempotently from the manifest.
+- **Issue template:** every issue contains `Title`, `Mini-PRD / Context`, `Linked requirements`, `Scope - in`, `Scope - out`, `Technical approach`, `Acceptance criteria`, `Dependencies`, `Definition of Done`, and `Estimate`.
+- **GitHub Projects:** skipped for this pass.
+
+---
+
+## 11. Coding standards for agents (`docs/conventions.md`)
+
+Typed everywhere (mypy) · Pydantic at every boundary · Repository pattern for all DB access · **LLM never emits raw SQL** · small focused modules (a growing file signals it's doing too much) · providers behind interfaces · ruff-formatted · conventional commits · secrets never logged, encrypted at rest.
+
+---
+
+## 12. Open questions before scaffolding
+
+**Resolved:** the golden-set eval is a hard, mandatory gate, not optional.
+Eval regressions block merges unless the user explicitly accepts the tradeoff.
+See `AGENTS.md`.
+
+**Also resolved:** Phase 2 DoD gate is ≥90% precision AND ≥85% recall on job-vs-not (floor-then-ratchet).
+
+**Also resolved:** migrations use **Alembic** with batch mode enabled for SQLite's limited `ALTER TABLE`.
+sqlite-vec and other virtual/vector tables are managed by hand-written revisions, not autogenerate.
+
+**Resolved:** approved backlog decisions are recorded in `docs/backlog-decisions.md`.
+The approved ticket plan is recorded in `docs/github-backlog-plan.md`.
