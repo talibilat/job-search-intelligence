@@ -68,6 +68,9 @@ Developer instructions:
 
 The backend has an initial FastAPI app factory; the rest of the backend tooling (`pyproject.toml`, config, database) and the frontend scaffold do not exist yet, so the commands below apply once they land.
 
+- Backend type checking: `backend/mypy.ini` defines strict mypy defaults for backend code.
+- Until backend Python modules land, validate the config from `backend/` with `mypy --config-file mypy.ini -c "def typed(value: int) -> int: return value"`.
+- Once backend Python modules exist, run `mypy --config-file mypy.ini app tests evals` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
