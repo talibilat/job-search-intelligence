@@ -41,6 +41,7 @@ token.json
 .claude/settings.local.json
 .gnhf/
 .lavish/
+.worktrees/
 treehouse.toml
 
 # Logs and coverage
