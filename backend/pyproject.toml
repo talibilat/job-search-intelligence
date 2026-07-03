@@ -1,0 +1,11 @@
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+mypy_path = "."
+namespace_packages = true
+explicit_package_bases = true
+strict = true
+warn_unused_configs = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true
