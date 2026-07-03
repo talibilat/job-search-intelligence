@@ -1,0 +1,41 @@
+# Coding conventions
+
+Baseline coding standards for every agent and contributor.
+`AGENTS.md` is the canonical guide; this file is the quick reference it points at.
+
+## Types and boundaries
+
+- Type everything; code is `mypy`-clean.
+- Cross every boundary with a Pydantic v2 DTO, never a raw dict.
+- Validate structured LLM output with Pydantic and reject malformed output instead of storing it.
+
+## Architecture patterns
+
+- Repository pattern for all database access; no raw SQL scattered through services.
+- Strategy pattern for `EmailProvider` and `LLMProvider`; provider-specific code stays behind the interface.
+- Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
+- Service layer holds business logic; FastAPI route handlers stay thin.
+- FastAPI dependency injection supplies repositories, providers, and config.
+- Typed errors at API boundaries; no bare exceptions leak to the client.
+
+## Determinism and the LLM
+
+- Dashboard counts, rates, funnels, time math, and group-bys are deterministic SQL or typed Python.
+- The same input database produces the same metrics every time.
+- The LLM never produces authoritative counts and never emits raw SQL for execution.
+- Quantitative answers reconcile with deterministic queries; content answers cite real emails or applications.
+
+## Style and hygiene
+
+- Format and lint with `ruff`; keep modules small and focused, since a growing file signals it is doing too much.
+- Use conventional commit messages.
+- Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; store secrets encrypted at rest.
+- Do not add telemetry, shared credentials, auto-apply, or autonomous outbound email.
+
+## Verification
+
+- Backend changes: run `ruff`, `mypy`, and the relevant `pytest` tests.
+- Frontend changes: run TypeScript checks, lint, and relevant tests.
+- Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
+- Aggregation changes: verify idempotency and no duplicate applications.
+- Never claim work is complete without fresh verification evidence.
