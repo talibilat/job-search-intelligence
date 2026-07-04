@@ -67,6 +67,27 @@ def test_wipe_local_data_removes_external_sqlite_sidecars(tmp_path: Path) -> Non
     assert str(database.resolve()) in result.deleted_paths
 
 
+def test_wipe_local_data_refuses_directory_at_external_sqlite_path(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    database = tmp_path / "external" / "jobtracker.sqlite3"
+    database.mkdir(parents=True)
+    (database / "unrelated.txt").write_text("unrelated")
+    settings = AppSettings(
+        _env_file=None,
+        data_dir=data_dir,
+        database_url=f"sqlite+aiosqlite:///{database}",
+        fernet_key_file=data_dir / "fernet.key",
+    )
+
+    with pytest.raises(UnsafeWipeTargetError):
+        wipe_local_data(settings)
+
+    assert database.exists()
+    assert (database / "unrelated.txt").exists()
+
+
 @pytest.mark.parametrize("target", [Path("/"), Path.home(), Path.cwd()])
 def test_wipe_local_data_refuses_unsafe_data_dir(target: Path) -> None:
     settings = AppSettings(

@@ -22,6 +22,7 @@ class UnsafeWipeTargetError(ValueError):
 
 def wipe_local_data(settings: AppSettings) -> WipeDataResult:
     targets = _wipe_targets(settings)
+    data_dir = settings.data_dir.resolve()
     deleted_paths: list[str] = []
     missing_paths: list[str] = []
 
@@ -32,6 +33,8 @@ def wipe_local_data(settings: AppSettings) -> WipeDataResult:
             continue
 
         if target.is_dir():
+            if target != data_dir:
+                raise UnsafeWipeTargetError(f"Unsafe wipe target: {target}")
             shutil.rmtree(target)
         else:
             target.unlink()
