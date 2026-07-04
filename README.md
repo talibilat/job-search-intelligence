@@ -82,7 +82,7 @@ The backend settings loader and database do not exist yet, so the commands refer
 - Current backend lint check: run `ruff check .` from `backend/`.
 - Current backend format check: run `ruff format --check .` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
-- Frontend setup: `npm install` from `frontend/`.
+- Frontend setup: use Node `^20.19.0 || >=22.12.0`, then run `npm install` from `frontend/`.
 - Frontend dev server: `npm run dev` from `frontend/`.
 - Frontend TypeScript check: `npm run typecheck` from `frontend/`.
 - Frontend lint check: `npm run lint` from `frontend/`.
