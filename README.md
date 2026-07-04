@@ -52,6 +52,7 @@ scripts/    developer and operational scripts
 - Secrets are stored encrypted at rest and never logged.
 - `backend/.env.example` documents operational settings only; keep API keys, OAuth tokens, passwords, client secrets, and Google OAuth client JSON out of the repo.
 - Local wipe-data path: `POST /local-data/wipe` clears configured local app data and derived artifacts after the request body confirms `{"confirmation":"wipe-local-data"}`.
+- For recursive wipe safety, a custom `JOBTRACKER_DATA_DIR` must either be named `.jobtracker` or contain a `.jobtracker-data` marker file before `POST /local-data/wipe` will delete it.
 - No telemetry.
 - Gmail access is read-only (`gmail.readonly`) in v1.
 

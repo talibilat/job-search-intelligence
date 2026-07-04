@@ -71,6 +71,10 @@ def load_env_example_text() -> str:
     return env_example_path().read_text()
 
 
+def readme_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "README.md"
+
+
 def test_env_example_documents_expected_v1_settings() -> None:
     env_values = load_env_example()
 
@@ -115,3 +119,13 @@ def test_env_example_documents_allowed_setting_values() -> None:
     assert "JOBTRACKER_EMAIL_PROVIDER allowed values: gmail" in env_text
     assert "JOBTRACKER_LLM_PROVIDER allowed values: azure_openai, ollama" in env_text
     assert "JOBTRACKER_CLASSIFICATION_MODE allowed values: hybrid, llm, local" in env_text
+
+
+def test_wipe_data_marker_contract_is_documented() -> None:
+    env_text = load_env_example_text()
+    readme_text = readme_path().read_text()
+
+    assert ".jobtracker-data" in env_text
+    assert ".jobtracker-data" in readme_text
+    assert ".jobtracker" in env_text
+    assert ".jobtracker" in readme_text
