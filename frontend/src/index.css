@@ -115,6 +115,81 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.chart-panel {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  margin-top: 24px;
+  padding: 32px;
+  border-radius: 28px;
+  background: #102417;
+  color: #f8f2e7;
+  box-shadow: 0 24px 70px rgb(36 50 38 / 14%);
+}
+
+.chart-panel h2 {
+  color: #fffaf0;
+}
+
+.chart-panel__header {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  max-width: 720px;
+}
+
+.chart-panel__description {
+  max-width: 650px;
+  margin-bottom: 0;
+  color: #c9d8ce;
+  font-size: 1.02rem;
+}
+
+.chart-panel__surface {
+  display: grid;
+  min-width: 0;
+  min-height: var(--chart-min-height, 280px);
+  border: 1px solid rgb(255 250 240 / 16%);
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgb(255 250 240 / 8%), rgb(63 107 82 / 16%)),
+    #162c1d;
+  overflow: hidden;
+}
+
+.chart-panel__viewport {
+  min-width: 0;
+  min-height: var(--chart-min-height, 280px);
+  padding: 18px;
+}
+
+.chart-empty-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-width: 0;
+  min-height: inherit;
+  padding: 32px;
+  text-align: center;
+}
+
+.chart-empty-state__title {
+  margin-bottom: 8px;
+  color: #fffaf0;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.chart-empty-state__description {
+  max-width: 460px;
+  margin-bottom: 0;
+  color: #c9d8ce;
+}
+
+.chart-empty-state__action {
+  margin-top: 18px;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding: 40px 18px;
@@ -128,6 +203,14 @@ h2 {
 
   .status-card {
     grid-template-columns: minmax(0, 1fr);
+    padding: 24px;
+  }
+
+  .chart-panel {
+    padding: 24px;
+  }
+
+  .chart-empty-state {
     padding: 24px;
   }
 }
