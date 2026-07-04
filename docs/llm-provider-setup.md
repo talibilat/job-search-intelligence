@@ -22,7 +22,8 @@ Use Azure OpenAI when you want stronger hosted model quality and accept that con
 
 `classification_mode` must match the provider choice.
 Use `local` with Ollama.
-Use `hybrid` with Azure OpenAI for the default cost-controlled path, or `llm` when you intentionally want every candidate to go through the hosted model.
+Use `hybrid` with Azure OpenAI for the default cost-controlled path, where the heuristic filter narrows the inbox before hosted classification.
+Use `llm` with Azure OpenAI only when you intentionally want every ingested email to go through the hosted model.
 
 ## Azure OpenAI
 
@@ -47,6 +48,21 @@ kind: llm_api_key
 provider: azure_openai
 name: api_key
 ```
+
+Use the default encrypted-at-rest secret backend unless your machine cannot use OS keyring:
+
+```env
+JOBTRACKER_SECRET_STORE_BACKEND=keyring
+```
+
+If keyring is unavailable, switch to the documented Fernet fallback and keep the key file inside the app-owned local data directory:
+
+```env
+JOBTRACKER_SECRET_STORE_BACKEND=fernet
+JOBTRACKER_FERNET_KEY_FILE=./.jobtracker/fernet.key
+```
+
+Do not commit the Fernet key file or place it in screenshots, tickets, logs, or setup notes.
 
 Before running a bulk classification pass, verify that the selected mode will show a token and cost estimate.
 Hosted Azure calls should be used through the configured provider path only, never by ad hoc scripts that bypass redaction or prompt-version tracking.
