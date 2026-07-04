@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+from pathlib import Path
+from urllib.parse import unquote, urlsplit, urlunsplit
+
+from app.config import LOCAL_SQLITE_SCHEMES
+
+ASYNC_SQLITE_SCHEME = "sqlite+aiosqlite"
+
+
+def sqlite_database_path(database_url: str) -> Path:
+    parsed = urlsplit(database_url)
+    if parsed.scheme not in LOCAL_SQLITE_SCHEMES or parsed.netloc:
+        raise ValueError("database_url must use a file-backed local SQLite URL")
+
+    raw_path = unquote(parsed.path)
+    if raw_path in {"", "/", "/:memory:"}:
+        raise ValueError("database_url must use a file-backed local SQLite URL")
+    if raw_path.startswith("//"):
+        return Path(raw_path[1:])
+    if raw_path.startswith("/"):
+        return Path(raw_path[1:])
+    return Path(raw_path)
+
+
+def sqlite_async_database_url(database_url: str) -> str:
+    sqlite_database_path(database_url)
+    parsed = urlsplit(database_url)
+    if parsed.scheme == ASYNC_SQLITE_SCHEME:
+        return database_url
+    return urlunsplit(parsed._replace(scheme=ASYNC_SQLITE_SCHEME))

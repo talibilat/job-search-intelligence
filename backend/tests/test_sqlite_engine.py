@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from app.config import AppSettings
 from app.db.engine import create_sqlite_engine, dispose_sqlite_engine, sqlite_transaction
+from app.db.sqlite_url import sqlite_database_path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -22,6 +23,14 @@ def settings_for_database(database_path: Path) -> AppSettings:
     )
 
 
+def settings_for_sync_database_url(database_path: Path) -> AppSettings:
+    return AppSettings(
+        _env_file=None,
+        data_dir=database_path.parent,
+        database_url=f"sqlite:///{database_path}",
+    )
+
+
 @pytest.mark.anyio
 async def test_create_sqlite_engine_returns_async_engine(tmp_path: Path) -> None:
     engine = create_sqlite_engine(settings_for_database(tmp_path / "jobtracker.sqlite3"))
@@ -30,6 +39,27 @@ async def test_create_sqlite_engine_returns_async_engine(tmp_path: Path) -> None
         assert isinstance(engine, AsyncEngine)
     finally:
         await dispose_sqlite_engine(engine)
+
+
+@pytest.mark.anyio
+async def test_create_sqlite_engine_accepts_sync_sqlite_url(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    engine = create_sqlite_engine(settings_for_sync_database_url(database_path))
+
+    try:
+        async with sqlite_transaction(engine) as connection:
+            await connection.execute(text("CREATE TABLE widgets (id INTEGER PRIMARY KEY)"))
+
+        assert database_path.exists()
+    finally:
+        await dispose_sqlite_engine(engine)
+
+
+def test_sqlite_database_path_parses_file_backed_local_urls(tmp_path: Path) -> None:
+    database_path = tmp_path / "nested path" / "jobtracker.sqlite3"
+
+    assert sqlite_database_path(f"sqlite:///{database_path}") == database_path
+    assert sqlite_database_path(f"sqlite+aiosqlite:///{database_path}") == database_path
 
 
 @pytest.mark.anyio
