@@ -1,8 +1,7 @@
+import app.main as main
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
-
-import app.main as main
 
 
 def test_create_app_returns_fastapi_application() -> None:

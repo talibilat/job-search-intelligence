@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import app.main as main
 import pytest
+from app.api.errors import ApiError, ApiErrorCode
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.testclient import TestClient
-
-import app.main as main
-from app.api.errors import ApiError, ApiErrorCode
 
 
 def test_api_error_maps_to_typed_error_response(
