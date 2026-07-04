@@ -13,6 +13,7 @@ Baseline coding standards for every agent and contributor.
 
 - Repository pattern for all database access; no raw SQL scattered through services.
 - Strategy pattern for `EmailProvider` and `LLMProvider`; provider-specific code stays behind the interface.
+- Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; adapters own encrypted-at-rest storage.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
 - Service layer holds business logic; FastAPI route handlers stay thin.
 - FastAPI dependency injection supplies repositories, providers, and config.
@@ -31,7 +32,7 @@ Baseline coding standards for every agent and contributor.
 
 - Format and lint with `ruff`; keep modules small and focused, since a growing file signals it is doing too much.
 - Use conventional commit messages.
-- Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; store secrets encrypted at rest.
+- Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; route secrets through `SecretStore` and store them encrypted at rest.
 - Do not add telemetry, shared credentials, auto-apply, or autonomous outbound email.
 
 ## Verification
