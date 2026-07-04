@@ -23,6 +23,7 @@ The rest of the backend, the frontend, and the CI scaffold fill in over subseque
 | Database | SQLite (single local file) |
 | Vector store | sqlite-vec (embeddings in the same SQLite file) |
 | LLM providers | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later |
+| LLM provider seam | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs |
 | API style | REST with a generated TypeScript client from OpenAPI |
 | Data contracts | Pydantic v2 DTOs at every boundary |
 | API errors | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details |
@@ -70,7 +71,7 @@ Developer instructions:
 
 ## Development
 
-The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, the `app.providers.llm.LLMProvider` strategy seam, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend settings loader, database, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
 
 - Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn` as runtime dependencies, and uses `ruff`, `mypy`, and `pytest` as the dev-dependency verification gate; `backend/pyproject.toml` also holds the strict mypy defaults.
