@@ -32,6 +32,17 @@ function App() {
         </ul>
       </section>
 
+      <section className="status-card" aria-labelledby="sync-title">
+        <div>
+          <p className="eyebrow">Sync readiness</p>
+          <h2 id="sync-title">Sync status ready for backend wiring</h2>
+        </div>
+        <ul>
+          <li>Manual sync and last-run state will appear here once the sync API exists.</li>
+          <li>No Gmail data is fetched or retained by the Phase 0 frontend shell.</li>
+        </ul>
+      </section>
+
       <ChartPanel
         description="A small accessible wrapper layer is ready for future deterministic dashboard charts, while Phase 0 avoids real dashboard metrics."
         emptyState={{
