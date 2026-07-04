@@ -11,8 +11,8 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
-Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold fill in over subsequent Phase 0 and Phase 1 tickets.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, the backend GitHub Actions workflow, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+Concrete Gmail provider behavior and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
 
@@ -97,9 +97,10 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Current OpenAPI schema generation: run `uv run python -m scripts.generate_openapi` from `backend/` to write sorted, indented JSON to `frontend/src/api/openapi.json`; pass `--output <path>` to write the schema elsewhere.
 - Current backend type check: run `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
-- Current backend lint check: run `ruff check .` from `backend/`.
-- Current backend format check: run `ruff format --check .` from `backend/`.
+- Current backend lint check: run `uv run ruff check .` from `backend/`.
+- Current backend format check: run `uv run ruff format --check .` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
+- Backend CI: `.github/workflows/backend-ci.yml` runs on backend and workflow changes, installs the locked `uv` environment with Python 3.12, then runs `uv run ruff check app evals tests`, `uv run mypy`, and `uv run pytest` from `backend/`.
 - Frontend setup: use Node `^20.19.0 || ^22.13.0 || >=24`, then run `npm install` from `frontend/`.
 - Frontend dev server: `npm run dev` from `frontend/`.
 - Frontend TypeScript check: `npm run typecheck` from `frontend/`.

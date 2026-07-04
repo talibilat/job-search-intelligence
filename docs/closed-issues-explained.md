@@ -113,7 +113,7 @@ Important files and folders to inspect:
 `docs/` is where the product and architecture docs live.
 `tickets/` is where local ticket artifacts live.
 `scripts/` is for project scripts.
-`.github/workflows/` is for GitHub Actions later.
+`.github/workflows/` is for GitHub Actions workflows.
 
 How to test it:
 

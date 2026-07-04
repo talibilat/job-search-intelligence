@@ -101,7 +101,7 @@ job-search-intelligence/
 │   ├── github-backlog-plan.md      # approved issue list before manifest generation
 │   └── conventions.md              # coding standards for agents
 ├── .pre-commit-config.yaml
-├── .github/workflows/ci.yml        # lint + typecheck (minimal)
+├── .github/workflows/backend-ci.yml # backend ruff + mypy + pytest
 └── README.md
 ```
 
@@ -231,7 +231,7 @@ Full list in `docs/questions.md`. Mapping:
 ## 8. Phase roadmap (with Definition of Done)
 
 **Phase 0 - Groundwork / scaffold**
-Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, backend CI (ruff, mypy, pytest), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
 **Phase 1 - Gmail ingestion**
