@@ -840,7 +840,7 @@ npm run check
 Expected result:
 `npm run typecheck` should finish without TypeScript errors.
 `npm run lint` should finish without ESLint errors or warnings.
-`npm run check` should run typecheck, lint, and Vite build.
+At the time JT-034 closed, `npm run check` ran typecheck, lint, and Vite build.
 
 Caveat:
 This ticket does not add frontend tests.
@@ -864,6 +864,8 @@ Run these frontend checks from `frontend/`:
 npm install
 npm run check
 ```
+
+`npm run check` runs type checking, linting, Vitest, and the Vite build.
 
 Run the backend manually from `backend/`:
 
@@ -913,6 +915,6 @@ You can see early safety work for typed errors, secret references, safe configur
 
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
-The frontend can start and build, but it is still a static shell.
+The frontend can start, run unit tests, and build, but it is still a static shell.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, and the wipe-data endpoint.

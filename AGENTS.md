@@ -275,7 +275,7 @@ Testing is intentionally minimal, but verification is not optional.
 Required checks depend on the work:
 
 - Backend Python changes: run ruff, mypy, and relevant pytest tests once scaffolded.
-- Frontend changes: run `npm run check` from `frontend/`; run relevant tests once those tools are scaffolded.
+- Frontend changes: run `npm run check` from `frontend/`; it includes type checking, linting, Vitest, and build verification.
 - Critical frontend flows: run the tiny Playwright smoke suite once scaffolded.
 - API contract changes: regenerate or validate the TypeScript client.
 - Metric changes: verify against sample data or fixtures.

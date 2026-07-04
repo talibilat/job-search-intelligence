@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, Vitest, build gate scripts, and route-query helpers.
 Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
@@ -104,10 +104,12 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Frontend dev server: `npm run dev` from `frontend/`.
 - Frontend TypeScript check: `npm run typecheck` from `frontend/`.
 - Frontend lint check: `npm run lint` from `frontend/`.
-- Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, and build.
+- Frontend unit tests: `npm run test` from `frontend/` runs Vitest.
+- Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, Vitest, and build.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Frontend test scripts are not scaffolded yet; later frontend and Playwright tickets own those checks.
+- Current frontend route-query helper: `frontend/src/lib/routeQuery.ts` parses, serializes, and patches URL query strings for URL-backed filter state.
+- Playwright smoke tests are not scaffolded yet; a later frontend ticket owns those checks.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
 Never claim work is complete without fresh verification evidence.

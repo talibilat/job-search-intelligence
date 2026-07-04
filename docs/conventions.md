@@ -42,7 +42,7 @@ Baseline coding standards for every agent and contributor.
 ## Verification
 
 - Backend changes: run `ruff`, `mypy`, and the relevant `pytest` tests.
-- Frontend changes: run `npm run check` from `frontend/`; run relevant tests once those tools are scaffolded.
+- Frontend changes: run `npm run check` from `frontend/`; it includes type checking, linting, Vitest, and build verification.
 - Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.
