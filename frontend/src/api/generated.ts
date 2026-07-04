@@ -42,12 +42,76 @@ export const ClassificationMode = {
   local: "local",
 } as const;
 
+export type ProviderRequirementEnforcement =
+  (typeof ProviderRequirementEnforcement)[keyof typeof ProviderRequirementEnforcement];
+
+export const ProviderRequirementEnforcement = {
+  declarative: "declarative",
+  selection: "selection",
+} as const;
+
+/**
+ * Non-secret provider setting required by a supported provider.
+ */
+export interface ProviderConfigRequirementResponse {
+  enforcement: ProviderRequirementEnforcement;
+  label: string;
+  required: boolean;
+  setting_name: string;
+}
+
 export type EmailProviderName =
   (typeof EmailProviderName)[keyof typeof EmailProviderName];
 
 export const EmailProviderName = {
   gmail: "gmail",
 } as const;
+
+export type SecretKind = (typeof SecretKind)[keyof typeof SecretKind];
+
+export const SecretKind = {
+  oauth_token: "oauth_token",
+  llm_api_key: "llm_api_key",
+} as const;
+
+/**
+ * Stable non-secret identifier for a stored secret.
+ */
+export interface SecretRef {
+  kind: SecretKind;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   * @pattern ^[a-z0-9][a-z0-9_.:-]*$
+   */
+  name: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   * @pattern ^[a-z0-9][a-z0-9_.:-]*$
+   */
+  provider: string;
+}
+
+/**
+ * Secret reference metadata without the secret value.
+ */
+export interface ProviderSecretRequirementResponse {
+  enforcement: ProviderRequirementEnforcement;
+  label: string;
+  ref: SecretRef;
+  required: boolean;
+}
+
+/**
+ * Email provider metadata exposed by the provider config API shell.
+ */
+export interface EmailProviderConfigResponse {
+  config_requirements: ProviderConfigRequirementResponse[];
+  display_name: string;
+  name: EmailProviderName;
+  secret_requirements: ProviderSecretRequirementResponse[];
+}
 
 export type ValidationErrorCtx = { [key: string]: unknown };
 
@@ -75,6 +139,69 @@ export const LLMProviderName = {
   azure_openai: "azure_openai",
   ollama: "ollama",
 } as const;
+
+/**
+ * LLM provider metadata exposed by the provider config API shell.
+ */
+export interface LLMProviderConfigResponse {
+  config_requirements: ProviderConfigRequirementResponse[];
+  display_name: string;
+  is_local: boolean;
+  name: LLMProviderName;
+  secret_requirements: ProviderSecretRequirementResponse[];
+}
+
+/**
+ * Currently selected provider choices for the setup/config shell.
+ */
+export interface ProviderSelection {
+  classification_mode: ClassificationMode;
+  email_provider: EmailProviderName;
+  llm_provider: LLMProviderName;
+}
+
+/**
+ * Non-secret provider settings visible at the API boundary.
+ */
+export interface ProviderConfigValues {
+  azure_openai_api_version: string;
+  azure_openai_chat_deployment: string;
+  azure_openai_embedding_deployment: string;
+  azure_openai_endpoint: string;
+  gmail_client_config_file: string;
+  gmail_scopes: string[];
+  ollama_base_url: string;
+  ollama_chat_model: string;
+  ollama_embedding_model: string;
+}
+
+/**
+ * Selected provider config plus supported provider metadata.
+ */
+export interface ProviderConfigResponse {
+  email_providers: EmailProviderConfigResponse[];
+  llm_providers: LLMProviderConfigResponse[];
+  selection: ProviderSelection;
+  settings: ProviderConfigValues;
+}
+
+/**
+ * Partial in-process update for non-secret Phase 0 provider config.
+ */
+export interface ProviderConfigUpdateRequest {
+  azure_openai_api_version?: string | null;
+  azure_openai_chat_deployment?: string | null;
+  azure_openai_embedding_deployment?: string | null;
+  azure_openai_endpoint?: string | null;
+  classification_mode?: ClassificationMode | null;
+  email_provider?: EmailProviderName | null;
+  gmail_client_config_file?: string | null;
+  gmail_scopes?: string[] | null;
+  llm_provider?: LLMProviderName | null;
+  ollama_base_url?: string | null;
+  ollama_chat_model?: string | null;
+  ollama_embedding_model?: string | null;
+}
 
 /**
  * First-run setup readiness and selected non-secret provider settings.
@@ -131,6 +258,100 @@ export interface WipeDataResponse {
   missing_paths?: string[];
   status: "wiped";
 }
+
+export type getProviderConfigConfigProvidersGetResponse200 = {
+  data: ProviderConfigResponse;
+  status: 200;
+};
+
+export type getProviderConfigConfigProvidersGetResponseSuccess =
+  getProviderConfigConfigProvidersGetResponse200 & {
+    headers: Headers;
+  };
+export type getProviderConfigConfigProvidersGetResponse =
+  getProviderConfigConfigProvidersGetResponseSuccess;
+
+export const getGetProviderConfigConfigProvidersGetUrl = () => {
+  return `/config/providers`;
+};
+
+/**
+ * Return selected provider config and non-secret supported-provider metadata.
+ * @summary Get Provider Config
+ */
+export const getProviderConfigConfigProvidersGet = async (
+  options?: RequestInit,
+): Promise<getProviderConfigConfigProvidersGetResponse> => {
+  const res = await fetch(getGetProviderConfigConfigProvidersGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getProviderConfigConfigProvidersGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getProviderConfigConfigProvidersGetResponse;
+};
+
+export type updateProviderConfigConfigProvidersPutResponse200 = {
+  data: ProviderConfigResponse;
+  status: 200;
+};
+
+export type updateProviderConfigConfigProvidersPutResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type updateProviderConfigConfigProvidersPutResponseSuccess =
+  updateProviderConfigConfigProvidersPutResponse200 & {
+    headers: Headers;
+  };
+export type updateProviderConfigConfigProvidersPutResponseError =
+  updateProviderConfigConfigProvidersPutResponse422 & {
+    headers: Headers;
+  };
+
+export type updateProviderConfigConfigProvidersPutResponse =
+  | updateProviderConfigConfigProvidersPutResponseSuccess
+  | updateProviderConfigConfigProvidersPutResponseError;
+
+export const getUpdateProviderConfigConfigProvidersPutUrl = () => {
+  return `/config/providers`;
+};
+
+/**
+ * Validate and update the in-process provider config shell.
+ * @summary Update Provider Config
+ */
+export const updateProviderConfigConfigProvidersPut = async (
+  providerConfigUpdateRequest: ProviderConfigUpdateRequest,
+  options?: RequestInit,
+): Promise<updateProviderConfigConfigProvidersPutResponse> => {
+  const res = await fetch(getUpdateProviderConfigConfigProvidersPutUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(providerConfigUpdateRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateProviderConfigConfigProvidersPutResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateProviderConfigConfigProvidersPutResponse;
+};
 
 export type healthHealthGetResponse200 = {
   data: HealthResponse;
