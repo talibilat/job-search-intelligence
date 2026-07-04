@@ -232,6 +232,8 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - Current provider config API shell: `GET /config/providers` returns the selected email provider, LLM provider, classification mode, visible non-secret provider settings, supported provider metadata, and `SecretRef` requirements without secret values.
 - Current provider config update shell: `PUT /config/providers` validates and applies partial non-secret provider selection and setting changes to the running backend process only; durable setup persistence and secret writes are later work.
 - Current Fernet fallback: `app.security.FernetSecretStore` stores encrypted secret payloads under `JOBTRACKER_DATA_DIR/secrets/` with a generated or configured `JOBTRACKER_FERNET_KEY_FILE`; `app.security.build_secret_store` returns it only when `JOBTRACKER_SECRET_STORE_BACKEND=fernet`.
+- Current TypeScript API client generation: run `npm run generate:api` from `frontend/` to regenerate `src/api/openapi.json` through the backend script and then generate the Orval fetch client at `src/api/generated.ts`.
+- Frontend API contract check: `npm run check` includes `check:api` so stale generated API artifacts fail before typecheck, lint, and build.
 - Current backend type check: `uv run mypy` from `backend/`.
 - Current frontend setup copy: `frontend/src/setupWizardCopy.ts` defines the Phase 0 card copy for LLM provider, classification mode, Gmail read-only OAuth, and privacy-boundary choices while the full wizard flow is still scaffolded.
 - Setup copy smoke test: `uv run pytest tests/test_setup_wizard_copy.py -v` from `backend/` verifies the static copy keeps the required provider, mode, Gmail, `SecretStore`, and privacy terms visible.

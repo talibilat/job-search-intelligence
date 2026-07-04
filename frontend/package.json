@@ -10,11 +10,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --environment jsdom",
     "generate:openapi": "cd ../backend && uv run python -m scripts.generate_openapi",
+    "generate:api": "npm run generate:openapi && orval --config orval.config.mjs",
+    "check:api": "npm run generate:api && node scripts/check-api-generation.mjs && git diff --exit-code src/api/openapi.json src/api/generated.ts",
     "typecheck": "tsc -b",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"vite.config.ts\" --max-warnings=0",
-    "check": "npm run generate:openapi && npm run typecheck && npm run lint && npm run test && npm run build"
+    "check": "npm run check:api && npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "react": "^19.2.7",
@@ -31,6 +33,8 @@
     "eslint": "^10.6.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^29.1.1",
+    "orval": "^8.20.0",
+    "prettier": "^3.9.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",
     "vite": "^8.1.3",
