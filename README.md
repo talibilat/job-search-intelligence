@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health and setup-status API shells plus a typed API error boundary, and the frontend Vite React TypeScript shell.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
 The rest of the backend and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
@@ -84,12 +84,14 @@ The backend database does not exist yet; database-specific commands will apply o
 - Current backend lint check: run `ruff check .` from `backend/`.
 - Current backend format check: run `ruff format --check .` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
-- Frontend setup: `npm install` from `frontend/`.
+- Frontend setup: use Node `^20.19.0 || ^22.13.0 || >=24`, then run `npm install` from `frontend/`.
 - Frontend dev server: `npm run dev` from `frontend/`.
-- Current frontend TypeScript check: `npx tsc -b` from `frontend/`.
+- Frontend TypeScript check: `npm run typecheck` from `frontend/`.
+- Frontend lint check: `npm run lint` from `frontend/`.
+- Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, and build.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Frontend lint and test scripts are not scaffolded yet; later frontend tooling and Playwright tickets own those checks.
+- Frontend test scripts are not scaffolded yet; later frontend and Playwright tickets own those checks.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
 Never claim work is complete without fresh verification evidence.
