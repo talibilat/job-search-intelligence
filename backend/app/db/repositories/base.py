@@ -4,13 +4,11 @@ import sqlite3
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from typing import Generic, TypeVar
 
-MappedRowT = TypeVar("MappedRowT")
 SqlParameters = Sequence[object] | Mapping[str, object]
 
 
-class BaseRepository(ABC, Generic[MappedRowT]):
+class BaseRepository[MappedRowT](ABC):
     """Shared SQLite repository conventions for transactions and row mapping."""
 
     def __init__(self, connection: sqlite3.Connection) -> None:

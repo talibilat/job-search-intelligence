@@ -51,9 +51,7 @@ _EMAIL_CONTENT_KEY_TEXT: Final = (
     r"raw[_-]?body|raw[_-]?email[_-]?body|snippet"
 )
 
-_AUTHORIZATION_BEARER_PATTERN: Final = re.compile(
-    r"(?i)(authorization\s*:\s*bearer\s+)([^\s,;]+)"
-)
+_AUTHORIZATION_BEARER_PATTERN: Final = re.compile(r"(?i)(authorization\s*:\s*bearer\s+)([^\s,;]+)")
 _BEARER_PATTERN: Final = re.compile(r"(?i)(\bbearer\s+)([^\s,;]+)")
 _SECRET_ASSIGNMENT_PATTERN: Final = re.compile(
     rf"(?i)(\b(?:{_SECRET_KEY_TEXT})\b\s*=\s*)(['\"]?)([^&\s,;'\"}}]+)(\2)"
@@ -65,9 +63,7 @@ _SECRET_UNQUOTED_KEY_VALUE_PATTERN: Final = re.compile(
     rf"(?i)(\b(?:{_SECRET_KEY_TEXT})\b\s*:\s*)([^,\s}}]+)"
 )
 _EMAIL_QUOTED_KEY_VALUE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
-    re.compile(
-        rf"(?is)((['\"]?)(?:{_EMAIL_CONTENT_KEY_TEXT})\2\s*:\s*)(['\"])(.*?)(\3)"
-    ),
+    re.compile(rf"(?is)((['\"]?)(?:{_EMAIL_CONTENT_KEY_TEXT})\2\s*:\s*)(['\"])(.*?)(\3)"),
     re.compile(rf"(?is)(\b(?:{_EMAIL_CONTENT_KEY_TEXT})\b\s*=\s*)(['\"])(.*?)(\2)"),
 )
 _EMAIL_UNQUOTED_KEY_VALUE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
@@ -94,9 +90,7 @@ def redact_text(text: str) -> str:
     redacted = _AUTHORIZATION_BEARER_PATTERN.sub(
         lambda match: f"{match.group(1)}{REDACTED}", redacted
     )
-    redacted = _BEARER_PATTERN.sub(
-        lambda match: f"{match.group(1)}{REDACTED}", redacted
-    )
+    redacted = _BEARER_PATTERN.sub(lambda match: f"{match.group(1)}{REDACTED}", redacted)
     redacted = _SECRET_ASSIGNMENT_PATTERN.sub(
         lambda match: f"{match.group(1)}{match.group(2)}{REDACTED}{match.group(4)}",
         redacted,
@@ -110,13 +104,13 @@ def redact_text(text: str) -> str:
     )
     for pattern in _EMAIL_QUOTED_KEY_VALUE_PATTERNS:
         redacted = pattern.sub(
-            lambda match: f"{match.group(1)}{match.group(3)}{EMAIL_CONTENT_REDACTED}{match.group(5)}",
+            lambda match: (
+                f"{match.group(1)}{match.group(3)}{EMAIL_CONTENT_REDACTED}{match.group(5)}"
+            ),
             redacted,
         )
     for pattern in _EMAIL_UNQUOTED_KEY_VALUE_PATTERNS:
-        redacted = pattern.sub(
-            lambda match: f"{match.group(1)}{EMAIL_CONTENT_REDACTED}", redacted
-        )
+        redacted = pattern.sub(lambda match: f"{match.group(1)}{EMAIL_CONTENT_REDACTED}", redacted)
     return redacted
 
 
@@ -163,9 +157,7 @@ def _redact_extra_fields(record: logging.LogRecord) -> None:
 
 def _redact_exception(record: logging.LogRecord) -> None:
     if record.exc_info:
-        record.exc_text = redact_text(
-            "".join(traceback.format_exception(*record.exc_info))
-        )
+        record.exc_text = redact_text("".join(traceback.format_exception(*record.exc_info)))
     elif record.exc_text:
         record.exc_text = redact_text(record.exc_text)
 

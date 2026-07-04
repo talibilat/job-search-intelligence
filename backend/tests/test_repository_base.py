@@ -4,7 +4,6 @@ import sqlite3
 from dataclasses import dataclass
 
 import pytest
-
 from app.db.repositories.base import BaseRepository
 
 
@@ -113,10 +112,9 @@ def test_repository_transaction_commits_successful_work(
 def test_repository_transaction_rolls_back_failed_work(
     repository: WidgetRepository,
 ) -> None:
-    with pytest.raises(RuntimeError, match="force rollback"):
-        with repository.transaction():
-            repository.add("rolled-back")
-            raise RuntimeError("force rollback")
+    with pytest.raises(RuntimeError, match="force rollback"), repository.transaction():
+        repository.add("rolled-back")
+        raise RuntimeError("force rollback")
 
     assert repository.get_by_name("rolled-back") is None
 
@@ -126,10 +124,9 @@ def test_repository_transaction_rollback_keeps_prior_uncommitted_work(
 ) -> None:
     repository.add("before-transaction")
 
-    with pytest.raises(RuntimeError, match="force rollback"):
-        with repository.transaction():
-            repository.add("inside-transaction")
-            raise RuntimeError("force rollback")
+    with pytest.raises(RuntimeError, match="force rollback"), repository.transaction():
+        repository.add("inside-transaction")
+        raise RuntimeError("force rollback")
 
     assert repository.get_by_name("before-transaction") == Widget(
         id=1,
@@ -144,10 +141,12 @@ def test_repository_nested_transaction_rollback_keeps_outer_work(
     with repository.transaction():
         repository.add("outer-before")
 
-        with pytest.raises(RuntimeError, match="force inner rollback"):
-            with repository.transaction():
-                repository.add("inner")
-                raise RuntimeError("force inner rollback")
+        with (
+            pytest.raises(RuntimeError, match="force inner rollback"),
+            repository.transaction(),
+        ):
+            repository.add("inner")
+            raise RuntimeError("force inner rollback")
 
         repository.add("outer-after")
 

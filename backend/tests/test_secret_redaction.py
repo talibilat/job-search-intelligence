@@ -81,9 +81,7 @@ def test_redact_value_recurses_through_nested_structures() -> None:
 
 def test_redact_text_scrubs_common_inline_secret_patterns() -> None:
     message = (
-        "Authorization: Bearer ya29.oauth-token "
-        "api_key=provider-key "
-        "refresh_token=refresh-token"
+        "Authorization: Bearer ya29.oauth-token api_key=provider-key refresh_token=refresh-token"
     )
 
     redacted = redact_text(message)
@@ -174,15 +172,15 @@ def test_redacting_filter_scrubs_structured_extra_fields() -> None:
         args=(),
         exc_info=None,
     )
-    setattr(record, "access_token", "oauth-token")
-    setattr(record, "body_text", "private email body")
-    setattr(record, "safe_status", "failed")
+    record.access_token = "oauth-token"
+    record.body_text = "private email body"
+    record.safe_status = "failed"
 
     RedactingFilter().filter(record)
 
-    assert getattr(record, "access_token") == REDACTED
-    assert getattr(record, "body_text") == EMAIL_CONTENT_REDACTED
-    assert getattr(record, "safe_status") == "failed"
+    assert getattr(record, "access_token") == REDACTED  # noqa: B009
+    assert getattr(record, "body_text") == EMAIL_CONTENT_REDACTED  # noqa: B009
+    assert getattr(record, "safe_status") == "failed"  # noqa: B009
 
 
 def test_redacting_filter_scrubs_exception_text() -> None:
