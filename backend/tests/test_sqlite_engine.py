@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from app.config import AppSettings
 from app.db.engine import create_sqlite_engine, dispose_sqlite_engine, sqlite_transaction
-from app.db.sqlite_url import sqlite_database_path
+from app.db.sqlite_url import sqlite_async_database_url, sqlite_database_path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -60,6 +60,26 @@ def test_sqlite_database_path_parses_file_backed_local_urls(tmp_path: Path) -> N
 
     assert sqlite_database_path(f"sqlite:///{database_path}") == database_path
     assert sqlite_database_path(f"sqlite+aiosqlite:///{database_path}") == database_path
+
+
+def test_sqlite_async_database_url_preserves_sqlite_slash_forms(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+
+    assert (
+        sqlite_async_database_url(
+            "sqlite:///./.jobtracker/jobtracker.sqlite3",
+        )
+        == "sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3"
+    )
+    assert sqlite_async_database_url(f"sqlite:///{database_path}") == (
+        f"sqlite+aiosqlite:///{database_path}"
+    )
+    assert (
+        sqlite_async_database_url(
+            "sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3",
+        )
+        == "sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3"
+    )
 
 
 @pytest.mark.anyio

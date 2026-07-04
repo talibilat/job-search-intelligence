@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import unquote, urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit
 
 from app.config import LOCAL_SQLITE_SCHEMES
 
@@ -28,4 +28,10 @@ def sqlite_async_database_url(database_url: str) -> str:
     parsed = urlsplit(database_url)
     if parsed.scheme == ASYNC_SQLITE_SCHEME:
         return database_url
-    return urlunsplit(parsed._replace(scheme=ASYNC_SQLITE_SCHEME))
+
+    async_url = f"{ASYNC_SQLITE_SCHEME}://{parsed.path}"
+    if parsed.query:
+        async_url = f"{async_url}?{parsed.query}"
+    if parsed.fragment:
+        async_url = f"{async_url}#{parsed.fragment}"
+    return async_url
