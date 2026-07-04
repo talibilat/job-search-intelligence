@@ -858,6 +858,12 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
+Run the root pre-commit gate after backend and frontend dependencies are installed:
+
+```bash
+uv run --project backend pre-commit run --all-files
+```
+
 Run these frontend checks from `frontend/`:
 
 ```bash

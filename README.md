@@ -46,6 +46,7 @@ docs/             source-of-truth product and architecture documents
 tickets/          issue manifest and templates
 scripts/          repository-level developer and operational scripts
 .github/          CI workflows
+.pre-commit-config.yaml  root hooks for backend and frontend checks
 ```
 
 ## Privacy
@@ -84,7 +85,7 @@ Developer instructions:
 The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol and keyring adapter in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers in `backend/app/db/repositories/`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend database schema and engine do not exist yet; schema-specific commands will apply once they land.
 
-- Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`, `uvicorn`, and `keyring` as runtime dependencies, and uses `ruff`, `mypy`, and `pytest` as the dev-dependency verification gate; `backend/pyproject.toml` also holds the strict mypy defaults.
+- Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`, `uvicorn`, and `keyring` as runtime dependencies, and uses `ruff`, `mypy`, `pytest`, and `pre-commit` as dev-dependency verification tooling; `backend/pyproject.toml` also holds the strict mypy defaults.
 - Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
 - Repository base contract: import `BaseRepository` and the shared `SqlParameters` type from `app.db.repositories`; `uv run pytest tests/test_repository_base.py -v` verifies typed row mapping, parameterized statements, transactions, and the package export contract.
 - Email provider contract test: `uv run pytest tests/test_email_provider_contract.py -v` from `backend/` verifies the provider boundary keeps OAuth token material behind `SecretRef`, separates metadata from retained body fetching, supports full and incremental cursor shapes, excludes body-derived metadata snippets, and excludes attachment content.
@@ -97,8 +98,8 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Current OpenAPI schema generation: run `uv run python -m scripts.generate_openapi` from `backend/` to write sorted, indented JSON to `frontend/src/api/openapi.json`; pass `--output <path>` to write the schema elsewhere.
 - Current backend type check: run `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
-- Current backend lint check: run `ruff check .` from `backend/`.
-- Current backend format check: run `ruff format --check .` from `backend/`.
+- Current backend lint check: run `uv run ruff check .` from `backend/`.
+- Current backend format check: run `uv run ruff format --check .` from `backend/`.
 - Pre-commit setup: run `uv run --project backend pre-commit install` from the repository root after backend and frontend dependencies are installed.
 - Current pre-commit gate: run `uv run --project backend pre-commit run --all-files` from the repository root to execute backend Ruff lint, backend Ruff format check, backend mypy, and the frontend `npm run check` gate.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
