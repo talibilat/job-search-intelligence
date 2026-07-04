@@ -39,7 +39,7 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 ### Design-pattern set
 
 - **Repository** - all DB access behind repository classes (no raw SQL scattered in services).
-- **Strategy** - `EmailProvider` and `LLMProvider` interfaces with swappable adapters.
+- **Strategy** - `EmailProvider` and `LLMProvider` protocols with swappable adapters.
 - **Pipeline** - `ingest -> filter -> classify -> aggregate`, each stage a pure-ish function taking/returning Pydantic DTOs.
 - **Service layer** - business logic in services; API routes stay thin.
 - **Dependency Injection** - FastAPI `Depends` for repos, providers, config.
@@ -63,7 +63,7 @@ job-search-intelligence/
 │   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
-│   │   │   ├── email/              # EmailProvider ABC + gmail.py (+ future outlook/imap)
+│   │   │   ├── email/              # EmailProvider protocol + future gmail.py/outlook.py/imap.py
 │   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
@@ -133,7 +133,11 @@ Manual corrections are audited, lock affected grouping/status from automatic ove
 ## 4. Pipeline
 
 ```text
-Gmail API -> raw_emails
+EmailProvider -> metadata-only raw_emails
+                 │
+                 ├─ full backfill: paginated metadata pages, no body snippets
+                 ├─ incremental sync: provider-owned cursor required
+                 └─ retained bodies fetched only for selected candidate/reconciliation refs
                  │
                  ▼
    1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
@@ -159,6 +163,9 @@ Gmail API -> raw_emails
      metrics         insights       (sqlite-vec)
      (dashboard)     (insights)      (chat agent)
 ```
+
+`EmailProvider` adapters own provider-specific auth, metadata normalization, pagination, opaque sync cursors, and retained-body fetching.
+The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, and ignores attachment content in v1.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 
