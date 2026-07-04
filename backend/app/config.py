@@ -124,8 +124,12 @@ class AppSettings(BaseSettings):
     @classmethod
     def validate_local_sqlite_url(cls, value: str) -> str:
         parsed = urlsplit(value)
-        if parsed.scheme not in LOCAL_SQLITE_SCHEMES or parsed.netloc:
-            raise ValueError("database_url must use a local SQLite URL")
+        if (
+            parsed.scheme not in LOCAL_SQLITE_SCHEMES
+            or parsed.netloc
+            or parsed.path in {"", "/", "/:memory:"}
+        ):
+            raise ValueError("database_url must use a file-backed local SQLite URL")
 
         return value
 

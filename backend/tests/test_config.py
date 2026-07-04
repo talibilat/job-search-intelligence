@@ -126,6 +126,27 @@ def test_settings_reject_non_sqlite_database_urls(
         AppSettings(_env_file=env_file)
 
 
+@pytest.mark.parametrize(
+    "database_url",
+    [
+        "sqlite://",
+        "sqlite:///:memory:",
+        "sqlite+aiosqlite:///:memory:",
+    ],
+)
+def test_settings_reject_in_memory_sqlite_database_urls(
+    database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"JOBTRACKER_DATABASE_URL={database_url}\n")
+
+    with pytest.raises(ValidationError):
+        AppSettings(_env_file=env_file)
+
+
 def test_settings_reject_broader_gmail_scopes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
