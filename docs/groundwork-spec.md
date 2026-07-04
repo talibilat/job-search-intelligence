@@ -84,7 +84,10 @@ job-search-intelligence/
 │   └── .env.example
 ├── frontend/
 │   ├── src/
-│   │   ├── api/                    # generated TS client (from OpenAPI)
+│   │   ├── api/                    # stable API import boundary
+│   │   │   ├── generated/          # generated TS client destination (from OpenAPI)
+│   │   │   ├── index.ts            # re-export boundary for app imports
+│   │   │   └── client.contract.ts  # compile-time boundary contract
 │   │   ├── pages/                  # Dashboard, Insights, Chat, Setup
 │   │   ├── components/             # charts, filters, cards, chat UI
 │   │   └── lib/
@@ -103,6 +106,7 @@ job-search-intelligence/
 │   ├── conventions.md              # coding standards for agents
 │   └── synthetic-fixtures.md       # private-data-free fixture format
 ├── .pre-commit-config.yaml
+├── .github/workflows/backend-ci.yml # backend ruff + mypy + pytest
 ├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
 └── README.md
 ```
@@ -180,7 +184,8 @@ Show a **pre-run cost estimate** and track tokens per run.
 ## 5. API surface (REST)
 
 - **Health:** `GET /health` returns a liveness-only `{ "status": "ok" }` response for Phase 0 smoke checks.
-- **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; later endpoints include `GET /auth/gmail`, `GET /auth/gmail/callback`, `GET|PUT /config/providers`.
+- **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only.
+  Later endpoints include `GET /auth/gmail` and `GET /auth/gmail/callback`.
 - **Local data:** `POST /local-data/wipe` removes configured local app data and derived artifacts after the exact confirmation phrase `wipe-local-data`; unsafe configured filesystem targets return the standard typed `400` API error.
 - **Sync:** `POST /sync`, `GET /sync/status`
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit
@@ -188,7 +193,9 @@ Show a **pre-run cost estimate** and track tokens per run.
 - **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
 
-OpenAPI schema -> `backend/scripts/generate_openapi.py` -> frontend TypeScript client in `frontend/src/api/`.
+OpenAPI schema -> `backend/scripts/generate_openapi.py` -> frontend TypeScript client in `frontend/src/api/generated/client.ts`.
+Frontend application code imports through the stable `frontend/src/api` boundary instead of reaching into `generated/` directly.
+Until the generation workflow lands, the placeholder client marks the destination and `frontend/src/api/client.contract.ts` keeps the boundary typechecked.
 
 Standard error responses use a typed Pydantic shape: `{"error": {"code": "...", "message": "...", "details": []}}`.
 Routes and services raise explicit `ApiError` values for public API-boundary failures.
@@ -233,6 +240,9 @@ Full list in `docs/questions.md`. Mapping:
 ## 8. Phase roadmap (with Definition of Done)
 
 **Phase 0 - Groundwork / scaffold**
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, backend CI (ruff, mypy, pytest), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, frontend generated-client destination and import boundary, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, Recharts chart wrapper foundation with empty states, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` interface seam, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
@@ -262,7 +272,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, pe
 
 ## 9. Testing (minimal + one carve-out)
 
-- **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Vitest only for non-trivial frontend logic.
+- **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** setup, sync status, dashboard fixture load, and chat citation smoke paths.
 - **Carve-out - the golden set:** ~30 hand-labeled emails in `evals/golden_set.jsonl`; `evals/run_eval.py` reports classification precision/recall. Run it whenever the classify prompt/model changes. *This is the one thing that keeps the dashboard honest.*
 

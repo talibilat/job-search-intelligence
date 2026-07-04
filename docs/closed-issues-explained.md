@@ -44,6 +44,8 @@ Do not switch branches if you have local work you have not saved or committed.
 The repository now has the start of a local-first job-search intelligence app.
 The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
+The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
+There are backend endpoints for health, setup status, and wiping local data.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
 There is configuration infrastructure, a keyring-backed secret-store path, and lint/type/test tooling.
@@ -113,6 +115,7 @@ Important files and folders to inspect:
 `docs/` is where the product and architecture docs live.
 `tickets/` is where local ticket artifacts live.
 `scripts/` is for project scripts.
+`.github/workflows/` is for GitHub Actions workflows.
 `.github/workflows/` is for GitHub Actions workflows as Phase 0 CI lands.
 
 How to test it:
@@ -840,7 +843,7 @@ npm run check
 Expected result:
 `npm run typecheck` should finish without TypeScript errors.
 `npm run lint` should finish without ESLint errors or warnings.
-`npm run check` should run typecheck, lint, and Vite build.
+At the time JT-034 closed, `npm run check` ran typecheck, lint, and Vite build.
 
 Caveat:
 This ticket does not add frontend tests.
@@ -905,6 +908,8 @@ npm ci
 npm run check
 ```
 
+`npm run check` runs type checking, linting, Vitest, and the Vite build.
+
 Run the backend manually from `backend/`:
 
 ```bash
@@ -935,7 +940,7 @@ Backend:
 You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, and local wipe-data infrastructure.
 
 Frontend:
-You can see a static React shell for JobTracker.
+You can see a static React shell for JobTracker and an empty Recharts foundation panel for future deterministic dashboard metrics.
 It is not connected to backend data yet.
 
 Configuration:
@@ -953,6 +958,8 @@ You can see early safety work for typed errors, secret references, safe configur
 
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
+The frontend can start, run unit tests, and build, but it is still a static shell.
+The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
 The frontend can start and build, but it is still a static shell.
 Frontend CI now runs the existing frontend typecheck, lint, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.

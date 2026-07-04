@@ -1,3 +1,5 @@
+import { ChartPanel } from "./components/charts";
+
 const phaseItems = [
   "Connect Gmail through a local-only setup flow",
   "Reconstruct applications from job-search email history",
@@ -28,6 +30,16 @@ function App() {
           ))}
         </ul>
       </section>
+
+      <ChartPanel
+        description="A small accessible wrapper layer is ready for future deterministic dashboard charts, while Phase 0 avoids real dashboard metrics."
+        emptyState={{
+          title: "Dashboard data pending",
+          description:
+            "Future deterministic dashboard metrics will render here after the metrics API exists.",
+        }}
+        title="Chart foundation"
+      />
     </main>
   );
 }

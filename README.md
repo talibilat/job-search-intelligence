@@ -11,6 +11,14 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, the backend GitHub Actions workflow, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+Concrete Gmail provider behavior and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, Vitest, build gate scripts, and route-query helpers.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+The frontend also has a generated API client destination placeholder, a stable `frontend/src/api` import boundary, and a compile-time contract covered by the TypeScript check until OpenAPI generation is wired.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, provider config API shell, local wipe-data route, and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the backend OpenAPI schema generator, the shared SQLite repository base package, and the frontend Vite React TypeScript shell with a Recharts chart wrapper foundation plus npm typecheck, lint, test, and build gate scripts.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts, and a root pre-commit configuration for backend and frontend checks.
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts, and a frontend GitHub Actions workflow that runs the combined frontend check.
 Concrete Gmail provider behavior, remaining backend pieces, and remaining CI workflows fill in over subsequent Phase 0 and Phase 1 tickets.
@@ -30,9 +38,11 @@ Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold 
 | Provider registry | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
 | LLM provider seam | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs |
 | Email providers | `EmailProvider` protocol with typed auth, metadata, cursor, and retained-body DTOs; Gmail implementation deferred |
-| API style | REST with a generated TypeScript client from OpenAPI |
+| API style | REST with a generated TypeScript client from OpenAPI, imported through `frontend/src/api` |
 | Data contracts | Pydantic v2 DTOs at every boundary |
 | API errors | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details |
+| Secret storage seam | Backend `SecretStore` protocol with Pydantic `SecretRef` identifiers and `SecretStr` values |
+| Frontend charting | Recharts through small accessible wrapper components; currently empty-state only until deterministic metrics APIs exist |
 | Secret storage | Backend `SecretStore` protocol with a default OS keyring adapter, Pydantic `SecretRef` identifiers, and `SecretStr` values |
 | Background sync | APScheduler in-process |
 | RAG agent | LangGraph hybrid router (structured query + semantic retrieval) |
@@ -57,9 +67,8 @@ scripts/          repository-level developer and operational scripts
 
 - Local-first: app state lives in a single local SQLite file, and nothing leaves the machine except LLM API calls the user explicitly configures.
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
-- Secrets are stored encrypted at rest and never logged.
 - Fernet fallback storage is documented in `docs/secret-storage.md`; set `JOBTRACKER_SECRET_STORE_BACKEND=fernet` until the OS keyring adapter lands or when OS keyring is unavailable.
-- Secrets are stored encrypted at rest through OS keyring by default and never logged.
+- Secrets are stored encrypted at rest through OS keyring by default and never logged; backend redaction helpers are exported from `app.security` for logging boundaries.
 - Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate or reconciliation messages.
 - Broad email metadata excludes body-derived snippets, and v1 ignores attachment content.
 - `backend/.env.example` documents operational settings only; keep API keys, OAuth tokens, passwords, client secrets, and Google OAuth client JSON out of the repo.
@@ -187,6 +196,8 @@ npm run check
 
 ## Development Commands
 
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, provider config DTOs/routes/services for `GET|PUT /config/providers`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` seam in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers in `backend/app/db/repositories/`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol, keyring adapter, and redaction helpers in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers and repository stubs in `backend/app/db/repositories/`, table-shaped record DTOs in `backend/app/models/records.py`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol and keyring adapter in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers in `backend/app/db/repositories/`, synthetic fixture DTOs in `backend/app/models/synthetic_fixture.py`, a sample fixture in `backend/tests/fixtures/synthetic/basic_job_search.json`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol and keyring adapter in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers and repository stubs in `backend/app/db/repositories/`, table-shaped record DTOs in `backend/app/models/records.py`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend database schema and engine do not exist yet; schema-specific commands will apply once they land.
@@ -206,6 +217,8 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Current local wipe-data endpoint: `POST /local-data/wipe` removes configured local storage targets after the exact confirmation phrase `wipe-local-data`.
 - Current provider registry: `app.providers.provider_registry` declares Gmail, Ollama, and Azure OpenAI metadata; validation checks selected non-secret LLM settings only and does not read secret values.
 - Current OpenAPI schema generation: run `uv run python -m scripts.generate_openapi` from `backend/` to write sorted, indented JSON to `frontend/src/api/openapi.json`; pass `--output <path>` to write the schema elsewhere.
+- Current provider config API shell: `GET /config/providers` returns the selected email provider, LLM provider, classification mode, visible non-secret provider settings, supported provider metadata, and `SecretRef` requirements without secret values.
+- Current provider config update shell: `PUT /config/providers` validates and applies partial non-secret provider selection and setting changes to the running backend process only; durable setup persistence and secret writes are later work.
 - Current Fernet fallback: `app.security.FernetSecretStore` stores encrypted secret payloads under `JOBTRACKER_DATA_DIR/secrets/` with a generated or configured `JOBTRACKER_FERNET_KEY_FILE`; `app.security.build_secret_store` returns it only when `JOBTRACKER_SECRET_STORE_BACKEND=fernet`.
 - Current backend type check: `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
@@ -214,15 +227,27 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Pre-commit setup: run `uv run --project backend pre-commit install` from the repository root after backend and frontend dependencies are installed.
 - Current pre-commit gate: run `uv run --project backend pre-commit run --all-files` from the repository root to execute backend Ruff lint, backend Ruff format check, backend mypy, and the frontend `npm run check` gate.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
+- Backend CI: `.github/workflows/backend-ci.yml` runs on backend and workflow changes, installs the locked `uv` environment with Python 3.12, then runs `uv run ruff check app evals tests`, `uv run mypy`, and `uv run pytest` from `backend/`.
 - Frontend setup: use Node `^20.19.0 || ^22.13.0 || >=24`, then run `npm install` from `frontend/`.
 - Frontend dev server: `npm run dev` from `frontend/`.
 - Frontend TypeScript check: `npm run typecheck` from `frontend/`.
 - Frontend lint check: `npm run lint` from `frontend/`.
+- Frontend unit tests: `npm run test` from `frontend/` runs Vitest.
+- Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, Vitest, and build.
+- Current frontend build check: `npm run build` from `frontend/`.
+- Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
+- Current frontend route-query helper: `frontend/src/lib/routeQuery.ts` parses, serializes, and patches URL query strings for URL-backed filter state.
+- Playwright smoke tests are not scaffolded yet; a later frontend ticket owns those checks.
+- Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, Vitest, and build.
+- Frontend unit test check: `npm run test` from `frontend/` runs Vitest in jsdom.
 - Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, and build.
+- Current frontend API boundary: import client types and helpers from `frontend/src/api`; `frontend/src/api/generated/client.ts` is the OpenAPI-generated client destination placeholder until client generation is wired, and `frontend/src/api/client.contract.ts` is covered by `npm run typecheck`.
 - Frontend CI: `.github/workflows/frontend-ci.yml` runs on pushes and pull requests to `main`, installs dependencies with `npm ci`, and runs `npm run check` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
 - Frontend test scripts are not scaffolded yet.
 - Classification changes: run the golden-set eval at `backend/evals/run_eval.py`; regressions block merges.
+- Playwright smoke scripts are not scaffolded yet; later Playwright tickets own those checks.
+- Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
 Never claim work is complete without fresh verification evidence.
