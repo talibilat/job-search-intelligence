@@ -109,7 +109,7 @@ job-search-intelligence/
 │   └── synthetic-fixtures.md       # private-data-free fixture format and SQLite loader
 ├── .pre-commit-config.yaml
 ├── .github/workflows/backend-ci.yml # backend ruff + mypy + pytest
-├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
+├── .github/workflows/frontend-ci.yml # frontend OpenAPI generation + typecheck + lint + test + build smoke check
 └── README.md
 ```
 
@@ -195,9 +195,10 @@ Show a **pre-run cost estimate** and track tokens per run.
 - **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
 
-OpenAPI schema -> `backend/scripts/generate_openapi.py` -> frontend TypeScript client in `frontend/src/api/generated/client.ts`.
+OpenAPI schema -> `backend/scripts/generate_openapi.py` -> `frontend/src/api/openapi.json`.
 Frontend application code imports through the stable `frontend/src/api` boundary instead of reaching into `generated/` directly.
-Until the generation workflow lands, the placeholder client marks the destination and `frontend/src/api/client.contract.ts` keeps the boundary typechecked.
+`frontend/package.json` runs the schema generator before the frontend typecheck, lint, Vitest, and build gate so backend and frontend contracts cannot silently drift.
+Until full TypeScript client generation lands, the placeholder client marks the destination and `frontend/src/api/client.contract.ts` keeps the boundary typechecked.
 
 Standard error responses use a typed Pydantic shape: `{"error": {"code": "...", "message": "...", "details": []}}`.
 Routes and services raise explicit `ApiError` values for public API-boundary failures.

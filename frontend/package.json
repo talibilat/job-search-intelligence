@@ -11,9 +11,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "generate:openapi": "cd ../backend && uv run python -m scripts.generate_openapi",
     "typecheck": "tsc -b",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"vite.config.ts\" --max-warnings=0",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "check": "npm run generate:openapi && npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "react": "^19.2.7",

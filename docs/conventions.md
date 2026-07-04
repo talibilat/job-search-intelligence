@@ -47,7 +47,7 @@ Baseline coding standards for every agent and contributor.
 ## Verification
 
 - Backend changes: run `ruff`, `mypy`, and the relevant `pytest` tests.
-- Frontend changes: run `npm run check` from `frontend/`; it includes type checking, linting, Vitest, and build verification.
+- Frontend changes: after backend dependencies are synced with `uv`, run `npm run check` from `frontend/`; it generates the OpenAPI schema through the backend, then runs type checking, linting, Vitest, and build verification.
 - Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
 - Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
