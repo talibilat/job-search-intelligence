@@ -70,8 +70,7 @@ Developer instructions:
 
 ## Development
 
-The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, and `backend/pyproject.toml` with strict mypy defaults; backend config, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
-The backend has an initial FastAPI app factory, `backend/pyproject.toml` with strict mypy defaults, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, strict mypy defaults in `backend/pyproject.toml`, pytest discovery in `backend/pytest.ini`, Ruff lint/format defaults in `backend/ruff.toml`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend settings loader, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
 
 - Backend type checking: `backend/pyproject.toml` defines strict mypy defaults for backend code.
@@ -81,8 +80,8 @@ The backend settings loader, database, uv project metadata, and the frontend sca
 - Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Once backend `uv` project metadata exists, run `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
-- Until backend Python modules land, validate the config from `backend/` with `echo 'x=1' | ruff format --config ruff.toml --stdin-filename app/tmp.py -`.
-- Once backend Python modules exist, run `ruff check .` and `ruff format --check .` from `backend/`.
+- Current backend lint check: run `ruff check .` from `backend/`.
+- Current backend format check: run `ruff format --check .` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
