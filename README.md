@@ -75,6 +75,7 @@ The backend settings loader, database, uv project metadata, and the frontend sca
 - Current scaffold check: run `mypy --config-file pyproject.toml` from `backend/`.
 - Current backend tests: run `python3 -m pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
+- Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Once backend `uv` project metadata exists, run `uv run mypy` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
