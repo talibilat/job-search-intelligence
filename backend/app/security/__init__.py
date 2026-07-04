@@ -1,5 +1,6 @@
 """Security interfaces and adapters."""
 
+from .fernet_secret_store import FernetSecretStore
 from .secret_store import (
     SecretKind,
     SecretRef,
@@ -9,6 +10,7 @@ from .secret_store import (
 )
 
 __all__ = [
+    "FernetSecretStore",
     "SecretKind",
     "SecretRef",
     "SecretStore",

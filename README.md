@@ -53,6 +53,7 @@ scripts/          repository-level developer and operational scripts
 - Local-first: app state lives in a single local SQLite file, and nothing leaves the machine except LLM API calls the user explicitly configures.
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
 - Secrets are stored encrypted at rest and never logged.
+- Fernet fallback storage is documented in `docs/secret-storage.md`; set `JOBTRACKER_SECRET_STORE_BACKEND=fernet` when OS keyring is unavailable.
 - Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate or reconciliation messages.
 - Broad email metadata excludes body-derived snippets, and v1 ignores attachment content.
 - `backend/.env.example` documents operational settings only; keep API keys, OAuth tokens, passwords, client secrets, and Google OAuth client JSON out of the repo.
@@ -94,6 +95,7 @@ The backend database does not exist yet; database-specific commands will apply o
 - Current local wipe-data endpoint: `POST /local-data/wipe` removes configured local storage targets after the exact confirmation phrase `wipe-local-data`.
 - Current provider registry: `app.providers.provider_registry` declares Gmail, Ollama, and Azure OpenAI metadata; validation checks selected non-secret LLM settings only and does not read secret values.
 - Current OpenAPI schema generation: run `uv run python -m scripts.generate_openapi` from `backend/` to write sorted, indented JSON to `frontend/src/api/openapi.json`; pass `--output <path>` to write the schema elsewhere.
+- Current Fernet fallback: `app.security.FernetSecretStore` stores encrypted secret payloads under `JOBTRACKER_DATA_DIR/secrets/` with a generated or configured `JOBTRACKER_FERNET_KEY_FILE`; see `docs/secret-storage.md`.
 - Current backend type check: run `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
 - Current backend lint check: run `ruff check .` from `backend/`.
