@@ -3,7 +3,7 @@
 # usable before JT-004 and JT-007 add Python modules to the scaffold.
 target-version = "py312"
 line-length = 100
-src = ["app", "tests", "evals"]
+src = ["app", "tests", "evals", "scripts"]
 
 [lint]
 select = [

@@ -30,7 +30,7 @@ packages = ["app"]
 # JT-006 owns mypy defaults; JT-005 owns Ruff defaults in ruff.toml.
 # Later Phase 0 tickets add backend project metadata.
 python_version = "3.12"
-files = ["app", "evals", "tests"]
+files = ["app", "evals", "scripts", "tests"]
 mypy_path = "."
 namespace_packages = true
 explicit_package_bases = true
