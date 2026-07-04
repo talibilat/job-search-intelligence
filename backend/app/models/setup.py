@@ -6,6 +6,8 @@ from app.config import ClassificationMode, EmailProviderName, LLMProviderName
 
 
 class SetupStatusResponse(BaseModel):
+    """First-run setup readiness and selected non-secret provider settings."""
+
     setup_complete: bool
     gmail_connected: bool
     llm_configured: bool

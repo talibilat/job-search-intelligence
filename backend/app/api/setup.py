@@ -15,4 +15,6 @@ router = APIRouter(prefix="/setup", tags=["setup"])
 async def setup_status(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> SetupStatusResponse:
+    """Report the Phase 0 setup shell without validating or exposing secrets."""
+
     return build_setup_status(settings)
