@@ -3,10 +3,12 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const frontendRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
+const frontendRoot = dirname(
+    fileURLToPath(new URL("../package.json", import.meta.url)),
+);
 
 async function readProjectFile(relativePath) {
-  return readFile(join(frontendRoot, relativePath), "utf8");
+    return readFile(join(frontendRoot, relativePath), "utf8");
 }
 
 const packageJson = JSON.parse(await readProjectFile("package.json"));
@@ -22,10 +24,10 @@ assert.equal(openapiJson.info.title, "Job Search Intelligence API");
 assert.ok(openapiJson.paths["/health"].get);
 assert.ok(openapiJson.paths["/setup"].post);
 assert.equal(
-  openapiJson.paths["/local-data/wipe"].post.responses["400"].content[
-    "application/json"
-  ].schema.$ref,
-  "#/components/schemas/ApiErrorResponse",
+    openapiJson.paths["/local-data/wipe"].post.responses["400"].content[
+        "application/json"
+    ].schema.$ref,
+    "#/components/schemas/ApiErrorResponse",
 );
 
 const generatedClient = await readProjectFile("src/api/generated.ts");
