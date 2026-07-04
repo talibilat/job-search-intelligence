@@ -34,6 +34,7 @@ def test_wipe_local_data_removes_data_dir_and_reports_deleted_path(
 
     assert not settings.data_dir.exists()
     assert str(settings.data_dir.resolve()) in result.deleted_paths
+    assert result.missing_paths == []
     assert result.status == "wiped"
 
 

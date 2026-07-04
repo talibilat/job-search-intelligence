@@ -75,6 +75,15 @@ def _wipe_targets(settings: AppSettings) -> list[Path]:
         return targets
 
     absolute_database_path = _absolute_path(database_path)
+    if _is_relative_to(absolute_database_path, data_dir):
+        if (
+            absolute_database_path.exists()
+            and absolute_database_path.is_symlink()
+            and not _is_relative_to(absolute_database_path.resolve(), data_dir)
+        ):
+            raise UnsafeWipeTargetError(f"Unsafe wipe target: {absolute_database_path}")
+        return _deduplicate_paths(targets)
+
     targets.extend(_sqlite_file_targets(absolute_database_path))
 
     return _deduplicate_paths(targets)
