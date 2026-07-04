@@ -5,6 +5,10 @@ Callers pass non-secret `SecretRef` identifiers and Pydantic `SecretStr` values,
 
 ## Fernet Fallback
 
+`JOBTRACKER_SECRET_STORE_BACKEND` accepts `keyring` and `fernet`.
+The architecture default remains `keyring` for the OS keyring adapter ticket, but the current factory only builds a concrete store for `fernet`.
+Choosing `keyring` raises `SecretStoreUnavailableError` until that adapter lands.
+
 Use the Fernet fallback when the OS keyring is unavailable by setting `JOBTRACKER_SECRET_STORE_BACKEND=fernet`.
 The fallback writes one encrypted Fernet token per secret under `JOBTRACKER_DATA_DIR/secrets/<kind>/<provider>/<name>.fernet`.
 The path components come from `SecretRef` and are not secret values.
@@ -21,6 +25,8 @@ Keep `JOBTRACKER_FERNET_KEY_FILE` and `JOBTRACKER_DATA_DIR/secrets/` out of git.
 The repository ignores `.jobtracker/` and `*.key`, but custom locations should also stay outside tracked paths.
 Back up the key and encrypted secret files together if you need to preserve local credentials across machines.
 For stronger separation, place `JOBTRACKER_FERNET_KEY_FILE` outside `JOBTRACKER_DATA_DIR` and outside the repository.
+With the default paths, `POST /local-data/wipe` deletes `JOBTRACKER_DATA_DIR`, including `secrets/` and `fernet.key`.
+A custom `JOBTRACKER_FERNET_KEY_FILE` outside `JOBTRACKER_DATA_DIR` is not deleted by wipe-data and must be removed separately if you want a full local credential wipe.
 Do not put API keys, OAuth tokens, passwords, Google OAuth client secrets, Fernet keys, or encrypted secret files in `.env.example` or committed docs.
 
 The fallback encrypts secrets at rest, but anyone with both the encrypted payload and the Fernet key can decrypt them.
