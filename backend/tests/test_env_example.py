@@ -54,14 +54,17 @@ def parse_env_example(env_example_path: Path) -> dict[str, str]:
     return parsed
 
 
-def load_env_example() -> dict[str, str]:
+def env_example_path() -> Path:
     backend_root = Path(__file__).resolve().parents[1]
-    return parse_env_example(backend_root / ".env.example")
+    return backend_root / ".env.example"
+
+
+def load_env_example() -> dict[str, str]:
+    return parse_env_example(env_example_path())
 
 
 def load_env_example_text() -> str:
-    backend_root = Path(__file__).resolve().parents[1]
-    return (backend_root / ".env.example").read_text()
+    return env_example_path().read_text()
 
 
 def test_env_example_documents_expected_v1_settings() -> None:
