@@ -36,11 +36,13 @@ The endpoint will return a typed `400` API error if resolved paths are unsafe wi
 
 Add `backend/app/services/wipe_data.py`.
 The service consumes `AppSettings` and computes deletion targets from `settings.data_dir` and `settings.database_url`.
-The service deletes `settings.data_dir` recursively when it exists.
+The service deletes `settings.data_dir` recursively when it exists and is app-owned.
+An app-owned data directory is either named `.jobtracker` or contains the `.jobtracker-data` marker file.
 The service deletes the configured SQLite database file and SQLite sidecar files when the database path is outside `settings.data_dir`.
 The sidecar files are `<database>-wal`, `<database>-shm`, and `<database>-journal`.
 The service treats missing paths as already clean so the operation is idempotent.
-The service refuses unsafe targets such as the filesystem root, the user home directory, the repository root, and the current working directory.
+The service preflights every target before deleting anything.
+The service refuses unsafe targets such as the filesystem root, the user home directory, the repository root, the current working directory, current-working-directory parents, non-directory data-dir paths, external SQLite paths that are directories, and symlinks that would escape the app-owned data directory.
 
 ## Data Model Impact
 

@@ -15,5 +15,11 @@ class WipeDataRequest(BaseModel):
 
 class WipeDataResponse(BaseModel):
     status: Literal["wiped"]
-    deleted_paths: list[str] = Field(default_factory=list)
-    missing_paths: list[str] = Field(default_factory=list)
+    deleted_paths: list[str] = Field(
+        default_factory=list,
+        description="Canonical local filesystem paths deleted by the wipe operation.",
+    )
+    missing_paths: list[str] = Field(
+        default_factory=list,
+        description="Canonical local filesystem paths that were already absent.",
+    )

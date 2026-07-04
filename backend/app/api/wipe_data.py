@@ -12,7 +12,17 @@ from app.services.wipe_data import UnsafeWipeTargetError, wipe_local_data
 router = APIRouter(prefix="/local-data", tags=["local-data"])
 
 
-@router.post("/wipe", response_model=WipeDataResponse)
+@router.post(
+    "/wipe",
+    response_model=WipeDataResponse,
+    summary="Wipe local app data",
+    description=(
+        "Deletes configured local JobTracker data and derived artifacts after "
+        "the request body confirms the exact wipe-local-data phrase. The "
+        "service preflights every filesystem target and returns a typed 400 "
+        "error instead of deleting anything when a target is unsafe."
+    ),
+)
 def wipe_data(
     request: WipeDataRequest,
     settings: Annotated[AppSettings, Depends(get_settings)],

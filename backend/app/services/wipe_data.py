@@ -23,6 +23,8 @@ class UnsafeWipeTargetError(ValueError):
 
 
 def wipe_local_data(settings: AppSettings) -> WipeDataResult:
+    """Delete configured local storage targets after all targets pass safety checks."""
+
     targets = _wipe_targets(settings)
     data_dir = _target_path(settings.data_dir)
     deleted_paths: list[str] = []
