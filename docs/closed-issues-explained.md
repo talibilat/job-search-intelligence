@@ -842,7 +842,7 @@ npm run check
 Expected result:
 `npm run typecheck` should finish without TypeScript errors.
 `npm run lint` should finish without ESLint errors or warnings.
-`npm run check` should run typecheck, lint, and Vite build.
+At the time JT-034 closed, `npm run check` ran typecheck, lint, and Vite build.
 
 Caveat:
 This ticket does not add frontend tests.
@@ -907,6 +907,8 @@ npm ci
 npm run check
 ```
 
+`npm run check` runs type checking, linting, Vitest, and the Vite build.
+
 Run the backend manually from `backend/`:
 
 ```bash
@@ -955,6 +957,7 @@ You can see early safety work for typed errors, secret references, safe configur
 
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
+The frontend can start, run unit tests, and build, but it is still a static shell.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
 The frontend can start and build, but it is still a static shell.
 Frontend CI now runs the existing frontend typecheck, lint, and build gate on pushes and pull requests to `main`.

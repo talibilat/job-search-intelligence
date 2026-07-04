@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "test": "vitest run --environment jsdom",
     "typecheck": "tsc -b",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"vite.config.ts\" --max-warnings=0",
