@@ -53,6 +53,9 @@ def test_settings_defaults_match_phase_zero_config_shell(
     assert settings.llm_provider is LLMProviderName.OLLAMA
     assert settings.classification_mode is ClassificationMode.LOCAL
     assert settings.gmail_scopes == ("https://www.googleapis.com/auth/gmail.readonly",)
+    assert settings.gmail_client_config_file == (
+        Path.home() / ".config/jobtracker/google-oauth-client.json"
+    )
     assert settings.sync_on_open is True
     assert settings.ghost_threshold_days == 30
 
@@ -74,7 +77,7 @@ def test_settings_load_env_file_overrides(
                 "JOBTRACKER_LLM_PROVIDER=azure_openai",
                 "JOBTRACKER_CLASSIFICATION_MODE=hybrid",
                 "JOBTRACKER_SYNC_ON_OPEN=false",
-                "JOBTRACKER_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly,custom.scope",
+                "JOBTRACKER_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly",
                 "JOBTRACKER_SQLITE_VEC_EXTENSION_PATH=/usr/local/lib/sqlite_vec.dylib",
                 "JOBTRACKER_GHOST_THRESHOLD_DAYS=45",
             ]
@@ -94,10 +97,7 @@ def test_settings_load_env_file_overrides(
     assert settings.llm_provider is LLMProviderName.AZURE_OPENAI
     assert settings.classification_mode is ClassificationMode.HYBRID
     assert settings.sync_on_open is False
-    assert settings.gmail_scopes == (
-        "https://www.googleapis.com/auth/gmail.readonly",
-        "custom.scope",
-    )
+    assert settings.gmail_scopes == ("https://www.googleapis.com/auth/gmail.readonly",)
     assert settings.sqlite_vec_extension_path == Path("/usr/local/lib/sqlite_vec.dylib")
     assert settings.ghost_threshold_days == 45
 
@@ -109,6 +109,34 @@ def test_settings_reject_invalid_enum_values(
     clear_jobtracker_env(monkeypatch)
     env_file = tmp_path / ".env"
     env_file.write_text("JOBTRACKER_CLASSIFICATION_MODE=autopilot\n")
+
+    with pytest.raises(ValidationError):
+        AppSettings(_env_file=env_file)
+
+
+def test_settings_reject_non_sqlite_database_urls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    env_file = tmp_path / ".env"
+    env_file.write_text("JOBTRACKER_DATABASE_URL=postgresql://db.example.com/jobtracker\n")
+
+    with pytest.raises(ValidationError):
+        AppSettings(_env_file=env_file)
+
+
+def test_settings_reject_broader_gmail_scopes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "JOBTRACKER_GMAIL_SCOPES="
+        "https://www.googleapis.com/auth/gmail.readonly,"
+        "https://www.googleapis.com/auth/gmail.modify\n"
+    )
 
     with pytest.raises(ValidationError):
         AppSettings(_env_file=env_file)

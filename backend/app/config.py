@@ -4,11 +4,14 @@ from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 CommaSeparatedTuple = Annotated[tuple[str, ...], NoDecode]
+GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+LOCAL_SQLITE_SCHEMES = {"sqlite", "sqlite+aiosqlite"}
 
 
 class RuntimeEnvironment(StrEnum):
@@ -76,7 +79,7 @@ class AppSettings(BaseSettings):
     classification_mode: ClassificationMode = ClassificationMode.LOCAL
 
     gmail_client_config_file: Path = Path("~/.config/jobtracker/google-oauth-client.json")
-    gmail_scopes: CommaSeparatedTuple = ("https://www.googleapis.com/auth/gmail.readonly",)
+    gmail_scopes: CommaSeparatedTuple = (GMAIL_READONLY_SCOPE,)
     sync_on_open: bool = True
     sync_interval_seconds: int = Field(default=900, ge=1)
     gmail_page_size: int = Field(default=500, ge=1)
@@ -117,6 +120,23 @@ class AppSettings(BaseSettings):
 
         return value
 
+    @field_validator("database_url")
+    @classmethod
+    def validate_local_sqlite_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme not in LOCAL_SQLITE_SCHEMES or parsed.netloc:
+            raise ValueError("database_url must use a local SQLite URL")
+
+        return value
+
+    @field_validator("gmail_scopes")
+    @classmethod
+    def validate_gmail_readonly_scope(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if value != (GMAIL_READONLY_SCOPE,):
+            raise ValueError("gmail_scopes must only include gmail.readonly in v1")
+
+        return value
+
     @field_validator("sqlite_vec_extension_path", mode="before")
     @classmethod
     def parse_optional_path(cls, value: object) -> object:
@@ -124,6 +144,19 @@ class AppSettings(BaseSettings):
             return None
 
         return value
+
+    @field_validator(
+        "data_dir",
+        "fernet_key_file",
+        "gmail_client_config_file",
+        "sqlite_vec_extension_path",
+    )
+    @classmethod
+    def expand_user_paths(cls, value: Path | None) -> Path | None:
+        if value is None:
+            return None
+
+        return value.expanduser()
 
 
 @lru_cache
