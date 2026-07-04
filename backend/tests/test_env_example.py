@@ -45,14 +45,18 @@ EXPECTED_ENV_KEYS = {
 def parse_env_example(env_example_path: Path) -> dict[str, str]:
     parsed: dict[str, str] = {}
 
-    for line_number, raw_line in enumerate(env_example_path.read_text().splitlines(), 1):
+    for line_number, raw_line in enumerate(
+        env_example_path.read_text().splitlines(), 1
+    ):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
 
         assert "=" in line, f"line {line_number} must be KEY=value"
         key, value = line.split("=", 1)
-        assert key.startswith("JOBTRACKER_"), f"line {line_number} uses an unexpected key prefix"
+        assert key.startswith("JOBTRACKER_"), (
+            f"line {line_number} uses an unexpected key prefix"
+        )
         assert key not in parsed, f"line {line_number} duplicates {key}"
         parsed[key] = value
 
@@ -76,7 +80,10 @@ def test_env_example_documents_expected_v1_settings() -> None:
     env_values = load_env_example()
 
     assert set(env_values) == EXPECTED_ENV_KEYS
-    assert env_values["JOBTRACKER_GMAIL_SCOPES"] == "https://www.googleapis.com/auth/gmail.readonly"
+    assert (
+        env_values["JOBTRACKER_GMAIL_SCOPES"]
+        == "https://www.googleapis.com/auth/gmail.readonly"
+    )
     assert env_values["JOBTRACKER_CLASSIFICATION_MODE"] in {"hybrid", "llm", "local"}
     assert env_values["JOBTRACKER_SECRET_STORE_BACKEND"] in {"keyring", "fernet"}
 
@@ -92,7 +99,9 @@ def test_env_example_does_not_include_secret_values() -> None:
         "ACCESS_KEY",
     )
 
-    assert not [key for key in env_values if any(name in key for name in secret_like_names)]
+    assert not [
+        key for key in env_values if any(name in key for name in secret_like_names)
+    ]
     assert all("<" not in value and ">" not in value for value in env_values.values())
 
 
@@ -115,4 +124,6 @@ def test_env_example_documents_allowed_setting_values() -> None:
     assert "JOBTRACKER_SECRET_STORE_BACKEND allowed values: keyring, fernet" in env_text
     assert "JOBTRACKER_EMAIL_PROVIDER allowed values: gmail" in env_text
     assert "JOBTRACKER_LLM_PROVIDER allowed values: azure_openai, ollama" in env_text
-    assert "JOBTRACKER_CLASSIFICATION_MODE allowed values: hybrid, llm, local" in env_text
+    assert (
+        "JOBTRACKER_CLASSIFICATION_MODE allowed values: hybrid, llm, local" in env_text
+    )
