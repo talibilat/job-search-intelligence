@@ -16,7 +16,7 @@ Baseline coding standards for every agent and contributor.
 - Provider selection metadata belongs in `app.providers.provider_registry`; it declares supported providers, non-secret setting requirements, and `SecretRef` metadata without instantiating adapters or reading secrets.
 - LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
 - `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
-- Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; adapters own encrypted-at-rest storage.
+- Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
 - Service layer holds business logic; FastAPI route handlers stay thin.
 - FastAPI dependency injection supplies repositories, providers, and config.
@@ -36,13 +36,17 @@ Baseline coding standards for every agent and contributor.
 - Format and lint with `ruff`; keep modules small and focused, since a growing file signals it is doing too much.
 - Use conventional commit messages.
 - Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; route secrets through `SecretStore` and store them encrypted at rest.
+- Use the redaction helpers exported by `app.security` before logging structured data that may contain secrets or retained email bodies.
 - Use `app.security.redaction` before logging structured data that may contain secrets or retained email bodies.
+- Synthetic fixtures must be private-data-free, must set `contains_private_data` to `false`, and must use synthetic domains and content instead of copied inbox data.
 - Do not add telemetry, shared credentials, auto-apply, or autonomous outbound email.
 
 ## Verification
 
 - Backend changes: run `ruff`, `mypy`, and the relevant `pytest` tests.
 - Frontend changes: run `npm run check` from `frontend/`; the check includes typecheck, lint, Vitest, and build once those tools are scaffolded.
+- Frontend changes: run `npm run check` from `frontend/`; run relevant tests once those tools are scaffolded.
+- Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
 - Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.

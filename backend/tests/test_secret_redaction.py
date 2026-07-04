@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 
+import app.security as security
 from app.security.redaction import (
     EMAIL_CONTENT_REDACTED,
     REDACTED,
@@ -11,6 +12,15 @@ from app.security.redaction import (
     redact_text,
     redact_value,
 )
+
+
+def test_redaction_utilities_are_available_from_security_package() -> None:
+    assert security.REDACTED == REDACTED
+    assert security.EMAIL_CONTENT_REDACTED == EMAIL_CONTENT_REDACTED
+    assert security.RedactingFilter is RedactingFilter
+    assert security.redact_mapping is redact_mapping
+    assert security.redact_text is redact_text
+    assert security.redact_value is redact_value
 
 
 def test_redact_mapping_scrubs_secret_fields_case_insensitively() -> None:

@@ -27,8 +27,8 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 | API style | **REST**, resource-oriented, FastAPI auto-OpenAPI | Simple, well-understood |
 | Wire type-safety | **Typed TS client generated from OpenAPI** (openapi-typescript/orval) | Frontend + backend contracts can't silently drift |
 | Stage contracts | **Pydantic v2** DTOs at every boundary | One source of truth for shapes |
-| Config/secrets | **pydantic-settings** + `.env` + first-run wizard; keyring default with Fernet fallback; keys **encrypted at rest** | Safe defaults for eventual open-source |
-| Secret store seam | **`SecretStore` protocol** with Pydantic `SecretRef` and `SecretStr` values | OAuth tokens and LLM keys flow through one typed adapter boundary before concrete storage lands |
+| Config/secrets | **pydantic-settings** + `.env` + first-run wizard; keyring default with Fernet fallback owned by JT-015; keys **encrypted at rest** | Safe defaults for eventual open-source |
+| Secret store seam | **`SecretStore` protocol** with default OS keyring adapter plus Pydantic `SecretRef` and `SecretStr` values | OAuth tokens and LLM keys flow through one typed adapter boundary |
 | Migrations | **Alembic** (batch mode; vec/virtual tables hand-written) | Schema will churn (aggregation, versioning, later phases); reversible revision graph supports idempotent re-runs |
 | Background sync | **APScheduler** in-process while backend is running | "sync on open" / "sync now" without extra infra |
 | Python tooling | **uv** + **ruff** + **mypy** + **pre-commit** | Modern, fast, low-friction |
@@ -43,7 +43,7 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 - **Pipeline** - `ingest -> filter -> classify -> aggregate`, each stage a pure-ish function taking/returning Pydantic DTOs.
 - **Service layer** - business logic in services; API routes stay thin.
 - **Dependency Injection** - FastAPI `Depends` for repos, providers, config.
-- **SecretStore adapter** - OAuth tokens and LLM API keys pass through a typed `SecretStore` protocol; adapters own encrypted-at-rest storage.
+- **SecretStore adapter** - OAuth tokens and LLM API keys pass through a typed `SecretStore` protocol; the default adapter stores them in the host OS keyring and the Fernet fallback is owned by JT-015.
 - **DTOs** - Pydantic models cross every boundary (never pass raw dicts).
 - **Typed errors** - explicit error types, no bare exceptions leaking to the API; API errors use a standard `{"error": {"code": "...", "message": "...", "details": []}}` response body.
 
@@ -60,7 +60,7 @@ job-search-intelligence/
 │   │   ├── db/
 │   │   │   ├── engine.py           # SQLite connection, sqlite-vec load
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
-│   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo
+│   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider protocol + future gmail.py/outlook.py/imap.py
@@ -79,6 +79,7 @@ job-search-intelligence/
 │   │   ├── golden_set.jsonl        # ~30 hand-labeled emails
 │   │   └── run_eval.py             # classification accuracy report
 │   ├── tests/                      # minimal pytest (pipeline + metrics smoke)
+│   │   └── fixtures/synthetic/      # private-data-free synthetic fixture JSON
 │   ├── pyproject.toml              # uv, ruff, mypy config
 │   └── .env.example
 ├── frontend/
@@ -99,9 +100,10 @@ job-search-intelligence/
 │   ├── questions.md                # the 54 questions, tiered
 │   ├── backlog-decisions.md        # approved backlog and product decisions
 │   ├── github-backlog-plan.md      # approved issue list before manifest generation
-│   └── conventions.md              # coding standards for agents
+│   ├── conventions.md              # coding standards for agents
+│   └── synthetic-fixtures.md       # private-data-free fixture format
 ├── .pre-commit-config.yaml
-├── .github/workflows/ci.yml        # lint + typecheck (minimal)
+├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
 └── README.md
 ```
 
@@ -232,6 +234,7 @@ Full list in `docs/questions.md`. Mapping:
 
 **Phase 0 - Groundwork / scaffold**
 Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, Recharts chart wrapper foundation with empty states, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` interface seam, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
 **Phase 1 - Gmail ingestion**

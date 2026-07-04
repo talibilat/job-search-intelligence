@@ -48,7 +48,7 @@ The frontend also has a Recharts chart wrapper foundation with an empty state fo
 There are backend endpoints for health, setup status, and wiping local data.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
-There is configuration infrastructure, secret-store interface infrastructure, and lint/type/test tooling.
+There is configuration infrastructure, a keyring-backed secret-store path, and lint/type/test tooling.
 
 What does not exist yet is the full product.
 There is no working Gmail sync yet.
@@ -115,7 +115,7 @@ Important files and folders to inspect:
 `docs/` is where the product and architecture docs live.
 `tickets/` is where local ticket artifacts live.
 `scripts/` is for project scripts.
-`.github/workflows/` is for GitHub Actions later.
+`.github/workflows/` is for GitHub Actions workflows as Phase 0 CI lands.
 
 How to test it:
 
@@ -547,7 +547,7 @@ It defines how the app will refer to secrets such as OAuth tokens and LLM API ke
 
 Why it was done:
 This app must store secrets encrypted at rest.
-Adding the interface first lets later code depend on a clean contract before concrete backends such as OS keyring or Fernet are implemented.
+Adding the interface first let later code depend on a clean contract before concrete backends such as OS keyring or Fernet were implemented.
 
 Area:
 Backend security infrastructure.
@@ -570,8 +570,8 @@ The tests should pass.
 The import command should print a typed secret reference.
 
 Caveat:
-This ticket does not save secrets yet.
-It only defines the interface future secret storage implementations must follow.
+This ticket did not save secrets by itself.
+JT-014 later added the default OS keyring implementation, while the Fernet fallback remains separate.
 
 ## #26 JT-026 - Define EmailProvider Interface
 
@@ -848,6 +848,40 @@ Caveat:
 This ticket does not add frontend tests.
 It adds lint, type checking, and build verification only.
 
+## #48 JT-048 - Add Frontend CI Workflow
+
+GitHub issue: <https://github.com/talibilat/job-search-intelligence/issues/48>
+
+What was done:
+A frontend GitHub Actions workflow was added at `.github/workflows/frontend-ci.yml`.
+It checks out the repository, sets up Node.js 22 with npm package-lock caching, installs frontend dependencies with `npm ci`, and runs `npm run check` from `frontend/`.
+
+Why it was done:
+The frontend typecheck, ESLint gate, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
+This keeps the existing frontend package scripts as the source of truth while making them part of the Phase 0 CI gate.
+
+Area:
+Frontend CI and repository infrastructure.
+
+Important files to inspect:
+`.github/workflows/frontend-ci.yml` contains the GitHub Actions workflow.
+`frontend/package.json` contains the `check` script that CI invokes.
+
+How to test it locally:
+
+```bash
+cd frontend
+npm ci
+npm run check
+```
+
+Expected result:
+`npm run check` should run TypeScript checking, ESLint, and the Vite build without errors.
+
+Caveat:
+This ticket adds frontend CI only.
+It does not add frontend tests, backend CI, application behavior, data model changes, secrets, telemetry, or backend API surfaces.
+
 ## Quick Testing Checklist
 
 Run these backend checks from `backend/`:
@@ -860,10 +894,16 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
+Run the root pre-commit gate after backend and frontend dependencies are installed:
+
+```bash
+uv run --project backend pre-commit run --all-files
+```
+
 Run these frontend checks from `frontend/`:
 
 ```bash
-npm install
+npm ci
 npm run check
 ```
 
@@ -916,5 +956,7 @@ You can see early safety work for typed errors, secret references, safe configur
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
+The frontend can start and build, but it is still a static shell.
+Frontend CI now runs the existing frontend typecheck, lint, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, and the wipe-data endpoint.
