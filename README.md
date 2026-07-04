@@ -202,6 +202,20 @@ Run the frontend toolchain gate from `frontend/` after backend dependencies have
 npm run check
 ```
 
+Install the Chromium browser for the frontend Playwright smoke suite once per machine:
+
+```sh
+npx playwright install chromium
+```
+
+Run the frontend Playwright smoke suite from `frontend/`:
+
+```sh
+npm run test:smoke
+```
+
+The smoke suite starts the Vite dev server on `127.0.0.1:4173` and asserts the currently rendered Phase 0 shell for setup copy, sync readiness, and dashboard empty-state coverage.
+
 ## Development Commands
 
 The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup and provider config DTOs/routes/services, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol, keyring adapter, and redaction helpers in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, an async SQLite engine in `backend/app/db/engine.py`, shared SQLite URL parsing in `backend/app/db/sqlite_url.py`, an Alembic migration environment in `backend/app/db/migrations/`, shared SQLite repository helpers and repository stubs in `backend/app/db/repositories/`, table-shaped record DTOs in `backend/app/models/records.py`, synthetic fixture DTOs in `backend/app/models/synthetic_fixture.py`, the `SyntheticFixtureRepository` loader in `backend/app/db/repositories/synthetic_fixture.py`, a sample fixture in `backend/tests/fixtures/synthetic/basic_job_search.json`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
@@ -251,17 +265,17 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - Frontend lint check: `npm run lint` from `frontend/`.
 - Frontend unit tests: `npm run test` from `frontend/` runs Vitest with jsdom for component behavior such as UI primitive accessibility contracts.
 - Current frontend route-query helper: `frontend/src/lib/routeQuery.ts` parses, serializes, and patches URL query strings for URL-backed filter state.
-- Playwright smoke tests are not scaffolded yet; a later frontend ticket owns those checks.
+- Frontend Playwright smoke tests: run `npm run test:smoke` from `frontend/` after installing Chromium with `npx playwright install chromium` once per machine.
 - Frontend unit test check: `npm run test` from `frontend/` runs Vitest in jsdom.
 - Frontend tooling gate: after backend dependencies are synced with `uv`, `npm run check` from `frontend/` runs API contract generation and staleness checks, typecheck, lint, Vitest, and build.
 - Current frontend API boundary: import client types and helpers from `frontend/src/api`; `frontend/src/api/generated.ts` is the Orval-generated fetch client from `frontend/src/api/openapi.json`.
 - Frontend CI: `.github/workflows/frontend-ci.yml` runs on pushes and pull requests to `main`, installs `uv`, sets up Python 3.12, syncs locked backend dependencies, sets up Node.js with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` from `frontend/`, and runs `npm run check` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Frontend Playwright smoke scripts are not scaffolded yet; later Playwright tickets own those checks.
-- Frontend unit test scripts are scaffolded; Playwright smoke scripts are not scaffolded yet.
+- Frontend Playwright smoke scripts are scaffolded under `frontend/tests/smoke/` and run with `npm run test:smoke`.
+- Frontend unit test scripts are scaffolded with Vitest, and Playwright smoke scripts cover the current Phase 0 browser shell.
 - Classification changes: run the golden-set eval at `backend/evals/run_eval.py`; regressions block merges.
-- Playwright smoke scripts are not scaffolded yet; later Playwright tickets own those checks.
+- Frontend Playwright smoke scripts are scaffolded and intentionally limited to the current Phase 0 shell until product pages exist.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
 Never claim work is complete without fresh verification evidence.
