@@ -11,8 +11,8 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, and an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary.
-The rest of the backend, the frontend, and the CI scaffold fill in over subsequent Phase 0 tickets.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, and the frontend Vite React TypeScript shell.
+The rest of the backend and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
 
@@ -71,7 +71,7 @@ Developer instructions:
 ## Development
 
 The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
-The backend settings loader, database, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
+The backend settings loader and database do not exist yet, so the commands referencing them below apply once those land.
 
 - Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn` as runtime dependencies, and uses `ruff`, `mypy`, and `pytest` as the dev-dependency verification gate; `backend/pyproject.toml` also holds the strict mypy defaults.
 - Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
@@ -82,7 +82,12 @@ The backend settings loader, database, and the frontend scaffold do not exist ye
 - Current backend lint check: run `ruff check .` from `backend/`.
 - Current backend format check: run `ruff format --check .` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
-- Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
+- Frontend setup: `npm install` from `frontend/`.
+- Frontend dev server: `npm run dev` from `frontend/`.
+- Current frontend TypeScript check: `npx tsc -b` from `frontend/`.
+- Current frontend build check: `npm run build` from `frontend/`.
+- Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
+- Frontend lint and test scripts are not scaffolded yet; later frontend tooling and Playwright tickets own those checks.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
 Never claim work is complete without fresh verification evidence.
