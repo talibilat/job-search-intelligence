@@ -46,7 +46,7 @@ The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
-There is configuration infrastructure, secret-store interface infrastructure, and lint/type/test tooling.
+There is configuration infrastructure, a keyring-backed secret-store path, and lint/type/test tooling.
 
 What does not exist yet is the full product.
 There is no working Gmail sync yet.
@@ -545,7 +545,7 @@ It defines how the app will refer to secrets such as OAuth tokens and LLM API ke
 
 Why it was done:
 This app must store secrets encrypted at rest.
-Adding the interface first lets later code depend on a clean contract before concrete backends such as OS keyring or Fernet are implemented.
+Adding the interface first let later code depend on a clean contract before concrete backends such as OS keyring or Fernet were implemented.
 
 Area:
 Backend security infrastructure.
@@ -568,8 +568,8 @@ The tests should pass.
 The import command should print a typed secret reference.
 
 Caveat:
-This ticket does not save secrets yet.
-It only defines the interface future secret storage implementations must follow.
+This ticket did not save secrets by itself.
+JT-014 later added the default OS keyring implementation, while the Fernet fallback remains separate.
 
 ## #26 JT-026 - Define EmailProvider Interface
 
