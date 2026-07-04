@@ -48,11 +48,11 @@ The frontend also has a Recharts chart wrapper foundation with an empty state fo
 The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
-There is configuration infrastructure, a keyring-backed secret-store path, and lint/type/test tooling.
+There is configuration infrastructure, a keyring-backed secret-store path, Alembic migration infrastructure, and lint/type/test tooling.
 
 What does not exist yet is the full product.
 There is no working Gmail sync yet.
-There is no database schema or ingestion pipeline yet.
+There is no application database schema or ingestion pipeline yet.
 There is no real dashboard yet.
 There is no chat agent yet.
 There is no concrete Azure OpenAI, Ollama, or Gmail adapter yet.
@@ -947,7 +947,7 @@ Then open `http://127.0.0.1:5173/` in a browser.
 ## What To Look For In The App Right Now
 
 Backend:
-You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, local wipe-data infrastructure, and the async SQLite engine infrastructure.
+You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, local wipe-data infrastructure, async SQLite engine infrastructure, and Alembic migration infrastructure.
 
 Frontend:
 You can see a static React shell for JobTracker, an empty Recharts foundation panel for future deterministic dashboard metrics, and shared accessible UI primitives for later pages.
@@ -968,11 +968,11 @@ You can see early safety work for typed errors, secret references, safe configur
 ## Summary In Plain English
 
 The closed tickets have built the foundation, not the finished product.
-The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
+The backend can start, expose a few basic endpoints, prepare Alembic's version table, run tests, lint, and type checks.
 The frontend can start, run unit tests, and build, but it is still a static shell with an empty chart foundation and shared primitive layer.
 Frontend CI now runs the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
-The backend can start, expose a few basic endpoints, create a configured async SQLite engine, run tests, lint, and type checks.
+The backend can start, expose a few basic endpoints, create a configured async SQLite engine, initialize Alembic's version table, run tests, lint, and type checks.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
 Frontend CI now runs the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
-The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, and the wipe-data endpoint.
+The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, Alembic migrations, and the wipe-data endpoint.
