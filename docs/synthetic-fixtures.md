@@ -95,8 +95,29 @@ Fixture enum values mirror the planned database contract:
 The initial sample fixture is `backend/tests/fixtures/synthetic/basic_job_search.json`.
 It contains one application confirmation and one later rejection for the same synthetic application.
 
+## Loader
+
+`backend/app/db/repositories/synthetic_fixture.py` defines `SyntheticFixtureRepository`.
+Use `SyntheticFixtureRepository(connection).load_file(path)` to validate a JSON fixture and load it into a caller-provided local SQLite connection.
+
+The loader creates the four core fixture tables when they are missing:
+
+- `raw_emails`
+- `email_classifications`
+- `applications`
+- `application_events`
+
+Rows are inserted with deterministic `INSERT OR REPLACE` behavior keyed by fixture IDs, so loading the same fixture twice does not duplicate rows.
+The loader returns `SyntheticFixtureLoadResult` with per-table counts.
+
 Validate the fixture contract from `backend/` with:
 
 ```bash
 uv run pytest tests/test_synthetic_fixture_format.py -v
+```
+
+Validate the loader with:
+
+```bash
+uv run pytest tests/test_synthetic_fixture_loader.py -v
 ```

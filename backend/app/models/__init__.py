@@ -10,6 +10,7 @@ from .provider_config import (
     ProviderConfigValues,
     ProviderSecretRequirementResponse,
     ProviderSelection,
+)
 from .records import (
     ApplicationCorrectionRecord,
     ApplicationEventRecord,
@@ -28,6 +29,7 @@ from .synthetic_fixture import (
     SyntheticEmailClassification,
     SyntheticEventType,
     SyntheticFixtureFile,
+    SyntheticFixtureLoadResult,
     SyntheticJobEmailCategory,
     SyntheticRawEmail,
     SyntheticSponsorship,
@@ -63,6 +65,7 @@ __all__ = [
     "SyntheticEmailClassification",
     "SyntheticEventType",
     "SyntheticFixtureFile",
+    "SyntheticFixtureLoadResult",
     "SyntheticJobEmailCategory",
     "SyntheticRawEmail",
     "SyntheticSponsorship",

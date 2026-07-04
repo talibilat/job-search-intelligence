@@ -7,6 +7,7 @@ from .correction import CorrectionRepository
 from .email import EmailRepository
 from .event import EventRepository
 from .insight import InsightRepository
+from .synthetic_fixture import SyntheticFixtureRepository
 
 __all__ = [
     "ApplicationRepository",
@@ -17,4 +18,5 @@ __all__ = [
     "EventRepository",
     "InsightRepository",
     "SqlParameters",
+    "SyntheticFixtureRepository",
 ]
