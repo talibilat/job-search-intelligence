@@ -131,13 +131,13 @@ class EmailMetadataListRequest(BaseModel):
     sync_cursor: EmailProviderCursor | None = None
 
     @model_validator(mode="after")
-    def validate_cursor_for_mode(self) -> Self:
+    def validate_cursor_for_mode(self) -> EmailMetadataListRequest:
         if self.mode is EmailSyncMode.INCREMENTAL and self.sync_cursor is None:
-            raise ValueError("incremental metadata requests require sync_cursor")
-
+            msg = "sync_cursor is required for incremental metadata sync"
+            raise ValueError(msg)
         if self.mode is EmailSyncMode.FULL_BACKFILL and self.sync_cursor is not None:
-            raise ValueError("full_backfill metadata requests must not set sync_cursor")
-
+            msg = "sync_cursor is not allowed for full metadata backfill"
+            raise ValueError(msg)
         return self
 
 

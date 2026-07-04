@@ -199,6 +199,7 @@ def test_metadata_contract_supports_full_backfill_and_incremental_cursors() -> N
 
     assert full_page.messages[0].ref.account.provider is EmailProviderName.GMAIL
     assert full_page.messages[0].body_text is None
+    assert not hasattr(full_page.messages[0], "snippet")
     assert full_page.next_sync_cursor is not None
     assert full_page.next_sync_cursor.value == "history-1"
     assert incremental_page.next_sync_cursor is not None
@@ -240,6 +241,20 @@ def test_email_provider_boundary_dtos_validate_safe_batches() -> None:
 
     with pytest.raises(ValidationError):
         EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=0)
+
+    with pytest.raises(ValidationError):
+        EmailMetadataListRequest(mode=EmailSyncMode.INCREMENTAL, page_size=500)
+
+    with pytest.raises(ValidationError):
+        EmailMetadataListRequest(
+            mode=EmailSyncMode.FULL_BACKFILL,
+            page_size=500,
+            sync_cursor=EmailProviderCursor(
+                account=account,
+                value="history-1",
+                issued_at=NOW,
+            ),
+        )
 
     with pytest.raises(ValidationError):
         EmailBodyFetchRequest(refs=())
