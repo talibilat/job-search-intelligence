@@ -25,7 +25,7 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 | LLM | **Pluggable provider** (Azure OpenAI / Ollama first, OpenAI / Anthropic later) | Chosen in setup wizard; not locked to one vendor |
 | Deployment | **Local-only** (localhost), coded hosting-ready | Gmail Testing mode = no verification/CASA; remote/phone access is a later phase |
 | API style | **REST**, resource-oriented, FastAPI auto-OpenAPI | Simple, well-understood |
-| Wire type-safety | **Typed TS client generated from OpenAPI** (openapi-typescript/orval) | Frontend + backend contracts can't silently drift |
+| Wire type-safety | **Typed TS client generated from OpenAPI with Orval** | Frontend + backend contracts can't silently drift |
 | Stage contracts | **Pydantic v2** DTOs at every boundary | One source of truth for shapes |
 | Config/secrets | **pydantic-settings** + `.env` + first-run wizard; keyring default with Fernet fallback owned by JT-015; keys **encrypted at rest** | Safe defaults for eventual open-source |
 | Secret store seam | **`SecretStore` protocol** with default OS keyring adapter plus Pydantic `SecretRef` and `SecretStr` values | OAuth tokens and LLM keys flow through one typed adapter boundary |
@@ -84,10 +84,7 @@ job-search-intelligence/
 │   └── .env.example
 ├── frontend/
 │   ├── src/
-│   │   ├── api/                    # stable API import boundary
-│   │   │   ├── generated/          # generated TS client destination (from OpenAPI)
-│   │   │   ├── index.ts            # re-export boundary for app imports
-│   │   │   └── client.contract.ts  # compile-time boundary contract
+│   │   ├── api/                    # Orval-generated TS client (from OpenAPI)
 │   │   ├── pages/                  # Dashboard, Insights, Chat, Setup
 │   │   ├── components/             # shared UI primitives, charts, filters, cards, chat UI
 │   │   └── lib/
@@ -195,10 +192,9 @@ Show a **pre-run cost estimate** and track tokens per run.
 - **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
 
-OpenAPI schema -> `backend/scripts/generate_openapi.py` -> `frontend/src/api/openapi.json`.
-Frontend application code imports through the stable `frontend/src/api` boundary instead of reaching into `generated/` directly.
-`frontend/package.json` runs the schema generator before the frontend typecheck, lint, Vitest, and build gate so backend and frontend contracts cannot silently drift.
-Until full TypeScript client generation lands, the placeholder client marks the destination and `frontend/src/api/client.contract.ts` keeps the boundary typechecked.
+OpenAPI schema -> `backend/scripts/generate_openapi.py` -> `frontend/src/api/openapi.json` -> Orval fetch client in `frontend/src/api/generated.ts`.
+Frontend application code imports through the stable `frontend/src/api` boundary instead of reaching into generated files directly.
+`frontend/package.json` runs API generation and staleness checks before the frontend typecheck, lint, Vitest, and build gate so backend and frontend contracts cannot silently drift.
 
 Standard error responses use a typed Pydantic shape: `{"error": {"code": "...", "message": "...", "details": []}}`.
 Routes and services raise explicit `ApiError` values for public API-boundary failures.
