@@ -34,8 +34,6 @@ EXPECTED_ENV_KEYS = {
     "JOBTRACKER_OLLAMA_CHAT_MODEL",
     "JOBTRACKER_OLLAMA_EMBEDDING_MODEL",
     "JOBTRACKER_GHOST_THRESHOLD_DAYS",
-    "JOBTRACKER_INSIGHTS_CACHE_TTL_SECONDS",
-    "JOBTRACKER_CHAT_HISTORY_LIMIT",
 }
 
 
@@ -59,6 +57,11 @@ def parse_env_example(env_example_path: Path) -> dict[str, str]:
 def load_env_example() -> dict[str, str]:
     backend_root = Path(__file__).resolve().parents[1]
     return parse_env_example(backend_root / ".env.example")
+
+
+def load_env_example_text() -> str:
+    backend_root = Path(__file__).resolve().parents[1]
+    return (backend_root / ".env.example").read_text()
 
 
 def test_env_example_documents_expected_v1_settings() -> None:
@@ -96,3 +99,12 @@ def test_env_example_keeps_oauth_client_config_outside_repo() -> None:
     env_values = load_env_example()
 
     assert not env_values["JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE"].startswith("./")
+
+
+def test_env_example_documents_allowed_setting_values() -> None:
+    env_text = load_env_example_text()
+
+    assert "JOBTRACKER_SECRET_STORE_BACKEND allowed values: keyring, fernet" in env_text
+    assert "JOBTRACKER_EMAIL_PROVIDER allowed values: gmail" in env_text
+    assert "JOBTRACKER_LLM_PROVIDER allowed values: azure_openai, ollama" in env_text
+    assert "JOBTRACKER_CLASSIFICATION_MODE allowed values: hybrid, llm, local" in env_text
