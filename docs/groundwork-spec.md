@@ -101,6 +101,7 @@ job-search-intelligence/
 │   ├── backlog-decisions.md        # approved backlog and product decisions
 │   ├── github-backlog-plan.md      # approved issue list before manifest generation
 │   ├── conventions.md              # coding standards for agents
+│   ├── llm-provider-setup.md       # Azure OpenAI and Ollama setup values and secret boundaries
 │   └── synthetic-fixtures.md       # private-data-free fixture format
 ├── .pre-commit-config.yaml
 ├── .github/workflows/ci.yml        # lint + typecheck (minimal)

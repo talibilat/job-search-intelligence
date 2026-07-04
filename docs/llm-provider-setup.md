@@ -5,6 +5,7 @@ It maps to FR-0, FR-6, NFR-5, NFR-8, and Phase 0.
 
 The current Phase 0 app has a typed provider registry and setup status shell.
 Concrete Azure OpenAI and Ollama adapters are implemented in later provider tickets, so this document is the setup contract for those screens and adapters.
+Phase 0 currently has only the `SecretStore` protocol and backend selector settings; the keyring adapter is tracked by JT-014 and the Fernet fallback is tracked by JT-015.
 
 ## Setup Principles
 
@@ -13,6 +14,7 @@ Concrete Azure OpenAI and Ollama adapters are implemented in later provider tick
 - Store secret values through the configured `SecretStore`, not in `backend/.env`.
 - Use `backend/.env` only for non-secret local overrides such as endpoints, model names, deployment names, and `classification_mode`.
 - Keep the app local-first: Ollama keeps LLM calls on the machine, while Azure OpenAI sends only configured LLM requests to the user's Azure resource.
+- Keep LLM providers behind the configured app provider path; providers must never execute raw SQL or produce authoritative dashboard counts.
 - Never paste API keys, OAuth tokens, Google client secrets, or raw email content into docs, tickets, commits, logs, or screenshots.
 
 ## Choosing A Provider
@@ -20,10 +22,10 @@ Concrete Azure OpenAI and Ollama adapters are implemented in later provider tick
 Use Ollama when privacy and offline local execution matter more than model quality or speed.
 Use Azure OpenAI when you want stronger hosted model quality and accept that configured LLM requests leave the machine for your Azure resource.
 
-`classification_mode` must match the provider choice.
-Use `local` with Ollama.
-Use `hybrid` with Azure OpenAI for the default cost-controlled path, where the heuristic filter narrows the inbox before hosted classification.
-Use `llm` with Azure OpenAI only when you intentionally want every ingested email to go through the hosted model.
+Default setup pairings should follow the selected provider.
+Use `local` with Ollama by default.
+Use `hybrid` with Azure OpenAI for the default cost-controlled hosted path, where the heuristic filter narrows the inbox before hosted classification.
+Use `llm` only when you intentionally want every ingested email to go through the selected LLM provider; with Azure OpenAI this sends every ingested email selected for classification to the hosted model.
 
 ## Azure OpenAI
 
@@ -49,13 +51,13 @@ provider: azure_openai
 name: api_key
 ```
 
-Use the default encrypted-at-rest secret backend unless your machine cannot use OS keyring:
+Use the keyring setting as the intended encrypted-at-rest default once JT-014 lands:
 
 ```env
 JOBTRACKER_SECRET_STORE_BACKEND=keyring
 ```
 
-If keyring is unavailable, switch to the documented Fernet fallback and keep the key file inside the app-owned local data directory:
+After JT-015 lands, switch to the documented Fernet fallback when keyring is unavailable and keep the key file inside the app-owned local data directory:
 
 ```env
 JOBTRACKER_SECRET_STORE_BACKEND=fernet
@@ -64,7 +66,7 @@ JOBTRACKER_FERNET_KEY_FILE=./.jobtracker/fernet.key
 
 Do not commit the Fernet key file or place it in screenshots, tickets, logs, or setup notes.
 
-Before running a bulk classification pass, verify that the selected mode will show a token and cost estimate.
+When JT-096 and JT-097 land, verify before a bulk classification pass that the selected mode shows a token and cost estimate.
 Hosted Azure calls should be used through the configured provider path only, never by ad hoc scripts that bypass redaction or prompt-version tracking.
 
 ## Ollama
@@ -95,8 +97,9 @@ If you change model names, update both the setup value and any local model pulls
 ## Readiness Checklist
 
 - The selected LLM provider is either `azure_openai` or `ollama`.
-- `classification_mode` is compatible with that provider.
+- `classification_mode` follows the intended default pairing for that provider unless the user explicitly chooses another supported non-local mode.
 - Azure OpenAI has endpoint, API version, chat deployment, embedding deployment, and an API key stored through `SecretStore`.
 - Ollama has a reachable local base URL and the configured chat and embedding models are pulled locally.
 - Gmail setup still uses `gmail.readonly` and a user-owned Google OAuth client.
+- LLM output is routed through application code that uses deterministic queries or constrained query builders for facts, never raw SQL emitted by the model.
 - No API keys, OAuth tokens, client secrets, or provider credentials are committed to the repository.
