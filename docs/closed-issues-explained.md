@@ -804,7 +804,7 @@ Expected result:
 Opening that URL should show the static JobTracker shell.
 
 Caveat:
-There is no real dashboard, API client, routing, Playwright smoke suite, or backend integration yet.
+At the time this shell landed, there was no real dashboard, generated API client, routing, Playwright smoke suite, or backend integration yet.
 
 ## #34 JT-034 - Configure Frontend Lint And Type Checks
 
@@ -813,18 +813,19 @@ Merged PR: <https://github.com/talibilat/job-search-intelligence/pull/240>
 
 What was done:
 The frontend got verification scripts for type checking, linting, and a combined check.
+Later API-client work extended the combined check with generated API contract validation before those original steps.
 An ESLint config was added for TypeScript and React Hooks rules.
 The frontend package now declares supported Node versions.
 
 Why it was done:
 Future frontend work needs a reliable quality gate.
-This catches TypeScript mistakes, lint problems, React Hooks problems, and build failures before changes are merged.
+This catches generated API contract drift, TypeScript mistakes, lint problems, React Hooks problems, and build failures before changes are merged.
 
 Area:
 Frontend tooling and documentation.
 
 Important files to inspect:
-`frontend/package.json` contains `generate:openapi`, `typecheck`, `lint`, and `check` scripts.
+`frontend/package.json` contains API generation, API contract check, `typecheck`, `lint`, and `check` scripts.
 `frontend/eslint.config.js` contains the ESLint setup.
 `frontend/tsconfig.json`, `frontend/tsconfig.app.json`, and `frontend/tsconfig.node.json` configure TypeScript.
 `README.md`, `AGENTS.md`, and `docs/conventions.md` document the frontend checks.
@@ -843,11 +844,11 @@ npm run check
 Expected result:
 `npm run typecheck` should finish without TypeScript errors.
 `npm run lint` should finish without ESLint errors or warnings.
-At the time JT-034 closed, `npm run check` ran typecheck, lint, and Vite build.
+`npm run check` should run API contract generation/staleness checks, typecheck, lint, and Vite build.
 
 Caveat:
 This ticket does not add frontend tests.
-It adds lint, type checking, and build verification only.
+It originally added lint, type checking, and build verification only; later API-client work added the generated API contract gate.
 
 ## #48 JT-048 - Add Frontend CI Workflow
 

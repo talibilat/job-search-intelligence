@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.api.errors import ApiError, ApiErrorCode
+from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.models import WipeDataRequest, WipeDataResponse
 from app.services.wipe_data import UnsafeWipeTargetError, wipe_local_data
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/local-data", tags=["local-data"])
         "service preflights every filesystem target and returns a typed 400 "
         "error instead of deleting anything when a target is unsafe."
     ),
+    responses={400: {"model": ApiErrorResponse}, 422: {"model": ApiErrorResponse}},
 )
 def wipe_data(
     request: WipeDataRequest,

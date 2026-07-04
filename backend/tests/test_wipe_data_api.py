@@ -61,7 +61,11 @@ def test_wipe_data_endpoint_is_documented_in_openapi() -> None:
     assert response.status_code == 200
     operation = response.json()["paths"]["/local-data/wipe"]["post"]
     schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    bad_request_schema = operation["responses"]["400"]["content"]["application/json"]["schema"]
+    validation_schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert schema["$ref"] == "#/components/schemas/WipeDataResponse"
+    assert bad_request_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
+    assert validation_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
 def test_wipe_data_endpoint_returns_typed_error_for_unsafe_target() -> None:

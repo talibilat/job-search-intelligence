@@ -1,0 +1,1055 @@
+{
+  "components": {
+    "schemas": {
+      "ApiErrorBody": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ApiErrorCode"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/ApiErrorDetail"
+            },
+            "title": "Details",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ApiErrorBody",
+        "type": "object"
+      },
+      "ApiErrorCode": {
+        "enum": [
+          "bad_request",
+          "conflict",
+          "forbidden",
+          "http_error",
+          "internal_error",
+          "not_found",
+          "unauthorized",
+          "validation_error"
+        ],
+        "title": "ApiErrorCode",
+        "type": "string"
+      },
+      "ApiErrorDetail": {
+        "properties": {
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "type"
+        ],
+        "title": "ApiErrorDetail",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "ClassificationMode": {
+        "enum": [
+          "hybrid",
+          "llm",
+          "local"
+        ],
+        "title": "ClassificationMode",
+        "type": "string"
+      },
+      "EmailProviderConfigResponse": {
+        "description": "Email provider metadata exposed by the provider config API shell.",
+        "properties": {
+          "config_requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderConfigRequirementResponse"
+            },
+            "title": "Config Requirements",
+            "type": "array"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          },
+          "secret_requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderSecretRequirementResponse"
+            },
+            "title": "Secret Requirements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "config_requirements",
+          "secret_requirements"
+        ],
+        "title": "EmailProviderConfigResponse",
+        "type": "object"
+      },
+      "EmailProviderName": {
+        "enum": [
+          "gmail"
+        ],
+        "title": "EmailProviderName",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "LLMProviderConfigResponse": {
+        "description": "LLM provider metadata exposed by the provider config API shell.",
+        "properties": {
+          "config_requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderConfigRequirementResponse"
+            },
+            "title": "Config Requirements",
+            "type": "array"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "is_local": {
+            "title": "Is Local",
+            "type": "boolean"
+          },
+          "name": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "secret_requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderSecretRequirementResponse"
+            },
+            "title": "Secret Requirements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "is_local",
+          "config_requirements",
+          "secret_requirements"
+        ],
+        "title": "LLMProviderConfigResponse",
+        "type": "object"
+      },
+      "LLMProviderName": {
+        "enum": [
+          "azure_openai",
+          "ollama"
+        ],
+        "title": "LLMProviderName",
+        "type": "string"
+      },
+      "ProviderConfigRequirementResponse": {
+        "description": "Non-secret provider setting required by a supported provider.",
+        "properties": {
+          "enforcement": {
+            "$ref": "#/components/schemas/ProviderRequirementEnforcement"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "setting_name": {
+            "title": "Setting Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "setting_name",
+          "label",
+          "required",
+          "enforcement"
+        ],
+        "title": "ProviderConfigRequirementResponse",
+        "type": "object"
+      },
+      "ProviderConfigResponse": {
+        "description": "Selected provider config plus supported provider metadata.",
+        "properties": {
+          "email_providers": {
+            "items": {
+              "$ref": "#/components/schemas/EmailProviderConfigResponse"
+            },
+            "title": "Email Providers",
+            "type": "array"
+          },
+          "llm_providers": {
+            "items": {
+              "$ref": "#/components/schemas/LLMProviderConfigResponse"
+            },
+            "title": "Llm Providers",
+            "type": "array"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/ProviderSelection"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ProviderConfigValues"
+          }
+        },
+        "required": [
+          "selection",
+          "settings",
+          "email_providers",
+          "llm_providers"
+        ],
+        "title": "ProviderConfigResponse",
+        "type": "object"
+      },
+      "ProviderConfigUpdateRequest": {
+        "description": "Partial in-process update for non-secret Phase 0 provider config.",
+        "properties": {
+          "azure_openai_api_version": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Api Version"
+          },
+          "azure_openai_chat_deployment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Chat Deployment"
+          },
+          "azure_openai_embedding_deployment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Embedding Deployment"
+          },
+          "azure_openai_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Endpoint"
+          },
+          "classification_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassificationMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email_provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailProviderName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gmail_client_config_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gmail Client Config File"
+          },
+          "gmail_scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gmail Scopes"
+          },
+          "llm_provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LLMProviderName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ollama_base_url": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Base Url"
+          },
+          "ollama_chat_model": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Chat Model"
+          },
+          "ollama_embedding_model": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Embedding Model"
+          }
+        },
+        "title": "ProviderConfigUpdateRequest",
+        "type": "object"
+      },
+      "ProviderConfigValues": {
+        "description": "Non-secret provider settings visible at the API boundary.",
+        "properties": {
+          "azure_openai_api_version": {
+            "title": "Azure Openai Api Version",
+            "type": "string"
+          },
+          "azure_openai_chat_deployment": {
+            "title": "Azure Openai Chat Deployment",
+            "type": "string"
+          },
+          "azure_openai_embedding_deployment": {
+            "title": "Azure Openai Embedding Deployment",
+            "type": "string"
+          },
+          "azure_openai_endpoint": {
+            "title": "Azure Openai Endpoint",
+            "type": "string"
+          },
+          "gmail_client_config_file": {
+            "format": "path",
+            "title": "Gmail Client Config File",
+            "type": "string"
+          },
+          "gmail_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gmail Scopes",
+            "type": "array"
+          },
+          "ollama_base_url": {
+            "title": "Ollama Base Url",
+            "type": "string"
+          },
+          "ollama_chat_model": {
+            "title": "Ollama Chat Model",
+            "type": "string"
+          },
+          "ollama_embedding_model": {
+            "title": "Ollama Embedding Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gmail_client_config_file",
+          "gmail_scopes",
+          "azure_openai_endpoint",
+          "azure_openai_api_version",
+          "azure_openai_chat_deployment",
+          "azure_openai_embedding_deployment",
+          "ollama_base_url",
+          "ollama_chat_model",
+          "ollama_embedding_model"
+        ],
+        "title": "ProviderConfigValues",
+        "type": "object"
+      },
+      "ProviderRequirementEnforcement": {
+        "enum": [
+          "declarative",
+          "selection"
+        ],
+        "title": "ProviderRequirementEnforcement",
+        "type": "string"
+      },
+      "ProviderSecretRequirementResponse": {
+        "description": "Secret reference metadata without the secret value.",
+        "properties": {
+          "enforcement": {
+            "$ref": "#/components/schemas/ProviderRequirementEnforcement"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/SecretRef"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ref",
+          "label",
+          "required",
+          "enforcement"
+        ],
+        "title": "ProviderSecretRequirementResponse",
+        "type": "object"
+      },
+      "ProviderSelection": {
+        "description": "Currently selected provider choices for the setup/config shell.",
+        "properties": {
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "email_provider": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          }
+        },
+        "required": [
+          "email_provider",
+          "llm_provider",
+          "classification_mode"
+        ],
+        "title": "ProviderSelection",
+        "type": "object"
+      },
+      "SecretKind": {
+        "enum": [
+          "oauth_token",
+          "llm_api_key"
+        ],
+        "title": "SecretKind",
+        "type": "string"
+      },
+      "SecretRef": {
+        "description": "Stable non-secret identifier for a stored secret.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SecretKind"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_.:-]*$",
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_.:-]*$",
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "provider",
+          "name"
+        ],
+        "title": "SecretRef",
+        "type": "object"
+      },
+      "SetupStatusResponse": {
+        "description": "First-run setup readiness and selected non-secret provider settings.",
+        "properties": {
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "email_provider": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          },
+          "gmail_connected": {
+            "title": "Gmail Connected",
+            "type": "boolean"
+          },
+          "llm_configured": {
+            "title": "Llm Configured",
+            "type": "boolean"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "setup_complete": {
+            "title": "Setup Complete",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "setup_complete",
+          "gmail_connected",
+          "llm_configured",
+          "email_provider",
+          "llm_provider",
+          "classification_mode"
+        ],
+        "title": "SetupStatusResponse",
+        "type": "object"
+      },
+      "SetupSubmitRequest": {
+        "additionalProperties": false,
+        "description": "Non-secret first-run setup choices accepted by the Phase 0 API shell.",
+        "properties": {
+          "azure_openai_api_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Api Version"
+          },
+          "azure_openai_chat_deployment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Chat Deployment"
+          },
+          "azure_openai_embedding_deployment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Embedding Deployment"
+          },
+          "azure_openai_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Endpoint"
+          },
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "email_provider": {
+            "$ref": "#/components/schemas/EmailProviderName",
+            "default": "gmail"
+          },
+          "gmail_client_config_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gmail Client Config File"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "ollama_base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Base Url"
+          },
+          "ollama_chat_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Chat Model"
+          },
+          "ollama_embedding_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Embedding Model"
+          }
+        },
+        "required": [
+          "llm_provider",
+          "classification_mode"
+        ],
+        "title": "SetupSubmitRequest",
+        "type": "object"
+      },
+      "SetupSubmitResponse": {
+        "description": "Acknowledgement for a setup submission that has not persisted secrets yet.",
+        "properties": {
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "email_provider": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          },
+          "gmail_connected": {
+            "title": "Gmail Connected",
+            "type": "boolean"
+          },
+          "llm_configured": {
+            "title": "Llm Configured",
+            "type": "boolean"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "setup_complete": {
+            "title": "Setup Complete",
+            "type": "boolean"
+          },
+          "status": {
+            "const": "accepted",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "setup_complete",
+          "gmail_connected",
+          "llm_configured",
+          "email_provider",
+          "llm_provider",
+          "classification_mode",
+          "status"
+        ],
+        "title": "SetupSubmitResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WipeDataRequest": {
+        "properties": {
+          "confirmation": {
+            "const": "wipe-local-data",
+            "description": "Must exactly equal wipe-local-data to confirm local data deletion.",
+            "title": "Confirmation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation"
+        ],
+        "title": "WipeDataRequest",
+        "type": "object"
+      },
+      "WipeDataResponse": {
+        "properties": {
+          "deleted_paths": {
+            "description": "Canonical local filesystem paths deleted by the wipe operation.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Deleted Paths",
+            "type": "array"
+          },
+          "missing_paths": {
+            "description": "Canonical local filesystem paths that were already absent.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Paths",
+            "type": "array"
+          },
+          "status": {
+            "const": "wiped",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "WipeDataResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Job Search Intelligence API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/config/providers": {
+      "get": {
+        "description": "Return selected provider config and non-secret supported-provider metadata.",
+        "operationId": "get_provider_config_config_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Provider Config",
+        "tags": [
+          "config"
+        ]
+      },
+      "put": {
+        "description": "Validate and update the in-process provider config shell.",
+        "operationId": "update_provider_config_config_providers_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderConfigUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Provider Config",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/local-data/wipe": {
+      "post": {
+        "description": "Deletes configured local JobTracker data and derived artifacts after the request body confirms the exact wipe-local-data phrase. The service preflights every filesystem target and returns a typed 400 error instead of deleting anything when a target is unsafe.",
+        "operationId": "wipe_data_local_data_wipe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WipeDataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WipeDataResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Wipe local app data",
+        "tags": [
+          "local-data"
+        ]
+      }
+    },
+    "/setup": {
+      "post": {
+        "description": "Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets.",
+        "operationId": "setup_submit_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupSubmitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Submit first-run setup choices",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/status": {
+      "get": {
+        "description": "Report the Phase 0 setup shell without validating or exposing secrets.",
+        "operationId": "setup_status_setup_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Setup Status",
+        "tags": [
+          "setup"
+        ]
+      }
+    }
+  }
+}
