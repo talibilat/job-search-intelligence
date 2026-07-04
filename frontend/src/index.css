@@ -64,7 +64,7 @@ h1 {
   font-size: clamp(2.7rem, 8vw, 5.9rem);
   line-height: 0.92;
   letter-spacing: -0.08em;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 h2 {
@@ -73,6 +73,7 @@ h2 {
   font-size: clamp(1.45rem, 3vw, 2.25rem);
   line-height: 1;
   letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
 }
 
 .hero-copy {
@@ -111,7 +112,7 @@ h2 {
   background: #edf6eb;
   color: #203f2c;
   font-weight: 700;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 720px) {
@@ -119,8 +120,14 @@ h2 {
     padding: 40px 18px;
   }
 
+  h1 {
+    font-size: clamp(2.1rem, 10vw, 3rem);
+    line-height: 0.98;
+    letter-spacing: -0.06em;
+  }
+
   .status-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding: 24px;
   }
 }
