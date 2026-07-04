@@ -28,6 +28,23 @@ class BaseRepository(ABC, Generic[MappedRowT]):
     ) -> sqlite3.Cursor:
         return self._connection.execute(sql, parameters)
 
+    def fetch_one(
+        self,
+        sql: str,
+        parameters: SqlParameters = (),
+    ) -> MappedRowT | None:
+        row = self.execute(sql, parameters).fetchone()
+        if row is None:
+            return None
+        return self.map_row(row)
+
+    def fetch_all(
+        self,
+        sql: str,
+        parameters: SqlParameters = (),
+    ) -> list[MappedRowT]:
+        return [self.map_row(row) for row in self.execute(sql, parameters).fetchall()]
+
     @contextmanager
     def transaction(self) -> Iterator[None]:
         self._connection.execute("SAVEPOINT repository_transaction")

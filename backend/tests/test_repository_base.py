@@ -29,13 +29,13 @@ class WidgetRepository(BaseRepository[Widget]):
         self.execute("INSERT INTO widgets (name) VALUES (?)", (name,))
 
     def get_by_name(self, name: str) -> Widget | None:
-        row = self.execute(
+        return self.fetch_one(
             "SELECT id, name FROM widgets WHERE name = ?",
             (name,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self.map_row(row)
+        )
+
+    def list_widgets(self) -> list[Widget]:
+        return self.fetch_all("SELECT id, name FROM widgets ORDER BY id")
 
     def map_row(self, row: sqlite3.Row) -> Widget:
         return Widget(id=row["id"], name=row["name"])
@@ -56,6 +56,32 @@ def test_repository_maps_sqlite_rows_to_typed_objects(
     repository.add("alpha")
 
     assert repository.get_by_name("alpha") == Widget(id=1, name="alpha")
+
+
+def test_repository_fetch_one_maps_single_row(
+    repository: WidgetRepository,
+) -> None:
+    repository.add("alpha")
+
+    assert repository.get_by_name("alpha") == Widget(id=1, name="alpha")
+
+
+def test_repository_fetch_one_returns_none_when_no_row(
+    repository: WidgetRepository,
+) -> None:
+    assert repository.get_by_name("missing") is None
+
+
+def test_repository_fetch_all_maps_all_rows(
+    repository: WidgetRepository,
+) -> None:
+    repository.add("alpha")
+    repository.add("beta")
+
+    assert repository.list_widgets() == [
+        Widget(id=1, name="alpha"),
+        Widget(id=2, name="beta"),
+    ]
 
 
 def test_repository_transaction_commits_successful_work(
