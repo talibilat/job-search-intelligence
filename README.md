@@ -24,6 +24,7 @@ The repository currently contains planning documents, root project metadata, the
 Concrete Gmail provider behavior, remaining backend pieces, and remaining CI workflows fill in over subsequent Phase 0 and Phase 1 tickets.
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the synthetic fixture DTO contract and sample fixture, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+The frontend shell also includes static first-run setup copy cards for provider, mode, Gmail, and privacy choices while the full wizard flow is still scaffolded.
 Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
@@ -224,6 +225,8 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Current provider config update shell: `PUT /config/providers` validates and applies partial non-secret provider selection and setting changes to the running backend process only; durable setup persistence and secret writes are later work.
 - Current Fernet fallback: `app.security.FernetSecretStore` stores encrypted secret payloads under `JOBTRACKER_DATA_DIR/secrets/` with a generated or configured `JOBTRACKER_FERNET_KEY_FILE`; `app.security.build_secret_store` returns it only when `JOBTRACKER_SECRET_STORE_BACKEND=fernet`.
 - Current backend type check: `uv run mypy` from `backend/`.
+- Current frontend setup copy: `frontend/src/setupWizardCopy.ts` defines the Phase 0 card copy for LLM provider, classification mode, Gmail read-only OAuth, and privacy-boundary choices while the full wizard flow is still scaffolded.
+- Setup copy smoke test: `uv run pytest tests/test_setup_wizard_copy.py -v` from `backend/` verifies the static copy keeps the required provider, mode, Gmail, `SecretStore`, and privacy terms visible.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
 - Current backend lint check: run `uv run ruff check .` from `backend/`.
 - Current backend format check: run `uv run ruff format --check .` from `backend/`.
