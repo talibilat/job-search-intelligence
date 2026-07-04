@@ -7,6 +7,7 @@ They model the same factual spine described in the PRD: emails, classifications,
 
 The canonical DTOs live in `backend/app/models/synthetic_fixture.py`.
 Fixture files use `schema_version: "1"` and must set `contains_private_data` to `false`.
+The DTOs are exported from `backend/app/models/__init__.py` for tests and the later loader ticket.
 
 Each fixture has these top-level arrays:
 
@@ -15,10 +16,87 @@ Each fixture has these top-level arrays:
 - `applications` models future `applications` rows used by deterministic metrics and aggregation tests.
 - `events` models future `application_events` rows and references both `application_id` and `email_id`.
 
-The DTOs reject unknown fields, duplicate IDs, private-data flags, and cross references to missing emails or applications.
+The DTO can default omitted arrays to empty tuples, but checked-in JSON fixtures should include all four arrays explicitly so fixture intent is obvious in review.
+
+## Fields
+
+Top-level fixture fields:
+
+- `schema_version`: required, currently only `"1"`.
+- `fixture_id`: required non-empty string.
+- `description`: required non-empty string.
+- `contains_private_data`: required, must be `false`.
+- `emails`, `classifications`, `applications`, `events`: explicit arrays in checked-in JSON fixtures.
+
+`emails` fields:
+
+- `id`: required non-empty string.
+- `provider`: required backend email provider enum value.
+- `thread_id`, `from_addr`, `to_addr`, `subject`: optional non-empty strings.
+- `sent_at`: optional timestamp.
+- `body_text`: optional synthetic body text, excluded from DTO repr output.
+- `body_retention_state`: optional, defaults to `metadata_only`.
+- `labels`: optional string array, defaults to empty.
+- `ingested_at`: required timestamp.
+
+`classifications` fields:
+
+- `email_id`: required non-empty string referencing an `emails[].id` value.
+- `is_job_related`: required boolean.
+- `category`: required classification category enum value.
+- `confidence`: required number from `0` through `1`.
+- `model`, `prompt_version`: required non-empty strings.
+- `classified_at`: required timestamp.
+
+`applications` fields:
+
+- `id`, `company`, `role_title`: required non-empty strings.
+- `source`: optional application source enum value, defaults to `other`.
+- `first_seen_at`, `last_activity_at`, `created_at`, `updated_at`: required timestamps.
+- `current_status`: required application status enum value.
+- `salary_min`, `salary_max`: optional non-negative integers.
+- `currency`: optional three-character string.
+- `location`, `seniority`: optional non-empty strings.
+- `work_mode`: optional work-mode enum value.
+- `sponsorship`: optional sponsorship enum value, defaults to `unknown`.
+- `tech_stack`: optional string array, defaults to empty.
+- `manual_lock`: optional boolean, defaults to `false`.
+
+`events` fields:
+
+- `id`: required non-empty string.
+- `application_id`: required non-empty string referencing an `applications[].id` value.
+- `email_id`: required non-empty string referencing an `emails[].id` value.
+- `event_type`: required event type enum value.
+- `event_at`: required timestamp.
+- `extract_note`: optional non-empty string.
+
+All payload fields are strict: unknown fields are rejected at every level.
+The file-level contract rejects duplicate email IDs, duplicate classification `email_id` values, duplicate application IDs, duplicate event IDs, private-data flags, and cross references to missing emails or applications.
+Application salary ranges must be non-negative, and `salary_min` must be less than or equal to `salary_max` when both are present.
 Retained synthetic email body text is excluded from object repr output to preserve the same redaction habit used for real retained bodies.
+
+## Enumerations
+
+Fixture enum values mirror the planned database contract:
+
+- `body_retention_state`: `metadata_only`, `retained`, `omitted`
+- `category`: `application_confirmation`, `rejection`, `interview_invite`, `recruiter_outreach`, `offer`, `assessment`, `follow_up`, `other`
+- `source`: `linkedin`, `company_site`, `indeed`, `referral`, `other`
+- `current_status`: `applied`, `in_review`, `assessment`, `interview`, `offer`, `rejected`, `ghosted`, `withdrawn`
+- `work_mode`: `remote`, `hybrid`, `onsite`
+- `sponsorship`: `offered`, `not_offered`, `unknown`
+- `event_type`: `applied`, `response`, `assessment`, `interview_scheduled`, `feedback`, `rejection`, `offer`, `ghost_inferred`
+
+`provider` uses the existing backend email provider enum, currently `gmail`.
 
 ## Sample
 
 The initial sample fixture is `backend/tests/fixtures/synthetic/basic_job_search.json`.
 It contains one application confirmation and one later rejection for the same synthetic application.
+
+Validate the fixture contract from `backend/` with:
+
+```bash
+uv run pytest tests/test_synthetic_fixture_format.py -v
+```
