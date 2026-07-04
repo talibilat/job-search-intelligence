@@ -3,7 +3,12 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from app.db.repositories import SyntheticFixtureRepository
+from app.db.repositories import (
+    ApplicationRepository,
+    EmailRepository,
+    EventRepository,
+    SyntheticFixtureRepository,
+)
 
 
 def test_synthetic_fixture_loader_loads_json_file_into_core_tables() -> None:
@@ -38,6 +43,35 @@ def test_synthetic_fixture_loader_loads_json_file_into_core_tables() -> None:
     assert [tuple(row) for row in event_application_ids] == [
         ("application-example-systems-backend-engineer",)
     ]
+
+
+def test_synthetic_fixture_loader_rows_read_through_core_repositories() -> None:
+    connection = sqlite3.connect(":memory:")
+    SyntheticFixtureRepository(connection).load_file(sample_fixture_path())
+
+    email = EmailRepository(connection).fetch_one(
+        "SELECT * FROM raw_emails WHERE id = ?",
+        ("email-application-confirmation",),
+    )
+    application = ApplicationRepository(connection).fetch_one(
+        "SELECT * FROM applications WHERE id = ?",
+        ("application-example-systems-backend-engineer",),
+    )
+    events = EventRepository(connection).fetch_all(
+        "SELECT * FROM application_events ORDER BY event_at"
+    )
+
+    assert email is not None
+    assert email.id == "email-application-confirmation"
+    assert application is not None
+    assert application.id == "application-example-systems-backend-engineer"
+    assert [event.id for event in events] == [
+        "event-application-submitted",
+        "event-application-rejected",
+    ]
+    assert {event.application_id for event in events} == {
+        "application-example-systems-backend-engineer"
+    }
 
 
 def test_synthetic_fixture_loader_is_idempotent_for_same_fixture() -> None:
