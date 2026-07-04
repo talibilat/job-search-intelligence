@@ -45,7 +45,7 @@ The repository now has the start of a local-first job-search intelligence app.
 The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
 The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
-There are backend endpoints for health, setup status, and wiping local data.
+The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
 There is configuration infrastructure, a keyring-backed secret-store path, and lint/type/test tooling.
@@ -855,11 +855,12 @@ GitHub issue: <https://github.com/talibilat/job-search-intelligence/issues/48>
 
 What was done:
 A frontend GitHub Actions workflow was added at `.github/workflows/frontend-ci.yml`.
-It checks out the repository, sets up Node.js 22 with npm package-lock caching, installs frontend dependencies with `npm ci`, and runs `npm run check` from `frontend/`.
+It checks out the repository, sets up Node.js 22 with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` with `working-directory: frontend`, and runs `npm run check` with `working-directory: frontend`.
 
 Why it was done:
 The frontend typecheck, ESLint gate, Vitest unit tests, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
 This keeps the existing frontend package scripts as the source of truth while making type checking, linting, unit tests, and build verification part of the Phase 0 CI gate.
+This keeps the existing frontend package scripts as the source of truth while making them part of the Phase 0 CI gate.
 
 Area:
 Frontend CI and repository infrastructure.
@@ -867,6 +868,8 @@ Frontend CI and repository infrastructure.
 Important files to inspect:
 `.github/workflows/frontend-ci.yml` contains the GitHub Actions workflow.
 `frontend/package.json` contains the `check` script that CI invokes.
+`frontend/package-lock.json` is the nested npm lockfile used by `npm ci` and the GitHub Actions npm cache.
+`backend/tests/test_frontend_ci_workflow.py` verifies the lockfile is valid JSON and the workflow uses the nested lockfile plus `frontend/` working directory for install and check steps.
 
 How to test it locally:
 
@@ -874,6 +877,13 @@ How to test it locally:
 cd frontend
 npm ci
 npm run check
+```
+
+To verify the workflow contract from the backend test suite:
+
+```bash
+cd backend
+uv run pytest tests/test_frontend_ci_workflow.py -q
 ```
 
 Expected result:
@@ -937,10 +947,11 @@ Then open `http://127.0.0.1:5173/` in a browser.
 ## What To Look For In The App Right Now
 
 Backend:
-You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, and local wipe-data infrastructure.
+You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, local wipe-data infrastructure, and the async SQLite engine infrastructure.
 
 Frontend:
 You can see a static React shell for JobTracker, an empty Recharts foundation panel for future deterministic dashboard metrics, and shared accessible UI primitives for later pages.
+You can see a static React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics and setup-copy cards for provider, mode, Gmail, and privacy choices.
 It is not connected to backend data yet.
 
 Configuration:
@@ -960,5 +971,8 @@ The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
 The frontend can start, run unit tests, and build, but it is still a static shell with an empty chart foundation and shared primitive layer.
 Frontend CI now runs the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
+The backend can start, expose a few basic endpoints, create a configured async SQLite engine, run tests, lint, and type checks.
+The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
+Frontend CI now runs the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
-The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, and the wipe-data endpoint.
+The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, and the wipe-data endpoint.

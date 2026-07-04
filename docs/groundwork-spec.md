@@ -58,7 +58,7 @@ job-search-intelligence/
 │   │   ├── main.py                 # FastAPI app factory, router registration
 │   │   ├── config.py               # pydantic-settings, provider selection, env overrides
 │   │   ├── db/
-│   │   │   ├── engine.py           # SQLite connection, sqlite-vec load
+│   │   │   ├── engine.py           # SQLite engine and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
 │   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
@@ -106,7 +106,7 @@ job-search-intelligence/
 │   ├── google-oauth-setup.md       # user-created Google OAuth client setup guide
 │   ├── conventions.md              # coding standards for agents
 │   ├── llm-provider-setup.md       # Azure OpenAI and Ollama setup values and secret boundaries
-│   └── synthetic-fixtures.md       # private-data-free fixture format
+│   └── synthetic-fixtures.md       # private-data-free fixture format and SQLite loader
 ├── .pre-commit-config.yaml
 ├── .github/workflows/backend-ci.yml # backend ruff + mypy + pytest
 ├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
