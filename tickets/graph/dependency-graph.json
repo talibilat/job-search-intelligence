@@ -1,0 +1,2720 @@
+{
+  "generated_at": "2026-07-03T15:16:06Z",
+  "stages": [
+    [
+      "JT-002",
+      "JT-003"
+    ],
+    [
+      "JT-004",
+      "JT-005",
+      "JT-006",
+      "JT-007",
+      "JT-008",
+      "JT-010",
+      "JT-011",
+      "JT-012",
+      "JT-013",
+      "JT-016",
+      "JT-017",
+      "JT-023",
+      "JT-026",
+      "JT-027",
+      "JT-028",
+      "JT-029",
+      "JT-032",
+      "JT-033",
+      "JT-034",
+      "JT-035",
+      "JT-036",
+      "JT-042",
+      "JT-045",
+      "JT-047",
+      "JT-048",
+      "JT-049",
+      "JT-050",
+      "JT-051",
+      "JT-052",
+      "JT-053",
+      "JT-054"
+    ],
+    [
+      "JT-009",
+      "JT-014",
+      "JT-015",
+      "JT-018",
+      "JT-019",
+      "JT-024",
+      "JT-030",
+      "JT-031",
+      "JT-037",
+      "JT-038",
+      "JT-039",
+      "JT-040",
+      "JT-041",
+      "JT-043",
+      "JT-044",
+      "JT-046",
+      "JT-055",
+      "JT-058",
+      "JT-059",
+      "JT-061",
+      "JT-063",
+      "JT-065",
+      "JT-066",
+      "JT-068",
+      "JT-069",
+      "JT-071",
+      "JT-072",
+      "JT-073",
+      "JT-075",
+      "JT-079",
+      "JT-080"
+    ],
+    [
+      "JT-020",
+      "JT-056",
+      "JT-060",
+      "JT-062",
+      "JT-067",
+      "JT-070",
+      "JT-074"
+    ],
+    [
+      "JT-021",
+      "JT-022",
+      "JT-025",
+      "JT-057",
+      "JT-064",
+      "JT-076",
+      "JT-077",
+      "JT-078"
+    ],
+    [
+      "JT-081",
+      "JT-082",
+      "JT-084",
+      "JT-086",
+      "JT-087",
+      "JT-088",
+      "JT-089",
+      "JT-090",
+      "JT-093",
+      "JT-095",
+      "JT-096",
+      "JT-097",
+      "JT-098",
+      "JT-099",
+      "JT-102",
+      "JT-103",
+      "JT-109"
+    ],
+    [
+      "JT-083",
+      "JT-091",
+      "JT-094",
+      "JT-100",
+      "JT-104"
+    ],
+    [
+      "JT-085",
+      "JT-092",
+      "JT-101",
+      "JT-105"
+    ],
+    [
+      "JT-106",
+      "JT-111",
+      "JT-112",
+      "JT-116"
+    ],
+    [
+      "JT-107",
+      "JT-113",
+      "JT-117",
+      "JT-118"
+    ],
+    [
+      "JT-108",
+      "JT-114",
+      "JT-119",
+      "JT-181",
+      "JT-182"
+    ],
+    [
+      "JT-110",
+      "JT-115",
+      "JT-183",
+      "JT-184"
+    ],
+    [
+      "JT-120",
+      "JT-185",
+      "JT-186",
+      "JT-189",
+      "JT-190",
+      "JT-191",
+      "JT-192",
+      "JT-193",
+      "JT-194",
+      "JT-195"
+    ],
+    [
+      "JT-121",
+      "JT-130",
+      "JT-136",
+      "JT-137",
+      "JT-138",
+      "JT-139",
+      "JT-140",
+      "JT-141",
+      "JT-142",
+      "JT-143",
+      "JT-144",
+      "JT-145",
+      "JT-146",
+      "JT-147",
+      "JT-148",
+      "JT-149",
+      "JT-150",
+      "JT-151",
+      "JT-152",
+      "JT-153",
+      "JT-154",
+      "JT-155",
+      "JT-156",
+      "JT-157",
+      "JT-158",
+      "JT-159",
+      "JT-160",
+      "JT-161",
+      "JT-162",
+      "JT-163",
+      "JT-164",
+      "JT-165",
+      "JT-166",
+      "JT-187",
+      "JT-188",
+      "JT-196"
+    ],
+    [
+      "JT-122",
+      "JT-123"
+    ],
+    [
+      "JT-124",
+      "JT-125",
+      "JT-126",
+      "JT-127",
+      "JT-128",
+      "JT-129",
+      "JT-135",
+      "JT-197",
+      "JT-198",
+      "JT-202",
+      "JT-206",
+      "JT-209",
+      "JT-210",
+      "JT-211",
+      "JT-212"
+    ],
+    [
+      "JT-131",
+      "JT-132",
+      "JT-133",
+      "JT-134",
+      "JT-168",
+      "JT-172",
+      "JT-173",
+      "JT-174",
+      "JT-175",
+      "JT-176",
+      "JT-177",
+      "JT-178",
+      "JT-179",
+      "JT-199",
+      "JT-214",
+      "JT-215",
+      "JT-216",
+      "JT-217",
+      "JT-218",
+      "JT-219",
+      "JT-220",
+      "JT-221",
+      "JT-222",
+      "JT-223"
+    ],
+    [
+      "JT-167",
+      "JT-169",
+      "JT-180",
+      "JT-200"
+    ],
+    [
+      "JT-170",
+      "JT-171",
+      "JT-201"
+    ],
+    [
+      "JT-203"
+    ],
+    [
+      "JT-204"
+    ],
+    [
+      "JT-205",
+      "JT-208"
+    ],
+    [
+      "JT-207"
+    ],
+    [
+      "JT-213"
+    ]
+  ],
+  "tickets": {
+    "JT-001": {
+      "deps": [],
+      "issue": 1,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "done",
+      "title": "JT-001 - Create private GitHub repository"
+    },
+    "JT-002": {
+      "deps": [
+        "JT-001"
+      ],
+      "issue": 2,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-002 - Initialize monorepo structure"
+    },
+    "JT-003": {
+      "deps": [],
+      "issue": 3,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "failed",
+      "title": "JT-003 - Add root project metadata"
+    },
+    "JT-004": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 4,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-004 - Scaffold backend Python project"
+    },
+    "JT-005": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 5,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-005 - Configure backend linting and formatting"
+    },
+    "JT-006": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 6,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-006 - Configure backend type checking"
+    },
+    "JT-007": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 7,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-007 - Add backend test harness"
+    },
+    "JT-008": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 8,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-008 - Create FastAPI app factory"
+    },
+    "JT-009": {
+      "deps": [
+        "JT-002",
+        "JT-008"
+      ],
+      "issue": 9,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-009 - Add health endpoint"
+    },
+    "JT-010": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 10,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-010 - Add typed API error model"
+    },
+    "JT-011": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 11,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-011 - Add Pydantic settings shell"
+    },
+    "JT-012": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 12,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-012 - Add env example"
+    },
+    "JT-013": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 13,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-013 - Add secret-store interface"
+    },
+    "JT-014": {
+      "deps": [
+        "JT-002",
+        "JT-013"
+      ],
+      "issue": 14,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-014 - Implement keyring secret store"
+    },
+    "JT-015": {
+      "deps": [
+        "JT-002",
+        "JT-013"
+      ],
+      "issue": 15,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-015 - Implement Fernet secret fallback"
+    },
+    "JT-016": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 16,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-016 - Add secret redaction utilities"
+    },
+    "JT-017": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 17,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-017 - Add SQLite engine module"
+    },
+    "JT-018": {
+      "deps": [
+        "JT-002",
+        "JT-017"
+      ],
+      "issue": 18,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-018 - Add sqlite-vec loading hook"
+    },
+    "JT-019": {
+      "deps": [
+        "JT-002",
+        "JT-017"
+      ],
+      "issue": 19,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-019 - Configure Alembic migrations"
+    },
+    "JT-020": {
+      "deps": [
+        "JT-002",
+        "JT-019"
+      ],
+      "issue": 20,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-020 - Create initial core schema migration"
+    },
+    "JT-021": {
+      "deps": [
+        "JT-002",
+        "JT-020"
+      ],
+      "issue": 21,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-021 - Add manual override schema migration"
+    },
+    "JT-022": {
+      "deps": [
+        "JT-002",
+        "JT-020"
+      ],
+      "issue": 22,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-022 - Add chat history schema migration"
+    },
+    "JT-023": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 23,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-023 - Create base repository module"
+    },
+    "JT-024": {
+      "deps": [
+        "JT-002",
+        "JT-023"
+      ],
+      "issue": 24,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-024 - Add repository stubs"
+    },
+    "JT-025": {
+      "deps": [
+        "JT-002",
+        "JT-020"
+      ],
+      "issue": 25,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-025 - Add Pydantic domain DTOs"
+    },
+    "JT-026": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 26,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-026 - Define EmailProvider interface"
+    },
+    "JT-027": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 27,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-027 - Define LLMProvider interface"
+    },
+    "JT-028": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 28,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-028 - Add provider registry"
+    },
+    "JT-029": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 29,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-029 - Add setup status API shell"
+    },
+    "JT-030": {
+      "deps": [
+        "JT-002",
+        "JT-029"
+      ],
+      "issue": 30,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-030 - Add setup submit API shell"
+    },
+    "JT-031": {
+      "deps": [
+        "JT-002",
+        "JT-028"
+      ],
+      "issue": 31,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-031 - Add provider config API shell"
+    },
+    "JT-032": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 32,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-032 - Add local wipe-data command or endpoint"
+    },
+    "JT-033": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 33,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-033 - Scaffold frontend Vite React TypeScript app"
+    },
+    "JT-034": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 34,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-034 - Configure frontend lint and type checks"
+    },
+    "JT-035": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 35,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-035 - Add frontend API client placeholder"
+    },
+    "JT-036": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 36,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-036 - Add backend OpenAPI schema generator"
+    },
+    "JT-037": {
+      "deps": [
+        "JT-002",
+        "JT-036"
+      ],
+      "issue": 37,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-037 - Add TypeScript client generation workflow"
+    },
+    "JT-038": {
+      "deps": [
+        "JT-002",
+        "JT-033",
+        "JT-042"
+      ],
+      "issue": 38,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-038 - Add setup page shell"
+    },
+    "JT-039": {
+      "deps": [
+        "JT-002",
+        "JT-033",
+        "JT-042"
+      ],
+      "issue": 39,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-039 - Add dashboard page shell"
+    },
+    "JT-040": {
+      "deps": [
+        "JT-002",
+        "JT-033",
+        "JT-042"
+      ],
+      "issue": 40,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-040 - Add insights page shell"
+    },
+    "JT-041": {
+      "deps": [
+        "JT-002",
+        "JT-033",
+        "JT-042"
+      ],
+      "issue": 41,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-041 - Add chat page shell"
+    },
+    "JT-042": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 42,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-042 - Add shared accessible UI primitives"
+    },
+    "JT-043": {
+      "deps": [
+        "JT-002",
+        "JT-033"
+      ],
+      "issue": 43,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-043 - Add Recharts foundation"
+    },
+    "JT-044": {
+      "deps": [
+        "JT-002",
+        "JT-033"
+      ],
+      "issue": 44,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-044 - Add frontend route query helper"
+    },
+    "JT-045": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 45,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-045 - Add synthetic fixture format"
+    },
+    "JT-046": {
+      "deps": [
+        "JT-002",
+        "JT-045"
+      ],
+      "issue": 46,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-046 - Add synthetic fixture loader"
+    },
+    "JT-047": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 47,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-047 - Add backend CI workflow"
+    },
+    "JT-048": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 48,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-048 - Add frontend CI workflow"
+    },
+    "JT-049": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 49,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-049 - Add pre-commit configuration"
+    },
+    "JT-050": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 50,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-050 - Add local developer README"
+    },
+    "JT-051": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 51,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-051 - Add Google OAuth setup guide"
+    },
+    "JT-052": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 52,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-052 - Add LLM provider setup guide"
+    },
+    "JT-053": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 53,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-053 - Add setup wizard copy"
+    },
+    "JT-054": {
+      "deps": [
+        "JT-002"
+      ],
+      "issue": 54,
+      "milestone": "Phase 0 - Groundwork",
+      "status": "todo",
+      "title": "JT-054 - Add minimal Playwright smoke harness"
+    },
+    "JT-055": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 55,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-055 - Implement Gmail auth URL endpoint"
+    },
+    "JT-056": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-055"
+      ],
+      "issue": 56,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-056 - Implement Gmail OAuth callback"
+    },
+    "JT-057": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-056"
+      ],
+      "issue": 57,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-057 - Implement Gmail token refresh"
+    },
+    "JT-058": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 58,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-058 - Add Gmail provider skeleton"
+    },
+    "JT-059": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 59,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-059 - Implement Gmail message listing"
+    },
+    "JT-060": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-059"
+      ],
+      "issue": 60,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-060 - Implement Gmail metadata normalization"
+    },
+    "JT-061": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 61,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-061 - Implement broad candidate query strategy"
+    },
+    "JT-062": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-061"
+      ],
+      "issue": 62,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-062 - Implement retained body fetching"
+    },
+    "JT-063": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 63,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-063 - Implement HTML-to-text normalization"
+    },
+    "JT-064": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-060",
+        "JT-062"
+      ],
+      "issue": 64,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-064 - Implement raw email repository writes"
+    },
+    "JT-065": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 65,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-065 - Add raw email retention flags"
+    },
+    "JT-066": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 66,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-066 - Implement full backfill state tracking"
+    },
+    "JT-067": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-066"
+      ],
+      "issue": 67,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-067 - Implement full backfill service"
+    },
+    "JT-068": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 68,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-068 - Add backfill reconciliation metrics"
+    },
+    "JT-069": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 69,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-069 - Store Gmail history ID"
+    },
+    "JT-070": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-069"
+      ],
+      "issue": 70,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-070 - Implement incremental sync"
+    },
+    "JT-071": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 71,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-071 - Handle expired history IDs"
+    },
+    "JT-072": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 72,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-072 - Add sync job status model"
+    },
+    "JT-073": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 73,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-073 - Add sync service"
+    },
+    "JT-074": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-073"
+      ],
+      "issue": 74,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-074 - Add sync API routes"
+    },
+    "JT-075": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 75,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-075 - Add APScheduler sync-on-open hook"
+    },
+    "JT-076": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-074"
+      ],
+      "issue": 76,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-076 - Add sync status frontend panel"
+    },
+    "JT-077": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-074"
+      ],
+      "issue": 77,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-077 - Add sync-now UI action"
+    },
+    "JT-078": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026",
+        "JT-055",
+        "JT-056"
+      ],
+      "issue": 78,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-078 - Add Gmail auth frontend flow"
+    },
+    "JT-079": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 79,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-079 - Add ingestion error handling"
+    },
+    "JT-080": {
+      "deps": [
+        "JT-013",
+        "JT-017",
+        "JT-026"
+      ],
+      "issue": 80,
+      "milestone": "Phase 1 - Gmail Ingestion",
+      "status": "todo",
+      "title": "JT-080 - Add ingestion smoke tests"
+    },
+    "JT-081": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 81,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-081 - Implement heuristic sender signals"
+    },
+    "JT-082": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 82,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-082 - Implement heuristic keyword signals"
+    },
+    "JT-083": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-081",
+        "JT-082"
+      ],
+      "issue": 83,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-083 - Implement candidate scoring"
+    },
+    "JT-084": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 84,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-084 - Persist filter decisions"
+    },
+    "JT-085": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-083",
+        "JT-099"
+      ],
+      "issue": 85,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-085 - Validate filter against golden set"
+    },
+    "JT-086": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 86,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-086 - Implement Azure OpenAI provider"
+    },
+    "JT-087": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 87,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-087 - Implement Ollama provider"
+    },
+    "JT-088": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 88,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-088 - Add LLM provider health checks"
+    },
+    "JT-089": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 89,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-089 - Add classification prompt contract"
+    },
+    "JT-090": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 90,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-090 - Add classification DTOs"
+    },
+    "JT-091": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-086",
+        "JT-087",
+        "JT-089",
+        "JT-090"
+      ],
+      "issue": 91,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-091 - Implement LLM classification service"
+    },
+    "JT-092": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-091"
+      ],
+      "issue": 92,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-092 - Persist email classifications"
+    },
+    "JT-093": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 93,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-093 - Add extraction schema"
+    },
+    "JT-094": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-093"
+      ],
+      "issue": 94,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-094 - Implement structured extraction service"
+    },
+    "JT-095": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 95,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-095 - Handle malformed LLM output"
+    },
+    "JT-096": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 96,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-096 - Track classification tokens and cost"
+    },
+    "JT-097": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 97,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-097 - Add pre-run classification estimate"
+    },
+    "JT-098": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 98,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-098 - Add classification mode config"
+    },
+    "JT-099": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 99,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-099 - Add golden set fixture file"
+    },
+    "JT-100": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-099"
+      ],
+      "issue": 100,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-100 - Add golden set eval runner"
+    },
+    "JT-101": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-100"
+      ],
+      "issue": 101,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-101 - Enforce golden set gate"
+    },
+    "JT-102": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 102,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-102 - Implement company normalization"
+    },
+    "JT-103": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 103,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-103 - Implement role normalization"
+    },
+    "JT-104": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-102",
+        "JT-103"
+      ],
+      "issue": 104,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-104 - Implement application grouping key"
+    },
+    "JT-105": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-104"
+      ],
+      "issue": 105,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-105 - Implement application upsert"
+    },
+    "JT-106": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-105"
+      ],
+      "issue": 106,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-106 - Implement event timeline upsert"
+    },
+    "JT-107": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-106"
+      ],
+      "issue": 107,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-107 - Implement status derivation"
+    },
+    "JT-108": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-107"
+      ],
+      "issue": 108,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-108 - Implement ghost inference"
+    },
+    "JT-109": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073"
+      ],
+      "issue": 109,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-109 - Add reprocessing version controls"
+    },
+    "JT-110": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-105",
+        "JT-106",
+        "JT-108"
+      ],
+      "issue": 110,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-110 - Add aggregation idempotency tests"
+    },
+    "JT-111": {
+      "deps": [
+        "JT-021",
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-105"
+      ],
+      "issue": 111,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-111 - Add manual merge API"
+    },
+    "JT-112": {
+      "deps": [
+        "JT-021",
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-105"
+      ],
+      "issue": 112,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-112 - Add manual split API"
+    },
+    "JT-113": {
+      "deps": [
+        "JT-021",
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-106"
+      ],
+      "issue": 113,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-113 - Add manual status and event edit API"
+    },
+    "JT-114": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-111",
+        "JT-112",
+        "JT-113"
+      ],
+      "issue": 114,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-114 - Implement correction locks"
+    },
+    "JT-115": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-114"
+      ],
+      "issue": 115,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-115 - Implement correction conflict detection"
+    },
+    "JT-116": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-105"
+      ],
+      "issue": 116,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-116 - Add application detail API"
+    },
+    "JT-117": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-106"
+      ],
+      "issue": 117,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-117 - Add application events API"
+    },
+    "JT-118": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-116"
+      ],
+      "issue": 118,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-118 - Add applications list API"
+    },
+    "JT-119": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-111",
+        "JT-112",
+        "JT-113"
+      ],
+      "issue": 119,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-119 - Add application correction UI"
+    },
+    "JT-120": {
+      "deps": [
+        "JT-027",
+        "JT-064",
+        "JT-073",
+        "JT-085",
+        "JT-091",
+        "JT-094",
+        "JT-110"
+      ],
+      "issue": 120,
+      "milestone": "Phase 2 - Classify Extract Aggregate",
+      "status": "todo",
+      "title": "JT-120 - Add Phase 2 pipeline smoke test"
+    },
+    "JT-121": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 121,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-121 - Add metrics service foundation"
+    },
+    "JT-122": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-121"
+      ],
+      "issue": 122,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-122 - Add metrics repository queries"
+    },
+    "JT-123": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-121"
+      ],
+      "issue": 123,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-123 - Add metrics filter DTOs"
+    },
+    "JT-124": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-122",
+        "JT-123"
+      ],
+      "issue": 124,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-124 - Add metrics summary endpoint"
+    },
+    "JT-125": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-122",
+        "JT-123"
+      ],
+      "issue": 125,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-125 - Add metrics rates endpoint"
+    },
+    "JT-126": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-122",
+        "JT-123"
+      ],
+      "issue": 126,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-126 - Add metrics funnel endpoint"
+    },
+    "JT-127": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-122",
+        "JT-123"
+      ],
+      "issue": 127,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-127 - Add metrics timeseries endpoint"
+    },
+    "JT-128": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-122",
+        "JT-123"
+      ],
+      "issue": 128,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-128 - Add metrics breakdown endpoint"
+    },
+    "JT-129": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-122"
+      ],
+      "issue": 129,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-129 - Add deterministic metric tests"
+    },
+    "JT-130": {
+      "deps": [
+        "JT-044",
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 130,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-130 - Add dashboard filter bar"
+    },
+    "JT-131": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-124"
+      ],
+      "issue": 131,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-131 - Add summary metric cards"
+    },
+    "JT-132": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-125",
+        "JT-126"
+      ],
+      "issue": 132,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-132 - Add rates and funnel widgets"
+    },
+    "JT-133": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-127"
+      ],
+      "issue": 133,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-133 - Add timeseries widgets"
+    },
+    "JT-134": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-128"
+      ],
+      "issue": 134,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-134 - Add breakdown table and chart widgets"
+    },
+    "JT-135": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-122"
+      ],
+      "issue": 135,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-135 - Add metric reconciliation helpers"
+    },
+    "JT-136": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 136,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-136 - Answer Q-01 lifetime applications"
+    },
+    "JT-137": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 137,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-137 - Answer Q-02 applications by window"
+    },
+    "JT-138": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 138,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-138 - Answer Q-03 distinct companies"
+    },
+    "JT-139": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 139,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-139 - Answer Q-04 response versus silence"
+    },
+    "JT-140": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 140,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-140 - Answer Q-05 rejection count"
+    },
+    "JT-141": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 141,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-141 - Answer Q-06 ghosted count"
+    },
+    "JT-142": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 142,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-142 - Answer Q-07 interview invitations"
+    },
+    "JT-143": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 143,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-143 - Answer Q-08 offers received"
+    },
+    "JT-144": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 144,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-144 - Answer Q-09 status of every application"
+    },
+    "JT-145": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 145,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-145 - Answer Q-10 live applications"
+    },
+    "JT-146": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 146,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-146 - Answer Q-11 overall response rate"
+    },
+    "JT-147": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 147,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-147 - Answer Q-12 rejection rate"
+    },
+    "JT-148": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 148,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-148 - Answer Q-13 ghost rate"
+    },
+    "JT-149": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 149,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-149 - Answer Q-14 application to interview rate"
+    },
+    "JT-150": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 150,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-150 - Answer Q-15 interview to offer rate"
+    },
+    "JT-151": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 151,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-151 - Answer Q-16 full funnel"
+    },
+    "JT-152": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 152,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-152 - Answer Q-17 time to first response"
+    },
+    "JT-153": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 153,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-153 - Answer Q-18 time to rejection"
+    },
+    "JT-154": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 154,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-154 - Answer Q-19 personal ghost threshold"
+    },
+    "JT-155": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 155,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-155 - Answer Q-20 application volume trend"
+    },
+    "JT-156": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 156,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-156 - Answer Q-21 response rate trend"
+    },
+    "JT-157": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 157,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-157 - Answer Q-22 title volume and conversion"
+    },
+    "JT-158": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 158,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-158 - Answer Q-23 best-converting titles"
+    },
+    "JT-159": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 159,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-159 - Answer Q-24 company type conversion"
+    },
+    "JT-160": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 160,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-160 - Answer Q-25 source outcomes"
+    },
+    "JT-161": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 161,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-161 - Answer Q-26 salary band conversion"
+    },
+    "JT-162": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 162,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-162 - Answer Q-27 work-mode conversion"
+    },
+    "JT-163": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 163,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-163 - Answer Q-28 sponsorship availability count"
+    },
+    "JT-164": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 164,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-164 - Answer Q-29 sponsorship conversion"
+    },
+    "JT-165": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 165,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-165 - Answer Q-30 tech-stack conversion"
+    },
+    "JT-166": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120"
+      ],
+      "issue": 166,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-166 - Answer Q-31 seniority conversion"
+    },
+    "JT-167": {
+      "deps": [
+        "JT-046",
+        "JT-118",
+        "JT-120",
+        "JT-131",
+        "JT-132",
+        "JT-133",
+        "JT-134"
+      ],
+      "issue": 167,
+      "milestone": "Phase 3 - Deterministic Dashboard",
+      "status": "todo",
+      "title": "JT-167 - Add dashboard smoke test"
+    },
+    "JT-168": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 168,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-168 - Add diagnostics service foundation"
+    },
+    "JT-169": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166",
+        "JT-168"
+      ],
+      "issue": 169,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-169 - Add diagnostics endpoint"
+    },
+    "JT-170": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166",
+        "JT-169"
+      ],
+      "issue": 170,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-170 - Add diagnostic comparison widgets"
+    },
+    "JT-171": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166",
+        "JT-169"
+      ],
+      "issue": 171,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-171 - Add diagnostic explainability notes"
+    },
+    "JT-172": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 172,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-172 - Answer Q-32 common traits of successful applications"
+    },
+    "JT-173": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 173,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-173 - Answer Q-33 common traits of rejected or ghosted applications"
+    },
+    "JT-174": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 174,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-174 - Answer Q-34 strongest response correlate"
+    },
+    "JT-175": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 175,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-175 - Answer Q-35 wasted-effort segments"
+    },
+    "JT-176": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 176,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-176 - Answer Q-36 best ROI source"
+    },
+    "JT-177": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 177,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-177 - Answer Q-37 sponsorship response impact"
+    },
+    "JT-178": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 178,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-178 - Answer Q-38 selling versus dead-weight skills"
+    },
+    "JT-179": {
+      "deps": [
+        "JT-122",
+        "JT-129",
+        "JT-166"
+      ],
+      "issue": 179,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-179 - Answer Q-39 adjacent role suggestions"
+    },
+    "JT-180": {
+      "deps": [
+        "JT-046",
+        "JT-122",
+        "JT-129",
+        "JT-166",
+        "JT-168"
+      ],
+      "issue": 180,
+      "milestone": "Phase 3.5 - Diagnostics",
+      "status": "todo",
+      "title": "JT-180 - Add diagnostics fixture tests"
+    },
+    "JT-181": {
+      "deps": [
+        "JT-020",
+        "JT-027",
+        "JT-118"
+      ],
+      "issue": 181,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-181 - Add insights repository"
+    },
+    "JT-182": {
+      "deps": [
+        "JT-027",
+        "JT-118"
+      ],
+      "issue": 182,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-182 - Add insight input builder"
+    },
+    "JT-183": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-181",
+        "JT-182"
+      ],
+      "issue": 183,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-183 - Add insight staleness detection"
+    },
+    "JT-184": {
+      "deps": [
+        "JT-027",
+        "JT-086",
+        "JT-087",
+        "JT-118",
+        "JT-182"
+      ],
+      "issue": 184,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-184 - Implement insight generation service"
+    },
+    "JT-185": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-184"
+      ],
+      "issue": 185,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-185 - Add insight grounding validator"
+    },
+    "JT-186": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-181",
+        "JT-184"
+      ],
+      "issue": 186,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-186 - Add insights API routes"
+    },
+    "JT-187": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-186"
+      ],
+      "issue": 187,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-187 - Add insights frontend page"
+    },
+    "JT-188": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-186"
+      ],
+      "issue": 188,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-188 - Add insight cost display"
+    },
+    "JT-189": {
+      "deps": [
+        "JT-118",
+        "JT-184"
+      ],
+      "issue": 189,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-189 - Answer Q-40 recurring rejection themes"
+    },
+    "JT-190": {
+      "deps": [
+        "JT-118",
+        "JT-184"
+      ],
+      "issue": 190,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-190 - Answer Q-41 recurring recruiter feedback"
+    },
+    "JT-191": {
+      "deps": [
+        "JT-118",
+        "JT-184"
+      ],
+      "issue": 191,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-191 - Answer Q-42 rejected-role skill gaps"
+    },
+    "JT-192": {
+      "deps": [
+        "JT-118",
+        "JT-184"
+      ],
+      "issue": 192,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-192 - Answer Q-43 strongest and weakest signals"
+    },
+    "JT-193": {
+      "deps": [
+        "JT-118",
+        "JT-184"
+      ],
+      "issue": 193,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-193 - Answer Q-44 best-fit roles"
+    },
+    "JT-194": {
+      "deps": [
+        "JT-118",
+        "JT-184"
+      ],
+      "issue": 194,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-194 - Answer Q-45 next-week actions"
+    },
+    "JT-195": {
+      "deps": [
+        "JT-118",
+        "JT-184"
+      ],
+      "issue": 195,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-195 - Answer Q-46 search story"
+    },
+    "JT-196": {
+      "deps": [
+        "JT-118",
+        "JT-184",
+        "JT-185"
+      ],
+      "issue": 196,
+      "milestone": "Phase 4 - Cached Insights",
+      "status": "todo",
+      "title": "JT-196 - Add insights grounding tests"
+    },
+    "JT-197": {
+      "deps": [
+        "JT-027",
+        "JT-062",
+        "JT-118",
+        "JT-122"
+      ],
+      "issue": 197,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-197 - Add email chunking service"
+    },
+    "JT-198": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122"
+      ],
+      "issue": 198,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-198 - Add embedding provider interface"
+    },
+    "JT-199": {
+      "deps": [
+        "JT-018",
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-197"
+      ],
+      "issue": 199,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-199 - Implement sqlite-vec chunk repository"
+    },
+    "JT-200": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-198",
+        "JT-199"
+      ],
+      "issue": 200,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-200 - Generate embeddings for job-related retained bodies"
+    },
+    "JT-201": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-199",
+        "JT-200"
+      ],
+      "issue": 201,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-201 - Add semantic search tool"
+    },
+    "JT-202": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122"
+      ],
+      "issue": 202,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-202 - Add structured query tool"
+    },
+    "JT-203": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-201",
+        "JT-202"
+      ],
+      "issue": 203,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-203 - Add chat router graph"
+    },
+    "JT-204": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-203"
+      ],
+      "issue": 204,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-204 - Add chat synthesis node"
+    },
+    "JT-205": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-204"
+      ],
+      "issue": 205,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-205 - Add SSE chat endpoint"
+    },
+    "JT-206": {
+      "deps": [
+        "JT-022",
+        "JT-027",
+        "JT-118",
+        "JT-122"
+      ],
+      "issue": 206,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-206 - Add chat history endpoint"
+    },
+    "JT-207": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-205",
+        "JT-206"
+      ],
+      "issue": 207,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-207 - Add chat frontend"
+    },
+    "JT-208": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-201",
+        "JT-202",
+        "JT-204"
+      ],
+      "issue": 208,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-208 - Add chat grounding tests"
+    },
+    "JT-209": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122"
+      ],
+      "issue": 209,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-209 - Answer Q-47 recruiter last-email recall"
+    },
+    "JT-210": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122"
+      ],
+      "issue": 210,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-210 - Answer Q-48 rejection and sponsorship recall"
+    },
+    "JT-211": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122"
+      ],
+      "issue": 211,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-211 - Answer Q-49 overdue follow-up recall"
+    },
+    "JT-212": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122"
+      ],
+      "issue": 212,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-212 - Answer Q-50 free-form job-search chat"
+    },
+    "JT-213": {
+      "deps": [
+        "JT-027",
+        "JT-118",
+        "JT-122",
+        "JT-207"
+      ],
+      "issue": 213,
+      "milestone": "Phase 5 - RAG Chat",
+      "status": "todo",
+      "title": "JT-213 - Add chat Playwright smoke test"
+    },
+    "JT-214": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 214,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-214 - Answer Q-51 conversion probability"
+    },
+    "JT-215": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 215,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-215 - Answer Q-52 market benchmark comparison"
+    },
+    "JT-216": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 216,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-216 - Answer Q-53 currently open role prioritization"
+    },
+    "JT-217": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 217,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-217 - Answer Q-54 company or recruiter activity check"
+    },
+    "JT-218": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 218,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-218 - Add Outlook provider adapter"
+    },
+    "JT-219": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 219,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-219 - Add IMAP provider adapter"
+    },
+    "JT-220": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 220,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-220 - Add draft-writing workflow"
+    },
+    "JT-221": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 221,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-221 - Add hosting-ready packaging"
+    },
+    "JT-222": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 222,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-222 - Add mobile or voice access"
+    },
+    "JT-223": {
+      "deps": [
+        "JT-212"
+      ],
+      "issue": 223,
+      "milestone": "Future",
+      "status": "todo",
+      "title": "JT-223 - Add open-source hardening"
+    }
+  },
+  "unresolvable": []
+}

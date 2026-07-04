@@ -1,0 +1,52 @@
+{
+  "JT-001": {
+    "branch": "agent/jt-001",
+    "note": "Repo already exists and is private (created 2026-07-02); verified via gh repo view and closed issue #1 as completed on 2026-07-03. Previous failed status was environmental (no-mistakes not initialized in worktree).",
+    "status": "done",
+    "updated": "2026-07-03T15:16:06Z",
+    "worktree": "/Users/talibilat/.treehouse/job-search-intelligence-ff571b/1/job-search-intelligence"
+  },
+  "JT-002": {
+    "branch": "jt-002",
+    "note": "Implemented by hand in the code repo clone; monorepo directory skeleton per groundwork-spec section 2. PR https://github.com/talibilat/job-search-intelligence/pull/224 closes issue #2.",
+    "pr": "https://github.com/talibilat/job-search-intelligence/pull/224",
+    "status": "done",
+    "updated": "2026-07-03T16:35:00Z"
+  },
+  "JT-003": {
+    "branch": "jt-003",
+    "note": "Reimplemented by hand in the code repo clone (previous agent/jt-003 worktree run failed on no-mistakes init). README, .gitignore, .editorconfig, docs/conventions.md. PR https://github.com/talibilat/job-search-intelligence/pull/225 closes issue #3.",
+    "pr": "https://github.com/talibilat/job-search-intelligence/pull/225",
+    "status": "done",
+    "updated": "2026-07-03T16:35:00Z"
+  },
+  "JT-006": {
+    "branch": "main",
+    "note": "Added backend/mypy.ini with strict Python 3.12 mypy defaults and README guidance. Verified typed inline code passes and untyped inline code fails with no-untyped-def.",
+    "status": "done",
+    "updated": "2026-07-03T23:16:07Z"
+  },
+  "JT-008": {
+    "branch": "jt-008-gate-run",
+    "note": "Added backend/app/main.py with create_app(), module-level app, and empty API router registration. Added focused app-factory pytest coverage. Verification passed: pytest focused, ruff, strict mypy, full backend pytest, import smoke check, and no-mistakes checks-passed.",
+    "pr": "https://github.com/talibilat/job-search-intelligence/pull/226",
+    "status": "done",
+    "updated": "2026-07-03T23:28:43Z",
+    "worktree": "/Users/talibilat/Documents/Projects/job-search-intelligence/.worktrees/jt-008"
+  },
+  "JT-005": {
+    "branch": "jt-005",
+    "note": "Added backend/ruff.toml with Python 3.12 target, focused lint rule set, and format defaults, using a standalone config (not pyproject.toml) to avoid coupling with JT-004's open project scaffolding. Documented README commands. Verified via stdin: ruff check caught F401/E741/C416 on bad code, passed on clean code, and ruff format normalized spacing.",
+    "status": "done",
+    "updated": "2026-07-04T00:11:15Z",
+    "worktree": "/Users/talibilat/.treehouse/job-search-intelligence-ff571b/3/job-search-intelligence"
+  },
+  "JT-004": {
+    "branch": "jt-004",
+    "note": "Added backend/pyproject.toml [project]/[dependency-groups] and uv.lock, making the backend a uv-managed project pinned to Python 3.12 (fastapi, uvicorn, pydantic, starlette runtime; ruff, mypy, pytest, httpx2 dev). Merged additively with JT-006's existing [tool.mypy] section. Rebased twice onto main as JT-007/008/009/010/012/013 landed concurrently; resolved conflicts by hand after opting out of the no-mistakes gate (its document step hit a session usage limit) at the user's direction to push and open the PR directly. Verified: uv sync --locked, 21/21 pytest passing, ruff clean, mypy strict clean.",
+    "pr": "https://github.com/talibilat/job-search-intelligence/pull/235",
+    "status": "done",
+    "updated": "2026-07-04T02:15:00Z",
+    "worktree": "/Users/talibilat/.treehouse/job-search-intelligence-ff571b/4/job-search-intelligence"
+  }
+}
