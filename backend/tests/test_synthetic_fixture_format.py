@@ -78,8 +78,10 @@ def make_valid_fixture() -> SyntheticFixtureFile:
     )
 
     return SyntheticFixtureFile(
+        schema_version="1",
         fixture_id="basic-job-search",
         description="Private-data-free job-search fixture for backend smoke tests.",
+        contains_private_data=False,
         emails=(email,),
         classifications=(classification,),
         applications=(application,),
@@ -111,6 +113,17 @@ def test_fixture_rejects_private_data_flag() -> None:
         SyntheticFixtureFile.model_validate(fixture_data)
 
 
+def test_fixture_requires_schema_version_and_private_data_attestation() -> None:
+    fixture_data = make_valid_fixture().model_dump(mode="json")
+
+    for required_field in ("schema_version", "contains_private_data"):
+        invalid_data = fixture_data | {required_field: None}
+        invalid_data.pop(required_field)
+
+        with pytest.raises(ValidationError):
+            SyntheticFixtureFile.model_validate(invalid_data)
+
+
 def test_fixture_rejects_unknown_email_payload_fields() -> None:
     email_data = make_valid_fixture().emails[0].model_dump(mode="json")
     email_data["raw_html"] = "<p>Do not retain raw HTML in synthetic fixtures.</p>"
@@ -124,8 +137,10 @@ def test_fixture_validates_unique_ids_and_cross_references() -> None:
 
     with pytest.raises(ValidationError, match="duplicate email ids"):
         SyntheticFixtureFile(
+            schema_version="1",
             fixture_id="duplicate-email",
             description="Duplicate email identifiers are invalid.",
+            contains_private_data=False,
             emails=(fixture.emails[0], fixture.emails[0]),
             classifications=fixture.classifications,
             applications=fixture.applications,
@@ -137,8 +152,10 @@ def test_fixture_validates_unique_ids_and_cross_references() -> None:
     )
     with pytest.raises(ValidationError, match="unknown email ids"):
         SyntheticFixtureFile(
+            schema_version="1",
             fixture_id="missing-classification-email",
             description="Classifications must reference emails in the fixture.",
+            contains_private_data=False,
             emails=fixture.emails,
             classifications=(missing_email_classification,),
             applications=fixture.applications,
@@ -150,8 +167,10 @@ def test_fixture_validates_unique_ids_and_cross_references() -> None:
     )
     with pytest.raises(ValidationError, match="unknown application ids"):
         SyntheticFixtureFile(
+            schema_version="1",
             fixture_id="missing-event-application",
             description="Events must reference applications in the fixture.",
+            contains_private_data=False,
             emails=fixture.emails,
             classifications=fixture.classifications,
             applications=fixture.applications,

@@ -154,10 +154,10 @@ class SyntheticFixtureFile(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal["1"] = "1"
+    schema_version: Literal["1"]
     fixture_id: str = Field(min_length=1)
     description: str = Field(min_length=1)
-    contains_private_data: Literal[False] = False
+    contains_private_data: Literal[False]
     emails: tuple[SyntheticRawEmail, ...] = ()
     classifications: tuple[SyntheticEmailClassification, ...] = ()
     applications: tuple[SyntheticApplication, ...] = ()
