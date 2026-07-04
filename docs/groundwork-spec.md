@@ -83,7 +83,10 @@ job-search-intelligence/
 │   └── .env.example
 ├── frontend/
 │   ├── src/
-│   │   ├── api/                    # generated TS client (from OpenAPI)
+│   │   ├── api/                    # stable API import boundary
+│   │   │   ├── generated/          # generated TS client destination (from OpenAPI)
+│   │   │   ├── index.ts            # re-export boundary for app imports
+│   │   │   └── client.contract.ts  # compile-time boundary contract
 │   │   ├── pages/                  # Dashboard, Insights, Chat, Setup
 │   │   ├── components/             # charts, filters, cards, chat UI
 │   │   └── lib/
@@ -186,7 +189,9 @@ Show a **pre-run cost estimate** and track tokens per run.
 - **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
 
-OpenAPI schema -> `backend/scripts/generate_openapi.py` -> frontend TypeScript client in `frontend/src/api/`.
+OpenAPI schema -> `backend/scripts/generate_openapi.py` -> frontend TypeScript client in `frontend/src/api/generated/client.ts`.
+Frontend application code imports through the stable `frontend/src/api` boundary instead of reaching into `generated/` directly.
+Until the generation workflow lands, the placeholder client marks the destination and `frontend/src/api/client.contract.ts` keeps the boundary typechecked.
 
 Standard error responses use a typed Pydantic shape: `{"error": {"code": "...", "message": "...", "details": []}}`.
 Routes and services raise explicit `ApiError` values for public API-boundary failures.
@@ -231,7 +236,7 @@ Full list in `docs/questions.md`. Mapping:
 ## 8. Phase roadmap (with Definition of Done)
 
 **Phase 0 - Groundwork / scaffold**
-Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, frontend generated-client destination and import boundary, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
 **Phase 1 - Gmail ingestion**

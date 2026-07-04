@@ -12,6 +12,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 
 Phase 0 (Groundwork).
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+The frontend also has a generated API client destination placeholder, a stable `frontend/src/api` import boundary, and a compile-time contract covered by the TypeScript check until OpenAPI generation is wired.
 Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
@@ -26,7 +27,7 @@ Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold 
 | Provider registry | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
 | LLM provider seam | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs |
 | Email providers | `EmailProvider` protocol with typed auth, metadata, cursor, and retained-body DTOs; Gmail implementation deferred |
-| API style | REST with a generated TypeScript client from OpenAPI |
+| API style | REST with a generated TypeScript client from OpenAPI, imported through `frontend/src/api` |
 | Data contracts | Pydantic v2 DTOs at every boundary |
 | API errors | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details |
 | Secret storage | Backend `SecretStore` protocol with a default OS keyring adapter, Pydantic `SecretRef` identifiers, and `SecretStr` values |
@@ -105,6 +106,7 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Frontend TypeScript check: `npm run typecheck` from `frontend/`.
 - Frontend lint check: `npm run lint` from `frontend/`.
 - Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, and build.
+- Current frontend API boundary: import client types and helpers from `frontend/src/api`; `frontend/src/api/generated/client.ts` is the OpenAPI-generated client destination placeholder until client generation is wired, and `frontend/src/api/client.contract.ts` is covered by `npm run typecheck`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
 - Frontend test scripts are not scaffolded yet; later frontend and Playwright tickets own those checks.

@@ -23,6 +23,7 @@ Baseline coding standards for every agent and contributor.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
 - Public API failures use the standard `{"error": {"code": "...", "message": "...", "details": []}}` response shape, and route-specific public failures should raise `ApiError` instead of exposing arbitrary `HTTPException.detail` text.
 - Validation, HTTP, and internal exception handlers must sanitize raw request input, tracebacks, secrets, and private exception details.
+- Frontend code imports API client types and helpers from `frontend/src/api`; `frontend/src/api/generated/` is reserved for OpenAPI-generated output and placeholder destination code.
 
 ## Determinism and the LLM
 
