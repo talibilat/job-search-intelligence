@@ -105,6 +105,7 @@ job-search-intelligence/
 │   ├── github-backlog-plan.md      # approved issue list before manifest generation
 │   ├── google-oauth-setup.md       # user-created Google OAuth client setup guide
 │   ├── conventions.md              # coding standards for agents
+│   ├── llm-provider-setup.md       # Azure OpenAI and Ollama setup values and secret boundaries
 │   └── synthetic-fixtures.md       # private-data-free fixture format
 ├── .pre-commit-config.yaml
 ├── .github/workflows/backend-ci.yml # backend ruff + mypy + pytest
