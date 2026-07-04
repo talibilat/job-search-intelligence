@@ -55,7 +55,7 @@ This keeps the future `applications` and `application_events` invariant intact b
 The endpoint does not log secrets or email content.
 The response only includes local filesystem paths derived from configured storage targets.
 The wipe behavior remains local-first and never sends data to a network service.
-External credential files and OS keyring entries are out of scope because concrete secret-store adapters are separate tickets.
+External credential files and OS keyring entries are out of scope because secret-store entry lifecycle belongs to the credential setup and secret-store tickets.
 
 ## Verification
 
