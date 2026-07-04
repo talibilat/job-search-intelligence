@@ -3,11 +3,12 @@ import { Alert, Button, DataTable, FormField, Tabs, TextInput } from "./primitiv
 interface ApplicationSummary {
   company: string;
   applications: number;
+  metadata: { source: string };
   status: "applied" | "interview" | "rejected";
 }
 
 const summaries: ApplicationSummary[] = [
-  { company: "Acme", applications: 2, status: "interview" },
+  { company: "Acme", applications: 2, metadata: { source: "manual" }, status: "interview" },
 ];
 
 export function UiPrimitiveContract() {
@@ -41,6 +42,16 @@ export function UiPrimitiveContract() {
           { key: "company", header: "Company" },
           { key: "applications", header: "Applications", align: "right" },
           { key: "status", header: "Current status" },
+        ]}
+        rows={summaries}
+        rowKey={(row) => row.company}
+      />
+
+      <DataTable
+        caption="Invalid object column"
+        columns={[
+          // @ts-expect-error Object-valued columns must provide render.
+          { key: "metadata", header: "Metadata" },
         ]}
         rows={summaries}
         rowKey={(row) => row.company}

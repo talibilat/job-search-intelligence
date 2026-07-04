@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { Alert, FormField, Tabs, TextInput } from "./primitives";
+import { Alert, DataTable, FormField, Tabs, TextInput, type DataTableColumn } from "./primitives";
 
 describe("FormField", () => {
   it("uses one id for the label target and child control", () => {
@@ -70,5 +70,28 @@ describe("Alert", () => {
     );
 
     expect(container.firstElementChild?.getAttribute("role")).toBe("status");
+  });
+});
+
+describe("DataTable", () => {
+  it("throws when a non-scalar cell has no renderer", () => {
+    interface RowWithDetails {
+      details: { status: string };
+    }
+
+    const columns = [
+      { key: "details", header: "Details" },
+    ] as unknown as DataTableColumn<RowWithDetails>[];
+
+    expect(() =>
+      render(
+        <DataTable
+          caption="Applications"
+          columns={columns}
+          rowKey={() => "row-1"}
+          rows={[{ details: { status: "applied" } }]}
+        />,
+      ),
+    ).toThrow("DataTable columns for non-scalar values must define render.");
   });
 });

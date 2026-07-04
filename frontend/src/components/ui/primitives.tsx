@@ -252,12 +252,30 @@ export function Tabs({ className, defaultItemId, items, label }: TabsProps) {
   );
 }
 
-export interface DataTableColumn<TRow extends object> {
+type DataTableCellValue = string | number | null | undefined;
+
+interface DataTableColumnBase {
   align?: "left" | "right";
   header: ReactNode;
+}
+
+export type DataTableColumn<TRow extends object> = DataTableColumnBase &
+  {
+    [TKey in keyof TRow & string]: TRow[TKey] extends DataTableCellValue
+      ? {
+          key: TKey;
+          render?: (row: TRow) => ReactNode;
+        }
+      : {
+          key: TKey;
+          render: (row: TRow) => ReactNode;
+        };
+  }[keyof TRow & string];
+
+type ResolvedDataTableColumn<TRow extends object> = DataTableColumnBase & {
   key: keyof TRow & string;
   render?: (row: TRow) => ReactNode;
-}
+};
 
 export interface DataTableProps<TRow extends object> {
   caption: ReactNode;
@@ -267,7 +285,7 @@ export interface DataTableProps<TRow extends object> {
   rows: readonly TRow[];
 }
 
-function renderCellValue<TRow extends object>(row: TRow, column: DataTableColumn<TRow>) {
+function renderCellValue<TRow extends object>(row: TRow, column: ResolvedDataTableColumn<TRow>) {
   if (column.render) {
     return column.render(row);
   }
@@ -282,7 +300,7 @@ function renderCellValue<TRow extends object>(row: TRow, column: DataTableColumn
     return "";
   }
 
-  return JSON.stringify(value);
+  throw new Error("DataTable columns for non-scalar values must define render.");
 }
 
 /** Captioned data table with typed columns and a horizontal overflow wrapper. */
