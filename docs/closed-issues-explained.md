@@ -855,10 +855,10 @@ GitHub issue: <https://github.com/talibilat/job-search-intelligence/issues/48>
 
 What was done:
 A frontend GitHub Actions workflow was added at `.github/workflows/frontend-ci.yml`.
-It checks out the repository, sets up Node.js 22 with npm package-lock caching, installs frontend dependencies with `npm ci`, and runs `npm run check` from `frontend/`.
+It checks out the repository, sets up Node.js 22 with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` with `working-directory: frontend`, and runs `npm run check` with `working-directory: frontend`.
 
 Why it was done:
-The frontend typecheck, ESLint gate, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
+The frontend typecheck, ESLint gate, Vitest unit tests, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
 This keeps the existing frontend package scripts as the source of truth while making them part of the Phase 0 CI gate.
 
 Area:
@@ -867,6 +867,8 @@ Frontend CI and repository infrastructure.
 Important files to inspect:
 `.github/workflows/frontend-ci.yml` contains the GitHub Actions workflow.
 `frontend/package.json` contains the `check` script that CI invokes.
+`frontend/package-lock.json` is the nested npm lockfile used by `npm ci` and the GitHub Actions npm cache.
+`backend/tests/test_frontend_ci_workflow.py` verifies the lockfile is valid JSON and the workflow uses the nested lockfile plus `frontend/` working directory for install and check steps.
 
 How to test it locally:
 
@@ -876,8 +878,15 @@ npm ci
 npm run check
 ```
 
+To verify the workflow contract from the backend test suite:
+
+```bash
+cd backend
+uv run pytest tests/test_frontend_ci_workflow.py -q
+```
+
 Expected result:
-`npm run check` should run TypeScript checking, ESLint, and the Vite build without errors.
+`npm run check` should run TypeScript checking, ESLint, Vitest, and the Vite build without errors.
 
 Caveat:
 This ticket adds frontend CI only.
@@ -961,6 +970,6 @@ The backend can start, expose a few basic endpoints, run tests, lint, and type c
 The frontend can start, run unit tests, and build, but it is still a static shell.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
 The frontend can start and build, but it is still a static shell.
-Frontend CI now runs the existing frontend typecheck, lint, and build gate on pushes and pull requests to `main`.
+Frontend CI now runs the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, and the wipe-data endpoint.

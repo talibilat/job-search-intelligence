@@ -228,12 +228,12 @@ The backend has an initial FastAPI app factory, typed API error DTOs in `backend
 - Playwright smoke tests are not scaffolded yet; a later frontend ticket owns those checks.
 - Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, Vitest, and build.
 - Frontend unit test check: `npm run test` from `frontend/` runs Vitest in jsdom.
-- Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, and build.
+- Frontend tooling gate: `npm run check` from `frontend/` runs typecheck, lint, Vitest, and build.
 - Current frontend API boundary: import client types and helpers from `frontend/src/api`; `frontend/src/api/generated/client.ts` is the OpenAPI-generated client destination placeholder until client generation is wired, and `frontend/src/api/client.contract.ts` is covered by `npm run typecheck`.
-- Frontend CI: `.github/workflows/frontend-ci.yml` runs on pushes and pull requests to `main`, installs dependencies with `npm ci`, and runs `npm run check` from `frontend/`.
+- Frontend CI: `.github/workflows/frontend-ci.yml` runs on pushes and pull requests to `main`, sets up Node.js with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` from `frontend/`, and runs `npm run check` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Frontend test scripts are not scaffolded yet.
+- Frontend unit test scripts are scaffolded; Playwright smoke scripts are not scaffolded yet.
 - Classification changes: run the golden-set eval at `backend/evals/run_eval.py`; regressions block merges.
 - Playwright smoke scripts are not scaffolded yet; later Playwright tickets own those checks.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
