@@ -67,6 +67,7 @@ scripts/          repository-level developer and operational scripts
 - A successful wipe returns `{"status":"wiped","deleted_paths":[],"missing_paths":[]}`; invalid confirmation bodies return the standard typed `422` validation error.
 - No telemetry.
 - Gmail access is read-only (`gmail.readonly`) in v1.
+- Google OAuth setup is documented in `docs/google-oauth-setup.md` and assumes a user-created Desktop app client with no shared or bundled credentials.
 
 ## Repository guide
 
