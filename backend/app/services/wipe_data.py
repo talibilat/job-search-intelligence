@@ -51,10 +51,7 @@ def _preflight_wipe_targets(targets: list[Path], data_dir: Path) -> None:
         if (
             target.exists()
             and target.is_symlink()
-            and (
-                target == data_dir
-                or not _is_relative_to(target.resolve(), canonical_data_dir)
-            )
+            and (target == data_dir or not _is_relative_to(target.resolve(), canonical_data_dir))
         ):
             raise UnsafeWipeTargetError(f"Unsafe wipe target: {target}")
         if target.exists() and target == data_dir and not target.is_dir():
