@@ -22,4 +22,5 @@ def test_setup_wizard_copy_covers_required_first_run_choices() -> None:
     assert "Gmail OAuth/API sync requests" in copy
     assert "Confirm privacy boundaries" in copy
     assert "No shared credentials" in copy
+    assert "wipe-local-data" in copy
     assert "SecretStore" in copy

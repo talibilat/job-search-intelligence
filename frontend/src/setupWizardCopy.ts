@@ -72,6 +72,10 @@ export const setupWizardSections: readonly SetupWizardSection[] = [
         label: "No dashboard counts from LLMs",
         body: "Factual metrics come from deterministic application data, not model output.",
       },
+      {
+        label: "Local data can be wiped",
+        body: "Use POST /local-data/wipe with the exact wipe-local-data confirmation phrase when you intentionally want to delete configured local app data and derived artifacts.",
+      },
     ],
   },
 ] as const;
