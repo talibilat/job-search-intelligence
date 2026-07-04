@@ -28,6 +28,7 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 | Wire type-safety | **Typed TS client generated from OpenAPI** (openapi-typescript/orval) | Frontend + backend contracts can't silently drift |
 | Stage contracts | **Pydantic v2** DTOs at every boundary | One source of truth for shapes |
 | Config/secrets | **pydantic-settings** + `.env` + first-run wizard; keyring default with Fernet fallback; keys **encrypted at rest** | Safe defaults for eventual open-source |
+| Secret store seam | **`SecretStore` protocol** with Pydantic `SecretRef` and `SecretStr` values | OAuth tokens and LLM keys flow through one typed adapter boundary before concrete storage lands |
 | Migrations | **Alembic** (batch mode; vec/virtual tables hand-written) | Schema will churn (aggregation, versioning, later phases); reversible revision graph supports idempotent re-runs |
 | Background sync | **APScheduler** in-process while backend is running | "sync on open" / "sync now" without extra infra |
 | Python tooling | **uv** + **ruff** + **mypy** + **pre-commit** | Modern, fast, low-friction |
@@ -42,6 +43,7 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 - **Pipeline** - `ingest -> filter -> classify -> aggregate`, each stage a pure-ish function taking/returning Pydantic DTOs.
 - **Service layer** - business logic in services; API routes stay thin.
 - **Dependency Injection** - FastAPI `Depends` for repos, providers, config.
+- **SecretStore adapter** - OAuth tokens and LLM API keys pass through a typed `SecretStore` protocol; adapters own encrypted-at-rest storage.
 - **DTOs** - Pydantic models cross every boundary (never pass raw dicts).
 - **Typed errors** - explicit error types, no bare exceptions leaking to the API.
 
@@ -63,6 +65,7 @@ job-search-intelligence/
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider ABC + gmail.py (+ future outlook/imap)
 │   │   │   └── llm/                # LLMProvider ABC + azure_openai.py/ollama.py (+ future openai/anthropic)
+│   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
 │   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords)
 │   │   │   ├── classify.py         # LLM classify + structured extract
@@ -216,7 +219,7 @@ Full list in `docs/questions.md`. Mapping:
 ## 8. Phase roadmap (with Definition of Done)
 
 **Phase 0 - Groundwork / scaffold**
-Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` ABCs (stubs), OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` ABCs (stubs), `SecretStore` interface seam, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
 **Phase 1 - Gmail ingestion**
@@ -266,7 +269,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, pe
 
 ## 11. Coding standards for agents (`docs/conventions.md`)
 
-Typed everywhere (mypy) · Pydantic at every boundary · Repository pattern for all DB access · **LLM never emits raw SQL** · small focused modules (a growing file signals it's doing too much) · providers behind interfaces · ruff-formatted · conventional commits · secrets never logged, encrypted at rest.
+Typed everywhere (mypy) · Pydantic at every boundary · Repository pattern for all DB access · **LLM never emits raw SQL** · small focused modules (a growing file signals it's doing too much) · providers behind interfaces · `SecretStore` for OAuth tokens and LLM keys · ruff-formatted · conventional commits · secrets never logged, encrypted at rest.
 
 ---
 

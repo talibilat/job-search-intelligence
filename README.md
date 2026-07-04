@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router, backend mypy/pytest scaffolding, and `backend/.env.example` for v1 operational settings.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router, and a backend `SecretStore` interface for OAuth tokens and LLM API keys.
 The rest of the backend, the frontend, and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
@@ -25,6 +25,7 @@ The rest of the backend, the frontend, and the CI scaffold fill in over subseque
 | LLM providers | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later |
 | API style | REST with a generated TypeScript client from OpenAPI |
 | Data contracts | Pydantic v2 DTOs at every boundary |
+| Secret storage seam | Backend `SecretStore` protocol with Pydantic `SecretRef` identifiers and `SecretStr` values |
 | Background sync | APScheduler in-process |
 | RAG agent | LangGraph hybrid router (structured query + semantic retrieval) |
 | Python tooling | uv, ruff, mypy, pre-commit |
@@ -34,7 +35,7 @@ See `docs/groundwork-spec.md` for the full locked architecture and repository la
 ## Repository layout
 
 ```text
-backend/    FastAPI app, pipeline, providers, repositories, evals, tests
+backend/    FastAPI app, pipeline, providers, security interfaces, repositories, evals, tests
 frontend/   React + TypeScript + Vite app
 docs/       source-of-truth product and architecture documents
 tickets/    issue manifest and templates
