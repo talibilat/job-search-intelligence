@@ -4,6 +4,12 @@ from __future__ import annotations
 class LLMProviderError(RuntimeError):
     """Base error for public-safe LLM provider failures."""
 
+    public_message: str
+
+    def __init__(self, *, public_message: str) -> None:
+        self.public_message = public_message
+        super().__init__(public_message)
+
 
 class LLMProviderUnavailableError(LLMProviderError):
     """Raised when the configured LLM provider cannot be used."""

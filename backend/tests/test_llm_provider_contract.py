@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 from app.providers.llm import (
@@ -105,13 +106,28 @@ def test_token_usage_rejects_negative_counts() -> None:
 
 def test_llm_provider_errors_are_typed() -> None:
     errors = [
-        LLMProviderUnavailableError("provider is unavailable"),
-        LLMProviderRequestError("provider request failed"),
-        LLMProviderResponseError("provider response was invalid"),
-        LLMProviderTimeoutError("provider request timed out"),
+        LLMProviderUnavailableError(public_message="provider is unavailable"),
+        LLMProviderRequestError(public_message="provider request failed"),
+        LLMProviderResponseError(public_message="provider response was invalid"),
+        LLMProviderTimeoutError(public_message="provider request timed out"),
     ]
 
     assert all(isinstance(error, LLMProviderError) for error in errors)
+
+
+def test_llm_provider_errors_expose_only_public_message() -> None:
+    error = LLMProviderRequestError(public_message="provider request failed")
+
+    assert error.public_message == "provider request failed"
+    assert str(error) == "provider request failed"
+    assert error.args == ("provider request failed",)
+
+
+def test_llm_provider_errors_reject_positional_messages() -> None:
+    error_type: type[Any] = LLMProviderRequestError
+
+    with pytest.raises(TypeError):
+        error_type("raw provider payload")
 
 
 def test_llm_boundary_models_do_not_define_credential_fields() -> None:
