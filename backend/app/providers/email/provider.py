@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import Protocol, Self, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.config import EmailProviderName
 from app.security import SecretRef
@@ -130,6 +130,16 @@ class EmailMetadataListRequest(BaseModel):
     page_token: str | None = Field(default=None, min_length=1)
     sync_cursor: EmailProviderCursor | None = None
 
+    @model_validator(mode="after")
+    def validate_cursor_for_mode(self) -> Self:
+        if self.mode is EmailSyncMode.INCREMENTAL and self.sync_cursor is None:
+            raise ValueError("incremental metadata requests require sync_cursor")
+
+        if self.mode is EmailSyncMode.FULL_BACKFILL and self.sync_cursor is not None:
+            raise ValueError("full_backfill metadata requests must not set sync_cursor")
+
+        return self
+
 
 class EmailMessageRef(BaseModel):
     """Provider-neutral stable reference to a single email message."""
@@ -144,7 +154,7 @@ class EmailMessageRef(BaseModel):
 class EmailMessageMetadata(BaseModel):
     """Provider-normalized metadata only; body text is fetched separately."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     ref: EmailMessageRef
     rfc822_message_id: str | None = None
@@ -152,7 +162,6 @@ class EmailMessageMetadata(BaseModel):
     to_addrs: tuple[EmailAddress, ...] = ()
     cc_addrs: tuple[EmailAddress, ...] = ()
     subject: str | None = None
-    snippet: str | None = None
     sent_at: datetime | None = None
     received_at: datetime | None = None
     labels: tuple[str, ...] = ()

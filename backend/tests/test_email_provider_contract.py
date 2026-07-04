@@ -106,7 +106,6 @@ class FakeEmailProvider:
                     to_addrs=(EmailAddress(address=connection.account.account_id),),
                     cc_addrs=(),
                     subject="Application received",
-                    snippet="Thanks for applying.",
                     sent_at=NOW,
                     received_at=NOW,
                     labels=("INBOX",),
@@ -247,6 +246,56 @@ def test_email_provider_boundary_dtos_validate_safe_batches() -> None:
 
     with pytest.raises(ValidationError):
         EmailBodyFetchRequest(refs=(message_ref,), max_body_bytes=0)
+
+
+def test_metadata_contract_excludes_body_derived_snippets() -> None:
+    account = EmailAccountRef(
+        provider=EmailProviderName.GMAIL,
+        account_id="me@example.com",
+    )
+    message_ref = EmailMessageRef(account=account, message_id="msg-1")
+    body_derived_metadata: dict[str, object] = {
+        "ref": message_ref,
+        "from_addr": EmailAddress(address="jobs@example.com"),
+        "subject": "Application received",
+        "snippet": "Thanks for applying.",
+    }
+
+    with pytest.raises(ValidationError):
+        EmailMessageMetadata.model_validate(body_derived_metadata)
+
+
+def test_metadata_list_request_validates_sync_mode_cursor_invariants() -> None:
+    account = EmailAccountRef(
+        provider=EmailProviderName.GMAIL,
+        account_id="me@example.com",
+    )
+    cursor = EmailProviderCursor(
+        account=account,
+        value="history-1",
+        issued_at=NOW,
+    )
+
+    EmailMetadataListRequest(
+        mode=EmailSyncMode.FULL_BACKFILL,
+        page_size=500,
+        page_token="next-page",
+    )
+    EmailMetadataListRequest(
+        mode=EmailSyncMode.INCREMENTAL,
+        page_size=500,
+        sync_cursor=cursor,
+    )
+
+    with pytest.raises(ValidationError):
+        EmailMetadataListRequest(mode=EmailSyncMode.INCREMENTAL, page_size=500)
+
+    with pytest.raises(ValidationError):
+        EmailMetadataListRequest(
+            mode=EmailSyncMode.FULL_BACKFILL,
+            page_size=500,
+            sync_cursor=cursor,
+        )
 
 
 def test_email_provider_errors_are_typed() -> None:
