@@ -859,6 +859,7 @@ It checks out the repository, sets up Node.js 22 with npm caching keyed by `fron
 
 Why it was done:
 The frontend typecheck, ESLint gate, Vitest unit tests, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
+This keeps the existing frontend package scripts as the source of truth while making type checking, linting, unit tests, and build verification part of the Phase 0 CI gate.
 This keeps the existing frontend package scripts as the source of truth while making them part of the Phase 0 CI gate.
 
 Area:
@@ -949,6 +950,7 @@ Backend:
 You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, local wipe-data infrastructure, and the async SQLite engine infrastructure.
 
 Frontend:
+You can see a static React shell for JobTracker, an empty Recharts foundation panel for future deterministic dashboard metrics, and shared accessible UI primitives for later pages.
 You can see a static React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics and setup-copy cards for provider, mode, Gmail, and privacy choices.
 It is not connected to backend data yet.
 
@@ -966,6 +968,9 @@ You can see early safety work for typed errors, secret references, safe configur
 ## Summary In Plain English
 
 The closed tickets have built the foundation, not the finished product.
+The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
+The frontend can start, run unit tests, and build, but it is still a static shell with an empty chart foundation and shared primitive layer.
+Frontend CI now runs the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, run tests, lint, and type checks.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
 Frontend CI now runs the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.

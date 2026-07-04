@@ -233,7 +233,7 @@ Classification is make-or-break for the whole product.
 - Make every number traceable to a deterministic endpoint.
 - Filters must compose consistently across metrics.
 - Dashboard filter state should live in route query strings.
-- Prefer accessible components and readable charts.
+- Prefer shared accessible primitives from `frontend/src/components/ui` for buttons, text inputs, labelled fields, alerts, tabs, and data tables, and use readable charts.
 - Use Recharts for charts and a small accessible component layer.
 - Avoid generic dashboards that hide the important story.
 - Show citations for narrative and chat answers.
@@ -276,8 +276,7 @@ Required checks depend on the work:
 
 - Backend Python changes: run ruff, mypy, and relevant pytest tests once scaffolded.
 - Frontend changes: run `npm run check` from `frontend/`; it includes type checking, linting, Vitest, and build verification.
-- Frontend changes: run `npm run check` from `frontend/`; the check includes typecheck, lint, Vitest, and build once those tools are scaffolded.
-- Frontend changes: run `npm run check` from `frontend/`; run relevant tests once those tools are scaffolded.
+- Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
 - Critical frontend flows: run the tiny Playwright smoke suite once scaffolded.
 - API contract changes: regenerate or validate the TypeScript client.
@@ -301,8 +300,7 @@ Never claim that work is complete without fresh verification evidence.
 
 ## Current Repository State
 
-At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, and Recharts chart wrapper foundation, but not the full product scaffold.
-At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, and root pre-commit configuration, but not the full product scaffold.
+At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, Recharts chart wrapper foundation, shared accessible UI primitives, root pre-commit configuration, and backend and frontend CI, but not the full product scaffold.
 Do not assume backend, frontend, tickets, scripts, or CI exist until you inspect the filesystem.
 
 When scaffolding begins, follow the layout in `docs/groundwork-spec.md` unless the user approves a change.
