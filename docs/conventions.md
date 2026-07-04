@@ -36,6 +36,7 @@ Baseline coding standards for every agent and contributor.
 - Format and lint with `ruff`; keep modules small and focused, since a growing file signals it is doing too much.
 - Use conventional commit messages.
 - Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; route secrets through `SecretStore` and store them encrypted at rest.
+- Use `app.security.redaction` before logging structured data that may contain secrets or retained email bodies.
 - Do not add telemetry, shared credentials, auto-apply, or autonomous outbound email.
 
 ## Verification
