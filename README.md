@@ -43,7 +43,7 @@ See `docs/groundwork-spec.md` for the full locked architecture and repository la
 backend/          FastAPI app, pipeline, providers, security interfaces, repositories, evals, tests
 backend/scripts/  backend operational scripts, including OpenAPI schema generation
 frontend/         React + TypeScript + Vite app
-docs/             source-of-truth product and architecture documents
+docs/             source-of-truth product, architecture, setup, and convention documents
 tickets/          issue manifest and templates
 scripts/          repository-level developer and operational scripts
 .github/          CI workflows
@@ -81,6 +81,7 @@ Developer instructions:
 
 - `AGENTS.md` - the canonical local agent guide with workflows and non-negotiable constraints.
 - `docs/conventions.md` - baseline coding standards.
+- `docs/google-oauth-setup.md` - Google OAuth setup guide for user-created Gmail credentials.
 - `docs/synthetic-fixtures.md` - private-data-free backend fixture format for future loader, aggregation, and dashboard smoke work.
 - `.editorconfig` - shared editor defaults.
 - Project-local agent worktrees and scratch checkouts under `.worktrees/` are ignored; ticket source-of-truth files stay tracked under `tickets/`.

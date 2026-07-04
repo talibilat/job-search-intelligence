@@ -16,6 +16,7 @@ Baseline coding standards for every agent and contributor.
 - Provider selection metadata belongs in `app.providers.provider_registry`; it declares supported providers, non-secret setting requirements, and `SecretRef` metadata without instantiating adapters or reading secrets.
 - LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
 - `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
+- Gmail OAuth setup and future auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, and token material routed through `SecretStore`.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
 - Service layer holds business logic; FastAPI route handlers stay thin.
