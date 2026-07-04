@@ -10,9 +10,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "typecheck": "tsc -b",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"vite.config.ts\" --max-warnings=0",
-    "check": "npm run typecheck && npm run lint && npm run build"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "react": "^19.2.7",
@@ -27,6 +28,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",
-    "vite": "^8.1.3"
+    "vite": "^8.1.3",
+    "vitest": "^4.1.9"
   }
 }
