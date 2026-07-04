@@ -52,6 +52,8 @@ scripts/    developer and operational scripts
 - Local-first: app state lives in a single local SQLite file, and nothing leaves the machine except LLM API calls the user explicitly configures.
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
 - Secrets are stored encrypted at rest and never logged.
+- Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate or reconciliation messages.
+- Broad email metadata excludes body-derived snippets, and v1 ignores attachment content.
 - `backend/.env.example` documents operational settings only; keep API keys, OAuth tokens, passwords, client secrets, and Google OAuth client JSON out of the repo.
 - Local wipe-data path: `POST /local-data/wipe` clears configured local app data and derived artifacts after the request body confirms `{"confirmation":"wipe-local-data"}`.
 - The wipe deletes `JOBTRACKER_DATA_DIR` recursively, and when `JOBTRACKER_DATABASE_URL` points to a local SQLite file outside that directory, it also deletes the database file plus `-wal`, `-shm`, and `-journal` sidecars.

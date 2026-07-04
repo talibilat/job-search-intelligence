@@ -133,7 +133,11 @@ Manual corrections are audited, lock affected grouping/status from automatic ove
 ## 4. Pipeline
 
 ```text
-Gmail API -> raw_emails
+EmailProvider -> metadata-only raw_emails
+                 │
+                 ├─ full backfill: paginated metadata pages, no body snippets
+                 ├─ incremental sync: provider-owned cursor required
+                 └─ retained bodies fetched only for selected candidate/reconciliation refs
                  │
                  ▼
    1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
@@ -159,6 +163,9 @@ Gmail API -> raw_emails
      metrics         insights       (sqlite-vec)
      (dashboard)     (insights)      (chat agent)
 ```
+
+`EmailProvider` adapters own provider-specific auth, metadata normalization, pagination, opaque sync cursors, and retained-body fetching.
+The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, and ignores attachment content in v1.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 

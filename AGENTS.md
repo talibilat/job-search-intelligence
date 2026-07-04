@@ -219,6 +219,8 @@ Classification is make-or-break for the whole product.
 - Use Gmail `gmail.readonly` for v1 ingestion.
 - Assume the user creates their own Google Cloud OAuth client.
 - Store metadata for all ingested Gmail messages, but retain body text only for broad job-search candidates or reconciliation/debugging.
+- Keep broad metadata backfill separate from retained body fetching; do not expose body-derived snippets in metadata DTOs.
+- Require provider-owned cursors for incremental metadata sync.
 - Do not retain raw HTML by default.
 - Ignore Gmail attachments in v1.
 - Embed only retained job-related email bodies.
