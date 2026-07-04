@@ -824,7 +824,7 @@ Area:
 Frontend tooling and documentation.
 
 Important files to inspect:
-`frontend/package.json` contains `typecheck`, `lint`, and `check` scripts.
+`frontend/package.json` contains `generate:openapi`, `typecheck`, `lint`, and `check` scripts.
 `frontend/eslint.config.js` contains the ESLint setup.
 `frontend/tsconfig.json`, `frontend/tsconfig.app.json`, and `frontend/tsconfig.node.json` configure TypeScript.
 `README.md`, `AGENTS.md`, and `docs/conventions.md` document the frontend checks.
@@ -855,21 +855,21 @@ GitHub issue: <https://github.com/talibilat/job-search-intelligence/issues/48>
 
 What was done:
 A frontend GitHub Actions workflow was added at `.github/workflows/frontend-ci.yml`.
-It checks out the repository, sets up Node.js 22 with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` with `working-directory: frontend`, and runs `npm run check` with `working-directory: frontend`.
+It checks out the repository, installs `uv`, sets up Python 3.12, syncs locked backend dependencies, sets up Node.js 22 with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` with `working-directory: frontend`, and runs `npm run check` with `working-directory: frontend`.
 
 Why it was done:
-The frontend typecheck, ESLint gate, Vitest unit tests, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
-This keeps the existing frontend package scripts as the source of truth while making type checking, linting, unit tests, and build verification part of the Phase 0 CI gate.
-This keeps the existing frontend package scripts as the source of truth while making them part of the Phase 0 CI gate.
+The frontend OpenAPI schema generation, typecheck, ESLint gate, Vitest unit tests, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
+This keeps the existing frontend package scripts as the source of truth while making OpenAPI generation, type checking, linting, unit tests, and build verification part of the Phase 0 CI gate.
+This keeps the OpenAPI-backed frontend package scripts as the source of truth for the Phase 0 CI gate.
 
 Area:
 Frontend CI and repository infrastructure.
 
 Important files to inspect:
 `.github/workflows/frontend-ci.yml` contains the GitHub Actions workflow.
-`frontend/package.json` contains the `check` script that CI invokes.
+`frontend/package.json` contains the `generate:openapi` script and the `check` script that CI invokes.
 `frontend/package-lock.json` is the nested npm lockfile used by `npm ci` and the GitHub Actions npm cache.
-`backend/tests/test_frontend_ci_workflow.py` verifies the lockfile is valid JSON and the workflow uses the nested lockfile plus `frontend/` working directory for install and check steps.
+`backend/tests/test_frontend_ci_workflow.py` verifies the lockfile is valid JSON, `npm run check` starts with OpenAPI generation through backend `uv`, and the workflow installs backend tooling before using the nested lockfile plus `frontend/` working directory for install and check steps.
 
 How to test it locally:
 
@@ -879,6 +879,8 @@ npm ci
 npm run check
 ```
 
+`npm run check` requires the backend `uv` environment because it shells into `backend/` to generate `frontend/src/api/openapi.json` before running frontend checks.
+
 To verify the workflow contract from the backend test suite:
 
 ```bash
@@ -887,7 +889,7 @@ uv run pytest tests/test_frontend_ci_workflow.py -q
 ```
 
 Expected result:
-`npm run check` should run TypeScript checking, ESLint, Vitest, and the Vite build without errors.
+`npm run check` should run OpenAPI schema generation, TypeScript checking, ESLint, Vitest, and the Vite build without errors.
 
 Caveat:
 This ticket adds frontend CI only.
@@ -918,7 +920,7 @@ npm ci
 npm run check
 ```
 
-`npm run check` runs type checking, linting, Vitest, and the Vite build.
+`npm run check` runs OpenAPI schema generation, type checking, linting, Vitest, and the Vite build.
 
 Run the backend manually from `backend/`:
 
@@ -970,9 +972,9 @@ You can see early safety work for typed errors, secret references, safe configur
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
 The frontend can start, run unit tests, and build, but it is still a static shell with an empty chart foundation and shared primitive layer.
-Frontend CI now runs the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
+Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, run tests, lint, and type checks.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
-Frontend CI now runs the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
+Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, and the wipe-data endpoint.
