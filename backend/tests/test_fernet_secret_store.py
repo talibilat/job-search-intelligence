@@ -11,6 +11,7 @@ from app.security import (
     SecretRef,
     SecretStore,
     SecretStoreUnavailableError,
+    build_secret_store,
 )
 from pydantic import SecretStr
 
@@ -112,3 +113,90 @@ def test_fernet_store_from_settings_uses_configured_key_and_data_dir(tmp_path: P
     encrypted_files = encrypted_secret_files(tmp_path / "data" / "secrets")
     assert len(encrypted_files) == 1
     assert b"configured-secret" not in encrypted_files[0].read_bytes()
+
+
+def test_build_secret_store_selects_fernet_backend(tmp_path: Path) -> None:
+    settings = AppSettings(
+        _env_file=None,
+        secret_store_backend="fernet",
+        data_dir=tmp_path / "data",
+        fernet_key_file=tmp_path / "keys" / "fernet.key",
+    )
+
+    store = build_secret_store(settings)
+
+    assert isinstance(store, FernetSecretStore)
+
+
+def test_build_secret_store_rejects_unimplemented_keyring_backend() -> None:
+    settings = AppSettings(_env_file=None, secret_store_backend="keyring")
+
+    with pytest.raises(SecretStoreUnavailableError):
+        build_secret_store(settings)
+
+
+def test_fernet_store_wraps_secret_directory_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = FernetSecretStore(
+        key_file=tmp_path / "fernet.key",
+        store_dir=tmp_path / "secrets",
+    )
+
+    def raise_permission_error(
+        self: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        raise PermissionError("no access")
+
+    monkeypatch.setattr(Path, "mkdir", raise_permission_error)
+
+    with pytest.raises(SecretStoreUnavailableError):
+        asyncio.run(store.set_secret(secret_ref(), SecretStr("secret-value")))
+
+
+def test_fernet_store_wraps_key_directory_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = FernetSecretStore(
+        key_file=tmp_path / "keys" / "fernet.key",
+        store_dir=tmp_path / "secrets",
+    )
+    original_mkdir = Path.mkdir
+
+    def raise_for_key_dir(
+        self: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        if self == tmp_path / "keys":
+            raise PermissionError("no access")
+        original_mkdir(self, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", raise_for_key_dir)
+
+    with pytest.raises(SecretStoreUnavailableError):
+        asyncio.run(store.set_secret(secret_ref(), SecretStr("secret-value")))
+
+
+def test_fernet_store_wraps_delete_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = FernetSecretStore(
+        key_file=tmp_path / "fernet.key",
+        store_dir=tmp_path / "secrets",
+    )
+
+    def raise_permission_error(self: Path) -> None:
+        raise PermissionError("no access")
+
+    monkeypatch.setattr(Path, "unlink", raise_permission_error)
+
+    with pytest.raises(SecretStoreUnavailableError):
+        asyncio.run(store.delete_secret(secret_ref()))

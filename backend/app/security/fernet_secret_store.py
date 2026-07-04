@@ -44,7 +44,12 @@ class FernetSecretStore:
 
     async def set_secret(self, ref: SecretRef, value: SecretStr) -> None:
         secret_file = self._secret_file(ref)
-        secret_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            secret_file.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise SecretStoreUnavailableError(
+                "Encrypted secret payload could not be written."
+            ) from error
 
         encrypted_value = self._load_or_create_fernet().encrypt(
             value.get_secret_value().encode("utf-8")
@@ -53,8 +58,14 @@ class FernetSecretStore:
 
     async def delete_secret(self, ref: SecretRef) -> None:
         secret_file = self._secret_file(ref)
-        with suppress(FileNotFoundError):
+        try:
             secret_file.unlink()
+        except FileNotFoundError:
+            return
+        except OSError as error:
+            raise SecretStoreUnavailableError(
+                "Encrypted secret payload could not be deleted."
+            ) from error
 
     def _secret_file(self, ref: SecretRef) -> Path:
         return self._store_dir / ref.kind.value / ref.provider / f"{ref.name}.fernet"
@@ -84,12 +95,16 @@ class FernetSecretStore:
         if not create_if_missing:
             raise SecretStoreUnavailableError("Fernet secret key file is missing.")
 
-        self._key_file.parent.mkdir(parents=True, exist_ok=True)
         key = Fernet.generate_key()
         try:
+            self._key_file.parent.mkdir(parents=True, exist_ok=True)
             self._write_new_private_file(self._key_file, key)
         except FileExistsError:
             return self._read_key_file()
+        except OSError as error:
+            raise SecretStoreUnavailableError(
+                "Fernet secret key could not be created."
+            ) from error
 
         return key
 
@@ -107,7 +122,7 @@ class FernetSecretStore:
             temp_path.replace(path)
             os.chmod(path, _PRIVATE_FILE_MODE)
         except OSError as error:
-            with suppress(FileNotFoundError):
+            with suppress(OSError):
                 temp_path.unlink()
             raise SecretStoreUnavailableError(
                 "Encrypted secret payload could not be written."
