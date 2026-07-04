@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
 Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
@@ -39,12 +39,13 @@ See `docs/groundwork-spec.md` for the full locked architecture and repository la
 ## Repository layout
 
 ```text
-backend/    FastAPI app, pipeline, providers, security interfaces, repositories, evals, tests
-frontend/   React + TypeScript + Vite app
-docs/       source-of-truth product and architecture documents
-tickets/    issue manifest and templates
-scripts/    developer and operational scripts
-.github/    CI workflows
+backend/          FastAPI app, pipeline, providers, security interfaces, repositories, evals, tests
+backend/scripts/  backend operational scripts, including OpenAPI schema generation
+frontend/         React + TypeScript + Vite app
+docs/             source-of-truth product and architecture documents
+tickets/          issue manifest and templates
+scripts/          repository-level developer and operational scripts
+.github/          CI workflows
 ```
 
 ## Privacy
@@ -80,8 +81,8 @@ Developer instructions:
 
 ## Development
 
-The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` seam in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers in `backend/app/db/repositories/`, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
-The backend database schema and engine do not exist yet; schema-specific commands will apply once they land.
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` seam in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend database does not exist yet; database-specific commands will apply once it lands.
 
 - Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn` as runtime dependencies, and uses `ruff`, `mypy`, and `pytest` as the dev-dependency verification gate; `backend/pyproject.toml` also holds the strict mypy defaults.
 - Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
@@ -92,6 +93,7 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Current setup shell: `GET /setup/status` returns typed first-run setup readiness fields without reading or returning secrets.
 - Current local wipe-data endpoint: `POST /local-data/wipe` removes configured local storage targets after the exact confirmation phrase `wipe-local-data`.
 - Current provider registry: `app.providers.provider_registry` declares Gmail, Ollama, and Azure OpenAI metadata; validation checks selected non-secret LLM settings only and does not read secret values.
+- Current OpenAPI schema generation: run `uv run python -m scripts.generate_openapi` from `backend/` to write sorted, indented JSON to `frontend/src/api/openapi.json`; pass `--output <path>` to write the schema elsewhere.
 - Current backend type check: run `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
 - Current backend lint check: run `ruff check .` from `backend/`.
