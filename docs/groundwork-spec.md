@@ -58,7 +58,7 @@ job-search-intelligence/
 │   │   ├── main.py                 # FastAPI app factory, router registration
 │   │   ├── config.py               # pydantic-settings, provider selection, env overrides
 │   │   ├── db/
-│   │   │   ├── engine.py           # SQLite connection, sqlite-vec load
+│   │   │   ├── engine.py           # SQLite engine and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
 │   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
