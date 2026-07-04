@@ -103,6 +103,7 @@ job-search-intelligence/
 │   ├── questions.md                # the 54 questions, tiered
 │   ├── backlog-decisions.md        # approved backlog and product decisions
 │   ├── github-backlog-plan.md      # approved issue list before manifest generation
+│   ├── google-oauth-setup.md       # user-created Google OAuth client setup guide
 │   ├── conventions.md              # coding standards for agents
 │   └── synthetic-fixtures.md       # private-data-free fixture format
 ├── .pre-commit-config.yaml

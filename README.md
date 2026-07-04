@@ -56,7 +56,7 @@ See `docs/groundwork-spec.md` for the full locked architecture and repository la
 backend/          FastAPI app, pipeline, providers, security interfaces, repositories, evals, tests
 backend/scripts/  backend operational scripts, including OpenAPI schema generation
 frontend/         React + TypeScript + Vite app
-docs/             source-of-truth product and architecture documents
+docs/             source-of-truth product, architecture, setup, and convention documents
 tickets/          issue manifest and templates
 scripts/          repository-level developer and operational scripts
 .github/          CI workflows
@@ -80,6 +80,7 @@ scripts/          repository-level developer and operational scripts
 - A successful wipe returns `{"status":"wiped","deleted_paths":[],"missing_paths":[]}`; invalid confirmation bodies return the standard typed `422` validation error.
 - No telemetry.
 - Gmail access is read-only (`gmail.readonly`) in v1.
+- Google OAuth setup is documented in `docs/google-oauth-setup.md` and assumes a user-created Desktop app client with no shared or bundled credentials.
 
 ## Repository guide
 
@@ -93,6 +94,7 @@ Developer instructions:
 
 - `AGENTS.md` - the canonical local agent guide with workflows and non-negotiable constraints.
 - `docs/conventions.md` - baseline coding standards.
+- `docs/google-oauth-setup.md` - Google OAuth setup guide for user-created Gmail credentials.
 - `docs/synthetic-fixtures.md` - private-data-free backend fixture format for future loader, aggregation, and dashboard smoke work.
 - `.editorconfig` - shared editor defaults.
 - Project-local agent worktrees and scratch checkouts under `.worktrees/` are ignored; ticket source-of-truth files stay tracked under `tickets/`.
