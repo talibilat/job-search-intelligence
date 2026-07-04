@@ -88,7 +88,104 @@ Developer instructions:
 - `.editorconfig` - shared editor defaults.
 - Project-local agent worktrees and scratch checkouts under `.worktrees/` are ignored; ticket source-of-truth files stay tracked under `tickets/`.
 
-## Development
+## Local Developer Quickstart
+
+Use this path for a fresh local checkout in Phase 0.
+The backend database does not exist yet, so database-specific commands will apply once it lands.
+
+### 1. Clone the repository
+
+```sh
+git clone https://github.com/talibilat/job-search-intelligence.git
+cd job-search-intelligence
+```
+
+Read the source-of-truth docs before implementing a ticket: `docs/prd.md`, `docs/groundwork-spec.md`, and `docs/questions.md`.
+
+### 2. Install backend dependencies
+
+The backend targets Python 3.12 and uses `uv` for dependency management.
+
+```sh
+cd backend
+uv sync
+```
+
+Run backend commands from `backend/` with `uv run`.
+
+### 3. Configure local backend environment
+
+Copy the example only when you need local overrides.
+
+```sh
+cp .env.example .env
+```
+
+Do not put API keys, OAuth tokens, passwords, client secrets, or Google OAuth client JSON in `backend/.env`.
+Keep Google OAuth client JSON outside the repository, for example at `~/.config/jobtracker/google-oauth-client.json`, and point `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` at that path.
+Keep `JOBTRACKER_GMAIL_SCOPES` set to `https://www.googleapis.com/auth/gmail.readonly` for v1 ingestion.
+The default `JOBTRACKER_DATA_DIR=./.jobtracker` is local app storage and is ignored by git.
+
+### 4. Run the backend
+
+From `backend/`:
+
+```sh
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Current backend endpoints include `GET /health`, `GET /setup/status`, and `POST /local-data/wipe`.
+The health endpoint returns `{"status":"ok"}`.
+The setup status endpoint returns typed first-run readiness fields without reading or returning secrets.
+The wipe-data endpoint requires the exact confirmation phrase `wipe-local-data` before deleting configured local app data.
+
+### 5. Install frontend dependencies
+
+Use Node `^20.19.0 || ^22.13.0 || >=24`.
+
+```sh
+cd frontend
+npm install
+```
+
+### 6. Run the frontend
+
+From `frontend/`:
+
+```sh
+npm run dev
+```
+
+Vite serves the Phase 0 frontend shell locally, usually at `http://127.0.0.1:5173/`.
+Keep the backend running separately on `127.0.0.1:8000` when testing API-backed flows.
+
+### 7. Smoke-check the local setup
+
+With the backend running, verify the health route:
+
+```sh
+curl http://127.0.0.1:8000/health
+```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+Run the backend smoke test from `backend/`:
+
+```sh
+uv run pytest tests/test_health.py -q
+```
+
+Run the frontend toolchain gate from `frontend/`:
+
+```sh
+npm run check
+```
+
+## Development Commands
 
 The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol and keyring adapter in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers in `backend/app/db/repositories/`, synthetic fixture DTOs in `backend/app/models/synthetic_fixture.py`, a sample fixture in `backend/tests/fixtures/synthetic/basic_job_search.json`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol and keyring adapter in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers and repository stubs in `backend/app/db/repositories/`, table-shaped record DTOs in `backend/app/models/records.py`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
@@ -100,6 +197,7 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, retained-body repr redaction, and the checked-in sample fixture.
 - Repository base contract: import `BaseRepository` and the shared `SqlParameters` type from `app.db.repositories`; `uv run pytest tests/test_repository_base.py -v` verifies typed row mapping, parameterized statements, transactions, and the base package export contract.
 - Repository stubs: import `EmailRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports and row-to-record mapping for Phase 0 table-shaped DTOs.
+- Backend smoke test: `uv run pytest tests/test_health.py -q` from `backend/`.
 - Email provider contract test: `uv run pytest tests/test_email_provider_contract.py -v` from `backend/` verifies the provider boundary keeps OAuth token material behind `SecretRef`, separates metadata from retained body fetching, supports full and incremental cursor shapes, excludes body-derived metadata snippets, and excludes attachment content.
 - Secret store test: `uv run pytest tests/test_keyring_secret_store.py -v` from `backend/` verifies the default keyring-backed `SecretStore` adapter, sanitized backend failures, idempotent deletion, and the JT-015 Fernet placeholder.
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
@@ -109,7 +207,7 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Current provider registry: `app.providers.provider_registry` declares Gmail, Ollama, and Azure OpenAI metadata; validation checks selected non-secret LLM settings only and does not read secret values.
 - Current OpenAPI schema generation: run `uv run python -m scripts.generate_openapi` from `backend/` to write sorted, indented JSON to `frontend/src/api/openapi.json`; pass `--output <path>` to write the schema elsewhere.
 - Current Fernet fallback: `app.security.FernetSecretStore` stores encrypted secret payloads under `JOBTRACKER_DATA_DIR/secrets/` with a generated or configured `JOBTRACKER_FERNET_KEY_FILE`; `app.security.build_secret_store` returns it only when `JOBTRACKER_SECRET_STORE_BACKEND=fernet`.
-- Current backend type check: run `uv run mypy` from `backend/`.
+- Current backend type check: `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
 - Current backend lint check: run `uv run ruff check .` from `backend/`.
 - Current backend format check: run `uv run ruff format --check .` from `backend/`.
@@ -124,7 +222,7 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Frontend CI: `.github/workflows/frontend-ci.yml` runs on pushes and pull requests to `main`, installs dependencies with `npm ci`, and runs `npm run check` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Frontend test scripts are not scaffolded yet; later frontend and Playwright tickets own those checks.
-- Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
+- Frontend test scripts are not scaffolded yet.
+- Classification changes: run the golden-set eval at `backend/evals/run_eval.py`; regressions block merges.
 
 Never claim work is complete without fresh verification evidence.
