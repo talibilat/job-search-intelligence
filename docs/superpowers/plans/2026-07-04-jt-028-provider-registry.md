@@ -7,13 +7,16 @@
 
 **Architecture:** The registry is a pure backend provider-layer seam.
 It uses the existing `AppSettings`, `EmailProviderName`, `LLMProviderName`, and `ClassificationMode` types from `app.config` and the existing `SecretRef` model from `app.security`.
+It marks requirements as either declarative metadata or selected-provider validation requirements with `ProviderRequirementEnforcement`.
+Gmail config and OAuth token requirements are declarative until setup/auth owns OAuth file lifecycle and secret storage.
+Azure OpenAI and Ollama non-secret LLM settings are enforced when selected.
 It does not instantiate adapters, call networks, read files, read secrets, or expose API routes.
 
 **Tech Stack:** Python 3.12, Pydantic v2, FastAPI backend package layout, `uv`, `pytest`, `mypy`, and `ruff`.
 
 ## Global Constraints
 
-- Work only in the Treehouse worktree at `/Users/talibilat/.treehouse/job-search-intelligence-ff571b/14/job-search-intelligence`.
+- Work only in the current dedicated git worktree.
 - Base the branch on `origin/main`, not the stale main checkout branch.
 - Implement only GitHub issue `JT-028` / `#28`.
 - Keep changes local-first and do not introduce telemetry.
@@ -37,7 +40,7 @@ It does not instantiate adapters, call networks, read files, read secrets, or ex
 - Create `backend/tests/test_provider_registry.py` to verify registry contents, secret metadata, settings validation, and non-leakage behavior.
 - Leave `backend/app/api/` unchanged because `JT-031` owns provider config API routes.
 - Leave `backend/app/providers/email/` and `backend/app/providers/llm/` unchanged because `JT-026` and `JT-027` own provider interfaces.
-- Leave `.env.example` unchanged because `origin/main` already defines the provider settings needed by this ticket.
+- Leave `.env.example` unchanged because it already defines the provider settings needed by this ticket.
 
 ---
 
@@ -51,8 +54,8 @@ It does not instantiate adapters, call networks, read files, read secrets, or ex
 
 **Interfaces:**
 
-- Consumes: `AppSettings`, `ClassificationMode`, `EmailProviderName`, `LLMProviderName`, `SecretKind`.
-- Produces: executable test expectations for `ProviderRegistry`, `ProviderConfigurationError`, and `provider_registry`.
+- Consumes: `AppSettings`, `ClassificationMode`, `EmailProviderName`, `LLMProviderName`, and `SecretKind`.
+- Produces: executable test expectations for `ProviderRegistry`, `ProviderRequirementEnforcement`, `ProviderConfigurationError`, and `provider_registry`.
 
 - [ ] **Step 1: Write failing tests for registry contents and metadata**
 
@@ -61,7 +64,12 @@ from __future__ import annotations
 
 import pytest
 from app.config import AppSettings, ClassificationMode, EmailProviderName, LLMProviderName
-from app.providers import ProviderConfigurationError, ProviderRegistry, provider_registry
+from app.providers import (
+    ProviderConfigurationError,
+    ProviderRegistry,
+    ProviderRequirementEnforcement,
+    provider_registry,
+)
 from app.security import SecretKind
 
 
@@ -78,11 +86,15 @@ def test_registry_declares_gmail_oauth_secret_ref_without_secret_values() -> Non
         "gmail_client_config_file",
         "gmail_scopes",
     ]
+    assert {requirement.enforcement for requirement in gmail.config_requirements} == {
+        ProviderRequirementEnforcement.DECLARATIVE,
+    }
     assert len(gmail.secret_requirements) == 1
     secret_ref = gmail.secret_requirements[0].ref
     assert secret_ref.kind is SecretKind.OAUTH_TOKEN
     assert secret_ref.provider == "gmail"
     assert secret_ref.name == "refresh_token"
+    assert gmail.secret_requirements[0].enforcement is ProviderRequirementEnforcement.DECLARATIVE
     assert "token-value" not in gmail.model_dump_json()
 
 
@@ -97,6 +109,9 @@ def test_registry_declares_ollama_as_local_without_api_key_secret() -> None:
         "ollama_chat_model",
         "ollama_embedding_model",
     ]
+    assert {requirement.enforcement for requirement in ollama.config_requirements} == {
+        ProviderRequirementEnforcement.SELECTION,
+    }
 
 
 def test_registry_declares_azure_openai_api_key_ref_without_secret_value() -> None:
@@ -115,6 +130,7 @@ def test_registry_declares_azure_openai_api_key_ref_without_secret_value() -> No
     assert secret_ref.kind is SecretKind.LLM_API_KEY
     assert secret_ref.provider == "azure_openai"
     assert secret_ref.name == "api_key"
+    assert azure.secret_requirements[0].enforcement is ProviderRequirementEnforcement.DECLARATIVE
     assert "super-secret" not in azure.model_dump_json()
 ```
 
@@ -140,6 +156,38 @@ def test_azure_openai_requires_non_secret_provider_metadata() -> None:
         azure_openai_endpoint="",
         azure_openai_chat_deployment="",
         azure_openai_embedding_deployment="",
+    )
+
+    with pytest.raises(ProviderConfigurationError) as error:
+        provider_registry.validate_settings(settings)
+
+    assert error.value.provider_name == "azure_openai"
+    assert error.value.missing_settings == (
+        "azure_openai_endpoint",
+        "azure_openai_chat_deployment",
+        "azure_openai_embedding_deployment",
+    )
+
+
+def test_gmail_requirements_are_declarative_metadata_not_selection_validation() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.OLLAMA,
+        classification_mode=ClassificationMode.LOCAL,
+        gmail_client_config_file="   ",
+    )
+
+    provider_registry.validate_settings(settings)
+
+
+def test_azure_openai_rejects_whitespace_only_provider_metadata() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        classification_mode=ClassificationMode.HYBRID,
+        azure_openai_endpoint="   ",
+        azure_openai_chat_deployment="\t",
+        azure_openai_embedding_deployment="\n",
     )
 
     with pytest.raises(ProviderConfigurationError) as error:
@@ -209,8 +257,8 @@ Expected: fail during import with a missing `app.providers` export or missing `r
 
 **Interfaces:**
 
-- Consumes: `AppSettings`, `ClassificationMode`, `EmailProviderName`, `LLMProviderName`, `SecretKind`, `SecretRef`.
-- Produces: `ProviderConfigRequirement`, `ProviderSecretRequirement`, `EmailProviderRegistration`, `LLMProviderRegistration`, `ProviderConfigurationError`, `ProviderRegistry`, `provider_registry`.
+- Consumes: `AppSettings`, `ClassificationMode`, `EmailProviderName`, `LLMProviderName`, `SecretKind`, and `SecretRef`.
+- Produces: `ProviderConfigRequirement`, `ProviderSecretRequirement`, `EmailProviderRegistration`, `LLMProviderRegistration`, `ProviderRequirementEnforcement`, `ProviderConfigurationError`, `ProviderRegistry`, and `provider_registry`.
 
 - [ ] **Step 1: Add provider registry implementation**
 
@@ -218,11 +266,17 @@ Expected: fail during import with a missing `app.providers` export or missing `r
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import AppSettings, ClassificationMode, EmailProviderName, LLMProviderName
 from app.security import SecretKind, SecretRef
+
+
+class ProviderRequirementEnforcement(StrEnum):
+    DECLARATIVE = "declarative"
+    SELECTION = "selection"
 
 
 class ProviderConfigRequirement(BaseModel):
@@ -233,6 +287,7 @@ class ProviderConfigRequirement(BaseModel):
     setting_name: str = Field(min_length=1)
     label: str = Field(min_length=1)
     required: bool = True
+    enforcement: ProviderRequirementEnforcement = ProviderRequirementEnforcement.SELECTION
 
 
 class ProviderSecretRequirement(BaseModel):
@@ -243,6 +298,7 @@ class ProviderSecretRequirement(BaseModel):
     ref: SecretRef
     label: str = Field(min_length=1)
     required: bool = True
+    enforcement: ProviderRequirementEnforcement = ProviderRequirementEnforcement.DECLARATIVE
 
 
 class EmailProviderRegistration(BaseModel):
@@ -292,8 +348,12 @@ class ProviderRegistry:
         email_providers: Iterable[EmailProviderRegistration],
         llm_providers: Iterable[LLMProviderRegistration],
     ) -> None:
-        self._email_providers = {provider.name: provider for provider in email_providers}
-        self._llm_providers = {provider.name: provider for provider in llm_providers}
+        self._email_providers: dict[EmailProviderName, EmailProviderRegistration] = {
+            provider.name: provider for provider in email_providers
+        }
+        self._llm_providers: dict[LLMProviderName, LLMProviderRegistration] = {
+            provider.name: provider for provider in llm_providers
+        }
 
         email_names = set(self._email_providers)
         llm_names = set(self._llm_providers)
@@ -313,10 +373,12 @@ class ProviderRegistry:
                         ProviderConfigRequirement(
                             setting_name="gmail_client_config_file",
                             label="Google OAuth client JSON path",
+                            enforcement=ProviderRequirementEnforcement.DECLARATIVE,
                         ),
                         ProviderConfigRequirement(
                             setting_name="gmail_scopes",
                             label="Gmail OAuth scopes",
+                            enforcement=ProviderRequirementEnforcement.DECLARATIVE,
                         ),
                     ),
                     secret_requirements=(
@@ -399,13 +461,22 @@ class ProviderRegistry:
     def get_llm_provider(self, name: LLMProviderName) -> LLMProviderRegistration:
         return self._llm_providers[name]
 
+    @staticmethod
+    def _is_missing_required_setting(value: object) -> bool:
+        if isinstance(value, str):
+            return not value.strip()
+
+        return not value
+
     def validate_settings(self, settings: AppSettings) -> None:
         self.get_email_provider(settings.email_provider)
         llm_provider = self.get_llm_provider(settings.llm_provider)
         missing_settings = tuple(
             requirement.setting_name
             for requirement in llm_provider.config_requirements
-            if requirement.required and not getattr(settings, requirement.setting_name)
+            if requirement.required
+            and requirement.enforcement is ProviderRequirementEnforcement.SELECTION
+            and self._is_missing_required_setting(getattr(settings, requirement.setting_name))
         )
         if missing_settings:
             raise ProviderConfigurationError(
@@ -437,6 +508,7 @@ from .registry import (
     ProviderConfigRequirement,
     ProviderConfigurationError,
     ProviderRegistry,
+    ProviderRequirementEnforcement,
     ProviderSecretRequirement,
     provider_registry,
 )
@@ -447,6 +519,7 @@ __all__ = [
     "ProviderConfigRequirement",
     "ProviderConfigurationError",
     "ProviderRegistry",
+    "ProviderRequirementEnforcement",
     "ProviderSecretRequirement",
     "provider_registry",
 ]
@@ -503,13 +576,13 @@ Run: `git status --short`
 
 Expected: only JT-028 files are modified or added.
 
-Run: `git diff -- backend/app/providers/__init__.py backend/app/providers/registry.py backend/tests/test_provider_registry.py docs/superpowers/plans/2026-07-04-jt-028-provider-registry.md`
+Run: `git diff -- backend/app/providers/__init__.py backend/app/providers/registry.py backend/tests/test_provider_registry.py README.md docs/conventions.md docs/superpowers/plans/2026-07-04-jt-028-provider-registry.md`
 
-Expected: diff contains only the provider registry, tests, and plan file.
+Expected: diff contains only the provider registry, tests, and documentation updates.
 
 - [ ] **Step 6: Create the local commit required by no-mistakes**
 
-Run: `git add backend/app/providers/__init__.py backend/app/providers/registry.py backend/tests/test_provider_registry.py docs/superpowers/plans/2026-07-04-jt-028-provider-registry.md`
+Run: `git add backend/app/providers/__init__.py backend/app/providers/registry.py backend/tests/test_provider_registry.py README.md docs/conventions.md docs/superpowers/plans/2026-07-04-jt-028-provider-registry.md`
 
 Run: `git commit -m "feat(config): add provider registry for JT-028"`
 
@@ -550,7 +623,7 @@ Expected: issue `#28` contains an implementation status comment.
 
 ## Self-Review
 
-Spec coverage: this plan covers typed provider selection metadata, provider config validation, secret-reference metadata without secret values, local-first behavior, tests, and verification.
+Spec coverage: this plan covers typed provider selection metadata, provider config validation, declarative requirement metadata, secret-reference metadata without secret values, local-first behavior, tests, and verification.
 
 Scope gaps: no gap for JT-028; API route work remains intentionally assigned to JT-031, provider interfaces remain assigned to JT-026 and JT-027, and provider adapters remain later work.
 

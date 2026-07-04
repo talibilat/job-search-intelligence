@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, the provider registry seam, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
 The rest of the backend and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
@@ -23,6 +23,7 @@ The rest of the backend and the CI scaffold fill in over subsequent Phase 0 tick
 | Database | SQLite (single local file) |
 | Vector store | sqlite-vec (embeddings in the same SQLite file) |
 | LLM providers | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later |
+| Provider registry | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
 | LLM provider seam | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs |
 | API style | REST with a generated TypeScript client from OpenAPI |
 | Data contracts | Pydantic v2 DTOs at every boundary |
@@ -71,7 +72,7 @@ Developer instructions:
 
 ## Development
 
-The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend database does not exist yet; database-specific commands will apply once it lands.
 
 - Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn` as runtime dependencies, and uses `ruff`, `mypy`, and `pytest` as the dev-dependency verification gate; `backend/pyproject.toml` also holds the strict mypy defaults.
@@ -79,6 +80,7 @@ The backend database does not exist yet; database-specific commands will apply o
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
 - Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Current setup shell: `GET /setup/status` returns typed first-run setup readiness fields without reading or returning secrets.
+- Current provider registry: `app.providers.provider_registry` declares Gmail, Ollama, and Azure OpenAI metadata; validation checks selected non-secret LLM settings only and does not read secret values.
 - Current backend type check: run `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
 - Current backend lint check: run `ruff check .` from `backend/`.
