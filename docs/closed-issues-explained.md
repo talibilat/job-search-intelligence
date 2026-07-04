@@ -44,9 +44,9 @@ Do not switch branches if you have local work you have not saved or committed.
 The repository now has the start of a local-first job-search intelligence app.
 The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
-There are backend endpoints for health, setup status, and wiping local data.
+There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
-There is configuration infrastructure, secret-store interface infrastructure, and lint/type/test tooling.
+There is configuration infrastructure, a keyring-backed secret-store path, and lint/type/test tooling.
 
 What does not exist yet is the full product.
 There is no working Gmail sync yet.
@@ -545,7 +545,7 @@ It defines how the app will refer to secrets such as OAuth tokens and LLM API ke
 
 Why it was done:
 This app must store secrets encrypted at rest.
-Adding the interface first lets later code depend on a clean contract before concrete backends such as OS keyring or Fernet are implemented.
+Adding the interface first let later code depend on a clean contract before concrete backends such as OS keyring or Fernet were implemented.
 
 Area:
 Backend security infrastructure.
@@ -568,8 +568,8 @@ The tests should pass.
 The import command should print a typed secret reference.
 
 Caveat:
-This ticket does not save secrets yet.
-It only defines the interface future secret storage implementations must follow.
+This ticket did not save secrets by itself.
+JT-014 later added the default OS keyring implementation, while the Fernet fallback remains separate.
 
 ## #26 JT-026 - Define EmailProvider Interface
 
@@ -876,6 +876,9 @@ Then test endpoints in another terminal:
 ```bash
 curl -s http://127.0.0.1:8765/health
 curl -s http://127.0.0.1:8765/setup/status
+curl -s -X POST http://127.0.0.1:8765/setup \
+  -H 'content-type: application/json' \
+  -d '{"email_provider":"gmail","llm_provider":"ollama","classification_mode":"local"}'
 ```
 
 Run the frontend manually from `frontend/`:
@@ -889,7 +892,7 @@ Then open `http://127.0.0.1:5173/` in a browser.
 ## What To Look For In The App Right Now
 
 Backend:
-You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, and local wipe-data infrastructure.
+You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, and local wipe-data infrastructure.
 
 Frontend:
 You can see a static React shell for JobTracker.
