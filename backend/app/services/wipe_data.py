@@ -4,9 +4,9 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
-from urllib.parse import unquote, urlsplit
 
-from app.config import LOCAL_SQLITE_SCHEMES, AppSettings
+from app.config import AppSettings
+from app.db.sqlite_url import sqlite_database_path
 
 APP_OWNED_DATA_DIR_MARKER = ".jobtracker-data"
 
@@ -76,9 +76,7 @@ def _wipe_targets(settings: AppSettings) -> list[Path]:
     data_dir = _target_path(settings.data_dir)
     canonical_data_dir = _canonical_path(settings.data_dir)
     targets = [data_dir]
-    database_path = _sqlite_database_path(settings.database_url)
-    if database_path is None:
-        return targets
+    database_path = sqlite_database_path(settings.database_url)
 
     database_target = _target_path(database_path)
     canonical_database_path = _canonical_path(database_path)
@@ -94,19 +92,6 @@ def _wipe_targets(settings: AppSettings) -> list[Path]:
     targets.extend(_sqlite_file_targets(database_target))
 
     return _deduplicate_paths(targets)
-
-
-def _sqlite_database_path(database_url: str) -> Path | None:
-    parsed = urlsplit(database_url)
-    if parsed.scheme not in LOCAL_SQLITE_SCHEMES or parsed.netloc:
-        return None
-
-    raw_path = unquote(parsed.path)
-    if raw_path.startswith("//"):
-        return Path(raw_path[1:])
-    if raw_path.startswith("/"):
-        return Path(raw_path[1:])
-    return Path(raw_path)
 
 
 def _sqlite_file_targets(database_path: Path) -> list[Path]:

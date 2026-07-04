@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
-from app.config import LOCAL_SQLITE_SCHEMES, AppSettings
+from app.config import AppSettings
+from app.db.sqlite_url import sqlite_async_database_url, sqlite_database_path
 
 SQLITE_BUSY_TIMEOUT_MS = 5000
 
@@ -20,7 +19,7 @@ def create_sqlite_engine(settings: AppSettings) -> AsyncEngine:
     database_path = sqlite_database_path(settings.database_url)
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(sqlite_async_database_url(settings.database_url))
     _register_sqlite_connection_pragmas(engine)
     return engine
 
@@ -37,23 +36,6 @@ async def sqlite_transaction(engine: AsyncEngine) -> AsyncIterator[AsyncConnecti
 
     async with engine.begin() as connection:
         yield connection
-
-
-def sqlite_database_path(database_url: str) -> Path:
-    """Return the file path represented by a local SQLite database URL."""
-
-    parsed = urlsplit(database_url)
-    if parsed.scheme not in LOCAL_SQLITE_SCHEMES or parsed.netloc:
-        raise ValueError("database_url must use a file-backed local SQLite URL")
-
-    raw_path = unquote(parsed.path)
-    if raw_path in {"", "/", "/:memory:"}:
-        raise ValueError("database_url must use a file-backed local SQLite URL")
-    if raw_path.startswith("//"):
-        return Path(raw_path[1:])
-    if raw_path.startswith("/"):
-        return Path(raw_path[1:])
-    return Path(raw_path)
 
 
 def _register_sqlite_connection_pragmas(engine: AsyncEngine) -> None:
