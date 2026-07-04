@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router, and a backend `SecretStore` interface for OAuth tokens and LLM API keys.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, and an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary.
 The rest of the backend, the frontend, and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
@@ -25,6 +25,7 @@ The rest of the backend, the frontend, and the CI scaffold fill in over subseque
 | LLM providers | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later |
 | API style | REST with a generated TypeScript client from OpenAPI |
 | Data contracts | Pydantic v2 DTOs at every boundary |
+| API errors | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details |
 | Secret storage seam | Backend `SecretStore` protocol with Pydantic `SecretRef` identifiers and `SecretStr` values |
 | Background sync | APScheduler in-process |
 | RAG agent | LangGraph hybrid router (structured query + semantic retrieval) |
@@ -69,6 +70,7 @@ Developer instructions:
 
 ## Development
 
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, and `backend/pyproject.toml` with strict mypy defaults; backend config, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
 The backend has an initial FastAPI app factory, `backend/pyproject.toml` with strict mypy defaults, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend settings loader, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
 
