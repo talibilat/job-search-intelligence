@@ -946,7 +946,7 @@ Then open `http://127.0.0.1:5173/` in a browser.
 ## What To Look For In The App Right Now
 
 Backend:
-You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, and local wipe-data infrastructure.
+You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, local wipe-data infrastructure, and the async SQLite engine infrastructure.
 
 Frontend:
 You can see a static React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics and setup-copy cards for provider, mode, Gmail, and privacy choices.
@@ -966,10 +966,8 @@ You can see early safety work for typed errors, secret references, safe configur
 ## Summary In Plain English
 
 The closed tickets have built the foundation, not the finished product.
-The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
-The frontend can start, run unit tests, and build, but it is still a static shell.
+The backend can start, expose a few basic endpoints, create a configured async SQLite engine, run tests, lint, and type checks.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
-The frontend can start and build, but it is still a static shell.
 Frontend CI now runs the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
-The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, and the wipe-data endpoint.
+The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, and the wipe-data endpoint.
