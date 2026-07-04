@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
@@ -251,6 +252,23 @@ def test_body_contract_fetches_candidate_refs_without_attachment_content() -> No
     assert not hasattr(body_batch.bodies[0], "attachments")
 
 
+def test_message_body_redacts_retained_body_text_from_repr() -> None:
+    account = EmailAccountRef(
+        provider=EmailProviderName.GMAIL,
+        account_id="me@example.com",
+    )
+    body = EmailMessageBody(
+        ref=EmailMessageRef(account=account, message_id="msg-1"),
+        body_text="Private recruiter feedback",
+        body_source=EmailBodySource.TEXT_PLAIN,
+        truncated=False,
+        fetched_at=NOW,
+    )
+
+    assert body.body_text == "Private recruiter feedback"
+    assert "Private recruiter feedback" not in repr(body)
+
+
 def test_email_provider_boundary_dtos_validate_safe_batches() -> None:
     account = EmailAccountRef(
         provider=EmailProviderName.GMAIL,
@@ -336,9 +354,30 @@ def test_metadata_list_request_validates_sync_mode_cursor_invariants() -> None:
 
 
 def test_email_provider_errors_are_typed() -> None:
-    assert isinstance(EmailProviderAuthError("reauth required"), EmailProviderError)
     assert isinstance(
-        EmailSyncCursorExpiredError("incremental cursor expired"),
+        EmailProviderAuthError(public_message="reauth required"),
         EmailProviderError,
     )
-    assert isinstance(EmailProviderTransientError("rate limited"), EmailProviderError)
+    assert isinstance(
+        EmailSyncCursorExpiredError(public_message="incremental cursor expired"),
+        EmailProviderError,
+    )
+    assert isinstance(
+        EmailProviderTransientError(public_message="rate limited"),
+        EmailProviderError,
+    )
+
+
+def test_email_provider_errors_expose_only_public_message() -> None:
+    error = EmailProviderAuthError(public_message="reauth required")
+
+    assert error.public_message == "reauth required"
+    assert str(error) == "reauth required"
+    assert error.args == ("reauth required",)
+
+
+def test_email_provider_errors_reject_positional_messages() -> None:
+    error_type: type[Any] = EmailProviderAuthError
+
+    with pytest.raises(TypeError):
+        error_type("raw provider payload")

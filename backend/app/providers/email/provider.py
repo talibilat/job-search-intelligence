@@ -206,7 +206,7 @@ class EmailMessageBody(BaseModel):
 
     model_config = ConfigDict(frozen=True)
     ref: EmailMessageRef
-    body_text: str
+    body_text: str = Field(repr=False)
     body_source: EmailBodySource
     truncated: bool
     fetched_at: datetime
@@ -232,7 +232,13 @@ class EmailBodyBatch(BaseModel):
 
 
 class EmailProviderError(RuntimeError):
-    """Base error for email-provider failures."""
+    """Base error for public-safe email-provider failures."""
+
+    public_message: str
+
+    def __init__(self, *, public_message: str) -> None:
+        self.public_message = public_message
+        super().__init__(public_message)
 
 
 class EmailProviderAuthError(EmailProviderError):
