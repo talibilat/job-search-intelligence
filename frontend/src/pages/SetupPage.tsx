@@ -1,5 +1,6 @@
 import { Button } from "../components/ui";
 import { setupWizardSections } from "../setupWizardCopy";
+import "./SetupPage.css";
 
 const setupSteps = [
   {
@@ -32,7 +33,7 @@ export function SetupPage() {
         <div className="setup-actions" aria-label="Setup actions">
           <Button disabled>Save setup choices</Button>
           <Button disabled variant="secondary">
-            Connect Gmail later
+            Gmail OAuth pending
           </Button>
         </div>
       </section>
