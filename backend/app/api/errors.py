@@ -100,7 +100,7 @@ def _error_response(
 
 
 def _field_from_location(location: object) -> str:
-    if isinstance(location, (list, tuple)):
+    if isinstance(location, list | tuple):
         return ".".join(str(part) for part in location)
     return str(location)
 

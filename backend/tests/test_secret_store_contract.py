@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from pydantic import SecretStr, ValidationError
-
 from app.security import (
     SecretKind,
     SecretRef,
@@ -12,6 +10,7 @@ from app.security import (
     SecretStoreError,
     SecretStoreUnavailableError,
 )
+from pydantic import SecretStr, ValidationError
 
 
 class FakeSecretStore:
