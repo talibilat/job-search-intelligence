@@ -13,6 +13,7 @@ Baseline coding standards for every agent and contributor.
 
 - Repository pattern for all database access; no raw SQL scattered through services.
 - Strategy pattern for `EmailProvider` and `LLMProvider`; provider-specific code stays behind the interface.
+- Provider selection metadata belongs in `app.providers.provider_registry`; it declares supported providers, non-secret setting requirements, and `SecretRef` metadata without instantiating adapters or reading secrets.
 - LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; adapters own encrypted-at-rest storage.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
