@@ -1,0 +1,12 @@
+[tool.mypy]
+# JT-006 owns mypy defaults; later Phase 0 tickets add project and Ruff metadata.
+python_version = "3.12"
+files = ["app", "evals", "tests"]
+mypy_path = "."
+namespace_packages = true
+explicit_package_bases = true
+strict = true
+warn_unused_configs = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true
