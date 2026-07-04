@@ -1,0 +1,21 @@
+# Ruff configuration for the backend.
+# Source targets are supplied by local commands and CI so this config remains
+# usable before JT-004 and JT-007 add Python modules to the scaffold.
+target-version = "py312"
+line-length = 100
+src = ["app", "tests", "evals"]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"

@@ -26,7 +26,8 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.mypy]
-# JT-006 owns mypy defaults; later Phase 0 tickets add project and Ruff metadata.
+# JT-006 owns mypy defaults; JT-005 owns Ruff defaults in ruff.toml.
+# Later Phase 0 tickets add backend project metadata.
 python_version = "3.12"
 files = ["app", "evals", "tests"]
 mypy_path = "."

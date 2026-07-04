@@ -77,6 +77,11 @@ The backend settings loader, database, and the frontend scaffold do not exist ye
 - Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
 - Current backend health check: `GET /health` returns `{"status": "ok"}`.
+- Once backend `uv` project metadata exists, run `uv run mypy` from `backend/`.
+- Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
+- Current backend lint check: run `ruff check .` from `backend/`.
+- Current backend format check: run `ruff format --check .` from `backend/`.
+- Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
