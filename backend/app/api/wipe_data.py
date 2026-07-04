@@ -22,7 +22,7 @@ router = APIRouter(prefix="/local-data", tags=["local-data"])
         "service preflights every filesystem target and returns a typed 400 "
         "error instead of deleting anything when a target is unsafe."
     ),
-    responses={400: {"model": ApiErrorResponse}},
+    responses={400: {"model": ApiErrorResponse}, 422: {"model": ApiErrorResponse}},
 )
 def wipe_data(
     request: WipeDataRequest,

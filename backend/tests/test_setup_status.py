@@ -179,5 +179,7 @@ def test_setup_submit_endpoint_is_documented_in_openapi(
     operation = response.json()["paths"]["/setup"]["post"]
     request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
     response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    validation_schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert request_schema["$ref"] == "#/components/schemas/SetupSubmitRequest"
     assert response_schema["$ref"] == "#/components/schemas/SetupSubmitResponse"
+    assert validation_schema["$ref"] == "#/components/schemas/ApiErrorResponse"

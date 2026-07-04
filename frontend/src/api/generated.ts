@@ -399,7 +399,7 @@ export type wipeDataLocalDataWipePostResponse400 = {
 };
 
 export type wipeDataLocalDataWipePostResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 
@@ -459,7 +459,7 @@ export type setupSubmitSetupPostResponse400 = {
 };
 
 export type setupSubmitSetupPostResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 

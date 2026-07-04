@@ -30,7 +30,7 @@ async def setup_status(
         "Accepts non-secret Phase 0 setup choices and validates selected provider "
         "metadata without running provider auth flows or persisting secrets."
     ),
-    responses={400: {"model": ApiErrorResponse}},
+    responses={400: {"model": ApiErrorResponse}, 422: {"model": ApiErrorResponse}},
 )
 async def setup_submit(
     request: SetupSubmitRequest,
