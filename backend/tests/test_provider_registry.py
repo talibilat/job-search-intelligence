@@ -98,6 +98,27 @@ def test_azure_openai_requires_non_secret_provider_metadata() -> None:
     )
 
 
+def test_azure_openai_rejects_whitespace_only_provider_metadata() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        classification_mode=ClassificationMode.HYBRID,
+        azure_openai_endpoint="   ",
+        azure_openai_chat_deployment="\t",
+        azure_openai_embedding_deployment="\n",
+    )
+
+    with pytest.raises(ProviderConfigurationError) as error:
+        provider_registry.validate_settings(settings)
+
+    assert error.value.provider_name == "azure_openai"
+    assert error.value.missing_settings == (
+        "azure_openai_endpoint",
+        "azure_openai_chat_deployment",
+        "azure_openai_embedding_deployment",
+    )
+
+
 def test_azure_openai_rejects_local_classification_mode() -> None:
     settings = AppSettings(
         _env_file=None,

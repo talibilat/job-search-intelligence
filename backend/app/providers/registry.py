@@ -187,13 +187,21 @@ class ProviderRegistry:
     def get_llm_provider(self, name: LLMProviderName) -> LLMProviderRegistration:
         return self._llm_providers[name]
 
+    @staticmethod
+    def _is_missing_required_setting(value: object) -> bool:
+        if isinstance(value, str):
+            return not value.strip()
+
+        return not value
+
     def validate_settings(self, settings: AppSettings) -> None:
         self.get_email_provider(settings.email_provider)
         llm_provider = self.get_llm_provider(settings.llm_provider)
         missing_settings = tuple(
             requirement.setting_name
             for requirement in llm_provider.config_requirements
-            if requirement.required and not getattr(settings, requirement.setting_name)
+            if requirement.required
+            and self._is_missing_required_setting(getattr(settings, requirement.setting_name))
         )
 
         if missing_settings:
