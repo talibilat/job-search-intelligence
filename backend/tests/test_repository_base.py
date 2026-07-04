@@ -28,6 +28,12 @@ class WidgetRepository(BaseRepository[Widget]):
     def add(self, name: str) -> None:
         self.execute("INSERT INTO widgets (name) VALUES (?)", (name,))
 
+    def add_many(self, names: list[str]) -> None:
+        self.execute_many(
+            "INSERT INTO widgets (name) VALUES (?)",
+            [(name,) for name in names],
+        )
+
     def get_by_name(self, name: str) -> Widget | None:
         return self.fetch_one(
             "SELECT id, name FROM widgets WHERE name = ?",
@@ -84,6 +90,17 @@ def test_repository_fetch_all_maps_all_rows(
     ]
 
 
+def test_repository_execute_many_runs_parameterized_bulk_statements(
+    repository: WidgetRepository,
+) -> None:
+    repository.add_many(["alpha", "beta"])
+
+    assert repository.list_widgets() == [
+        Widget(id=1, name="alpha"),
+        Widget(id=2, name="beta"),
+    ]
+
+
 def test_repository_transaction_commits_successful_work(
     repository: WidgetRepository,
 ) -> None:
@@ -119,3 +136,22 @@ def test_repository_transaction_rollback_keeps_prior_uncommitted_work(
         name="before-transaction",
     )
     assert repository.get_by_name("inside-transaction") is None
+
+
+def test_repository_nested_transaction_rollback_keeps_outer_work(
+    repository: WidgetRepository,
+) -> None:
+    with repository.transaction():
+        repository.add("outer-before")
+
+        with pytest.raises(RuntimeError, match="force inner rollback"):
+            with repository.transaction():
+                repository.add("inner")
+                raise RuntimeError("force inner rollback")
+
+        repository.add("outer-after")
+
+    assert repository.list_widgets() == [
+        Widget(id=1, name="outer-before"),
+        Widget(id=2, name="outer-after"),
+    ]

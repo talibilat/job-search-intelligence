@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from abc import ABC, abstractmethod
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Generic, TypeVar
 
@@ -27,6 +27,13 @@ class BaseRepository(ABC, Generic[MappedRowT]):
         parameters: SqlParameters = (),
     ) -> sqlite3.Cursor:
         return self._connection.execute(sql, parameters)
+
+    def execute_many(
+        self,
+        sql: str,
+        parameters: Iterable[SqlParameters],
+    ) -> sqlite3.Cursor:
+        return self._connection.executemany(sql, parameters)
 
     def fetch_one(
         self,
