@@ -84,10 +84,12 @@ The backend settings loader and database do not exist yet, so the commands refer
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend setup: `npm install` from `frontend/`.
 - Frontend dev server: `npm run dev` from `frontend/`.
-- Current frontend TypeScript check: `npx tsc -b` from `frontend/`.
+- Frontend TypeScript check: `npm run typecheck` from `frontend/`.
+- Frontend lint check: `npm run lint` from `frontend/`.
+- Frontend tooling gate: `npm run check` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Frontend lint and test scripts are not scaffolded yet; later frontend tooling and Playwright tickets own those checks.
+- Frontend test scripts are not scaffolded yet; later frontend and Playwright tickets own those checks.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
 Never claim work is complete without fresh verification evidence.
