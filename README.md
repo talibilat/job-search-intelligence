@@ -48,6 +48,7 @@ scripts/    developer and operational scripts
 - Local-first: app state lives in a single local SQLite file, and nothing leaves the machine except LLM API calls the user explicitly configures.
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
 - Secrets are stored encrypted at rest and never logged.
+- `backend/.env.example` documents operational settings only; keep API keys, OAuth tokens, passwords, client secrets, and Google OAuth client JSON out of the repo.
 - No telemetry.
 - Gmail access is read-only (`gmail.readonly`) in v1.
 
@@ -68,11 +69,14 @@ Developer instructions:
 
 ## Development
 
-The backend has an initial FastAPI app factory and `backend/pyproject.toml` with strict mypy defaults; backend config, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
+The backend has an initial FastAPI app factory, `backend/pyproject.toml` with strict mypy defaults, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend settings loader, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
 
 - Backend type checking: `backend/pyproject.toml` defines strict mypy defaults for backend code.
 - Current scaffold check: run `mypy --config-file pyproject.toml` from `backend/`.
 - Current backend tests: run `python3 -m pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
+- Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
+- Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Once backend `uv` project metadata exists, run `uv run mypy` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.

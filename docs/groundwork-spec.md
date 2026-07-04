@@ -170,6 +170,7 @@ Show a **pre-run cost estimate** and track tokens per run.
 
 ## 5. API surface (REST)
 
+- **Health:** `GET /health` returns a liveness-only `{ "status": "ok" }` response for Phase 0 smoke checks.
 - **Setup/auth:** `GET /setup/status`, `POST /setup`, `GET /auth/gmail`, `GET /auth/gmail/callback`, `GET|PUT /config/providers`
 - **Sync:** `POST /sync`, `GET /sync/status`
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit
