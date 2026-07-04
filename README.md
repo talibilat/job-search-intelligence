@@ -11,6 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts, and a root pre-commit configuration for backend and frontend checks.
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts, and a frontend GitHub Actions workflow that runs the combined frontend check.
 Concrete Gmail provider behavior, remaining backend pieces, and remaining CI workflows fill in over subsequent Phase 0 and Phase 1 tickets.
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the synthetic fixture DTO contract and sample fixture, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
@@ -49,6 +50,7 @@ docs/             source-of-truth product and architecture documents
 tickets/          issue manifest and templates
 scripts/          repository-level developer and operational scripts
 .github/          CI workflows
+.pre-commit-config.yaml  root hooks for backend and frontend checks
 ```
 
 ## Privacy
@@ -92,7 +94,7 @@ The backend has an initial FastAPI app factory, typed API error DTOs in `backend
 The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol and keyring adapter in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers and repository stubs in `backend/app/db/repositories/`, table-shaped record DTOs in `backend/app/models/records.py`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend database schema and engine do not exist yet; schema-specific commands will apply once they land.
 
-- Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`, `uvicorn`, and `keyring` as runtime dependencies, and uses `ruff`, `mypy`, and `pytest` as the dev-dependency verification gate; `backend/pyproject.toml` also holds the strict mypy defaults.
+- Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`, `uvicorn`, and `keyring` as runtime dependencies, and uses `ruff`, `mypy`, `pytest`, and `pre-commit` as dev-dependency verification tooling; `backend/pyproject.toml` also holds the strict mypy defaults.
 - Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
 - Repository base contract: import `BaseRepository` and the shared `SqlParameters` type from `app.db.repositories`; `uv run pytest tests/test_repository_base.py -v` verifies typed row mapping, parameterized statements, transactions, and the package export contract.
 - Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, retained-body repr redaction, and the checked-in sample fixture.
@@ -109,8 +111,10 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Current Fernet fallback: `app.security.FernetSecretStore` stores encrypted secret payloads under `JOBTRACKER_DATA_DIR/secrets/` with a generated or configured `JOBTRACKER_FERNET_KEY_FILE`; `app.security.build_secret_store` returns it only when `JOBTRACKER_SECRET_STORE_BACKEND=fernet`.
 - Current backend type check: run `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
-- Current backend lint check: run `ruff check .` from `backend/`.
-- Current backend format check: run `ruff format --check .` from `backend/`.
+- Current backend lint check: run `uv run ruff check .` from `backend/`.
+- Current backend format check: run `uv run ruff format --check .` from `backend/`.
+- Pre-commit setup: run `uv run --project backend pre-commit install` from the repository root after backend and frontend dependencies are installed.
+- Current pre-commit gate: run `uv run --project backend pre-commit run --all-files` from the repository root to execute backend Ruff lint, backend Ruff format check, backend mypy, and the frontend `npm run check` gate.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend setup: use Node `^20.19.0 || ^22.13.0 || >=24`, then run `npm install` from `frontend/`.
 - Frontend dev server: `npm run dev` from `frontend/`.

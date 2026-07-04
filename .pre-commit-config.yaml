@@ -1,0 +1,32 @@
+minimum_pre_commit_version: "4.0.0"
+
+repos:
+  - repo: local
+    hooks:
+      - id: backend-ruff-check
+        name: Backend Ruff lint
+        entry: bash -c 'cd backend && uv run ruff check .'
+        language: system
+        pass_filenames: false
+        files: ^(backend/|\.pre-commit-config\.yaml$)
+
+      - id: backend-ruff-format-check
+        name: Backend Ruff format check
+        entry: bash -c 'cd backend && uv run ruff format --check .'
+        language: system
+        pass_filenames: false
+        files: ^(backend/|\.pre-commit-config\.yaml$)
+
+      - id: backend-mypy
+        name: Backend mypy
+        entry: bash -c 'cd backend && uv run mypy'
+        language: system
+        pass_filenames: false
+        files: ^(backend/|\.pre-commit-config\.yaml$)
+
+      - id: frontend-check
+        name: Frontend typecheck, lint, and build
+        entry: bash -c 'cd frontend && npm run check'
+        language: system
+        pass_filenames: false
+        files: ^(frontend/|\.pre-commit-config\.yaml$)
