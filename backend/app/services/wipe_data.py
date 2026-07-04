@@ -24,7 +24,7 @@ class UnsafeWipeTargetError(ValueError):
 
 def wipe_local_data(settings: AppSettings) -> WipeDataResult:
     targets = _wipe_targets(settings)
-    data_dir = settings.data_dir.resolve()
+    data_dir = _absolute_path(settings.data_dir)
     deleted_paths: list[str] = []
     missing_paths: list[str] = []
 
@@ -35,7 +35,7 @@ def wipe_local_data(settings: AppSettings) -> WipeDataResult:
             missing_paths.append(str(target))
             continue
 
-        if target.is_dir():
+        if target == data_dir and target.is_dir():
             shutil.rmtree(target)
         else:
             target.unlink()
@@ -47,6 +47,12 @@ def wipe_local_data(settings: AppSettings) -> WipeDataResult:
 def _preflight_wipe_targets(targets: list[Path], data_dir: Path) -> None:
     for target in targets:
         _validate_safe_target(target)
+        if target.exists() and target.is_symlink() and not _is_relative_to(
+            target.resolve(), data_dir
+        ):
+            raise UnsafeWipeTargetError(f"Unsafe wipe target: {target}")
+        if target.exists() and target == data_dir and not target.is_dir():
+            raise UnsafeWipeTargetError(f"Unsafe wipe target: {target}")
         if target.exists() and target.is_dir() and target == data_dir:
             _validate_app_owned_data_dir(target)
         if target.exists() and target.is_dir() and target != data_dir:
@@ -62,15 +68,14 @@ def _validate_app_owned_data_dir(data_dir: Path) -> None:
 
 
 def _wipe_targets(settings: AppSettings) -> list[Path]:
-    data_dir = settings.data_dir.resolve()
+    data_dir = _absolute_path(settings.data_dir)
     targets = [data_dir]
     database_path = _sqlite_database_path(settings.database_url)
     if database_path is None:
         return targets
 
-    resolved_database_path = database_path.resolve()
-    if not _is_relative_to(resolved_database_path, data_dir):
-        targets.extend(_sqlite_file_targets(resolved_database_path))
+    absolute_database_path = _absolute_path(database_path)
+    targets.extend(_sqlite_file_targets(absolute_database_path))
 
     return _deduplicate_paths(targets)
 
@@ -101,10 +106,10 @@ def _deduplicate_paths(paths: list[Path]) -> list[Path]:
     deduplicated: list[Path] = []
     seen: set[Path] = set()
     for path in paths:
-        resolved = path.resolve()
-        if resolved not in seen:
-            deduplicated.append(resolved)
-            seen.add(resolved)
+        absolute = _absolute_path(path)
+        if absolute not in seen:
+            deduplicated.append(absolute)
+            seen.add(absolute)
     return deduplicated
 
 
@@ -112,6 +117,10 @@ def _validate_safe_target(target: Path) -> None:
     resolved = target.resolve()
     if resolved in _unsafe_targets():
         raise UnsafeWipeTargetError(f"Unsafe wipe target: {resolved}")
+
+
+def _absolute_path(path: Path) -> Path:
+    return path.expanduser().absolute()
 
 
 def _unsafe_targets() -> set[Path]:

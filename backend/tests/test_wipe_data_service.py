@@ -93,6 +93,50 @@ def test_wipe_local_data_refuses_directory_at_external_sqlite_path(
     assert (database / "unrelated.txt").exists()
 
 
+def test_wipe_local_data_refuses_data_dir_that_is_regular_file(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.write_text("unrelated")
+    settings = AppSettings(
+        _env_file=None,
+        data_dir=data_dir,
+        database_url=f"sqlite+aiosqlite:///{data_dir / 'jobtracker.sqlite3'}",
+        fernet_key_file=data_dir / "fernet.key",
+    )
+
+    with pytest.raises(UnsafeWipeTargetError):
+        wipe_local_data(settings)
+
+    assert data_dir.exists()
+    assert data_dir.read_text() == "unrelated"
+
+
+def test_wipe_local_data_refuses_sqlite_symlink_outside_data_dir(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".jobtracker"
+    data_dir.mkdir()
+    external_database = tmp_path / "external.sqlite3"
+    external_database.write_text("external db")
+    database = data_dir / "jobtracker.sqlite3"
+    database.symlink_to(external_database)
+    settings = AppSettings(
+        _env_file=None,
+        data_dir=data_dir,
+        database_url=f"sqlite+aiosqlite:///{database}",
+        fernet_key_file=data_dir / "fernet.key",
+    )
+
+    with pytest.raises(UnsafeWipeTargetError):
+        wipe_local_data(settings)
+
+    assert data_dir.exists()
+    assert database.is_symlink()
+    assert external_database.exists()
+    assert external_database.read_text() == "external db"
+
+
 def test_wipe_local_data_preflights_all_targets_before_deleting(
     tmp_path: Path,
 ) -> None:
