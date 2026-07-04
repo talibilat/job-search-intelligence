@@ -106,6 +106,7 @@ job-search-intelligence/
 │   ├── conventions.md              # coding standards for agents
 │   └── synthetic-fixtures.md       # private-data-free fixture format
 ├── .pre-commit-config.yaml
+├── .github/workflows/backend-ci.yml # backend ruff + mypy + pytest
 ├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
 └── README.md
 ```
@@ -239,6 +240,7 @@ Full list in `docs/questions.md`. Mapping:
 ## 8. Phase roadmap (with Definition of Done)
 
 **Phase 0 - Groundwork / scaffold**
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, backend CI (ruff, mypy, pytest), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, frontend generated-client destination and import boundary, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, Recharts chart wrapper foundation with empty states, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` interface seam, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.

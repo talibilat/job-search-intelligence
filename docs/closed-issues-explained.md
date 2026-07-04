@@ -115,6 +115,7 @@ Important files and folders to inspect:
 `docs/` is where the product and architecture docs live.
 `tickets/` is where local ticket artifacts live.
 `scripts/` is for project scripts.
+`.github/workflows/` is for GitHub Actions workflows.
 `.github/workflows/` is for GitHub Actions workflows as Phase 0 CI lands.
 
 How to test it:
