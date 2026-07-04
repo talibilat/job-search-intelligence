@@ -118,9 +118,9 @@ export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"
   tone?: "danger" | "info" | "success" | "warning";
 }
 
-/** Status or alert message with tone-based default live-region roles. */
+/** Static alert box with an assertive live-region role only for danger by default. */
 export function Alert({ children, className, role, title, tone = "info", ...props }: AlertProps) {
-  const computedRole = role ?? (tone === "danger" ? "alert" : "status");
+  const computedRole = role ?? (tone === "danger" ? "alert" : undefined);
 
   return (
     <div className={cx("ui-alert", `ui-alert--${tone}`, className)} role={computedRole} {...props}>

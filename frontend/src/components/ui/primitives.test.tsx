@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { FormField, Tabs, TextInput } from "./primitives";
+import { Alert, FormField, Tabs, TextInput } from "./primitives";
 
 describe("FormField", () => {
   it("uses one id for the label target and child control", () => {
@@ -37,5 +37,38 @@ describe("Tabs", () => {
       expect(controlledPanelId).toBeTruthy();
       expect(document.getElementById(controlledPanelId ?? "")).not.toBeNull();
     }
+  });
+});
+
+describe("Alert", () => {
+  it("does not make static non-danger tones live regions by default", () => {
+    for (const tone of ["info", "success", "warning"] as const) {
+      const { container, unmount } = render(
+        <Alert title="Status" tone={tone}>
+          Static message
+        </Alert>,
+      );
+
+      expect(container.firstElementChild?.getAttribute("role")).toBeNull();
+      unmount();
+    }
+  });
+
+  it("uses alert for danger and lets callers opt into status", () => {
+    const { container, rerender } = render(
+      <Alert title="Failed" tone="danger">
+        Sync failed
+      </Alert>,
+    );
+
+    expect(container.firstElementChild?.getAttribute("role")).toBe("alert");
+
+    rerender(
+      <Alert role="status" title="Saved" tone="success">
+        Settings saved
+      </Alert>,
+    );
+
+    expect(container.firstElementChild?.getAttribute("role")).toBe("status");
   });
 });
