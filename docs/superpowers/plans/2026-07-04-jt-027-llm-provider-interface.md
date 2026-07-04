@@ -12,7 +12,7 @@ The package contains no concrete provider implementations, no credentials, no em
 
 ## Global Constraints
 
-- Work only in `/Users/talibilat/.treehouse/job-search-intelligence-ff571b/10/job-search-intelligence`.
+- Work only in the current dedicated git worktree.
 - Work only on GitHub issue JT-027.
 - Keep all changes isolated to branch `jt-027-llm-provider-interface`.
 - Keep JT-027 in Phase 0 and map it to FR-0, FR-6, NFR-5, NFR-8.
@@ -22,7 +22,7 @@ The package contains no concrete provider implementations, no credentials, no em
 - Do not add telemetry, shared credentials, auto-apply behavior, autonomous outbound email, or multi-user SaaS assumptions.
 - Do not add credential fields to LLM request or response DTOs.
 - Do not introduce any SQL execution path.
-- Do not commit until implementation, verification, and no-mistakes pass cleanly.
+- Do not commit until implementation, verification, and no-mistakes pass cleanly when a commit is explicitly requested.
 
 ---
 
@@ -56,6 +56,7 @@ Create `backend/tests/test_llm_provider_contract.py` with this content:
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 from app.providers.llm import (
@@ -74,7 +75,7 @@ from app.providers.llm import (
     LLMResponseFormat,
     LLMTokenUsage,
 )
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 
 class FakeLLMProvider:
@@ -160,13 +161,28 @@ def test_token_usage_rejects_negative_counts() -> None:
 
 def test_llm_provider_errors_are_typed() -> None:
     errors = [
-        LLMProviderUnavailableError("provider is unavailable"),
-        LLMProviderRequestError("provider request failed"),
-        LLMProviderResponseError("provider response was invalid"),
-        LLMProviderTimeoutError("provider request timed out"),
+        LLMProviderUnavailableError(public_message="provider is unavailable"),
+        LLMProviderRequestError(public_message="provider request failed"),
+        LLMProviderResponseError(public_message="provider response was invalid"),
+        LLMProviderTimeoutError(public_message="provider request timed out"),
     ]
 
     assert all(isinstance(error, LLMProviderError) for error in errors)
+
+
+def test_llm_provider_errors_expose_only_public_message() -> None:
+    error = LLMProviderRequestError(public_message="provider request failed")
+
+    assert error.public_message == "provider request failed"
+    assert str(error) == "provider request failed"
+    assert error.args == ("provider request failed",)
+
+
+def test_llm_provider_errors_reject_positional_messages() -> None:
+    error_type: type[Any] = LLMProviderRequestError
+
+    with pytest.raises(TypeError):
+        error_type("raw provider payload")
 
 
 def test_llm_boundary_models_do_not_define_credential_fields() -> None:
@@ -180,12 +196,12 @@ def test_llm_boundary_models_do_not_define_credential_fields() -> None:
         "credentials",
         "oauth_token",
     }
-    boundary_models = [
+    boundary_models: tuple[type[BaseModel], ...] = (
         LLMMessage,
         LLMGenerationOptions,
         LLMGenerationRequest,
         LLMGenerationResponse,
-    ]
+    )
 
     for model in boundary_models:
         assert credential_field_names.isdisjoint(model.model_fields)
@@ -305,6 +321,12 @@ from __future__ import annotations
 
 class LLMProviderError(RuntimeError):
     """Base error for public-safe LLM provider failures."""
+
+    public_message: str
+
+    def __init__(self, *, public_message: str) -> None:
+        self.public_message = public_message
+        super().__init__(public_message)
 
 
 class LLMProviderUnavailableError(LLMProviderError):

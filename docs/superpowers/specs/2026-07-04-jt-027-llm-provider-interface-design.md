@@ -72,7 +72,7 @@ The golden-set eval is not required because JT-027 does not change classificatio
 
 ## Worktree And Branch
 
-All implementation work must happen in the dedicated Treehouse worktree at `/Users/talibilat/.treehouse/job-search-intelligence-ff571b/10/job-search-intelligence`.
+All implementation work must happen in the current dedicated git worktree.
 The implementation branch is `jt-027-llm-provider-interface` based on `origin/main`.
 
 ## Acceptance Mapping
