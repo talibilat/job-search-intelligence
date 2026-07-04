@@ -102,9 +102,7 @@ class FernetSecretStore:
         except FileExistsError:
             return self._read_key_file()
         except OSError as error:
-            raise SecretStoreUnavailableError(
-                "Fernet secret key could not be created."
-            ) from error
+            raise SecretStoreUnavailableError("Fernet secret key could not be created.") from error
 
         return key
 
