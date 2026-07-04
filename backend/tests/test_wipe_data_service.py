@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 from app.config import AppSettings
-from app.services.wipe_data import UnsafeWipeTargetError, wipe_local_data
+from app.services.wipe_data import (
+    APP_OWNED_DATA_DIR_MARKER,
+    UnsafeWipeTargetError,
+    wipe_local_data,
+)
 
 
 def make_settings(tmp_path: Path) -> AppSettings:
@@ -22,6 +26,7 @@ def test_wipe_local_data_removes_data_dir_and_reports_deleted_path(
 ) -> None:
     settings = make_settings(tmp_path)
     settings.data_dir.mkdir()
+    (settings.data_dir / APP_OWNED_DATA_DIR_MARKER).touch()
     (settings.data_dir / "jobtracker.sqlite3").write_text("db")
     (settings.data_dir / "derived.txt").write_text("derived")
 
@@ -111,6 +116,26 @@ def test_wipe_local_data_preflights_all_targets_before_deleting(
     assert (data_dir / "derived.txt").exists()
     assert database.exists()
     assert (database / "unrelated.txt").exists()
+
+
+def test_wipe_local_data_refuses_unmarked_custom_data_dir_before_deleting(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "Documents"
+    data_dir.mkdir()
+    (data_dir / "unrelated.txt").write_text("unrelated")
+    settings = AppSettings(
+        _env_file=None,
+        data_dir=data_dir,
+        database_url=f"sqlite+aiosqlite:///{data_dir / 'jobtracker.sqlite3'}",
+        fernet_key_file=data_dir / "fernet.key",
+    )
+
+    with pytest.raises(UnsafeWipeTargetError):
+        wipe_local_data(settings)
+
+    assert data_dir.exists()
+    assert (data_dir / "unrelated.txt").exists()
 
 
 @pytest.mark.parametrize("target", [Path("/"), Path.home(), Path.cwd()])

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from inspect import iscoroutinefunction
 from pathlib import Path
 
+from app.api.wipe_data import wipe_data
 from app.config import AppSettings, get_settings
 from app.main import create_app
+from app.services.wipe_data import APP_OWNED_DATA_DIR_MARKER
 from fastapi.testclient import TestClient
 
 
@@ -19,11 +22,16 @@ def test_wipe_data_requires_exact_confirmation_phrase() -> None:
     assert response.json()["error"]["code"] == "validation_error"
 
 
+def test_wipe_data_endpoint_is_sync_to_avoid_blocking_event_loop() -> None:
+    assert not iscoroutinefunction(wipe_data)
+
+
 def test_wipe_data_endpoint_deletes_configured_local_data(
     tmp_path: Path,
 ) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
+    (data_dir / APP_OWNED_DATA_DIR_MARKER).touch()
     (data_dir / "jobtracker.sqlite3").write_text("db")
     settings = AppSettings(
         _env_file=None,

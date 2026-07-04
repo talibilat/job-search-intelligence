@@ -8,6 +8,8 @@ from urllib.parse import unquote, urlsplit
 
 from app.config import LOCAL_SQLITE_SCHEMES, AppSettings
 
+APP_OWNED_DATA_DIR_MARKER = ".jobtracker-data"
+
 
 @dataclass(frozen=True)
 class WipeDataResult:
@@ -45,8 +47,18 @@ def wipe_local_data(settings: AppSettings) -> WipeDataResult:
 def _preflight_wipe_targets(targets: list[Path], data_dir: Path) -> None:
     for target in targets:
         _validate_safe_target(target)
+        if target.exists() and target.is_dir() and target == data_dir:
+            _validate_app_owned_data_dir(target)
         if target.exists() and target.is_dir() and target != data_dir:
             raise UnsafeWipeTargetError(f"Unsafe wipe target: {target}")
+
+
+def _validate_app_owned_data_dir(data_dir: Path) -> None:
+    if data_dir.name == ".jobtracker":
+        return
+    if (data_dir / APP_OWNED_DATA_DIR_MARKER).is_file():
+        return
+    raise UnsafeWipeTargetError(f"Unsafe wipe target: {data_dir}")
 
 
 def _wipe_targets(settings: AppSettings) -> list[Path]:

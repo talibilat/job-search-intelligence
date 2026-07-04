@@ -13,7 +13,7 @@ router = APIRouter(prefix="/local-data", tags=["local-data"])
 
 
 @router.post("/wipe", response_model=WipeDataResponse)
-async def wipe_data(
+def wipe_data(
     request: WipeDataRequest,
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> WipeDataResponse:
