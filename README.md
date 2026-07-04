@@ -51,6 +51,7 @@ scripts/    developer and operational scripts
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
 - Secrets are stored encrypted at rest and never logged.
 - `backend/.env.example` documents operational settings only; keep API keys, OAuth tokens, passwords, client secrets, and Google OAuth client JSON out of the repo.
+- Local wipe-data path: `POST /local-data/wipe` clears configured local app data and derived artifacts after the request body confirms `{"confirmation":"wipe-local-data"}`.
 - No telemetry.
 - Gmail access is read-only (`gmail.readonly`) in v1.
 

@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+import shutil
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Literal
+from urllib.parse import unquote, urlsplit
+
+from app.config import LOCAL_SQLITE_SCHEMES, AppSettings
+
+
+@dataclass(frozen=True)
+class WipeDataResult:
+    status: Literal["wiped"] = "wiped"
+    deleted_paths: list[str] = field(default_factory=list)
+    missing_paths: list[str] = field(default_factory=list)
+
+
+class UnsafeWipeTargetError(ValueError):
+    """Raised when configured storage points at a dangerous filesystem path."""
+
+
+def wipe_local_data(settings: AppSettings) -> WipeDataResult:
+    targets = _wipe_targets(settings)
+    deleted_paths: list[str] = []
+    missing_paths: list[str] = []
+
+    for target in targets:
+        _validate_safe_target(target)
+        if not target.exists():
+            missing_paths.append(str(target))
+            continue
+
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+        deleted_paths.append(str(target))
+
+    return WipeDataResult(deleted_paths=deleted_paths, missing_paths=missing_paths)
+
+
+def _wipe_targets(settings: AppSettings) -> list[Path]:
+    data_dir = settings.data_dir.resolve()
+    targets = [data_dir]
+    database_path = _sqlite_database_path(settings.database_url)
+    if database_path is None:
+        return targets
+
+    resolved_database_path = database_path.resolve()
+    if not _is_relative_to(resolved_database_path, data_dir):
+        targets.extend(_sqlite_file_targets(resolved_database_path))
+
+    return _deduplicate_paths(targets)
+
+
+def _sqlite_database_path(database_url: str) -> Path | None:
+    parsed = urlsplit(database_url)
+    if parsed.scheme not in LOCAL_SQLITE_SCHEMES or parsed.netloc:
+        return None
+
+    raw_path = unquote(parsed.path)
+    if raw_path.startswith("//"):
+        return Path(raw_path[1:])
+    if raw_path.startswith("/"):
+        return Path(raw_path[1:])
+    return Path(raw_path)
+
+
+def _sqlite_file_targets(database_path: Path) -> list[Path]:
+    return [
+        database_path,
+        database_path.with_name(f"{database_path.name}-wal"),
+        database_path.with_name(f"{database_path.name}-shm"),
+        database_path.with_name(f"{database_path.name}-journal"),
+    ]
+
+
+def _deduplicate_paths(paths: list[Path]) -> list[Path]:
+    deduplicated: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        resolved = path.resolve()
+        if resolved not in seen:
+            deduplicated.append(resolved)
+            seen.add(resolved)
+    return deduplicated
+
+
+def _validate_safe_target(target: Path) -> None:
+    resolved = target.resolve()
+    if resolved in _unsafe_targets():
+        raise UnsafeWipeTargetError(f"Unsafe wipe target: {resolved}")
+
+
+def _unsafe_targets() -> set[Path]:
+    current_working_directory = Path.cwd().resolve()
+    return {
+        Path("/").resolve(),
+        Path.home().resolve(),
+        current_working_directory,
+        *current_working_directory.parents,
+    }
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
