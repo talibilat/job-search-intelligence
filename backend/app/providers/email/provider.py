@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, Self, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from app.config import EmailProviderName
 from app.security import SecretRef
@@ -70,14 +70,14 @@ class EmailAuthorizationStartResult(BaseModel):
 
 
 class EmailAuthorizationCallbackRequest(BaseModel):
-    """Provider-neutral request to complete an authorization flow."""
+    """Provider-neutral callback request whose auth code is treated as secret."""
 
     model_config = ConfigDict(frozen=True)
 
     provider: EmailProviderName
     redirect_uri: str = Field(min_length=1)
     state: str = Field(min_length=1)
-    code: str = Field(min_length=1)
+    code: SecretStr = Field(min_length=1)
 
 
 class EmailAddress(BaseModel):

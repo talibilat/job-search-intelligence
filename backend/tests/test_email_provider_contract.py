@@ -31,7 +31,7 @@ from app.providers.email import (
     EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 NOW = datetime(2026, 7, 4, 12, 0, tzinfo=UTC)
 
@@ -145,7 +145,7 @@ async def _connect_fake_provider(provider: FakeEmailProvider) -> EmailConnection
         provider=EmailProviderName.GMAIL,
         redirect_uri="http://127.0.0.1:8000/auth/gmail/callback",
         state="csrf-state",
-        code="authorization-code",
+        code=SecretStr("authorization-code"),
     )
     return await provider.complete_authorization(callback_request)
 
@@ -174,6 +174,28 @@ def test_authorization_contract_uses_secret_refs_not_raw_tokens() -> None:
     assert connection.account.provider is EmailProviderName.GMAIL
     assert not hasattr(connection, "access_token")
     assert not hasattr(connection, "refresh_token")
+
+
+def test_authorization_callback_code_is_redacted_from_repr() -> None:
+    raw_code = "authorization-code"
+
+    callback_request = EmailAuthorizationCallbackRequest(
+        provider=EmailProviderName.GMAIL,
+        redirect_uri="http://127.0.0.1:8000/auth/gmail/callback",
+        state="csrf-state",
+        code=SecretStr(raw_code),
+    )
+
+    assert callback_request.code.get_secret_value() == raw_code
+    assert raw_code not in repr(callback_request)
+
+    with pytest.raises(ValidationError):
+        EmailAuthorizationCallbackRequest(
+            provider=EmailProviderName.GMAIL,
+            redirect_uri="http://127.0.0.1:8000/auth/gmail/callback",
+            state="csrf-state",
+            code=SecretStr(""),
+        )
 
 
 def test_metadata_contract_supports_full_backfill_and_incremental_cursors() -> None:
