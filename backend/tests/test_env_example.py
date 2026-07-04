@@ -1,5 +1,10 @@
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = pytest.mark.smoke
+
 
 EXPECTED_ENV_KEYS = {
     "JOBTRACKER_ENV",
