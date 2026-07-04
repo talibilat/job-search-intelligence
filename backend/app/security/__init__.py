@@ -1,4 +1,4 @@
-"""Security interfaces and adapters."""
+"""Package-level security interfaces, adapters, and redaction helpers."""
 
 from .factory import build_secret_store
 from .fernet_secret_store import FernetSecretStore
