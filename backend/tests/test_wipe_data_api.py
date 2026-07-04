@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import app.api.wipe_data as wipe_data_api
-import pytest
-from app.config import AppSettings
+from app.config import AppSettings, get_settings
 from app.main import create_app
 from fastapi.testclient import TestClient
 
@@ -23,7 +21,6 @@ def test_wipe_data_requires_exact_confirmation_phrase() -> None:
 
 def test_wipe_data_endpoint_deletes_configured_local_data(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -33,8 +30,9 @@ def test_wipe_data_endpoint_deletes_configured_local_data(
         data_dir=data_dir,
         database_url=f"sqlite+aiosqlite:///{data_dir / 'jobtracker.sqlite3'}",
     )
-    monkeypatch.setattr(wipe_data_api, "get_settings", lambda: settings)
-    client = TestClient(create_app())
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: settings
+    client = TestClient(app)
 
     response = client.post(
         "/local-data/wipe",
@@ -58,16 +56,15 @@ def test_wipe_data_endpoint_is_documented_in_openapi() -> None:
     assert schema["$ref"] == "#/components/schemas/WipeDataResponse"
 
 
-def test_wipe_data_endpoint_returns_typed_error_for_unsafe_target(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_wipe_data_endpoint_returns_typed_error_for_unsafe_target() -> None:
     settings = AppSettings(
         _env_file=None,
         data_dir=Path.cwd(),
         database_url="sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3",
     )
-    monkeypatch.setattr(wipe_data_api, "get_settings", lambda: settings)
-    client = TestClient(create_app())
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: settings
+    client = TestClient(app)
 
     response = client.post(
         "/local-data/wipe",

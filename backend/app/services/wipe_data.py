@@ -26,21 +26,27 @@ def wipe_local_data(settings: AppSettings) -> WipeDataResult:
     deleted_paths: list[str] = []
     missing_paths: list[str] = []
 
+    _preflight_wipe_targets(targets, data_dir)
+
     for target in targets:
-        _validate_safe_target(target)
         if not target.exists():
             missing_paths.append(str(target))
             continue
 
         if target.is_dir():
-            if target != data_dir:
-                raise UnsafeWipeTargetError(f"Unsafe wipe target: {target}")
             shutil.rmtree(target)
         else:
             target.unlink()
         deleted_paths.append(str(target))
 
     return WipeDataResult(deleted_paths=deleted_paths, missing_paths=missing_paths)
+
+
+def _preflight_wipe_targets(targets: list[Path], data_dir: Path) -> None:
+    for target in targets:
+        _validate_safe_target(target)
+        if target.exists() and target.is_dir() and target != data_dir:
+            raise UnsafeWipeTargetError(f"Unsafe wipe target: {target}")
 
 
 def _wipe_targets(settings: AppSettings) -> list[Path]:
