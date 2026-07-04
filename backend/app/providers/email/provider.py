@@ -121,7 +121,12 @@ class EmailProviderCursor(BaseModel):
 
 
 class EmailMetadataListRequest(BaseModel):
-    """Request one provider-normalized metadata page."""
+    """Request one provider-normalized metadata page.
+
+    `page_token` continues pagination within the current listing run.
+    `sync_cursor` is provider-owned incremental state and is required only for
+    incremental sync.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -171,7 +176,12 @@ class EmailMessageMetadata(BaseModel):
 
 
 class EmailMetadataPage(BaseModel):
-    """One metadata page plus provider-owned continuation and sync cursors."""
+    """One metadata page plus provider-owned continuation and sync cursors.
+
+    `next_page_token` continues the current listing run.
+    `next_sync_cursor` is the opaque cursor the sync service can persist after a
+    successful provider page or run, depending on adapter semantics.
+    """
 
     model_config = ConfigDict(frozen=True)
     messages: tuple[EmailMessageMetadata, ...]
@@ -180,7 +190,11 @@ class EmailMetadataPage(BaseModel):
 
 
 class EmailBodyFetchRequest(BaseModel):
-    """Fetch retained body text only for caller-selected candidate messages."""
+    """Fetch retained body text only for caller-selected messages.
+
+    Callers select messages eligible for body retention, such as job-search
+    candidates or reconciliation/debug messages.
+    """
 
     model_config = ConfigDict(frozen=True)
     refs: tuple[EmailMessageRef, ...] = Field(min_length=1)
@@ -199,6 +213,13 @@ class EmailMessageBody(BaseModel):
 
 
 class EmailBodyFetchFailure(BaseModel):
+    """A message body that could not be returned for retention.
+
+    Use `EmailBodySource.EMPTY` with an empty `body_text` when an empty body is
+    successfully normalized; use `EmailBodyFetchFailureReason.EMPTY` when the
+    provider could not produce a retained body for the requested message.
+    """
+
     model_config = ConfigDict(frozen=True)
     ref: EmailMessageRef
     reason: EmailBodyFetchFailureReason

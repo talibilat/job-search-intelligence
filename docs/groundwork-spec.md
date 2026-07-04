@@ -39,7 +39,7 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 ### Design-pattern set
 
 - **Repository** - all DB access behind repository classes (no raw SQL scattered in services).
-- **Strategy** - `EmailProvider` and `LLMProvider` interfaces with swappable adapters.
+- **Strategy** - `EmailProvider` and `LLMProvider` protocols with swappable adapters.
 - **Pipeline** - `ingest -> filter -> classify -> aggregate`, each stage a pure-ish function taking/returning Pydantic DTOs.
 - **Service layer** - business logic in services; API routes stay thin.
 - **Dependency Injection** - FastAPI `Depends` for repos, providers, config.
@@ -63,7 +63,7 @@ job-search-intelligence/
 │   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
-│   │   │   ├── email/              # EmailProvider ABC + gmail.py (+ future outlook/imap)
+│   │   │   ├── email/              # EmailProvider protocol + future gmail.py/outlook.py/imap.py
 │   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
