@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, and an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, and an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary.
 The rest of the backend, the frontend, and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
@@ -70,17 +70,13 @@ Developer instructions:
 
 ## Development
 
-The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, and `backend/pyproject.toml` with strict mypy defaults; backend config, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
-The backend has an initial FastAPI app factory, `backend/pyproject.toml` with strict mypy defaults, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
-The backend settings loader, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend settings loader, database, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
 
-- Backend type checking: `backend/pyproject.toml` defines strict mypy defaults for backend code.
-- Current scaffold check: run `mypy --config-file pyproject.toml` from `backend/`.
-- Current backend tests: run `python3 -m pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
+- Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn` as runtime dependencies, and uses `ruff`, `mypy`, and `pytest` as the dev-dependency verification gate; `backend/pyproject.toml` also holds the strict mypy defaults.
+- Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
 - Current backend health check: `GET /health` returns `{"status": "ok"}`.
-- Once backend `uv` project metadata exists, run `uv run mypy` from `backend/`.
-- Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
