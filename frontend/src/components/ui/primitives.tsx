@@ -25,6 +25,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost";
 }
 
+/** Shared app button with a safe default `type` and visual variants. */
 export function Button({ className, type = "button", variant = "primary", ...props }: ButtonProps) {
   return (
     <button
@@ -39,6 +40,7 @@ export interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean;
 }
 
+/** Text input that maps the `invalid` state onto `aria-invalid`. */
 export function TextInput({
   "aria-invalid": ariaInvalid,
   className,
@@ -78,6 +80,7 @@ function mergeIds(...ids: (string | undefined)[]) {
   return merged.length > 0 ? merged : undefined;
 }
 
+/** Labelled control wrapper that wires hint and error text through `aria-describedby`. */
 export function FormField({ children, error, hint, htmlFor, label }: FormFieldProps) {
   const hintId = hint ? `${htmlFor}-hint` : undefined;
   const errorId = error ? `${htmlFor}-error` : undefined;
@@ -115,6 +118,7 @@ export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"
   tone?: "danger" | "info" | "success" | "warning";
 }
 
+/** Status or alert message with tone-based default live-region roles. */
 export function Alert({ children, className, role, title, tone = "info", ...props }: AlertProps) {
   const computedRole = role ?? (tone === "danger" ? "alert" : "status");
 
@@ -140,6 +144,7 @@ export interface TabsProps {
   label: string;
 }
 
+/** Keyboard-operable tab set with roving focus across enabled tabs. */
 export function Tabs({ className, defaultItemId, items, label }: TabsProps) {
   const baseId = useId();
   const firstEnabledItem = items.find((item) => !item.disabled) ?? items[0];
@@ -280,6 +285,7 @@ function renderCellValue<TRow extends object>(row: TRow, column: DataTableColumn
   return JSON.stringify(value);
 }
 
+/** Captioned data table with typed columns and a horizontal overflow wrapper. */
 export function DataTable<TRow extends object>({
   caption,
   columns,

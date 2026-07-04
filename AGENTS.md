@@ -276,8 +276,7 @@ Required checks depend on the work:
 
 - Backend Python changes: run ruff, mypy, and relevant pytest tests once scaffolded.
 - Frontend changes: run `npm run check` from `frontend/`; it includes type checking, linting, Vitest, and build verification.
-- Frontend changes: run `npm run check` from `frontend/`; the check includes typecheck, lint, Vitest, and build once those tools are scaffolded.
-- Frontend changes: run `npm run check` from `frontend/`; run relevant tests once those tools are scaffolded.
+- Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
 - Critical frontend flows: run the tiny Playwright smoke suite once scaffolded.
 - API contract changes: regenerate or validate the TypeScript client.
