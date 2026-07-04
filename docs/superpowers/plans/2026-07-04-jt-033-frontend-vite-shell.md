@@ -19,7 +19,7 @@ This keeps `JT-033` as the foundation other frontend tickets can build on.
 - Do not introduce telemetry, shared credentials, autonomous outbound email, auto-apply behavior, or multi-user SaaS assumptions.
 - Do not add generated API client work from `JT-035`.
 - Do not add shared UI primitives from `JT-042`.
-- Do not add frontend lint/typecheck configuration from `JT-034`.
+- Do not add frontend lint scripts, ESLint config, or dedicated typecheck package scripts from `JT-034`.
 - Do not add frontend CI from `JT-048`.
 - Do not add Playwright smoke harness work from `JT-054`.
 - Do not add setup, dashboard, insights, chat, Recharts, or route-query helper work from later frontend tickets.
@@ -343,6 +343,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow-x: hidden;
 }
 
 button,
@@ -354,6 +355,7 @@ select {
 
 .app-shell {
   width: min(100%, 1120px);
+  min-width: 0;
   min-height: 100vh;
   margin: 0 auto;
   padding: 64px 24px;
@@ -387,6 +389,7 @@ h1 {
   font-size: clamp(2.7rem, 8vw, 5.9rem);
   line-height: 0.92;
   letter-spacing: -0.08em;
+  overflow-wrap: anywhere;
 }
 
 h2 {
@@ -395,6 +398,7 @@ h2 {
   font-size: clamp(1.45rem, 3vw, 2.25rem);
   line-height: 1;
   letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
 }
 
 .hero-copy {
@@ -408,6 +412,7 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 32px;
+  min-width: 0;
   margin-top: 56px;
   padding: 32px;
   border: 1px solid #d8d0bf;
@@ -419,17 +424,20 @@ h2 {
 .status-card ul {
   display: grid;
   gap: 16px;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .status-card li {
+  min-width: 0;
   padding: 16px 18px;
   border-radius: 18px;
   background: #edf6eb;
   color: #203f2c;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 720px) {
@@ -437,8 +445,14 @@ h2 {
     padding: 40px 18px;
   }
 
+  h1 {
+    font-size: clamp(2.1rem, 10vw, 3rem);
+    line-height: 0.98;
+    letter-spacing: -0.06em;
+  }
+
   .status-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding: 24px;
   }
 }
@@ -468,8 +482,10 @@ Add these bullets to the Development section:
 ```markdown
 - Frontend setup: `npm install` from `frontend/`.
 - Frontend dev server: `npm run dev` from `frontend/`.
+- Current frontend TypeScript check: `npx tsc -b` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
+- Frontend lint and test scripts are not scaffolded yet; later frontend tooling and Playwright tickets own those checks.
 ```
 
 ---
@@ -485,35 +501,41 @@ Add these bullets to the Development section:
 - Consumes: frontend shell and README changes.
 - Produces: verification evidence for the `JT-033` PR.
 
-- [ ] **Step 1: Run the frontend build**
+- [ ] **Step 1: Run the frontend TypeScript check**
+
+Run: `npx tsc -b`
+
+Expected: TypeScript project references compile without errors.
+
+- [ ] **Step 2: Run the frontend build**
 
 Run: `npm run build`
 
 Expected: Vite produces `frontend/dist/` without errors.
 
-- [ ] **Step 2: Start the frontend dev server**
+- [ ] **Step 3: Start the frontend dev server**
 
 Run: `npm run dev -- --host 127.0.0.1`
 
 Expected: Vite reports a local URL on `127.0.0.1`.
 
-- [ ] **Step 3: Verify the served shell**
+- [ ] **Step 4: Verify the served shell**
 
 Fetch the local URL while the dev server is running.
 
 Expected: the HTML response is served and the app assets are reachable.
 
-- [ ] **Step 4: Stop the frontend dev server**
+- [ ] **Step 5: Stop the frontend dev server**
 
 Stop the dev server process after verification.
 
-- [ ] **Step 5: Run backend baseline tests if backend files changed**
+- [ ] **Step 6: Run backend baseline tests if backend files changed**
 
 Run: `uv run pytest` from `backend/` if backend files changed during the work.
 
 Expected: backend tests pass.
 
-- [ ] **Step 6: Review diff for scope discipline**
+- [ ] **Step 7: Review diff for scope discipline**
 
 Run: `git diff --stat` and `git diff -- frontend README.md docs/superpowers/plans/2026-07-04-jt-033-frontend-vite-shell.md`.
 
@@ -525,7 +547,7 @@ Expected: changes are limited to the frontend shell, README, package lock, and t
 
 - Spec coverage: Tasks 2 through 4 implement the Vite React TypeScript app shell required by `JT-033`.
 - Spec coverage: Task 5 updates relevant documentation.
-- Spec coverage: Task 6 verifies the frontend build and dev server smoke path.
-- Scope check: The plan excludes lint, generated API client, UI primitives, CI, Playwright, route pages, Recharts, and route-query helper work.
+- Spec coverage: Task 6 verifies the frontend TypeScript check, build, and dev server smoke path.
+- Scope check: The plan excludes lint scripts, ESLint config, generated API client, UI primitives, CI, Playwright, route pages, Recharts, and route-query helper work.
 - Type consistency: `App` is the default export consumed by `main.tsx`.
 - Type consistency: The Vite entrypoint uses `src/main.tsx`, matching `index.html`.
