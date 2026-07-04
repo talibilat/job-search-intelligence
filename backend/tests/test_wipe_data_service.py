@@ -73,6 +73,30 @@ def test_wipe_local_data_removes_external_sqlite_sidecars(tmp_path: Path) -> Non
     assert str(database.resolve()) in result.deleted_paths
 
 
+def test_wipe_local_data_removes_external_sqlite_path_with_parent_segment(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / APP_OWNED_DATA_DIR_MARKER).touch()
+    database = tmp_path / "jobtracker.sqlite3"
+    database.write_text("db")
+    database.with_name(f"{database.name}-wal").write_text("wal")
+    settings = AppSettings(
+        _env_file=None,
+        data_dir=data_dir,
+        database_url=f"sqlite+aiosqlite:///{data_dir / '..' / database.name}",
+        fernet_key_file=data_dir / "fernet.key",
+    )
+
+    result = wipe_local_data(settings)
+
+    assert not data_dir.exists()
+    assert not database.exists()
+    assert not database.with_name(f"{database.name}-wal").exists()
+    assert str(database.resolve()) in result.deleted_paths
+
+
 def test_wipe_local_data_refuses_directory_at_external_sqlite_path(
     tmp_path: Path,
 ) -> None:

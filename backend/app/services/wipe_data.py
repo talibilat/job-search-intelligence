@@ -24,7 +24,7 @@ class UnsafeWipeTargetError(ValueError):
 
 def wipe_local_data(settings: AppSettings) -> WipeDataResult:
     targets = _wipe_targets(settings)
-    data_dir = _absolute_path(settings.data_dir)
+    data_dir = _target_path(settings.data_dir)
     deleted_paths: list[str] = []
     missing_paths: list[str] = []
 
@@ -45,10 +45,16 @@ def wipe_local_data(settings: AppSettings) -> WipeDataResult:
 
 
 def _preflight_wipe_targets(targets: list[Path], data_dir: Path) -> None:
+    canonical_data_dir = _canonical_path(data_dir)
     for target in targets:
         _validate_safe_target(target)
-        if target.exists() and target.is_symlink() and not _is_relative_to(
-            target.resolve(), data_dir
+        if (
+            target.exists()
+            and target.is_symlink()
+            and (
+                target == data_dir
+                or not _is_relative_to(target.resolve(), canonical_data_dir)
+            )
         ):
             raise UnsafeWipeTargetError(f"Unsafe wipe target: {target}")
         if target.exists() and target == data_dir and not target.is_dir():
@@ -68,23 +74,25 @@ def _validate_app_owned_data_dir(data_dir: Path) -> None:
 
 
 def _wipe_targets(settings: AppSettings) -> list[Path]:
-    data_dir = _absolute_path(settings.data_dir)
+    data_dir = _target_path(settings.data_dir)
+    canonical_data_dir = _canonical_path(settings.data_dir)
     targets = [data_dir]
     database_path = _sqlite_database_path(settings.database_url)
     if database_path is None:
         return targets
 
-    absolute_database_path = _absolute_path(database_path)
-    if _is_relative_to(absolute_database_path, data_dir):
+    database_target = _target_path(database_path)
+    canonical_database_path = _canonical_path(database_path)
+    if _is_relative_to(canonical_database_path, canonical_data_dir):
         if (
-            absolute_database_path.exists()
-            and absolute_database_path.is_symlink()
-            and not _is_relative_to(absolute_database_path.resolve(), data_dir)
+            database_target.exists()
+            and database_target.is_symlink()
+            and not _is_relative_to(database_target.resolve(), canonical_data_dir)
         ):
-            raise UnsafeWipeTargetError(f"Unsafe wipe target: {absolute_database_path}")
+            raise UnsafeWipeTargetError(f"Unsafe wipe target: {database_target}")
         return _deduplicate_paths(targets)
 
-    targets.extend(_sqlite_file_targets(absolute_database_path))
+    targets.extend(_sqlite_file_targets(database_target))
 
     return _deduplicate_paths(targets)
 
@@ -115,10 +123,11 @@ def _deduplicate_paths(paths: list[Path]) -> list[Path]:
     deduplicated: list[Path] = []
     seen: set[Path] = set()
     for path in paths:
-        absolute = _absolute_path(path)
-        if absolute not in seen:
-            deduplicated.append(absolute)
-            seen.add(absolute)
+        target = _target_path(path)
+        canonical = _canonical_path(path)
+        if canonical not in seen:
+            deduplicated.append(target)
+            seen.add(canonical)
     return deduplicated
 
 
@@ -130,6 +139,17 @@ def _validate_safe_target(target: Path) -> None:
 
 def _absolute_path(path: Path) -> Path:
     return path.expanduser().absolute()
+
+
+def _canonical_path(path: Path) -> Path:
+    return path.expanduser().resolve(strict=False)
+
+
+def _target_path(path: Path) -> Path:
+    absolute = _absolute_path(path)
+    if absolute.exists() and absolute.is_symlink():
+        return absolute
+    return _canonical_path(path)
 
 
 def _unsafe_targets() -> set[Path]:
