@@ -63,6 +63,7 @@ Developer instructions:
 - `AGENTS.md` - the canonical local agent guide with workflows and non-negotiable constraints.
 - `docs/conventions.md` - baseline coding standards.
 - `.editorconfig` - shared editor defaults.
+- Project-local agent worktrees and scratch checkouts under `.worktrees/` are ignored; ticket source-of-truth files stay tracked under `tickets/`.
 
 ## Development
 
@@ -70,6 +71,7 @@ The backend has an initial FastAPI app factory and `backend/pyproject.toml` with
 
 - Backend type checking: `backend/pyproject.toml` defines strict mypy defaults for backend code.
 - Current scaffold check: run `mypy --config-file pyproject.toml` from `backend/`.
+- Current backend tests: run `python3 -m pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
 - Once backend `uv` project metadata exists, run `uv run mypy` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
