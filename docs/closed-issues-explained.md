@@ -858,8 +858,8 @@ A frontend GitHub Actions workflow was added at `.github/workflows/frontend-ci.y
 It checks out the repository, sets up Node.js 22 with npm package-lock caching, installs frontend dependencies with `npm ci`, and runs `npm run check` from `frontend/`.
 
 Why it was done:
-The frontend typecheck, ESLint gate, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
-This keeps the existing frontend package scripts as the source of truth while making them part of the Phase 0 CI gate.
+The frontend typecheck, ESLint gate, Vitest unit tests, and Vite build smoke check now run automatically on pushes and pull requests targeting `main`.
+This keeps the existing frontend package scripts as the source of truth while making type checking, linting, unit tests, and build verification part of the Phase 0 CI gate.
 
 Area:
 Frontend CI and repository infrastructure.
@@ -877,7 +877,7 @@ npm run check
 ```
 
 Expected result:
-`npm run check` should run TypeScript checking, ESLint, and the Vite build without errors.
+`npm run check` should run TypeScript checking, ESLint, Vitest, and the Vite build without errors.
 
 Caveat:
 This ticket adds frontend CI only.
@@ -940,7 +940,7 @@ Backend:
 You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, and local wipe-data infrastructure.
 
 Frontend:
-You can see a static React shell for JobTracker and an empty Recharts foundation panel for future deterministic dashboard metrics.
+You can see a static React shell for JobTracker, an empty Recharts foundation panel for future deterministic dashboard metrics, and shared accessible UI primitives for later pages.
 It is not connected to backend data yet.
 
 Configuration:
@@ -958,9 +958,7 @@ You can see early safety work for typed errors, secret references, safe configur
 
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
-The frontend can start, run unit tests, and build, but it is still a static shell.
-The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
-The frontend can start and build, but it is still a static shell.
-Frontend CI now runs the existing frontend typecheck, lint, and build gate on pushes and pull requests to `main`.
+The frontend can start, run unit tests, and build, but it is still a static shell with an empty chart foundation and shared primitive layer.
+Frontend CI now runs the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, and the wipe-data endpoint.

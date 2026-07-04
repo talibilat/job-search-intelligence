@@ -25,6 +25,7 @@ Baseline coding standards for every agent and contributor.
 - Public API failures use the standard `{"error": {"code": "...", "message": "...", "details": []}}` response shape, and route-specific public failures should raise `ApiError` instead of exposing arbitrary `HTTPException.detail` text.
 - Validation, HTTP, and internal exception handlers must sanitize raw request input, tracebacks, secrets, and private exception details.
 - Frontend code imports API client types and helpers from `frontend/src/api`; `frontend/src/api/generated/` is reserved for OpenAPI-generated output and placeholder destination code.
+- Frontend UI code uses shared primitives from `frontend/src/components/ui` for buttons, text inputs, labelled fields, alerts, tabs, and data tables so accessibility behavior stays centralized.
 
 ## Determinism and the LLM
 
@@ -39,7 +40,6 @@ Baseline coding standards for every agent and contributor.
 - Use conventional commit messages.
 - Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; route secrets through `SecretStore` and store them encrypted at rest.
 - Use the redaction helpers exported by `app.security` before logging structured data that may contain secrets or retained email bodies.
-- Use `app.security.redaction` before logging structured data that may contain secrets or retained email bodies.
 - Synthetic fixtures must be private-data-free, must set `contains_private_data` to `false`, and must use synthetic domains and content instead of copied inbox data.
 - Do not add telemetry, shared credentials, auto-apply, or autonomous outbound email.
 

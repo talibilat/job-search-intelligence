@@ -118,7 +118,7 @@ export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"
   tone?: "danger" | "info" | "success" | "warning";
 }
 
-/** Static alert box with an assertive live-region role only for danger by default. */
+/** Static alert box; danger defaults to `role="alert"`, while callers opt into `status`. */
 export function Alert({ children, className, role, title, tone = "info", ...props }: AlertProps) {
   const computedRole = role ?? (tone === "danger" ? "alert" : undefined);
 
@@ -303,7 +303,7 @@ function renderCellValue<TRow extends object>(row: TRow, column: ResolvedDataTab
   throw new Error("DataTable columns for non-scalar values must define render.");
 }
 
-/** Captioned data table with typed columns and a horizontal overflow wrapper. */
+/** Captioned data table; non-scalar columns must provide `render`. */
 export function DataTable<TRow extends object>({
   caption,
   columns,

@@ -233,7 +233,7 @@ Classification is make-or-break for the whole product.
 - Make every number traceable to a deterministic endpoint.
 - Filters must compose consistently across metrics.
 - Dashboard filter state should live in route query strings.
-- Prefer accessible components and readable charts.
+- Prefer shared accessible primitives from `frontend/src/components/ui` for buttons, text inputs, labelled fields, alerts, tabs, and data tables, and use readable charts.
 - Use Recharts for charts and a small accessible component layer.
 - Avoid generic dashboards that hide the important story.
 - Show citations for narrative and chat answers.
@@ -300,8 +300,7 @@ Never claim that work is complete without fresh verification evidence.
 
 ## Current Repository State
 
-At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, and Recharts chart wrapper foundation, but not the full product scaffold.
-At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, and root pre-commit configuration, but not the full product scaffold.
+At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, Recharts chart wrapper foundation, shared accessible UI primitives, root pre-commit configuration, and backend and frontend CI, but not the full product scaffold.
 Do not assume backend, frontend, tickets, scripts, or CI exist until you inspect the filesystem.
 
 When scaffolding begins, follow the layout in `docs/groundwork-spec.md` unless the user approves a change.
