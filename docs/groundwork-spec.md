@@ -43,7 +43,7 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 - **Service layer** - business logic in services; API routes stay thin.
 - **Dependency Injection** - FastAPI `Depends` for repos, providers, config.
 - **DTOs** - Pydantic models cross every boundary (never pass raw dicts).
-- **Typed errors** - explicit error types, no bare exceptions leaking to the API.
+- **Typed errors** - explicit error types, no bare exceptions leaking to the API; API errors use a standard `{"error": {"code": "...", "message": "...", "details": []}}` response body.
 
 ---
 
@@ -70,7 +70,7 @@ job-search-intelligence/
 │   │   ├── services/               # sync_service, metrics_service, insights_service, chat_service
 │   │   ├── scripts/                # generate_openapi.py
 │   │   ├── agent/                  # LangGraph graph, tools (structured_query, semantic_search)
-│   │   ├── api/                    # routers: setup, auth, sync, applications, metrics, insights, chat
+│   │   ├── api/                    # routers, typed API errors, setup, auth, sync, applications, metrics, insights, chat
 │   │   └── setup/                  # first-run wizard logic
 │   ├── evals/
 │   │   ├── golden_set.jsonl        # ~30 hand-labeled emails
@@ -175,6 +175,10 @@ Show a **pre-run cost estimate** and track tokens per run.
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
 
 OpenAPI schema -> `backend/scripts/generate_openapi.py` -> frontend TypeScript client in `frontend/src/api/`.
+
+Standard error responses use a typed Pydantic shape: `{"error": {"code": "...", "message": "...", "details": []}}`.
+Routes and services raise explicit `ApiError` values for public API-boundary failures.
+Request validation errors, Starlette HTTP errors, and unhandled exceptions are mapped by the FastAPI app factory and must not expose raw request input, tracebacks, secrets, or arbitrary exception details.
 
 ---
 

@@ -1,3 +1,5 @@
+"""Typed, sanitized API error responses for the FastAPI boundary."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -39,6 +41,8 @@ class ApiErrorResponse(BaseModel):
 
 
 class ApiError(Exception):
+    """Raise for public API failures that should return a typed error response."""
+
     def __init__(
         self,
         *,
