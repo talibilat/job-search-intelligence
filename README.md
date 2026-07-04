@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, and the frontend Vite React TypeScript shell.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
 The rest of the backend and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
