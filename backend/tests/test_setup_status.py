@@ -76,3 +76,108 @@ def test_setup_status_endpoint_is_documented_in_openapi(
     operation = response.json()["paths"]["/setup/status"]["get"]
     schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     assert schema["$ref"] == "#/components/schemas/SetupStatusResponse"
+
+
+def test_setup_submit_endpoint_accepts_phase_zero_shell_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    client = TestClient(create_test_app(AppSettings(_env_file=None)))
+
+    response = client.post(
+        "/setup",
+        json={
+            "email_provider": "gmail",
+            "llm_provider": "ollama",
+            "classification_mode": "local",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "accepted",
+        "setup_complete": False,
+        "gmail_connected": False,
+        "llm_configured": False,
+        "email_provider": "gmail",
+        "llm_provider": "ollama",
+        "classification_mode": "local",
+    }
+
+
+def test_setup_submit_endpoint_rejects_incomplete_selected_provider_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    client = TestClient(create_test_app(AppSettings(_env_file=None)))
+
+    response = client.post(
+        "/setup",
+        json={
+            "email_provider": "gmail",
+            "llm_provider": "azure_openai",
+            "classification_mode": "hybrid",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": {
+            "code": "bad_request",
+            "message": "Submitted setup choices are incomplete.",
+            "details": [
+                {
+                    "field": "azure_openai_endpoint",
+                    "message": "Required for selected provider.",
+                    "type": "missing_provider_setting",
+                },
+                {
+                    "field": "azure_openai_chat_deployment",
+                    "message": "Required for selected provider.",
+                    "type": "missing_provider_setting",
+                },
+                {
+                    "field": "azure_openai_embedding_deployment",
+                    "message": "Required for selected provider.",
+                    "type": "missing_provider_setting",
+                },
+            ],
+        },
+    }
+
+
+def test_setup_submit_endpoint_rejects_unknown_secret_like_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    client = TestClient(create_test_app(AppSettings(_env_file=None)))
+
+    response = client.post(
+        "/setup",
+        json={
+            "email_provider": "gmail",
+            "llm_provider": "ollama",
+            "classification_mode": "local",
+            "azure_openai_api_key": "super-secret-api-key",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert "super-secret-api-key" not in response.text
+
+
+def test_setup_submit_endpoint_is_documented_in_openapi(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    client = TestClient(create_test_app(AppSettings(_env_file=None)))
+
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    operation = response.json()["paths"]["/setup"]["post"]
+    request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert request_schema["$ref"] == "#/components/schemas/SetupSubmitRequest"
+    assert response_schema["$ref"] == "#/components/schemas/SetupSubmitResponse"
