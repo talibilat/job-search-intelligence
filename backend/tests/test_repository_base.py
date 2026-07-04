@@ -4,6 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 
 import pytest
+from app.db import repositories
 from app.db.repositories.base import BaseRepository
 
 
@@ -98,6 +99,10 @@ def test_repository_execute_many_runs_parameterized_bulk_statements(
         Widget(id=1, name="alpha"),
         Widget(id=2, name="beta"),
     ]
+
+
+def test_repository_package_exports_shared_sql_parameter_type() -> None:
+    assert hasattr(repositories, "SqlParameters")
 
 
 def test_repository_transaction_commits_successful_work(
