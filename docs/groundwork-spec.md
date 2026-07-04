@@ -103,7 +103,7 @@ job-search-intelligence/
 │   ├── conventions.md              # coding standards for agents
 │   └── synthetic-fixtures.md       # private-data-free fixture format
 ├── .pre-commit-config.yaml
-├── .github/workflows/ci.yml        # lint + typecheck (minimal)
+├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
 └── README.md
 ```
 
