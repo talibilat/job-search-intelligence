@@ -15,6 +15,7 @@ frontend/dist/
 *.tsbuildinfo
 
 # Local data (SQLite is the app state; never commit user data)
+.jobtracker/
 *.db
 *.sqlite
 *.sqlite3
