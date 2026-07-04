@@ -80,7 +80,7 @@ def test_application_repository_maps_application_rows() -> None:
         repository,
         """
         SELECT
-            42 AS id,
+            'application-42' AS id,
             'Acme' AS company,
             'Software Engineer' AS role_title,
             'linkedin' AS source,
@@ -102,7 +102,7 @@ def test_application_repository_maps_application_rows() -> None:
     )
 
     assert isinstance(record, ApplicationRecord)
-    assert record.id == 42
+    assert record.id == "application-42"
     assert record.current_status == "applied"
     assert record.manual_lock is False
     assert record.tech_stack == ["Python", "FastAPI"]
@@ -115,8 +115,8 @@ def test_event_repository_maps_application_event_rows() -> None:
         repository,
         """
         SELECT
-            7 AS id,
-            42 AS application_id,
+            'event-7' AS id,
+            'application-42' AS application_id,
             'email-1' AS email_id,
             'applied' AS event_type,
             '2026-07-01T09:00:00+00:00' AS event_at,
@@ -125,7 +125,7 @@ def test_event_repository_maps_application_event_rows() -> None:
     )
 
     assert isinstance(record, ApplicationEventRecord)
-    assert record.application_id == 42
+    assert record.application_id == "application-42"
     assert record.event_type == "applied"
     assert isinstance(record.event_at, datetime)
 
@@ -160,7 +160,7 @@ def test_correction_repository_maps_application_correction_rows() -> None:
         """
         SELECT
             2 AS id,
-            42 AS application_id,
+            'application-42' AS application_id,
             'status_edit' AS correction_type,
             '{"current_status": "applied"}' AS before_json,
             '{"current_status": "rejected"}' AS after_json,

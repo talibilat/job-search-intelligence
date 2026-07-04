@@ -55,11 +55,11 @@ type JsonObjectList = list[JsonObject]
 
 class RawEmailRecord(BaseModel):
     id: str
-    thread_id: str
-    from_addr: str
-    to_addr: str
-    subject: str
-    sent_at: datetime
+    thread_id: str | None
+    from_addr: str | None
+    to_addr: str | None
+    subject: str | None
+    sent_at: datetime | None
     body_text: str | None
     body_retention_state: str
     labels: list[str]
@@ -73,7 +73,7 @@ class RawEmailRecord(BaseModel):
 
 
 class ApplicationRecord(BaseModel):
-    id: int
+    id: str
     company: str
     role_title: str
     source: ApplicationSource
@@ -99,8 +99,8 @@ class ApplicationRecord(BaseModel):
 
 
 class ApplicationEventRecord(BaseModel):
-    id: int
-    application_id: int
+    id: str
+    application_id: str
     email_id: str
     event_type: ApplicationEventType
     event_at: datetime
@@ -109,7 +109,7 @@ class ApplicationEventRecord(BaseModel):
 
 class ApplicationCorrectionRecord(BaseModel):
     id: int
-    application_id: int
+    application_id: str
     correction_type: CorrectionType
     before_json: JsonObject
     after_json: JsonObject

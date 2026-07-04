@@ -203,6 +203,18 @@ class SyntheticFixtureFile(BaseModel):
             raise ValueError(msg)
 
 
+class SyntheticFixtureLoadResult(BaseModel):
+    """Summary of a synthetic fixture load into SQLite."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fixture_id: str = Field(min_length=1)
+    email_count: int = Field(ge=0)
+    classification_count: int = Field(ge=0)
+    application_count: int = Field(ge=0)
+    event_count: int = Field(ge=0)
+
+
 def _find_duplicates(values: Iterable[str]) -> set[str]:
     seen: set[str] = set()
     duplicates: set[str] = set()

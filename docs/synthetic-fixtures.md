@@ -7,14 +7,14 @@ They model the same factual spine described in the PRD: emails, classifications,
 
 The canonical DTOs live in `backend/app/models/synthetic_fixture.py`.
 Fixture files use `schema_version: "1"` and must set `contains_private_data` to `false`.
-The DTOs are exported from `backend/app/models/__init__.py` for tests and the later loader ticket.
+The DTOs are exported from `backend/app/models/__init__.py` for tests and the SQLite fixture loader.
 
 Each fixture has these top-level arrays:
 
-- `emails` models future `raw_emails` rows with provider metadata and retained synthetic body text when needed.
-- `classifications` models future `email_classifications` rows and references emails by `email_id`.
-- `applications` models future `applications` rows used by deterministic metrics and aggregation tests.
-- `events` models future `application_events` rows and references both `application_id` and `email_id`.
+- `emails` models `raw_emails` rows with provider metadata and retained synthetic body text when needed.
+- `classifications` models `email_classifications` rows and references emails by `email_id`.
+- `applications` models `applications` rows used by deterministic metrics and aggregation tests.
+- `events` models `application_events` rows and references both `application_id` and `email_id`.
 
 The DTO can default omitted arrays to empty tuples, but checked-in JSON fixtures should include all four arrays explicitly so fixture intent is obvious in review.
 
@@ -95,8 +95,31 @@ Fixture enum values mirror the planned database contract:
 The initial sample fixture is `backend/tests/fixtures/synthetic/basic_job_search.json`.
 It contains one application confirmation and one later rejection for the same synthetic application.
 
+## Loader
+
+`backend/app/db/repositories/synthetic_fixture.py` defines `SyntheticFixtureRepository`.
+Use `SyntheticFixtureRepository(connection).load_file(path)` to validate a JSON fixture and load it into a caller-provided local SQLite connection.
+Use `load_fixture(fixture)` when the caller already has a validated `SyntheticFixtureFile` instance.
+
+The loader creates the four core fixture tables when they are missing:
+
+- `raw_emails`
+- `email_classifications`
+- `applications`
+- `application_events`
+
+Rows are inserted with deterministic `INSERT OR REPLACE` behavior keyed by fixture IDs, so loading the same fixture twice does not duplicate rows.
+The loader returns `SyntheticFixtureLoadResult` with the fixture ID and per-table counts.
+It is for deterministic tests and smoke data only; it does not add API routes, production ingestion behavior, LLM behavior, telemetry, or real email data.
+
 Validate the fixture contract from `backend/` with:
 
 ```bash
 uv run pytest tests/test_synthetic_fixture_format.py -v
+```
+
+Validate the loader with:
+
+```bash
+uv run pytest tests/test_synthetic_fixture_loader.py -v
 ```

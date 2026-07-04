@@ -106,7 +106,7 @@ job-search-intelligence/
 │   ├── google-oauth-setup.md       # user-created Google OAuth client setup guide
 │   ├── conventions.md              # coding standards for agents
 │   ├── llm-provider-setup.md       # Azure OpenAI and Ollama setup values and secret boundaries
-│   └── synthetic-fixtures.md       # private-data-free fixture format
+│   └── synthetic-fixtures.md       # private-data-free fixture format and SQLite loader
 ├── .pre-commit-config.yaml
 ├── .github/workflows/backend-ci.yml # backend ruff + mypy + pytest
 ├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
