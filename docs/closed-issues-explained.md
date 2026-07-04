@@ -44,6 +44,7 @@ Do not switch branches if you have local work you have not saved or committed.
 The repository now has the start of a local-first job-search intelligence app.
 The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
+The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
 There are backend endpoints for health, setup status, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
 There is configuration infrastructure, secret-store interface infrastructure, and lint/type/test tooling.
@@ -892,7 +893,7 @@ Backend:
 You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, and local wipe-data infrastructure.
 
 Frontend:
-You can see a static React shell for JobTracker.
+You can see a static React shell for JobTracker and an empty Recharts foundation panel for future deterministic dashboard metrics.
 It is not connected to backend data yet.
 
 Configuration:
@@ -910,6 +911,6 @@ You can see early safety work for typed errors, secret references, safe configur
 
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, run tests, lint, and type checks.
-The frontend can start and build, but it is still a static shell.
+The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, and the wipe-data endpoint.

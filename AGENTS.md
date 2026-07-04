@@ -275,7 +275,7 @@ Testing is intentionally minimal, but verification is not optional.
 Required checks depend on the work:
 
 - Backend Python changes: run ruff, mypy, and relevant pytest tests once scaffolded.
-- Frontend changes: run `npm run check` from `frontend/`; run relevant tests once those tools are scaffolded.
+- Frontend changes: run `npm run check` from `frontend/`; the check includes typecheck, lint, Vitest, and build once those tools are scaffolded.
 - Critical frontend flows: run the tiny Playwright smoke suite once scaffolded.
 - API contract changes: regenerate or validate the TypeScript client.
 - Metric changes: verify against sample data or fixtures.
@@ -298,7 +298,7 @@ Never claim that work is complete without fresh verification evidence.
 
 ## Current Repository State
 
-At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell and frontend Vite shell, but not the full product scaffold.
+At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, and Recharts chart wrapper foundation, but not the full product scaffold.
 Do not assume backend, frontend, tickets, scripts, or CI exist until you inspect the filesystem.
 
 When scaffolding begins, follow the layout in `docs/groundwork-spec.md` unless the user approves a change.

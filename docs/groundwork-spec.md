@@ -231,7 +231,7 @@ Full list in `docs/questions.md`. Mapping:
 ## 8. Phase roadmap (with Definition of Done)
 
 **Phase 0 - Groundwork / scaffold**
-Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` interface seam, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, Recharts chart wrapper foundation with empty states, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` interface seam, OpenAPI generation via `backend/scripts/generate_openapi.py`, CI (lint+typecheck), `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
 **Phase 1 - Gmail ingestion**
@@ -260,7 +260,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, pe
 
 ## 9. Testing (minimal + one carve-out)
 
-- **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Vitest only for non-trivial frontend logic.
+- **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** setup, sync status, dashboard fixture load, and chat citation smoke paths.
 - **Carve-out - the golden set:** ~30 hand-labeled emails in `evals/golden_set.jsonl`; `evals/run_eval.py` reports classification precision/recall. Run it whenever the classify prompt/model changes. *This is the one thing that keeps the dashboard honest.*
 
