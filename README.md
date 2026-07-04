@@ -144,7 +144,7 @@ The wipe-data endpoint requires the exact confirmation phrase `wipe-local-data` 
 Use Node `^20.19.0 || ^22.13.0 || >=24`.
 
 ```sh
-cd frontend
+cd ../frontend
 npm install
 ```
 
