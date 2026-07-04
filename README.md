@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, and an initial FastAPI app factory (`backend/app/main.py`) with an empty API router.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, and an initial FastAPI app factory (`backend/app/main.py`) with API router registration and a `GET /health` smoke endpoint.
 The rest of the backend, the frontend, and the CI scaffold fill in over subsequent Phase 0 tickets.
 
 ## Architecture at a glance
@@ -72,6 +72,7 @@ The backend has an initial FastAPI app factory and `backend/pyproject.toml` with
 - Backend type checking: `backend/pyproject.toml` defines strict mypy defaults for backend code.
 - Current scaffold check: run `mypy --config-file pyproject.toml` from `backend/`.
 - Current backend tests: run `python3 -m pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
+- Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Once backend `uv` project metadata exists, run `uv run mypy` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
