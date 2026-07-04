@@ -1,4 +1,5 @@
 import { ChartPanel } from "./components/charts";
+import { setupWizardSections } from "./setupWizardCopy";
 
 const phaseItems = [
   "Connect Gmail through a local-only setup flow",
@@ -40,6 +41,33 @@ function App() {
         }}
         title="Chart foundation"
       />
+
+      <section className="wizard-copy" aria-labelledby="wizard-title">
+        <div className="section-heading">
+          <p className="eyebrow">First-run setup copy</p>
+          <h2 id="wizard-title">The wizard must make each privacy and provider choice explicit.</h2>
+          <p>
+            These cards provide the setup-screen copy for provider, mode, Gmail, and privacy choices while the full wizard flow is still being scaffolded.
+          </p>
+        </div>
+
+        <div className="wizard-grid">
+          {setupWizardSections.map((section) => (
+            <article className="wizard-card" key={section.title}>
+              <h3>{section.title}</h3>
+              <p>{section.body}</p>
+              <ul>
+                {section.options.map((option) => (
+                  <li key={option.label}>
+                    <strong>{option.label}</strong>
+                    <span>{option.body}</span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }
