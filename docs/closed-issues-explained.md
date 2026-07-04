@@ -46,6 +46,7 @@ The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
 The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
 There are backend endpoints for health, setup status, and wiping local data.
+There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
 There is configuration infrastructure, secret-store interface infrastructure, and lint/type/test tooling.
 
@@ -877,6 +878,9 @@ Then test endpoints in another terminal:
 ```bash
 curl -s http://127.0.0.1:8765/health
 curl -s http://127.0.0.1:8765/setup/status
+curl -s -X POST http://127.0.0.1:8765/setup \
+  -H 'content-type: application/json' \
+  -d '{"email_provider":"gmail","llm_provider":"ollama","classification_mode":"local"}'
 ```
 
 Run the frontend manually from `frontend/`:
@@ -890,7 +894,7 @@ Then open `http://127.0.0.1:5173/` in a browser.
 ## What To Look For In The App Right Now
 
 Backend:
-You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, and local wipe-data infrastructure.
+You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, and local wipe-data infrastructure.
 
 Frontend:
 You can see a static React shell for JobTracker and an empty Recharts foundation panel for future deterministic dashboard metrics.
