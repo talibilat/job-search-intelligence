@@ -11,7 +11,7 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, provider config API shell, local wipe-data route, and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm typecheck, lint, and build gate scripts.
 Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
@@ -81,7 +81,7 @@ Developer instructions:
 
 ## Development
 
-The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` seam in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers in `backend/app/db/repositories/`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup status and setup submission DTOs in `backend/app/models/setup.py`, provider config DTOs/routes/services for `GET|PUT /config/providers`, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` seam in `backend/app/security/`, the `EmailProvider` contract in `backend/app/providers/email/`, shared SQLite repository helpers in `backend/app/db/repositories/`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The backend database schema and engine do not exist yet; schema-specific commands will apply once they land.
 
 - Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn` as runtime dependencies, and uses `ruff`, `mypy`, and `pytest` as the dev-dependency verification gate; `backend/pyproject.toml` also holds the strict mypy defaults.
@@ -94,6 +94,8 @@ The backend database schema and engine do not exist yet; schema-specific command
 - Current local wipe-data endpoint: `POST /local-data/wipe` removes configured local storage targets after the exact confirmation phrase `wipe-local-data`.
 - Current provider registry: `app.providers.provider_registry` declares Gmail, Ollama, and Azure OpenAI metadata; validation checks selected non-secret LLM settings only and does not read secret values.
 - Current OpenAPI schema generation: run `uv run python -m scripts.generate_openapi` from `backend/` to write sorted, indented JSON to `frontend/src/api/openapi.json`; pass `--output <path>` to write the schema elsewhere.
+- Current provider config API shell: `GET /config/providers` returns the selected email provider, LLM provider, classification mode, visible non-secret provider settings, supported provider metadata, and `SecretRef` requirements without secret values.
+- Current provider config update shell: `PUT /config/providers` validates and applies partial non-secret provider selection and setting changes to the running backend process only; durable setup persistence and secret writes are later work.
 - Current backend type check: run `uv run mypy` from `backend/`.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
 - Current backend lint check: run `ruff check .` from `backend/`.

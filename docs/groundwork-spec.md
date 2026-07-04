@@ -178,7 +178,8 @@ Show a **pre-run cost estimate** and track tokens per run.
 ## 5. API surface (REST)
 
 - **Health:** `GET /health` returns a liveness-only `{ "status": "ok" }` response for Phase 0 smoke checks.
-- **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; later endpoints include `GET /auth/gmail`, `GET /auth/gmail/callback`, `GET|PUT /config/providers`.
+- **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only.
+  Later endpoints include `GET /auth/gmail` and `GET /auth/gmail/callback`.
 - **Local data:** `POST /local-data/wipe` removes configured local app data and derived artifacts after the exact confirmation phrase `wipe-local-data`; unsafe configured filesystem targets return the standard typed `400` API error.
 - **Sync:** `POST /sync`, `GET /sync/status`
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit
