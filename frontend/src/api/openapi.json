@@ -1,6 +1,85 @@
 {
   "components": {
     "schemas": {
+      "ApiErrorBody": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ApiErrorCode"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/ApiErrorDetail"
+            },
+            "title": "Details",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ApiErrorBody",
+        "type": "object"
+      },
+      "ApiErrorCode": {
+        "enum": [
+          "bad_request",
+          "conflict",
+          "forbidden",
+          "http_error",
+          "internal_error",
+          "not_found",
+          "unauthorized",
+          "validation_error"
+        ],
+        "title": "ApiErrorCode",
+        "type": "string"
+      },
+      "ApiErrorDetail": {
+        "properties": {
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "type"
+        ],
+        "title": "ApiErrorDetail",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
       "ClassificationMode": {
         "enum": [
           "hybrid",
@@ -86,6 +165,159 @@
           "classification_mode"
         ],
         "title": "SetupStatusResponse",
+        "type": "object"
+      },
+      "SetupSubmitRequest": {
+        "additionalProperties": false,
+        "description": "Non-secret first-run setup choices accepted by the Phase 0 API shell.",
+        "properties": {
+          "azure_openai_api_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Api Version"
+          },
+          "azure_openai_chat_deployment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Chat Deployment"
+          },
+          "azure_openai_embedding_deployment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Embedding Deployment"
+          },
+          "azure_openai_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Endpoint"
+          },
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "email_provider": {
+            "$ref": "#/components/schemas/EmailProviderName",
+            "default": "gmail"
+          },
+          "gmail_client_config_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gmail Client Config File"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "ollama_base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Base Url"
+          },
+          "ollama_chat_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Chat Model"
+          },
+          "ollama_embedding_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Embedding Model"
+          }
+        },
+        "required": [
+          "llm_provider",
+          "classification_mode"
+        ],
+        "title": "SetupSubmitRequest",
+        "type": "object"
+      },
+      "SetupSubmitResponse": {
+        "description": "Acknowledgement for a setup submission that has not persisted secrets yet.",
+        "properties": {
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "email_provider": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          },
+          "gmail_connected": {
+            "title": "Gmail Connected",
+            "type": "boolean"
+          },
+          "llm_configured": {
+            "title": "Llm Configured",
+            "type": "boolean"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "setup_complete": {
+            "title": "Setup Complete",
+            "type": "boolean"
+          },
+          "status": {
+            "const": "accepted",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "setup_complete",
+          "gmail_connected",
+          "llm_configured",
+          "email_provider",
+          "llm_provider",
+          "classification_mode",
+          "status"
+        ],
+        "title": "SetupSubmitResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -227,6 +459,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -241,6 +483,58 @@
         "summary": "Wipe local app data",
         "tags": [
           "local-data"
+        ]
+      }
+    },
+    "/setup": {
+      "post": {
+        "description": "Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets.",
+        "operationId": "setup_submit_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupSubmitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit first-run setup choices",
+        "tags": [
+          "setup"
         ]
       }
     },

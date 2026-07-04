@@ -4,6 +4,35 @@
  * Job Search Intelligence API
  * OpenAPI spec version: 0.1.0
  */
+export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
+
+export const ApiErrorCode = {
+  bad_request: "bad_request",
+  conflict: "conflict",
+  forbidden: "forbidden",
+  http_error: "http_error",
+  internal_error: "internal_error",
+  not_found: "not_found",
+  unauthorized: "unauthorized",
+  validation_error: "validation_error",
+} as const;
+
+export interface ApiErrorDetail {
+  field?: string | null;
+  message: string;
+  type: string;
+}
+
+export interface ApiErrorBody {
+  code: ApiErrorCode;
+  details?: ApiErrorDetail[];
+  message: string;
+}
+
+export interface ApiErrorResponse {
+  error: ApiErrorBody;
+}
+
 export type ClassificationMode =
   (typeof ClassificationMode)[keyof typeof ClassificationMode];
 
@@ -57,6 +86,36 @@ export interface SetupStatusResponse {
   llm_configured: boolean;
   llm_provider: LLMProviderName;
   setup_complete: boolean;
+}
+
+/**
+ * Non-secret first-run setup choices accepted by the Phase 0 API shell.
+ */
+export interface SetupSubmitRequest {
+  azure_openai_api_version?: string | null;
+  azure_openai_chat_deployment?: string | null;
+  azure_openai_embedding_deployment?: string | null;
+  azure_openai_endpoint?: string | null;
+  classification_mode: ClassificationMode;
+  email_provider?: EmailProviderName;
+  gmail_client_config_file?: string | null;
+  llm_provider: LLMProviderName;
+  ollama_base_url?: string | null;
+  ollama_chat_model?: string | null;
+  ollama_embedding_model?: string | null;
+}
+
+/**
+ * Acknowledgement for a setup submission that has not persisted secrets yet.
+ */
+export interface SetupSubmitResponse {
+  classification_mode: ClassificationMode;
+  email_provider: EmailProviderName;
+  gmail_connected: boolean;
+  llm_configured: boolean;
+  llm_provider: LLMProviderName;
+  setup_complete: boolean;
+  status: "accepted";
 }
 
 export const WipeDataRequestValue = {
@@ -113,6 +172,11 @@ export type wipeDataLocalDataWipePostResponse200 = {
   status: 200;
 };
 
+export type wipeDataLocalDataWipePostResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
 export type wipeDataLocalDataWipePostResponse422 = {
   data: HTTPValidationError;
   status: 422;
@@ -122,10 +186,11 @@ export type wipeDataLocalDataWipePostResponseSuccess =
   wipeDataLocalDataWipePostResponse200 & {
     headers: Headers;
   };
-export type wipeDataLocalDataWipePostResponseError =
-  wipeDataLocalDataWipePostResponse422 & {
-    headers: Headers;
-  };
+export type wipeDataLocalDataWipePostResponseError = (
+  wipeDataLocalDataWipePostResponse400 | wipeDataLocalDataWipePostResponse422
+) & {
+  headers: Headers;
+};
 
 export type wipeDataLocalDataWipePostResponse =
   | wipeDataLocalDataWipePostResponseSuccess
@@ -160,6 +225,65 @@ export const wipeDataLocalDataWipePost = async (
     status: res.status,
     headers: res.headers,
   } as wipeDataLocalDataWipePostResponse;
+};
+
+export type setupSubmitSetupPostResponse200 = {
+  data: SetupSubmitResponse;
+  status: 200;
+};
+
+export type setupSubmitSetupPostResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
+export type setupSubmitSetupPostResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type setupSubmitSetupPostResponseSuccess =
+  setupSubmitSetupPostResponse200 & {
+    headers: Headers;
+  };
+export type setupSubmitSetupPostResponseError = (
+  setupSubmitSetupPostResponse400 | setupSubmitSetupPostResponse422
+) & {
+  headers: Headers;
+};
+
+export type setupSubmitSetupPostResponse =
+  setupSubmitSetupPostResponseSuccess | setupSubmitSetupPostResponseError;
+
+export const getSetupSubmitSetupPostUrl = () => {
+  return `/setup`;
+};
+
+/**
+ * Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets.
+ * @summary Submit first-run setup choices
+ */
+export const setupSubmitSetupPost = async (
+  setupSubmitRequest: SetupSubmitRequest,
+  options?: RequestInit,
+): Promise<setupSubmitSetupPostResponse> => {
+  const res = await fetch(getSetupSubmitSetupPostUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setupSubmitRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setupSubmitSetupPostResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setupSubmitSetupPostResponse;
 };
 
 export type setupStatusSetupStatusGetResponse200 = {

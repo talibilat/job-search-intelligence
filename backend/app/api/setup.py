@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail
+from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.models import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
 from app.services.setup_status import build_setup_status
@@ -30,6 +30,7 @@ async def setup_status(
         "Accepts non-secret Phase 0 setup choices and validates selected provider "
         "metadata without running provider auth flows or persisting secrets."
     ),
+    responses={400: {"model": ApiErrorResponse}},
 )
 async def setup_submit(
     request: SetupSubmitRequest,

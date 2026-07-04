@@ -244,7 +244,7 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - Current pre-commit gate: run `uv run --project backend pre-commit run --all-files` from the repository root to execute backend Ruff lint, backend Ruff format check, backend mypy, and the frontend `npm run check` gate.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Backend CI: `.github/workflows/backend-ci.yml` runs on backend and workflow changes, installs the locked `uv` environment with Python 3.12, then runs `uv run ruff check app evals tests`, `uv run mypy`, and `uv run pytest` from `backend/`.
-- Frontend setup: use Node `^20.19.0 || ^22.13.0 || >=24`, then run `npm install` from `frontend/`.
+- Frontend setup: use Node `>=22.18.0`, then run `npm install` from `frontend/`.
 - Frontend dev server: `npm run dev` from `frontend/`.
 - Frontend UI primitives: import shared buttons, text inputs, labelled form fields, alerts, tabs, and data tables from `frontend/src/components/ui`; these primitives carry the baseline accessibility behavior for later pages.
 - Alert live regions: non-danger `info`, `success`, and `warning` alerts are static by default; `danger` alerts default to `role="alert"`, and callers can pass `role="status"` for dynamic non-danger status messages.
