@@ -63,4 +63,16 @@ describe("route query helpers", () => {
 
     expect(result).toBe("?role=frontend&work_mode=remote");
   });
+
+  it("preserves unrelated query params when updating schema values", () => {
+    const result = updateRouteQuery(
+      "?page=2&status=applied&tab=activity&status=interview&sort=recent",
+      {
+        statuses: ["rejected"],
+      },
+      dashboardQuerySchema,
+    );
+
+    expect(result).toBe("?page=2&tab=activity&sort=recent&status=rejected");
+  });
 });

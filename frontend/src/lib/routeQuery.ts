@@ -51,13 +51,26 @@ export function updateRouteQuery<const TSchema extends RouteQuerySchema>(
   patch: Partial<RouteQueryValues<TSchema>>,
   schema: TSchema,
 ): string {
-  return routeQueryString(
-    {
-      ...parseRouteQuery(search, schema),
-      ...patch,
-    },
-    schema,
-  );
+  const params = toSearchParams(search);
+  const values = {
+    ...parseRouteQuery(params, schema),
+    ...patch,
+  };
+
+  for (const name of objectKeys(schema)) {
+    params.delete(schema[name].key);
+  }
+
+  for (const name of objectKeys(schema)) {
+    const param = schema[name];
+    const serializedValues = param.serialize(values[name]);
+    for (const value of serializedValues) {
+      params.append(param.key, value);
+    }
+  }
+
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 export function stringQueryParam(key: string, defaultValue = ""): RouteQueryParam<string> {
