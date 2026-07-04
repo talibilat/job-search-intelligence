@@ -66,7 +66,7 @@ Developer instructions:
 
 ## Development
 
-The backend has an initial FastAPI app factory; the rest of the backend tooling (`pyproject.toml`, config, database) and the frontend scaffold do not exist yet, so the commands below apply once they land.
+The backend has an initial FastAPI app factory and `backend/pyproject.toml` with strict mypy defaults; backend config, database, uv project metadata, and the frontend scaffold do not exist yet, so the commands referencing them below apply once those land.
 
 - Backend type checking: `backend/pyproject.toml` defines strict mypy defaults for backend code.
 - Current scaffold check: run `mypy --config-file pyproject.toml` from `backend/`.
