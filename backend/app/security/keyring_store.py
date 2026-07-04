@@ -15,6 +15,8 @@ _KEYRING_UNAVAILABLE_MESSAGE = "keyring secret store is unavailable"
 
 
 class KeyringBackend(Protocol):
+    """Minimal keyring client surface used by KeyringSecretStore."""
+
     def get_password(self, service_name: str, username: str) -> str | None: ...
 
     def set_password(self, service_name: str, username: str, password: str) -> None: ...
@@ -69,6 +71,8 @@ def create_secret_store(
     *,
     keyring_backend: KeyringBackend | None = None,
 ) -> SecretStore:
+    """Create the configured SecretStore adapter without exposing secret values."""
+
     if settings.secret_store_backend is SecretStoreBackend.KEYRING:
         return KeyringSecretStore(keyring_backend=keyring_backend)
 
