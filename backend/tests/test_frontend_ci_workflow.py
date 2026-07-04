@@ -30,7 +30,9 @@ def test_frontend_check_generates_openapi_through_backend_uv() -> None:
     assert scripts["generate:openapi"] == (
         "cd ../backend && uv run python -m scripts.generate_openapi"
     )
-    assert scripts["check"].startswith("npm run generate:openapi && ")
+    assert scripts["generate:api"].startswith("npm run generate:openapi && ")
+    assert scripts["check:api"].startswith("npm run generate:api && ")
+    assert scripts["check"].startswith("npm run check:api && ")
 
 
 def test_frontend_ci_installs_backend_dependencies_for_openapi_generation() -> None:
