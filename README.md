@@ -90,7 +90,9 @@ Developer instructions:
 ## Local Developer Quickstart
 
 Use this path for a fresh local checkout in Phase 0.
-The persistent backend database engine is scaffolded; the schema is not yet scaffolded, and the synthetic fixture loader can still populate caller-provided local SQLite connections for deterministic backend tests.
+The backend SQLite engine exists, but the database schema and migrations are later Phase 0 work.
+Schema-specific commands will apply once they land.
+The synthetic fixture loader can still populate caller-provided local SQLite connections for deterministic backend tests.
 
 ### 1. Clone the repository
 
