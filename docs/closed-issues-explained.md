@@ -45,7 +45,7 @@ The repository now has the start of a local-first job-search intelligence app.
 The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
 The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
-There are backend endpoints for health, setup status, and wiping local data.
+The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
 There is configuration infrastructure, a keyring-backed secret-store path, and lint/type/test tooling.
@@ -949,7 +949,7 @@ Backend:
 You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, and local wipe-data infrastructure.
 
 Frontend:
-You can see a static React shell for JobTracker and an empty Recharts foundation panel for future deterministic dashboard metrics.
+You can see a static React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics and setup-copy cards for provider, mode, Gmail, and privacy choices.
 It is not connected to backend data yet.
 
 Configuration:
