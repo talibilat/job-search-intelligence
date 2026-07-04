@@ -101,7 +101,7 @@ job-search-intelligence/
 │   ├── github-backlog-plan.md      # approved issue list before manifest generation
 │   └── conventions.md              # coding standards for agents
 ├── .pre-commit-config.yaml
-├── .github/workflows/ci.yml        # lint + typecheck (minimal)
+├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
 └── README.md
 ```
 
