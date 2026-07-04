@@ -34,7 +34,7 @@ export const setupWizardSections: readonly SetupWizardSection[] = [
       },
       {
         label: "llm",
-        body: "Send every retained candidate through the configured LLM provider. Use this only when you intentionally prefer model coverage over cost control.",
+        body: "Skip the heuristic pre-filter and send every retained email selected for classification to the configured LLM provider. Use this only when you intentionally prefer model coverage over cost control.",
       },
       {
         label: "local",
@@ -66,7 +66,7 @@ export const setupWizardSections: readonly SetupWizardSection[] = [
       },
       {
         label: "No telemetry",
-        body: "Local app state stays in SQLite, and nothing leaves the machine except configured LLM calls and Gmail OAuth requests.",
+        body: "Local app state stays in SQLite, and nothing leaves the machine except configured LLM calls and Gmail OAuth/API sync requests.",
       },
       {
         label: "No dashboard counts from LLMs",
