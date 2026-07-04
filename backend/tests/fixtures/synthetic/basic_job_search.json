@@ -1,0 +1,94 @@
+{
+  "schema_version": "1",
+  "fixture_id": "basic-job-search",
+  "description": "Private-data-free fixture with one application confirmation and one rejection timeline.",
+  "contains_private_data": false,
+  "emails": [
+    {
+      "id": "email-application-confirmation",
+      "provider": "gmail",
+      "thread_id": "thread-synthetic-1",
+      "from_addr": "no-reply@ats.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Application received for Backend Engineer",
+      "sent_at": "2026-07-04T12:00:00Z",
+      "body_text": "Thank you for applying to Example Systems.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-04T12:01:00Z"
+    },
+    {
+      "id": "email-rejection",
+      "provider": "gmail",
+      "thread_id": "thread-synthetic-1",
+      "from_addr": "recruiting@example-systems.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Update on your Backend Engineer application",
+      "sent_at": "2026-07-18T15:30:00Z",
+      "body_text": "We decided to move forward with candidates whose experience better matches this role.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-18T15:31:00Z"
+    }
+  ],
+  "classifications": [
+    {
+      "email_id": "email-application-confirmation",
+      "is_job_related": true,
+      "category": "application_confirmation",
+      "confidence": 0.98,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-04T12:02:00Z"
+    },
+    {
+      "email_id": "email-rejection",
+      "is_job_related": true,
+      "category": "rejection",
+      "confidence": 0.96,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-18T15:32:00Z"
+    }
+  ],
+  "applications": [
+    {
+      "id": "application-example-systems-backend-engineer",
+      "company": "Example Systems",
+      "role_title": "Backend Engineer",
+      "source": "company_site",
+      "first_seen_at": "2026-07-04T12:00:00Z",
+      "current_status": "rejected",
+      "salary_min": 120000,
+      "salary_max": 150000,
+      "currency": "USD",
+      "location": "Remote",
+      "work_mode": "remote",
+      "seniority": "senior",
+      "sponsorship": "unknown",
+      "tech_stack": ["Python", "FastAPI"],
+      "last_activity_at": "2026-07-18T15:30:00Z",
+      "manual_lock": false,
+      "created_at": "2026-07-04T12:03:00Z",
+      "updated_at": "2026-07-18T15:33:00Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "event-application-submitted",
+      "application_id": "application-example-systems-backend-engineer",
+      "email_id": "email-application-confirmation",
+      "event_type": "applied",
+      "event_at": "2026-07-04T12:00:00Z",
+      "extract_note": "Application confirmation received."
+    },
+    {
+      "id": "event-application-rejected",
+      "application_id": "application-example-systems-backend-engineer",
+      "email_id": "email-rejection",
+      "event_type": "rejection",
+      "event_at": "2026-07-18T15:30:00Z",
+      "extract_note": "Rejection received after review."
+    }
+  ]
+}
