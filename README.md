@@ -80,6 +80,9 @@ The backend settings loader, database, uv project metadata, and the frontend sca
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
 - Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Once backend `uv` project metadata exists, run `uv run mypy` from `backend/`.
+- Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
+- Until backend Python modules land, validate the config from `backend/` with `echo 'x=1' | ruff format --config ruff.toml --stdin-filename app/tmp.py -`.
+- Once backend Python modules exist, run `ruff check .` and `ruff format --check .` from `backend/`.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
 - Frontend: Vite dev server from `frontend/`, with TypeScript checks and lint as the verification gate.
 - Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
