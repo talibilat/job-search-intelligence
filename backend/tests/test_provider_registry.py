@@ -7,7 +7,12 @@ from app.config import (
     EmailProviderName,
     LLMProviderName,
 )
-from app.providers import ProviderConfigurationError, ProviderRegistry, provider_registry
+from app.providers import (
+    ProviderConfigurationError,
+    ProviderRegistry,
+    ProviderRequirementEnforcement,
+    provider_registry,
+)
 from app.security import SecretKind
 
 
@@ -26,11 +31,15 @@ def test_registry_declares_gmail_oauth_secret_ref_without_secret_values() -> Non
         "gmail_client_config_file",
         "gmail_scopes",
     ]
+    assert {requirement.enforcement for requirement in gmail.config_requirements} == {
+        ProviderRequirementEnforcement.DECLARATIVE,
+    }
     assert len(gmail.secret_requirements) == 1
     secret_ref = gmail.secret_requirements[0].ref
     assert secret_ref.kind is SecretKind.OAUTH_TOKEN
     assert secret_ref.provider == "gmail"
     assert secret_ref.name == "refresh_token"
+    assert gmail.secret_requirements[0].enforcement is ProviderRequirementEnforcement.DECLARATIVE
     assert "token-value" not in gmail.model_dump_json()
 
 
@@ -45,6 +54,9 @@ def test_registry_declares_ollama_as_local_without_api_key_secret() -> None:
         "ollama_chat_model",
         "ollama_embedding_model",
     ]
+    assert {requirement.enforcement for requirement in ollama.config_requirements} == {
+        ProviderRequirementEnforcement.SELECTION,
+    }
 
 
 def test_registry_declares_azure_openai_api_key_ref_without_secret_value() -> None:
@@ -58,11 +70,15 @@ def test_registry_declares_azure_openai_api_key_ref_without_secret_value() -> No
         "azure_openai_chat_deployment",
         "azure_openai_embedding_deployment",
     ]
+    assert {requirement.enforcement for requirement in azure.config_requirements} == {
+        ProviderRequirementEnforcement.SELECTION,
+    }
     assert len(azure.secret_requirements) == 1
     secret_ref = azure.secret_requirements[0].ref
     assert secret_ref.kind is SecretKind.LLM_API_KEY
     assert secret_ref.provider == "azure_openai"
     assert secret_ref.name == "api_key"
+    assert azure.secret_requirements[0].enforcement is ProviderRequirementEnforcement.DECLARATIVE
     assert "super-secret" not in azure.model_dump_json()
 
 
@@ -96,6 +112,17 @@ def test_azure_openai_requires_non_secret_provider_metadata() -> None:
         "azure_openai_chat_deployment",
         "azure_openai_embedding_deployment",
     )
+
+
+def test_gmail_requirements_are_declarative_metadata_not_selection_validation() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.OLLAMA,
+        classification_mode=ClassificationMode.LOCAL,
+        gmail_client_config_file="   ",
+    )
+
+    provider_registry.validate_settings(settings)
 
 
 def test_azure_openai_rejects_whitespace_only_provider_metadata() -> None:

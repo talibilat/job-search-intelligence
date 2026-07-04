@@ -6,6 +6,7 @@ from .registry import (
     ProviderConfigRequirement,
     ProviderConfigurationError,
     ProviderRegistry,
+    ProviderRequirementEnforcement,
     ProviderSecretRequirement,
     provider_registry,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "ProviderConfigRequirement",
     "ProviderConfigurationError",
     "ProviderRegistry",
+    "ProviderRequirementEnforcement",
     "ProviderSecretRequirement",
     "provider_registry",
 ]

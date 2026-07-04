@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import AppSettings, ClassificationMode, EmailProviderName, LLMProviderName
 from app.security import SecretKind, SecretRef
+
+
+class ProviderRequirementEnforcement(StrEnum):
+    DECLARATIVE = "declarative"
+    SELECTION = "selection"
 
 
 class ProviderConfigRequirement(BaseModel):
@@ -16,6 +22,7 @@ class ProviderConfigRequirement(BaseModel):
     setting_name: str = Field(min_length=1)
     label: str = Field(min_length=1)
     required: bool = True
+    enforcement: ProviderRequirementEnforcement = ProviderRequirementEnforcement.SELECTION
 
 
 class ProviderSecretRequirement(BaseModel):
@@ -26,6 +33,7 @@ class ProviderSecretRequirement(BaseModel):
     ref: SecretRef
     label: str = Field(min_length=1)
     required: bool = True
+    enforcement: ProviderRequirementEnforcement = ProviderRequirementEnforcement.DECLARATIVE
 
 
 class EmailProviderRegistration(BaseModel):
@@ -101,10 +109,12 @@ class ProviderRegistry:
                         ProviderConfigRequirement(
                             setting_name="gmail_client_config_file",
                             label="Google OAuth client JSON path",
+                            enforcement=ProviderRequirementEnforcement.DECLARATIVE,
                         ),
                         ProviderConfigRequirement(
                             setting_name="gmail_scopes",
                             label="Gmail OAuth scopes",
+                            enforcement=ProviderRequirementEnforcement.DECLARATIVE,
                         ),
                     ),
                     secret_requirements=(
@@ -201,6 +211,7 @@ class ProviderRegistry:
             requirement.setting_name
             for requirement in llm_provider.config_requirements
             if requirement.required
+            and requirement.enforcement is ProviderRequirementEnforcement.SELECTION
             and self._is_missing_required_setting(getattr(settings, requirement.setting_name))
         )
 
