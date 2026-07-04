@@ -86,7 +86,7 @@ export function FormField({ children, error, hint, htmlFor, label }: FormFieldPr
     ? cloneElement(children, {
         "aria-describedby": mergeIds(children.props["aria-describedby"], describedBy),
         "aria-invalid": error ? true : children.props["aria-invalid"],
-        id: children.props.id ?? htmlFor,
+        id: htmlFor,
       })
     : children;
 
@@ -227,14 +227,22 @@ export function Tabs({ className, defaultItemId, items, label }: TabsProps) {
           );
         })}
       </div>
-      <div
-        aria-labelledby={getTabId(activeItem)}
-        className="ui-tab-panel"
-        id={getPanelId(activeItem)}
-        role="tabpanel"
-      >
-        {activeItem.content}
-      </div>
+      {items.map((item) => {
+        const selected = item.id === activeItem.id;
+
+        return (
+          <div
+            aria-labelledby={getTabId(item)}
+            className="ui-tab-panel"
+            hidden={!selected}
+            id={getPanelId(item)}
+            key={item.id}
+            role="tabpanel"
+          >
+            {item.content}
+          </div>
+        );
+      })}
     </div>
   );
 }
