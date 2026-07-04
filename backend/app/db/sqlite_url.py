@@ -39,3 +39,19 @@ def sqlite_async_database_url(database_url: str) -> str:
     if parsed.fragment:
         async_url = f"{async_url}#{parsed.fragment}"
     return async_url
+
+
+def sqlite_sync_database_url(database_url: str) -> str:
+    """Normalize a local SQLite URL to SQLAlchemy's synchronous SQLite scheme."""
+
+    sqlite_database_path(database_url)
+    parsed = urlsplit(database_url)
+    if parsed.scheme == "sqlite":
+        return database_url
+
+    sync_url = f"sqlite://{parsed.path}"
+    if parsed.query:
+        sync_url = f"{sync_url}?{parsed.query}"
+    if parsed.fragment:
+        sync_url = f"{sync_url}#{parsed.fragment}"
+    return sync_url
