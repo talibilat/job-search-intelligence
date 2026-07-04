@@ -79,6 +79,7 @@ job-search-intelligence/
 │   │   ├── golden_set.jsonl        # ~30 hand-labeled emails
 │   │   └── run_eval.py             # classification accuracy report
 │   ├── tests/                      # minimal pytest (pipeline + metrics smoke)
+│   │   └── fixtures/synthetic/      # private-data-free synthetic fixture JSON
 │   ├── pyproject.toml              # uv, ruff, mypy config
 │   └── .env.example
 ├── frontend/
@@ -99,9 +100,10 @@ job-search-intelligence/
 │   ├── questions.md                # the 54 questions, tiered
 │   ├── backlog-decisions.md        # approved backlog and product decisions
 │   ├── github-backlog-plan.md      # approved issue list before manifest generation
-│   └── conventions.md              # coding standards for agents
+│   ├── conventions.md              # coding standards for agents
+│   └── synthetic-fixtures.md       # private-data-free fixture format
 ├── .pre-commit-config.yaml
-├── .github/workflows/ci.yml        # lint + typecheck (minimal)
+├── .github/workflows/frontend-ci.yml # frontend typecheck + lint + build smoke check
 └── README.md
 ```
 
