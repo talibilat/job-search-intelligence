@@ -51,7 +51,6 @@ __all__ = [
     "ApplicationEventRecord",
     "ApplicationRecord",
     "ChatMessageRecord",
-    "HealthResponse",
     "InsightRecord",
     "RawEmailRecord",
     "SetupStatusResponse",
