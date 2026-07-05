@@ -150,7 +150,11 @@ _BASE_ROLES: tuple[_BaseRole, ...] = (
 
 
 def normalize_company_name(company: str) -> str:
-    """Return a deterministic grouping key for extracted company names."""
+    """Return a deterministic company grouping key for Phase 2 aggregation.
+
+    The key normalizes extracted display strings only; grouping-key assembly stays
+    responsible for combining this with role, thread, and time-window signals.
+    """
 
     decoded_company = html.unescape(company)
     tokens = _company_tokens(decoded_company)
@@ -236,6 +240,7 @@ def _drop_trailing_legal_suffixes(tokens: list[str]) -> list[str]:
     if len(trimmed) > 1 and trimmed[-1] == "and":
         trimmed.pop()
     return trimmed
+
 
 def _matching_trailing_dotted_legal_suffix(tokens: list[str]) -> tuple[str, ...] | None:
     for suffix_tokens in _DOTTED_LEGAL_SUFFIX_TOKEN_SEQUENCES:
