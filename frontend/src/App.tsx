@@ -1,4 +1,5 @@
 import { ChartPanel } from "./components/charts";
+import Chat from "./pages/Chat";
 import { DashboardPage } from "./pages/DashboardPage";
 import { Insights } from "./pages/Insights";
 import { SetupPage } from "./pages/SetupPage";
@@ -14,6 +15,7 @@ const navigationItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },
   { href: "/insights", label: "Insights" },
+  { href: "/chat", label: "Chat" },
 ] as const;
 
 function OverviewPage() {
@@ -102,6 +104,8 @@ function App() {
         <DashboardPage />
       ) : currentPath === "/insights" ? (
         <Insights />
+      ) : currentPath === "/chat" ? (
+        <Chat />
       ) : (
         <OverviewPage />
       )}
