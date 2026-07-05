@@ -18,6 +18,8 @@ The repository currently contains planning documents, root project metadata, the
 Phase 0 (Groundwork) with early Phase 1 ingestion service slices.
 The frontend shell keeps the root overview page intact, adds a `/setup` first-run setup page shell with primary navigation, disabled setup actions, setup checklist, provider and classification mode copy, Gmail read-only boundary copy, privacy copy, and explicit not-ready states until later backend persistence, OAuth, metric, insight, citation, and model-call behavior land.
 [JT-020 2026-07-05 v2] Concrete Gmail provider behavior, product pages, and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
+[JT-073 2026-07-05 v1] Manual sync routes now orchestrate metadata sync through `EmailSyncService`, persist metadata-only raw-email rows without downgrading retained bodies, store running and last-run status, and return typed not-configured responses until Gmail connection persistence lands.
+[JT-073 2026-07-05 v1] Gmail OAuth callback handling, token exchange, token persistence, connected-account lookup for real sync runs, retained-body fetching, concrete Gmail incremental transport behavior, product pages, and remaining backend pieces fill in over subsequent Phase 1 tickets.
 
 ## Architecture at a glance
 
@@ -31,7 +33,7 @@ The frontend shell keeps the root overview page intact, adds a `/setup` first-ru
 | LLM providers       | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later                                                       |
 | Provider registry   | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
 | LLM provider seam   | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs                                       |
-| Email providers     | `EmailProvider` protocol with typed auth, metadata, cursor, candidate-query, and normalized retained-body DTOs; Gmail can build read-only OAuth authorization URLs and, when constructed with a `SecretStore`, list safe metadata-only full-backfill pages, while callback, token exchange, incremental sync, and retained-body access remain deferred |
+| Email providers     | `EmailProvider` protocol with typed auth, metadata, cursor, candidate-query, and normalized retained-body DTOs; Gmail can build read-only OAuth authorization URLs and, when constructed with a `SecretStore`, list safe metadata-only full-backfill pages, while callback, token exchange, connected-account persistence, incremental transport, and retained-body access remain deferred |
 | API style           | REST with an Orval-generated TypeScript client from OpenAPI, imported through `frontend/src/api`                           |
 | Data contracts      | Pydantic v2 DTOs at every boundary                                                                                         |
 | API errors          | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details                               |
@@ -64,7 +66,7 @@ scripts/          repository-level developer and operational scripts
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
 - Fernet fallback storage is documented in `docs/secret-storage.md`; set `JOBTRACKER_SECRET_STORE_BACKEND=fernet` until the OS keyring adapter lands or when OS keyring is unavailable.
 - Secrets are stored encrypted at rest through OS keyring by default and never logged; backend redaction helpers are exported from `app.security` for logging boundaries.
-- If a provider reports an expired incremental cursor, the sync service restarts as full metadata reconciliation and returns the provider page token plus replacement sync cursor for resumable progress.
+- If a provider reports an expired incremental cursor, the sync service restarts as full metadata reconciliation, persists page progress between pages, and exposes whether the run recovered from an expired cursor in sync status.
 - Candidate selection uses provider-neutral static sender-domain, subject keyword, and excluded-label signals after metadata listing, so broad Gmail metadata queries do not expose snippets or body content.
 - Retained email bodies are stored as normalized plain text: HTML MIME bodies are converted to text, raw HTML fields are rejected, and mislabelled plain-text bodies that still look like HTML fail validation.
 - Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate, debugging, or reconciliation messages, and raw email DTOs track `metadata_only`, `retained`, or `debugging` retention state.
@@ -73,7 +75,7 @@ scripts/          repository-level developer and operational scripts
 - Current Gmail metadata listing requests Gmail `format=metadata` plus partial fields for message IDs, thread IDs, labels, size estimates, and selected headers only.
 [JT-066 2026-07-05 v2] - Current Gmail metadata listing also reads Gmail profile `historyId` on the final full-backfill page and returns it as the opaque replacement sync cursor for later incremental sync.
 [JT-066 2026-07-05 v2] - Full-backfill state is stored in local SQLite as status, next page token, page and message counters, replacement cursor fields, timestamps, and public-safe failure text scoped by provider and account; completion records the final page and promotes its replacement cursor to sync state in one local transaction.
-- Incremental sync anchors are stored in local SQLite as opaque provider cursor values scoped by provider and account; they are not OAuth token material or email content.
+- Incremental sync anchors and in-progress page tokens are stored in local SQLite as opaque provider values scoped by provider and account; they are not OAuth token material or email content.
 - `backend/.env.example` documents operational settings only; keep API keys, OAuth tokens, passwords, client secrets, and Google OAuth client JSON out of the repo.
 - Local wipe-data path: `POST /local-data/wipe` clears configured local app data and derived artifacts after the request body confirms `{"confirmation":"wipe-local-data"}`.
 - The wipe deletes `JOBTRACKER_DATA_DIR` recursively, and when `JOBTRACKER_DATABASE_URL` points to a local SQLite file outside that directory, it also deletes the database file plus `-wal`, `-shm`, and `-journal` sidecars.
@@ -115,6 +117,7 @@ Use this path for a fresh local checkout in Phase 0.
 The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment and first sync-state schema revision exist.
 [JT-020 2026-07-05 v2] The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment can load sqlite-vec for hand-written vector-table revisions.
 [JT-020 2026-07-05 v1] The migration chain creates `email_sync_state` first, then the core `raw_emails`, `email_classifications`, `applications`, `application_events`, `insights`, and `email_chunks` schema.
+[JT-073 2026-07-05 v1] The sync service uses the migrated `email_sync_state` and core `raw_emails` tables for manual metadata sync orchestration.
 Run Alembic upgrades before using repository code that expects migrated tables.
 The synthetic fixture loader can still populate caller-provided local SQLite connections for deterministic backend tests.
 
@@ -161,11 +164,12 @@ From `backend/`:
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Current backend endpoints include `GET /health`, `GET /setup/status`, `POST /setup`, `GET|PUT /config/providers`, `GET /auth/gmail`, `GET /sync/status`, and `POST /local-data/wipe`.
+Current backend endpoints include `GET /health`, `GET /setup/status`, `POST /setup`, `GET|PUT /config/providers`, `GET /auth/gmail`, `POST /sync`, `GET /sync/status`, and `POST /local-data/wipe`.
 The health endpoint returns `{"status":"ok"}`.
 The setup status endpoint returns typed first-run readiness fields without reading or returning secrets.
 The Gmail auth-start endpoint returns a provider-built Google authorization URL for `gmail.readonly` and maps missing, unreadable, or invalid client config files to typed `400` errors.
-The sync status endpoint returns the public-safe `SyncJobStatus` contract with phase, provider/account identifiers when available, deterministic counts, sanitized error summaries, timestamps, last-run timestamp, and `0..1` progress; until sync orchestration lands, it reports an idle zero-progress snapshot only.
+The manual sync endpoint returns a typed not-configured `400` until Gmail callback/token persistence can provide a connected account, rejects concurrent syncs with typed `409`, and returns `EmailSyncStatus` when dependency-injected runtime state can run.
+The sync status endpoint returns the current or last-run `EmailSyncStatus` with state, provider, account, mode, start and finish timestamps, page count, message count, raw-email count, expired-cursor recovery, and public error text.
 The wipe-data endpoint requires the exact confirmation phrase `wipe-local-data` before deleting configured local app data.
 On backend startup, the FastAPI lifespan creates `SyncScheduler`; with sync-on-open enabled it schedules an immediate interval job, and with sync-on-open disabled it leaves the scheduler stopped.
 The concrete Gmail sync runner is not wired yet, so the production app uses a safe no-op sync job until a later Phase 1 ticket injects the real runner.
@@ -247,6 +251,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 [JT-066 2026-07-05 v2] The next Phase 1 schema revision creates `email_backfill_state`; run `uv run alembic upgrade head` before using backfill-state repository behavior against a fresh local database.
 [JT-020 2026-07-05 v2] The first Alembic schema revision creates `email_sync_state`; the next core schema revision creates `raw_emails`, `email_classifications`, `applications`, `application_events`, `insights`, and `email_chunks` with SQLite constraints, foreign keys, lookup indexes, and a 1536-dimensional sqlite-vec embedding column.
 [JT-020 2026-07-05 v2] Run `uv run alembic upgrade head` before using repository behavior against a fresh local database.
+[JT-073 2026-07-05 v1] The backend sync route and service now cover manual metadata sync orchestration, metadata-only upserts, persisted provider cursor and page progress, running and failed status, and typed not-configured and concurrency API responses.
 
 - Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn`, `apscheduler`, `keyring`, `cryptography`, `sqlalchemy[asyncio]`, `aiosqlite`, `sqlite-vec`, and `alembic` as runtime dependencies, and uses `ruff`, `mypy`, `pytest`, and `pre-commit` as dev-dependency verification tooling; `backend/pyproject.toml` also holds the strict mypy defaults.
 - Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
@@ -263,10 +268,10 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Sync-state persistence test: `uv run pytest tests/test_sync_state.py -v` from `backend/` verifies Alembic creates `email_sync_state`, cursors upsert per provider account, and repository reads require migrated schema.
 [JT-066 2026-07-05 v2] - Backfill-state persistence test: `uv run pytest tests/test_backfill_state.py -v` from `backend/` verifies Alembic creates `email_backfill_state`, backfill state upserts per provider account, completed pages require replacement cursors, failures store public-safe errors while preserving progress, and final-page cursor promotion shares one SQLite transaction with page recording.
 - Ingestion smoke test: `uv run pytest tests/test_ingestion_smoke.py -v` from `backend/` verifies provider metadata pagination, idempotent raw-email upserts, metadata replay preserving retained body text, and service-level sync-state status snapshots.
+- Sync API test: `uv run pytest tests/test_sync_api.py -v` from `backend/` verifies manual sync and status routes, typed not-configured and concurrency errors, dependency-wired repositories, metadata persistence, and status-store behavior.
 - Backend smoke test: `uv run pytest tests/test_health.py -q` from `backend/`.
 - Email provider contract test: `uv run pytest tests/test_email_provider_contract.py -v` from `backend/` verifies the provider boundary keeps OAuth token material behind `SecretRef`, separates metadata from retained body fetching, supports full and incremental cursor shapes, excludes body-derived metadata snippets, excludes attachment content, normalizes HTML bodies to retained plain text, and rejects raw HTML retention fields.
-- Sync service test: `uv run pytest tests/test_sync_service.py -v` from `backend/` verifies metadata-page coordination, expired history cursor fallback to full reconciliation, continuation page-token forwarding, and ambiguity rejection when paginated sync includes a cursor without an explicit mode.
-- Sync status test: `uv run pytest tests/test_sync_status.py -v` from `backend/` verifies the `SyncJobStatus` DTO, timestamp and progress validation, the idle status helper, and the OpenAPI-documented `GET /sync/status` response.
+- Sync service test: `uv run pytest tests/test_sync_service.py -v` from `backend/` verifies metadata-page coordination, manual full-backfill and incremental mode selection, metadata-only raw-email persistence, retained-body preservation, persisted page-token resume, running and failed status reporting, expired history cursor fallback to full reconciliation, continuation page-token forwarding, and ambiguity rejection when paginated sync includes a cursor without an explicit mode.
 - Email candidate query test: `uv run pytest tests/test_email_candidate_query.py -v` from `backend/` verifies broad job-search candidate signals, label exclusions, no body or snippet fields in the query, and that candidate filters stay out of provider metadata listing requests.
 - Gmail provider test: `uv run pytest tests/test_gmail_email_provider.py -v` from `backend/` verifies readonly scope enforcement, advertised read-only ingestion capabilities, attachment exclusion, public-safe not-implemented runtime errors for deferred behavior, and provider-level safe metadata listing when a `SecretStore` is configured.
 - Gmail message listing test: `uv run pytest tests/test_gmail_message_listing.py -v` from `backend/` verifies Gmail full-backfill pagination, SecretStore token access, metadata-only Gmail partial responses, public-safe provider errors, empty pages, and the 500-message page-size limit.
@@ -275,7 +280,9 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
 - Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Current setup shell: `GET /setup/status` returns typed first-run setup readiness fields without reading or returning secrets, and `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns `{"status":"accepted",...}` without running provider auth flows or persisting secrets.
-- Current Gmail auth-start endpoint: `GET /auth/gmail` returns a Google authorization URL, generated OAuth state, provider name, and the single `gmail.readonly` scope; callback handling, token exchange, token persistence, endpoint-driven message sync, and retained-body access remain later Phase 1 work.
+- Current Gmail auth-start endpoint: `GET /auth/gmail` returns a Google authorization URL, generated OAuth state, provider name, and the single `gmail.readonly` scope; callback handling, token exchange, token persistence, connected-account lookup, incremental transport, and retained-body fetching remain later Phase 1 work.
+- Current sync API: `POST /sync` orchestrates a manual metadata sync when a configured `EmailConnection` is injected, persists metadata-only `raw_emails`, preserves retained bodies on metadata refresh, stores cursors and resumable page progress in SQLite, returns typed `400` when Gmail connection persistence is not configured yet, and returns typed `409` for concurrent manual runs.
+- Current sync status API: `GET /sync/status` returns the current or last manual run status without exposing tokens, secrets, or email body content.
 - LLM provider setup guide: [`docs/llm-provider-setup.md`](docs/llm-provider-setup.md) documents the Azure OpenAI and Ollama values the first-run setup flow needs, including `classification_mode` choices and `SecretStore` boundaries.
 - Current local wipe-data endpoint: `POST /local-data/wipe` removes configured local storage targets after the exact confirmation phrase `wipe-local-data`.
 - Current provider registry: `app.providers.provider_registry` declares Gmail, Ollama, and Azure OpenAI metadata; validation checks selected non-secret LLM settings only and does not read secret values.

@@ -241,8 +241,10 @@ def create_email_sync_state_table(connection: sqlite3.Connection) -> None:
         CREATE TABLE email_sync_state (
             provider TEXT NOT NULL,
             account_id TEXT NOT NULL,
-            sync_cursor TEXT NOT NULL,
-            cursor_issued_at TEXT NOT NULL,
+            sync_cursor TEXT,
+            cursor_issued_at TEXT,
+            in_progress_mode TEXT,
+            next_page_token TEXT,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (provider, account_id)
         )

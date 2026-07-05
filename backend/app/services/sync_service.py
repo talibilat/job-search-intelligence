@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterable
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -103,6 +104,47 @@ class SyncScheduler:
         self._started = False
 
 
+class EmailSyncRunState(StrEnum):
+    IDLE = "idle"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class EmailSyncStatus(BaseModel):
+    """Current or last manual sync run status exposed at the API boundary."""
+
+    provider: EmailProviderName | None = None
+    account_id: str | None = None
+    state: EmailSyncRunState
+    mode: EmailSyncMode | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    page_count: int = Field(default=0, ge=0)
+    message_count: int = Field(default=0, ge=0)
+    raw_email_count: int = Field(default=0, ge=0)
+    recovered_from_expired_cursor: bool = False
+    last_error: str | None = None
+
+
+class SyncAlreadyRunningError(RuntimeError):
+    """Raised when a manual sync starts while another run is active."""
+
+
+class SyncConnectionNotConfiguredError(RuntimeError):
+    """Raised when a sync run has no configured account connection."""
+
+
+class EmailSyncRuntime(Protocol):
+    async def run_manual_sync(self) -> EmailSyncStatus:
+        """Run a manual sync for the configured account."""
+        ...
+
+    def current_status(self) -> EmailSyncStatus:
+        """Return current or last-run status."""
+        ...
+
+
 class SyncService:
     """Business seam for email sync state used by full and incremental runs."""
 
@@ -112,24 +154,31 @@ class SyncService:
     def get_sync_cursor(self, account: EmailAccountRef) -> EmailProviderCursor | None:
         return self._sync_state_repository.get_cursor(account)
 
+    def get_sync_state(self, account: EmailAccountRef) -> EmailSyncStateRecord | None:
+        return self._sync_state_repository.fetch_state(account)
+
     def get_sync_status(self, account: EmailAccountRef) -> EmailSyncStateStatus | None:
         state = self._sync_state_repository.fetch_state(account)
         if state is None:
             return None
 
-        return EmailSyncStateStatus(
-            account=EmailAccountRef(
-                provider=EmailProviderName(state.provider),
-                account_id=state.account_id,
-            ),
-            cursor=EmailProviderCursor(
+        cursor = None
+        if state.sync_cursor is not None and state.cursor_issued_at is not None:
+            cursor = EmailProviderCursor(
                 account=EmailAccountRef(
                     provider=EmailProviderName(state.provider),
                     account_id=state.account_id,
                 ),
                 value=state.sync_cursor,
                 issued_at=state.cursor_issued_at,
+            )
+
+        return EmailSyncStateStatus(
+            account=EmailAccountRef(
+                provider=EmailProviderName(state.provider),
+                account_id=state.account_id,
             ),
+            cursor=cursor,
             last_state_update_at=state.updated_at,
         )
 
@@ -141,6 +190,34 @@ class SyncService:
     ) -> EmailSyncStateRecord:
         return self._sync_state_repository.save_cursor(
             cursor,
+            updated_at=updated_at or datetime.now(UTC),
+        )
+
+    def store_page_progress(
+        self,
+        account: EmailAccountRef,
+        *,
+        mode: EmailSyncMode,
+        next_page_token: str,
+        sync_cursor: EmailProviderCursor | None,
+        updated_at: datetime | None = None,
+    ) -> EmailSyncStateRecord:
+        return self._sync_state_repository.save_page_progress(
+            account,
+            mode=mode,
+            next_page_token=next_page_token,
+            sync_cursor=sync_cursor,
+            updated_at=updated_at or datetime.now(UTC),
+        )
+
+    def clear_page_progress(
+        self,
+        account: EmailAccountRef,
+        *,
+        updated_at: datetime | None = None,
+    ) -> EmailSyncStateRecord | None:
+        return self._sync_state_repository.clear_page_progress(
+            account,
             updated_at=updated_at or datetime.now(UTC),
         )
 
@@ -335,12 +412,91 @@ class EmailBackfillPageResult(BaseModel):
 class EmailSyncService:
     """Service-layer coordination for resumable provider metadata sync."""
 
-    def __init__(self, *, provider: MetadataListingProvider, page_size: int) -> None:
+    def __init__(
+        self,
+        *,
+        provider: MetadataListingProvider,
+        page_size: int,
+        email_repository: EmailRepository | None = None,
+        sync_service: SyncService | None = None,
+        clock: Callable[[], datetime] | None = None,
+        status_callback: Callable[[EmailSyncStatus], None] | None = None,
+    ) -> None:
         if page_size < 1:
             msg = "page_size must be at least 1"
             raise ValueError(msg)
         self._provider = provider
         self._page_size = page_size
+        self._email_repository = email_repository
+        self._sync_service = sync_service
+        self._clock = clock or _utcnow
+        self._status_callback = status_callback
+        self._status = EmailSyncStatus(state=EmailSyncRunState.IDLE)
+
+    def current_status(self) -> EmailSyncStatus:
+        return self._status
+
+    async def run_manual_sync(self, *, connection: EmailConnection) -> EmailSyncStatus:
+        """Run a manual sync using full backfill first, then incremental cursors."""
+
+        if self._email_repository is None or self._sync_service is None:
+            raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
+        if self._status.state is EmailSyncRunState.RUNNING:
+            raise SyncAlreadyRunningError("Email sync is already running.")
+
+        started_at = self._clock()
+        sync_state = self._sync_service.get_sync_state(connection.account)
+        existing_cursor = self._sync_service.get_sync_cursor(connection.account)
+        resume_page_token = sync_state.next_page_token if sync_state is not None else None
+        resume_mode = (
+            EmailSyncMode(sync_state.in_progress_mode)
+            if sync_state is not None
+            and sync_state.in_progress_mode is not None
+            and sync_state.next_page_token is not None
+            else None
+        )
+        requested_mode = resume_mode or (
+            EmailSyncMode.INCREMENTAL
+            if existing_cursor is not None
+            else EmailSyncMode.FULL_BACKFILL
+        )
+        self._set_status(
+            EmailSyncStatus(
+                provider=connection.account.provider,
+                account_id=connection.account.account_id,
+                state=EmailSyncRunState.RUNNING,
+                mode=requested_mode,
+                started_at=started_at,
+            )
+        )
+
+        try:
+            result = await self._run_metadata_pages(
+                connection=connection,
+                sync_cursor=existing_cursor,
+                initial_mode=resume_mode,
+                initial_page_token=resume_page_token,
+                started_at=started_at,
+            )
+        except Exception as error:
+            self._set_status(
+                self._status.model_copy(
+                    update={
+                        "state": EmailSyncRunState.FAILED,
+                        "finished_at": self._clock(),
+                        "last_error": _public_sync_error_message(error),
+                    }
+                )
+            )
+            raise
+
+        self._set_status(result)
+        return result
+
+    def _set_status(self, status: EmailSyncStatus) -> None:
+        self._status = status
+        if self._status_callback is not None:
+            self._status_callback(status)
 
     async def list_metadata_page(
         self,
@@ -442,6 +598,108 @@ class EmailSyncService:
             ),
         )
 
+    async def _run_metadata_pages(
+        self,
+        *,
+        connection: EmailConnection,
+        sync_cursor: EmailProviderCursor | None,
+        initial_mode: EmailSyncMode | None,
+        initial_page_token: str | None,
+        started_at: datetime,
+    ) -> EmailSyncStatus:
+        if self._email_repository is None or self._sync_service is None:
+            raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
+
+        page_token = initial_page_token
+        mode = initial_mode
+        latest_cursor: EmailProviderCursor | None = (
+            sync_cursor
+            if initial_mode is EmailSyncMode.FULL_BACKFILL and initial_page_token is not None
+            else None
+        )
+        page_count = 0
+        message_count = 0
+        recovered_from_expired_cursor = False
+        final_mode = (
+            EmailSyncMode.INCREMENTAL if sync_cursor is not None else EmailSyncMode.FULL_BACKFILL
+        )
+
+        while True:
+            page_result = await self.list_metadata_page(
+                connection=connection,
+                mode=mode,
+                sync_cursor=sync_cursor,
+                page_token=page_token,
+            )
+            final_mode = page_result.mode
+            recovered_from_expired_cursor = (
+                recovered_from_expired_cursor or page_result.recovered_from_expired_cursor
+            )
+            page_count += 1
+            message_count += len(page_result.page.messages)
+            if page_result.page.messages:
+                self._email_repository.upsert_metadata_only(
+                    page_result.page.messages,
+                    ingested_at=self._clock(),
+                )
+            if page_result.page.next_sync_cursor is not None:
+                latest_cursor = page_result.page.next_sync_cursor
+            self._set_status(
+                EmailSyncStatus(
+                    provider=connection.account.provider,
+                    account_id=connection.account.account_id,
+                    state=EmailSyncRunState.RUNNING,
+                    mode=final_mode,
+                    started_at=started_at,
+                    page_count=page_count,
+                    message_count=message_count,
+                    raw_email_count=self._email_repository.count_raw_emails(
+                        provider=connection.account.provider,
+                    ),
+                    recovered_from_expired_cursor=recovered_from_expired_cursor,
+                )
+            )
+            if page_result.page.next_page_token is None:
+                break
+
+            page_token = page_result.page.next_page_token
+            mode = page_result.mode
+            self._sync_service.store_page_progress(
+                connection.account,
+                mode=mode,
+                next_page_token=page_token,
+                sync_cursor=latest_cursor or sync_cursor,
+                updated_at=self._clock(),
+            )
+            if mode is EmailSyncMode.FULL_BACKFILL:
+                sync_cursor = None
+
+        if latest_cursor is not None:
+            self._sync_service.store_sync_cursor(
+                latest_cursor,
+                updated_at=self._clock(),
+            )
+        else:
+            self._sync_service.clear_page_progress(
+                connection.account,
+                updated_at=self._clock(),
+            )
+
+        return EmailSyncStatus(
+            provider=connection.account.provider,
+            account_id=connection.account.account_id,
+            state=EmailSyncRunState.SUCCEEDED,
+            mode=final_mode,
+            started_at=started_at,
+            finished_at=self._clock(),
+            page_count=page_count,
+            message_count=message_count,
+            raw_email_count=self._email_repository.count_raw_emails(
+                provider=connection.account.provider,
+            ),
+            recovered_from_expired_cursor=recovered_from_expired_cursor,
+        )
+
 
 def build_idle_sync_status(*, now: datetime | None = None) -> SyncJobStatus:
     """Build the public status snapshot before any sync job is running."""
@@ -507,3 +765,13 @@ def build_backfill_reconciliation_metrics(
         extra_local_message_count=extra_local_message_count,
         reconciled=(missing_local_message_count == 0 and extra_local_message_count == 0),
     )
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def _public_sync_error_message(error: Exception) -> str:
+    if isinstance(error, EmailProviderError):
+        return error.public_message
+    return "Sync failed."

@@ -116,12 +116,14 @@ class RawEmailRecord(BaseModel):
 
 
 class EmailSyncStateRecord(BaseModel):
-    """Persisted opaque provider cursor for one email account."""
+    """Persisted provider cursor and in-progress page state for one account."""
 
     provider: str
     account_id: str
-    sync_cursor: str
-    cursor_issued_at: datetime
+    sync_cursor: str | None = None
+    cursor_issued_at: datetime | None = None
+    in_progress_mode: str | None = None
+    next_page_token: str | None = None
     updated_at: datetime
 
 
