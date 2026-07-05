@@ -24,6 +24,23 @@ class JobEmailCategory(StrEnum):
     OTHER = "other"
 
 
+_CATEGORY_APPLICATION_STATUS = {
+    JobEmailCategory.APPLICATION_CONFIRMATION: "applied",
+    JobEmailCategory.REJECTION: "rejected",
+    JobEmailCategory.INTERVIEW_INVITE: "interview",
+    JobEmailCategory.OFFER: "offer",
+    JobEmailCategory.ASSESSMENT: "assessment",
+}
+
+_CATEGORY_EVENT_TYPE = {
+    JobEmailCategory.APPLICATION_CONFIRMATION: "applied",
+    JobEmailCategory.REJECTION: "rejection",
+    JobEmailCategory.INTERVIEW_INVITE: "interview_scheduled",
+    JobEmailCategory.OFFER: "offer",
+    JobEmailCategory.ASSESSMENT: "assessment",
+}
+
+
 class EmailClassificationRecord(BaseModel):
     """Stored classification result for one raw email."""
 
@@ -100,6 +117,24 @@ class ClassificationPromptOutput(BaseModel):
             raise ValueError(msg)
 
         if self.is_job_related:
+            expected_status = _CATEGORY_APPLICATION_STATUS.get(self.category)
+            if (
+                expected_status is not None
+                and self.application_status is not None
+                and self.application_status != expected_status
+            ):
+                msg = "application_status contradicts category"
+                raise ValueError(msg)
+
+            expected_event_type = _CATEGORY_EVENT_TYPE.get(self.category)
+            if (
+                expected_event_type is not None
+                and self.event_type is not None
+                and self.event_type != expected_event_type
+            ):
+                msg = "event_type contradicts category"
+                raise ValueError(msg)
+
             return self
 
         if self.category is not JobEmailCategory.OTHER:
@@ -120,7 +155,11 @@ class ClassificationPromptOutput(BaseModel):
             self.seniority,
             self.rejection_reason,
         )
-        if any(value is not None for value in extracted_values) or self.tech_stack:
+        if (
+            any(value is not None for value in extracted_values)
+            or self.sponsorship != "unknown"
+            or self.tech_stack
+        ):
             msg = "non-job-related outputs cannot include extracted application data"
             raise ValueError(msg)
 
