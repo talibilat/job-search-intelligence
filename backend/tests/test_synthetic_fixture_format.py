@@ -230,6 +230,11 @@ def test_fixture_allows_only_inferred_events_without_email() -> None:
 
     assert inferred_fixture.events[0].email_id is None
 
+    with pytest.raises(ValidationError, match="ghost-inferred events cannot reference email_id"):
+        SyntheticApplicationEvent.model_validate(
+            inferred_event_data | {"email_id": fixture.emails[0].id},
+        )
+
     with pytest.raises(ValidationError, match="evidence-backed events require email_id"):
         SyntheticApplicationEvent.model_validate(
             inferred_event_data | {"event_type": SyntheticEventType.REJECTION},

@@ -153,6 +153,9 @@ class ApplicationEventRecord(BaseModel):
 
     @model_validator(mode="after")
     def validate_email_id_for_event_type(self) -> Self:
+        if self.event_type == "ghost_inferred" and self.email_id is not None:
+            msg = "ghost-inferred events cannot reference email_id"
+            raise ValueError(msg)
         if self.event_type != "ghost_inferred" and self.email_id is None:
             msg = "evidence-backed events require email_id"
             raise ValueError(msg)

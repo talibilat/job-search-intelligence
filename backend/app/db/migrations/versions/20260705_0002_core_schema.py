@@ -176,7 +176,8 @@ def upgrade() -> None:
             name="ck_application_events_event_type",
         ),
         sa.CheckConstraint(
-            "event_type = 'ghost_inferred' OR email_id IS NOT NULL",
+            "(event_type = 'ghost_inferred' AND email_id IS NULL) OR "
+            "(event_type != 'ghost_inferred' AND email_id IS NOT NULL)",
             name="ck_application_events_email_required_for_evidence_events",
         ),
         sa.ForeignKeyConstraint(["application_id"], ["applications.id"], ondelete="CASCADE"),
@@ -209,7 +210,7 @@ def upgrade() -> None:
         "CREATE VIRTUAL TABLE email_chunks USING vec0("
         "email_id TEXT, "
         "chunk_index INTEGER, "
-        "content TEXT, "
+        "+content TEXT, "
         "embedding float[1536]"
         ")",
     )

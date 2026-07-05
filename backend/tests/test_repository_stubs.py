@@ -234,6 +234,11 @@ def test_application_event_record_allows_only_inferred_events_without_email() ->
     )
     assert inferred_event.email_id is None
 
+    with pytest.raises(ValidationError, match="ghost-inferred events cannot reference email_id"):
+        ApplicationEventRecord.model_validate(
+            base_data | {"email_id": "email-1", "event_type": "ghost_inferred"},
+        )
+
     with pytest.raises(ValidationError, match="evidence-backed events require email_id"):
         ApplicationEventRecord.model_validate(
             base_data | {"email_id": None, "event_type": "rejection"},

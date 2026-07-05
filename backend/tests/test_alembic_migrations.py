@@ -216,6 +216,11 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "content",
             "embedding",
         ]
+        email_chunks_sql = connection.execute(
+            "SELECT sql FROM sqlite_schema WHERE name = 'email_chunks'",
+        ).fetchone()
+        assert email_chunks_sql is not None
+        assert "+content TEXT" in email_chunks_sql[0]
         assert foreign_key_targets(connection, "email_classifications") == {
             ("email_id", "raw_emails", "id"),
         }
@@ -282,6 +287,80 @@ def test_application_events_allow_ghost_inferred_without_email(tmp_path: Path) -
         assert connection.execute(
             "SELECT email_id FROM application_events WHERE id = 'event_1'",
         ).fetchone() == (None,)
+
+
+def test_application_events_reject_ghost_inferred_with_email(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(
+            """
+            INSERT INTO raw_emails (
+                id,
+                body_retention_state,
+                labels,
+                provider,
+                ingested_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "email_1",
+                "metadata_only",
+                "[]",
+                "gmail",
+                "2026-07-01T00:00:00Z",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO applications (
+                id,
+                company,
+                role_title,
+                source,
+                first_seen_at,
+                current_status,
+                last_activity_at,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "Example Co",
+                "Software Engineer",
+                "company_site",
+                "2026-07-01T00:00:00Z",
+                "ghosted",
+                "2026-07-31T00:00:00Z",
+                "2026-07-01T00:00:00Z",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO application_events (
+                    id,
+                    application_id,
+                    email_id,
+                    event_type,
+                    event_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "event_1",
+                    "app_1",
+                    "email_1",
+                    "ghost_inferred",
+                    "2026-07-31T00:00:00Z",
+                ),
+            )
 
 
 def test_application_events_require_email_for_evidence_backed_events(
