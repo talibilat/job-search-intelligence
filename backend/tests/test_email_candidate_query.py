@@ -185,6 +185,133 @@ def test_candidate_query_explains_filter_outcome_and_reason_without_private_meta
     assert "Personal inbox subject" not in no_signal_decision.model_dump_json()
 
 
+def test_candidate_query_scores_signals_without_private_metadata() -> None:
+    account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
+    query = build_broad_candidate_query()
+    message = EmailMessageMetadata(
+        ref=EmailMessageRef(account=account, message_id="msg-1", thread_id="thread-1"),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Application received",
+        labels=("INBOX",),
+    )
+
+    decision = query.evaluate_metadata(message)
+
+    assert decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE
+    assert decision.score >= query.candidate_score_threshold
+    assert decision.reason == "sender_domain:greenhouse.io"
+    assert decision.signals == (
+        "sender_domain:greenhouse.io",
+        "subject_keyword:application",
+    )
+    assert "Application received" not in decision.model_dump_json()
+
+
+def test_candidate_query_promotes_same_thread_messages_after_direct_signal() -> None:
+    account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
+    query = build_broad_candidate_query()
+    direct_candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id="msg-direct",
+            thread_id="thread-job-search",
+        ),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Your weekly newsletter",
+        labels=("INBOX",),
+    )
+    thread_sibling = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id="msg-thread-sibling",
+            thread_id="thread-job-search",
+        ),
+        from_addr=EmailAddress(address="person@example.com"),
+        subject="Friday follow-up",
+        labels=("INBOX",),
+    )
+    blocked_thread_sibling = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id="msg-blocked-thread-sibling",
+            thread_id="thread-job-search",
+        ),
+        from_addr=EmailAddress(address="person@example.com"),
+        subject="Friday follow-up",
+        labels=("TRASH",),
+    )
+    unrelated = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id="msg-unrelated",
+            thread_id="thread-newsletter",
+        ),
+        from_addr=EmailAddress(address="news@example.com"),
+        subject="Friday digest",
+        labels=("INBOX",),
+    )
+
+    decisions = query.evaluate_metadata_batch(
+        (direct_candidate, thread_sibling, blocked_thread_sibling, unrelated),
+    )
+
+    assert [decision.outcome for decision in decisions] == [
+        EmailCandidateDecisionOutcome.CANDIDATE,
+        EmailCandidateDecisionOutcome.CANDIDATE,
+        EmailCandidateDecisionOutcome.REJECTED,
+        EmailCandidateDecisionOutcome.REJECTED,
+    ]
+    assert decisions[1].reason == "thread_signal:candidate_thread"
+    assert decisions[1].signals == ("thread_signal:candidate_thread",)
+    assert decisions[1].score >= query.candidate_score_threshold
+    assert decisions[2].reason == "excluded_label:trash"
+    assert decisions[3].reason == "no_filter_signal"
+    assert "thread-job-search" not in decisions[1].model_dump_json()
+    assert "Friday follow-up" not in decisions[1].model_dump_json()
+
+
+def test_candidate_query_combines_direct_and_thread_signals_for_threshold() -> None:
+    account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
+    query = EmailCandidateQuery(
+        strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
+        sender_domain_terms=("greenhouse.io",),
+        keyword_terms=("application",),
+        candidate_score_threshold=4,
+    )
+    direct_candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id="msg-direct",
+            thread_id="thread-job-search",
+        ),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Application received",
+        labels=("INBOX",),
+    )
+    thread_sibling_with_subject_signal = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id="msg-thread-sibling",
+            thread_id="thread-job-search",
+        ),
+        from_addr=EmailAddress(address="person@example.com"),
+        subject="Application follow-up",
+        labels=("INBOX",),
+    )
+
+    _direct_decision, sibling_decision = query.evaluate_metadata_batch(
+        (direct_candidate, thread_sibling_with_subject_signal),
+    )
+
+    assert sibling_decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE
+    assert sibling_decision.score == query.candidate_score_threshold
+    assert sibling_decision.signals == (
+        "subject_keyword:application",
+        "thread_signal:candidate_thread",
+    )
+    assert "thread-job-search" not in sibling_decision.model_dump_json()
+
+
 def test_candidate_query_excludes_metadata_with_blocked_labels() -> None:
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
     query = build_broad_candidate_query()

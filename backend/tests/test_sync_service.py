@@ -751,6 +751,18 @@ def test_manual_sync_persists_filter_decisions_for_candidate_and_rejected_metada
                         sent_at=NOW,
                         labels=("INBOX",),
                     ),
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-thread-sibling",
+                            thread_id="thread-candidate",
+                        ),
+                        from_addr=EmailAddress(address="person@example.com"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Friday follow-up",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
                 ),
                 next_sync_cursor=EmailProviderCursor(
                     account=mailbox.account,
@@ -791,6 +803,13 @@ def test_manual_sync_persists_filter_decisions_for_candidate_and_rejected_metada
             "broad_job_search",
             "rejected",
             "no_filter_signal",
+            NOW.isoformat(),
+        ),
+        (
+            "gmail-thread-sibling",
+            "broad_job_search",
+            "candidate",
+            "thread_signal:candidate_thread",
             NOW.isoformat(),
         ),
     ]
@@ -896,6 +915,60 @@ def test_sync_service_fetches_retained_bodies_only_for_candidates_and_debug_refs
         "msg-debugging",
     ]
     assert provider.body_requests[0].max_body_bytes == 10_000
+
+
+def test_sync_service_fetches_retained_bodies_for_candidate_threads() -> None:
+    provider = RecordingRetainedBodyProvider()
+    service = EmailSyncService(provider=provider, page_size=250)
+    connection = email_connection()
+    direct_candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id="msg-candidate",
+            thread_id="thread-candidate",
+        ),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Weekly digest",
+        labels=("INBOX",),
+    )
+    thread_sibling = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id="msg-thread-sibling",
+            thread_id="thread-candidate",
+        ),
+        from_addr=EmailAddress(address="person@example.com"),
+        subject="Friday follow-up",
+        labels=("INBOX",),
+    )
+    non_candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id="msg-newsletter",
+            thread_id="thread-newsletter",
+        ),
+        from_addr=EmailAddress(address="news@example.com"),
+        subject="Product newsletter",
+        labels=("INBOX",),
+    )
+
+    batch = asyncio.run(
+        service.fetch_retained_bodies(
+            connection=connection,
+            metadata=(direct_candidate, thread_sibling, non_candidate),
+            candidate_query=build_broad_candidate_query(),
+        )
+    )
+
+    assert [body.ref.message_id for body in batch.bodies] == [
+        "msg-candidate",
+        "msg-thread-sibling",
+    ]
+    assert len(provider.body_requests) == 1
+    assert [ref.message_id for ref in provider.body_requests[0].refs] == [
+        "msg-candidate",
+        "msg-thread-sibling",
+    ]
 
 
 def test_sync_service_chunks_retained_body_fetches_by_provider_limit() -> None:
