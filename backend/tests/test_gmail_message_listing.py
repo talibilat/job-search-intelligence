@@ -164,6 +164,81 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
             assert ("metadataHeaders", header) in query
 
 
+def test_gmail_message_lister_normalizes_metadata_fields() -> None:
+    class NormalizationTransport(FakeGmailTransport):
+        async def get_json(
+            self,
+            path: str,
+            *,
+            query: tuple[tuple[str, str], ...],
+            access_token: SecretStr,
+        ) -> dict[str, object]:
+            self.calls.append((path, query, access_token.get_secret_value()))
+            if path == "/gmail/v1/users/me/profile":
+                return {"historyId": "  history-normalized  "}
+            if path == "/gmail/v1/users/me/messages":
+                return {"messages": [{"id": "msg-normalized", "threadId": " thread-list "}]}
+            if path == "/gmail/v1/users/me/messages/msg-normalized":
+                return {
+                    "id": "  msg-normalized  ",
+                    "threadId": " thread-normalized ",
+                    "labelIds": [" INBOX ", "inbox", "CATEGORY_PRIMARY", ""],
+                    "payload": {
+                        "headers": [
+                            {
+                                "name": "From",
+                                "value": "  Jane Recruiter  <JANE@Example.COM> ",
+                            },
+                            {
+                                "name": "To",
+                                "value": (
+                                    " Candidate <ME@Example.COM>, "
+                                    "candidate <me@example.com>, Jobs@Example.com "
+                                ),
+                            },
+                            {"name": "Cc", "value": " Hiring <HIRING@Example.COM> "},
+                            {"name": "Subject", "value": "  Application received  "},
+                            {"name": "Date", "value": "Sun, 05 Jul 2026 08:00:00 -0400"},
+                            {"name": "Message-ID", "value": "  <Gmail-Msg-1@Example.COM>  "},
+                        ]
+                    },
+                }
+            raise AssertionError(f"unexpected Gmail path: {path}")
+
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=NormalizationTransport(),
+    )
+
+    page = asyncio.run(
+        lister.list_message_metadata(
+            _connection(),
+            EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=500),
+        )
+    )
+
+    assert page.next_sync_cursor is not None
+    assert page.next_sync_cursor.value == "history-normalized"
+    assert len(page.messages) == 1
+    message = page.messages[0]
+    assert message.ref.message_id == "msg-normalized"
+    assert message.ref.thread_id == "thread-normalized"
+    assert message.rfc822_message_id == "<Gmail-Msg-1@Example.COM>"
+    assert message.from_addr is not None
+    assert message.from_addr.address == "jane@example.com"
+    assert message.from_addr.display_name == "Jane Recruiter"
+    assert [(address.address, address.display_name) for address in message.to_addrs] == [
+        ("me@example.com", "Candidate"),
+        ("jobs@example.com", None),
+    ]
+    assert [(address.address, address.display_name) for address in message.cc_addrs] == [
+        ("hiring@example.com", "Hiring")
+    ]
+    assert message.subject == "Application received"
+    assert message.sent_at == datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
+    assert message.labels == ("INBOX", "CATEGORY_PRIMARY")
+
+
 def test_gmail_message_lister_handles_empty_pages_without_metadata_fetches() -> None:
     class EmptyTransport(FakeGmailTransport):
         async def get_json(
@@ -420,6 +495,45 @@ def test_gmail_message_lister_returns_history_cursor_after_final_incremental_pag
     assert page.next_page_token is None
     assert page.next_sync_cursor is not None
     assert page.next_sync_cursor.value == "1004"
+
+
+def test_gmail_message_lister_normalizes_incremental_history_cursor() -> None:
+    class PaddedHistoryTransport(FakeGmailTransport):
+        async def get_json(
+            self,
+            path: str,
+            *,
+            query: tuple[tuple[str, str], ...],
+            access_token: SecretStr,
+        ) -> dict[str, object]:
+            self.calls.append((path, query, access_token.get_secret_value()))
+            if path == "/gmail/v1/users/me/history":
+                return {"history": [], "historyId": "  1005  "}
+            raise AssertionError(f"unexpected Gmail path: {path}")
+
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=PaddedHistoryTransport(),
+    )
+    cursor = EmailProviderCursor(
+        account=_connection().account,
+        value="1004",
+        issued_at=NOW,
+    )
+
+    page = asyncio.run(
+        lister.list_message_metadata(
+            _connection(),
+            EmailMetadataListRequest(
+                mode=EmailSyncMode.INCREMENTAL,
+                page_size=2,
+                sync_cursor=cursor,
+            ),
+        )
+    )
+
+    assert page.next_sync_cursor is not None
+    assert page.next_sync_cursor.value == "1005"
 
 
 def test_gmail_history_404_maps_to_expired_sync_cursor(monkeypatch: pytest.MonkeyPatch) -> None:

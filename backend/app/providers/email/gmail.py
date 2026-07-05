@@ -68,6 +68,23 @@ _MESSAGE_BODY_FIELDS = "id,threadId,payload"
 _INVALID_DATA_MESSAGE = "Gmail metadata listing returned invalid data"
 _INVALID_BODY_DATA_MESSAGE = "Gmail body fetching returned invalid data"
 _FULL_BACKFILL_PAGE_TOKEN_PREFIX = "gmail-full-backfill:"
+_GMAIL_SYSTEM_LABELS = {
+    "CHAT",
+    "CATEGORY_FORUMS",
+    "CATEGORY_PERSONAL",
+    "CATEGORY_PRIMARY",
+    "CATEGORY_PROMOTIONS",
+    "CATEGORY_SOCIAL",
+    "CATEGORY_UPDATES",
+    "DRAFT",
+    "IMPORTANT",
+    "INBOX",
+    "SENT",
+    "SPAM",
+    "STARRED",
+    "TRASH",
+    "UNREAD",
+}
 
 
 class GoogleOAuthInstalledClientConfig(BaseModel):
@@ -710,7 +727,7 @@ class GmailMessageLister:
         if history_response.next_page_token is None:
             next_sync_cursor = EmailProviderCursor(
                 account=connection.account,
-                value=history_response.history_id,
+                value=_normalize_required_id(history_response.history_id),
                 issued_at=datetime.now(UTC),
             )
 
@@ -736,7 +753,7 @@ class GmailMessageLister:
         )
         return EmailProviderCursor(
             account=connection.account,
-            value=profile.history_id,
+            value=_normalize_required_id(profile.history_id),
             issued_at=datetime.now(UTC),
         )
 
@@ -887,8 +904,9 @@ class GmailMessageLister:
         return EmailMessageMetadata(
             ref=EmailMessageRef(
                 account=connection.account,
-                message_id=gmail_metadata.id,
-                thread_id=gmail_metadata.thread_id or message.thread_id,
+                message_id=_normalize_required_id(gmail_metadata.id),
+                thread_id=_normalize_optional_id(gmail_metadata.thread_id)
+                or _normalize_optional_id(message.thread_id),
             ),
             rfc822_message_id=_first_header(headers, "message-id"),
             from_addr=_first_email_address(headers, "from"),
@@ -896,7 +914,7 @@ class GmailMessageLister:
             cc_addrs=_email_addresses(headers, "cc"),
             subject=_first_header(headers, "subject"),
             sent_at=_parse_email_datetime(_first_header(headers, "date")),
-            labels=gmail_metadata.label_ids,
+            labels=_normalize_label_ids(gmail_metadata.label_ids),
             size_bytes=gmail_metadata.size_estimate,
         )
 
@@ -1015,7 +1033,10 @@ def _body_query() -> tuple[tuple[str, str], ...]:
 def _metadata_headers(metadata: GmailMessageMetadataResponse) -> dict[str, tuple[str, ...]]:
     headers: dict[str, list[str]] = {}
     for header in metadata.payload.headers if metadata.payload is not None else ():
-        headers.setdefault(header.name.lower(), []).append(header.value)
+        header_name = header.name.strip().lower()
+        if not header_name:
+            continue
+        headers.setdefault(header_name, []).append(header.value)
     return {name: tuple(values) for name, values in headers.items()}
 
 
@@ -1023,7 +1044,7 @@ def _first_header(headers: dict[str, tuple[str, ...]], name: str) -> str | None:
     values = headers.get(name)
     if values is None:
         return None
-    return values[0]
+    return _normalize_optional_header(values[0])
 
 
 def _first_email_address(headers: dict[str, tuple[str, ...]], name: str) -> EmailAddress | None:
@@ -1035,20 +1056,78 @@ def _first_email_address(headers: dict[str, tuple[str, ...]], name: str) -> Emai
 
 def _email_addresses(headers: dict[str, tuple[str, ...]], name: str) -> tuple[EmailAddress, ...]:
     values = headers.get(name, ())
-    return tuple(
-        EmailAddress(address=address, display_name=display_name or None)
-        for display_name, address in getaddresses(values)
-        if address
-    )
+    addresses: list[EmailAddress] = []
+    seen_addresses: set[str] = set()
+    for display_name, address in getaddresses(values):
+        normalized_address = address.strip().lower()
+        if not normalized_address or normalized_address in seen_addresses:
+            continue
+        seen_addresses.add(normalized_address)
+        addresses.append(
+            EmailAddress(
+                address=normalized_address,
+                display_name=_normalize_optional_display_name(display_name),
+            )
+        )
+    return tuple(addresses)
 
 
 def _parse_email_datetime(value: str | None) -> datetime | None:
     if value is None:
         return None
     try:
-        return parsedate_to_datetime(value)
+        parsed = parsedate_to_datetime(value)
     except (TypeError, ValueError, IndexError):
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _normalize_required_id(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise EmailProviderError(public_message=_INVALID_DATA_MESSAGE)
+    return normalized
+
+
+def _normalize_optional_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _normalize_optional_header(value: str) -> str | None:
+    normalized = value.strip()
+    return normalized or None
+
+
+def _normalize_optional_display_name(value: str) -> str | None:
+    normalized = " ".join(value.strip().split())
+    return normalized or None
+
+
+def _normalize_label_ids(label_ids: tuple[str, ...]) -> tuple[str, ...]:
+    labels: list[str] = []
+    seen_labels: set[str] = set()
+    for label_id in label_ids:
+        normalized = _normalize_label_id(label_id)
+        if normalized is None or normalized in seen_labels:
+            continue
+        seen_labels.add(normalized)
+        labels.append(normalized)
+    return tuple(labels)
+
+
+def _normalize_label_id(label_id: str) -> str | None:
+    normalized = label_id.strip()
+    if not normalized:
+        return None
+    uppercase = normalized.upper()
+    if uppercase in _GMAIL_SYSTEM_LABELS:
+        return uppercase
+    return normalized
 
 
 def _credential_ref_for_account(account_id: str) -> SecretRef:
