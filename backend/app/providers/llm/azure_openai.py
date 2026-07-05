@@ -285,9 +285,7 @@ def _token_usage(usage: AzureOpenAIUsageResponse | None) -> LLMTokenUsage | None
 
 def _raise_provider_error_for_transport_error(error: AzureOpenAITransportError) -> NoReturn:
     if error.is_timeout or error.reason == "timeout":
-        raise LLMProviderTimeoutError(
-            public_message="Azure OpenAI request timed out."
-        ) from error
+        raise LLMProviderTimeoutError(public_message="Azure OpenAI request timed out.") from error
     if error.status_code is None or error.status_code in _TRANSIENT_STATUS_CODES:
         raise LLMProviderUnavailableError(
             public_message="Azure OpenAI is temporarily unavailable."

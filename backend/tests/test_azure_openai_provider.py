@@ -148,9 +148,7 @@ def test_azure_openai_provider_posts_chat_completion_request() -> None:
     )
 
     response = asyncio.run(
-        provider.generate(
-            generation_request(response_format=LLMResponseFormat.JSON_OBJECT)
-        )
+        provider.generate(generation_request(response_format=LLMResponseFormat.JSON_OBJECT))
     )
 
     assert secret_store.requested_refs == [AZURE_API_KEY_REF]
