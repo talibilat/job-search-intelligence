@@ -224,6 +224,65 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
         }
 
 
+def test_application_events_allow_ghost_inferred_without_email(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(
+            """
+            INSERT INTO applications (
+                id,
+                company,
+                role_title,
+                source,
+                first_seen_at,
+                current_status,
+                last_activity_at,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "Example Co",
+                "Software Engineer",
+                "company_site",
+                "2026-07-01T00:00:00Z",
+                "ghosted",
+                "2026-07-31T00:00:00Z",
+                "2026-07-01T00:00:00Z",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        connection.execute(
+            """
+            INSERT INTO application_events (
+                id,
+                application_id,
+                email_id,
+                event_type,
+                event_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "event_1",
+                "app_1",
+                None,
+                "ghost_inferred",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        assert connection.execute(
+            "SELECT email_id FROM application_events WHERE id = 'event_1'",
+        ).fetchone() == (None,)
+
+
 def test_alembic_downgrade_removes_jt020_core_schema(tmp_path: Path) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
     config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
@@ -241,6 +300,15 @@ def test_alembic_downgrade_removes_jt020_core_schema(tmp_path: Path) -> None:
         assert "application_events" not in table_names
         assert "insights" not in table_names
         assert not any(table_name.startswith("email_chunks") for table_name in table_names)
+
+
+def test_alembic_env_uses_shared_sqlite_vec_loader() -> None:
+    env_py = BACKEND_ROOT / "app" / "db" / "migrations" / "env.py"
+
+    env_source = env_py.read_text()
+
+    assert "load_sqlite_vec_sync" in env_source
+    assert "settings.sqlite_vec_extension_path" in env_source
 
 
 def sqlite_table_names(connection: sqlite3.Connection) -> set[str]:

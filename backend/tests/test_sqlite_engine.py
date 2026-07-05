@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from app.config import AppSettings
+from app.db import engine as sqlite_engine
 from app.db.engine import create_sqlite_engine, dispose_sqlite_engine, sqlite_transaction
 from app.db.sqlite_url import sqlite_async_database_url, sqlite_database_path
 from sqlalchemy import text
@@ -80,6 +81,24 @@ def test_sqlite_async_database_url_preserves_sqlite_slash_forms(tmp_path: Path) 
         )
         == "sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3"
     )
+
+
+def test_sync_sqlite_vec_loader_uses_configured_extension_path(tmp_path: Path) -> None:
+    extension_path = tmp_path / "sqlite_vec.dylib"
+    loaded_paths: list[str] = []
+    extension_states: list[bool] = []
+
+    class FakeConnection:
+        def enable_load_extension(self, enabled: bool) -> None:
+            extension_states.append(enabled)
+
+        def load_extension(self, path: str) -> None:
+            loaded_paths.append(path)
+
+    sqlite_engine.load_sqlite_vec_sync(FakeConnection(), extension_path)
+
+    assert loaded_paths == [str(extension_path)]
+    assert extension_states == [True, False]
 
 
 @pytest.mark.anyio

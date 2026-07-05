@@ -167,7 +167,7 @@ def upgrade() -> None:
         "application_events",
         sa.Column("id", sa.Text(), nullable=False),
         sa.Column("application_id", sa.Text(), nullable=False),
-        sa.Column("email_id", sa.Text(), nullable=False),
+        sa.Column("email_id", sa.Text(), nullable=True),
         sa.Column("event_type", sa.Text(), nullable=False),
         sa.Column("event_at", sa.Text(), nullable=False),
         sa.Column("extract_note", sa.Text(), nullable=True),
