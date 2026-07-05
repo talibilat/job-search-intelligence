@@ -85,8 +85,7 @@ def evaluate_golden_set(
             classified_at=classified_at,
         )
         predicted_is_job_related = (
-            isinstance(result, AcceptedLLMExtraction)
-            and result.classification.is_job_related
+            isinstance(result, AcceptedLLMExtraction) and result.classification.is_job_related
         )
 
         if predicted_is_job_related and entry.expected_is_job_related:
