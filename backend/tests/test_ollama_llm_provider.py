@@ -11,7 +11,10 @@ from app.providers.llm import (
     LLMGenerationRequest,
     LLMMessage,
     LLMMessageRole,
+    LLMModelHealthStatus,
+    LLMModelKind,
     LLMProvider,
+    LLMProviderHealthCheckRequest,
     LLMProviderRequestError,
     LLMProviderResponseError,
     LLMProviderTimeoutError,
@@ -178,6 +181,30 @@ def test_ollama_provider_uses_request_model_override_and_json_format() -> None:
     assert payload["model"] == "mistral"
     assert payload["format"] == "json"
     assert "options" not in payload
+
+
+def test_ollama_provider_health_check_reports_configured_models_available() -> None:
+    provider = OllamaLLMProvider(settings=_settings(), transport=FakeOllamaTransport())
+
+    response = asyncio.run(
+        provider.health_check(
+            LLMProviderHealthCheckRequest(
+                chat_model="llama3.1",
+                embedding_model="nomic-embed-text",
+            )
+        )
+    )
+
+    assert response.provider_name == "ollama"
+    assert response.status is LLMModelHealthStatus.AVAILABLE
+    assert [(check.kind, check.model, check.status) for check in response.checks] == [
+        (LLMModelKind.CHAT, "llama3.1", LLMModelHealthStatus.AVAILABLE),
+        (
+            LLMModelKind.EMBEDDING,
+            "nomic-embed-text",
+            LLMModelHealthStatus.AVAILABLE,
+        ),
+    ]
 
 
 def test_ollama_provider_maps_length_finish_reason() -> None:
