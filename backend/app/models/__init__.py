@@ -1,6 +1,10 @@
 """Pydantic DTOs used at application boundaries."""
 
-from .classification import ClassificationPromptOutput
+from .classification import (
+    ClassificationCandidateStats,
+    ClassificationPreRunEstimate,
+    ClassificationPromptOutput,
+)
 from .health import HealthResponse
 from .provider_config import (
     EmailProviderConfigResponse,
@@ -71,6 +75,8 @@ __all__ = [
     "ChatMessageRecord",
     "ChatMessageRole",
     "ClassificationRunRecord",
+    "ClassificationCandidateStats",
+    "ClassificationPreRunEstimate",
     "EmailBackfillStateRecord",
     "EmailBackfillStatus",
     "EmailCandidateQueryStrategy",

@@ -55,6 +55,63 @@ export const ClassificationMode = {
   local: "local",
 } as const;
 
+export type LLMProviderName =
+  (typeof LLMProviderName)[keyof typeof LLMProviderName];
+
+export const LLMProviderName = {
+  azure_openai: "azure_openai",
+  ollama: "ollama",
+} as const;
+
+/**
+ * Public pre-run estimate for a bulk classification pass.
+ */
+export interface ClassificationPreRunEstimate {
+  /**
+   * Retained candidate emails needing classification for the current model and prompt.
+   * @minimum 0
+   */
+  candidate_count: number;
+  classification_mode: ClassificationMode;
+  /** True when the endpoint can report a cost estimate, including zero-cost local mode. */
+  cost_estimate_available: boolean;
+  /** Currency for estimated_cost_usd. */
+  currency?: string;
+  /**
+   * Estimated completion/output tokens from the configured per-candidate budget.
+   * @minimum 0
+   */
+  estimated_completion_tokens: number;
+  /** Estimated USD cost, or null when non-local provider pricing is not configured. */
+  estimated_cost_usd?: number | null;
+  /**
+   * Estimated prompt/input tokens from retained body text plus configured overhead.
+   * @minimum 0
+   */
+  estimated_prompt_tokens: number;
+  /**
+   * Sum of estimated prompt and completion tokens.
+   * @minimum 0
+   */
+  estimated_total_tokens: number;
+  llm_provider: LLMProviderName;
+  /**
+   * Configured classification model identifier used to decide stale rows.
+   * @minLength 1
+   */
+  model: string;
+  /**
+   * Configured classification prompt version used to decide stale rows.
+   * @minLength 1
+   */
+  prompt_version: string;
+  /**
+   * Human-readable heuristic used for token estimates.
+   * @minLength 1
+   */
+  token_estimate_method: string;
+}
+
 export type EmailProviderName =
   (typeof EmailProviderName)[keyof typeof EmailProviderName];
 
@@ -255,14 +312,6 @@ export interface LLMModelHealthCheck {
   model: string;
   status: LLMModelHealthStatus;
 }
-
-export type LLMProviderName =
-  (typeof LLMProviderName)[keyof typeof LLMProviderName];
-
-export const LLMProviderName = {
-  azure_openai: "azure_openai",
-  ollama: "ollama",
-} as const;
 
 /**
  * LLM provider metadata exposed by the provider config API shell.
@@ -528,6 +577,48 @@ export const gmailAuthCallbackAuthGmailCallbackGet = async (
     status: res.status,
     headers: res.headers,
   } as gmailAuthCallbackAuthGmailCallbackGetResponse;
+};
+
+export type classificationEstimateClassificationEstimateGetResponse200 = {
+  data: ClassificationPreRunEstimate;
+  status: 200;
+};
+
+export type classificationEstimateClassificationEstimateGetResponseSuccess =
+  classificationEstimateClassificationEstimateGetResponse200 & {
+    headers: Headers;
+  };
+export type classificationEstimateClassificationEstimateGetResponse =
+  classificationEstimateClassificationEstimateGetResponseSuccess;
+
+export const getClassificationEstimateClassificationEstimateGetUrl = () => {
+  return `/classification/estimate`;
+};
+
+/**
+ * Returns deterministic candidate counts, token estimates, and cost availability for a future bulk classification pass without calling an LLM or exposing email content.
+ * @summary Estimate Classification Run
+ */
+export const classificationEstimateClassificationEstimateGet = async (
+  options?: RequestInit,
+): Promise<classificationEstimateClassificationEstimateGetResponse> => {
+  const res = await fetch(
+    getClassificationEstimateClassificationEstimateGetUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: classificationEstimateClassificationEstimateGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as classificationEstimateClassificationEstimateGetResponse;
 };
 
 export type getProviderConfigConfigProvidersGetResponse200 = {

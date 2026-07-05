@@ -9,6 +9,7 @@ from fastapi import Depends
 from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.repositories.connection import EmailConnectionRepository
+from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
 
@@ -43,3 +44,15 @@ def get_llm_provider(
         code=ApiErrorCode.SERVICE_UNAVAILABLE,
         message="Selected LLM provider is unavailable.",
     )
+
+
+def get_readonly_email_repository(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[EmailRepository]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield EmailRepository(connection)
+    finally:
+        connection.close()
