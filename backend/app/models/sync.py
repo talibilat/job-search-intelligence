@@ -55,6 +55,7 @@ class SyncJobStatus(BaseModel):
     started_at: datetime | None = None
     updated_at: datetime
     completed_at: datetime | None = None
+    last_run_at: datetime | None = None
     progress: float = Field(ge=0, le=1)
 
     @model_validator(mode="after")

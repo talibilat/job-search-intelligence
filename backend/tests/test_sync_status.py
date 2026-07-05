@@ -29,6 +29,7 @@ def test_sync_job_status_tracks_phase_counts_errors_timestamps_and_progress() ->
         started_at=NOW,
         updated_at=NOW + timedelta(seconds=30),
         completed_at=None,
+        last_run_at=NOW - timedelta(days=1),
         progress=0.25,
     )
 
@@ -37,6 +38,7 @@ def test_sync_job_status_tracks_phase_counts_errors_timestamps_and_progress() ->
     assert status.errors[0].message == "provider rate limit"
     assert status.started_at == NOW
     assert status.updated_at == NOW + timedelta(seconds=30)
+    assert status.last_run_at == NOW - timedelta(days=1)
     assert status.progress == 0.25
 
 
@@ -77,6 +79,7 @@ def test_build_idle_sync_status_returns_zero_progress_snapshot() -> None:
     assert status.started_at is None
     assert status.updated_at == NOW
     assert status.completed_at is None
+    assert status.last_run_at is None
     assert status.progress == 0
 
 
@@ -100,6 +103,7 @@ def test_sync_status_endpoint_exposes_typed_idle_status() -> None:
     assert payload["errors"] == []
     assert payload["started_at"] is None
     assert payload["completed_at"] is None
+    assert payload["last_run_at"] is None
     assert payload["progress"] == 0
     assert isinstance(datetime.fromisoformat(payload["updated_at"]), datetime)
 

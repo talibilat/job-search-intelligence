@@ -893,6 +893,18 @@
             "title": "Errors",
             "type": "array"
           },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
           "phase": {
             "$ref": "#/components/schemas/SyncJobPhase"
           },

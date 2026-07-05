@@ -306,6 +306,7 @@ export interface SyncJobStatus {
   completed_at?: string | null;
   counts: SyncJobCounts;
   errors?: SyncJobError[];
+  last_run_at?: string | null;
   phase: SyncJobPhase;
   /**
    * @minimum 0
