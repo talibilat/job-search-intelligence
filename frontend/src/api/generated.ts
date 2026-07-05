@@ -60,6 +60,12 @@ export interface EmailAccountRef {
   provider: EmailProviderName;
 }
 
+/**
+ * Provider-normalized email address plus optional display name.
+ *
+ * Provider adapters should lower-case parsed addresses, trim display names,
+ * and deduplicate repeated recipients before returning metadata DTOs.
+ */
 export interface EmailAddress {
   /** @minLength 1 */
   address: string;
@@ -324,66 +330,6 @@ export interface SetupSubmitResponse {
   llm_provider: LLMProviderName;
   setup_complete: boolean;
   status: "accepted";
-}
-
-/**
- * Deterministic counters reported by sync status.
- */
-export interface SyncJobCounts {
-  /** @minimum 0 */
-  errors?: number;
-  /** @minimum 0 */
-  metadata_messages?: number;
-  /** @minimum 0 */
-  metadata_pages?: number;
-  /** @minimum 0 */
-  raw_emails_written?: number;
-  /** @minimum 0 */
-  retained_bodies?: number;
-}
-
-/**
- * Public-safe sync error summary without provider payloads or email content.
- */
-export interface SyncJobError {
-  /** @minLength 1 */
-  message: string;
-  occurred_at: string;
-}
-
-/**
- * Public-safe phase for the current local email sync job.
- */
-export type SyncJobPhase = (typeof SyncJobPhase)[keyof typeof SyncJobPhase];
-
-export const SyncJobPhase = {
-  idle: "idle",
-  queued: "queued",
-  metadata_sync: "metadata_sync",
-  body_retention: "body_retention",
-  reconciling: "reconciling",
-  completed: "completed",
-  failed: "failed",
-} as const;
-
-/**
- * Current sync job state for the `/sync/status` API boundary.
- */
-export interface SyncJobStatus {
-  account_id?: string | null;
-  completed_at?: string | null;
-  counts: SyncJobCounts;
-  errors?: SyncJobError[];
-  last_run_at?: string | null;
-  phase: SyncJobPhase;
-  /**
-   * @minimum 0
-   * @maximum 1
-   */
-  progress: number;
-  provider?: EmailProviderName | null;
-  started_at?: string | null;
-  updated_at: string;
 }
 
 export const WipeDataRequestValue = {
@@ -874,7 +820,7 @@ export const syncNowSyncPost = async (
 };
 
 export type syncStatusSyncStatusGetResponse200 = {
-  data: SyncJobStatus;
+  data: EmailSyncStatus;
   status: 200;
 };
 

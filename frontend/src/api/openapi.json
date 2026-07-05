@@ -111,6 +111,7 @@
         "type": "object"
       },
       "EmailAddress": {
+        "description": "Provider-normalized email address plus optional display name.\n\nProvider adapters should lower-case parsed addresses, trim display names,\nand deduplicate repeated recipients before returning metadata DTOs.",
         "properties": {
           "address": {
             "minLength": 1,
@@ -1008,174 +1009,6 @@
         "title": "SetupSubmitResponse",
         "type": "object"
       },
-      "SyncJobCounts": {
-        "description": "Deterministic counters reported by sync status.",
-        "properties": {
-          "errors": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Errors",
-            "type": "integer"
-          },
-          "metadata_messages": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Metadata Messages",
-            "type": "integer"
-          },
-          "metadata_pages": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Metadata Pages",
-            "type": "integer"
-          },
-          "raw_emails_written": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Raw Emails Written",
-            "type": "integer"
-          },
-          "retained_bodies": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Retained Bodies",
-            "type": "integer"
-          }
-        },
-        "title": "SyncJobCounts",
-        "type": "object"
-      },
-      "SyncJobError": {
-        "description": "Public-safe sync error summary without provider payloads or email content.",
-        "properties": {
-          "message": {
-            "minLength": 1,
-            "title": "Message",
-            "type": "string"
-          },
-          "occurred_at": {
-            "format": "date-time",
-            "title": "Occurred At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "message",
-          "occurred_at"
-        ],
-        "title": "SyncJobError",
-        "type": "object"
-      },
-      "SyncJobPhase": {
-        "description": "Public-safe phase for the current local email sync job.",
-        "enum": [
-          "idle",
-          "queued",
-          "metadata_sync",
-          "body_retention",
-          "reconciling",
-          "completed",
-          "failed"
-        ],
-        "title": "SyncJobPhase",
-        "type": "string"
-      },
-      "SyncJobStatus": {
-        "description": "Current sync job state for the `/sync/status` API boundary.",
-        "properties": {
-          "account_id": {
-            "anyOf": [
-              {
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Account Id"
-          },
-          "completed_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed At"
-          },
-          "counts": {
-            "$ref": "#/components/schemas/SyncJobCounts"
-          },
-          "errors": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SyncJobError"
-            },
-            "title": "Errors",
-            "type": "array"
-          },
-          "last_run_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Run At"
-          },
-          "phase": {
-            "$ref": "#/components/schemas/SyncJobPhase"
-          },
-          "progress": {
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Progress",
-            "type": "number"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EmailProviderName"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "phase",
-          "counts",
-          "updated_at",
-          "progress"
-        ],
-        "title": "SyncJobStatus",
-        "type": "object"
-      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1624,7 +1457,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SyncJobStatus"
+                  "$ref": "#/components/schemas/EmailSyncStatus"
                 }
               }
             },
