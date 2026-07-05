@@ -126,6 +126,7 @@ class EmailSyncStateRecord(BaseModel):
     next_page_token: str | None = None
     updated_at: datetime
 
+
 class EmailBackfillStateRecord(BaseModel):
     """Persisted full-backfill cursor and page progress for one email account."""
 
