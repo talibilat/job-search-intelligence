@@ -1,5 +1,6 @@
 import { ChartPanel } from "./components/charts";
 import { DashboardPage } from "./pages/DashboardPage";
+import { Insights } from "./pages/Insights";
 import { SetupPage } from "./pages/SetupPage";
 
 const phaseItems = [
@@ -12,6 +13,7 @@ const navigationItems = [
   { href: "/", label: "Overview" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },
+  { href: "/insights", label: "Insights" },
 ] as const;
 
 function OverviewPage() {
@@ -70,10 +72,9 @@ function OverviewPage() {
 }
 
 function App() {
-  const currentPath = navigationItems.some(
-    (item) => item.href === window.location.pathname,
-  )
-    ? window.location.pathname
+  const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
+  const currentPath = navigationItems.some((item) => item.href === routePath)
+    ? routePath
     : "/";
 
   return (
@@ -99,6 +100,8 @@ function App() {
         <SetupPage />
       ) : currentPath === "/dashboard" ? (
         <DashboardPage />
+      ) : currentPath === "/insights" ? (
+        <Insights />
       ) : (
         <OverviewPage />
       )}
