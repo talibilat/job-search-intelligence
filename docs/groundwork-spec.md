@@ -246,7 +246,7 @@ Full list in `docs/questions.md`. Mapping:
 ## 8. Phase roadmap (with Definition of Done)
 
 **Phase 0 - Groundwork / scaffold**
-Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, frontend generated-client destination and import boundary, Recharts chart wrapper foundation with empty states, shared accessible frontend primitives, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, backend and frontend CI, `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, frontend generated-client destination and import boundary, Recharts chart wrapper foundation with empty states, empty dashboard route shell without metrics, shared accessible frontend primitives, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, backend and frontend CI, `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
 **Phase 1 - Gmail ingestion**
