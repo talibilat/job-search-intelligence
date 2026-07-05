@@ -37,6 +37,7 @@ Baseline coding standards for every agent and contributor.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Alembic migrations run in SQLite batch mode; sqlite-vec and other virtual or vector tables are excluded from autogenerate and must be managed by hand-written revisions.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
+- Aggregation role matching must use the deterministic `normalize_role_title()` service helper for the `normalized_role` portion of grouping keys, not ad hoc title cleanup in repositories, API routes, or LLM prompts.
 - Service layer holds business logic; FastAPI route handlers stay thin.
 - FastAPI dependency injection supplies repositories, providers, and config.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
