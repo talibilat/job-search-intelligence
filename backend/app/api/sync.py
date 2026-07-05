@@ -9,13 +9,20 @@ from fastapi import APIRouter, Depends
 
 from app.api.auth import get_gmail_secret_store
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
-from app.config import AppSettings, EmailProviderName, get_settings
-from app.db.repositories import EmailConnectionRepository, EmailRepository, SyncStateRepository
+from app.config import AppSettings, get_settings
+from app.db.repositories import (
+    BackfillStateRepository,
+    EmailConnectionRepository,
+    EmailRepository,
+    SyncStateRepository,
+)
 from app.db.sqlite_url import sqlite_database_path
+from app.models.records import EmailBackfillStatus
 from app.providers.email import EmailConnection, EmailProvider
 from app.providers.email.gmail import GmailEmailProvider
 from app.security import SecretStore
 from app.services.sync_service import (
+    BackfillStateService,
     EmailSyncRunState,
     EmailSyncRuntime,
     EmailSyncService,
@@ -72,15 +79,33 @@ class ConfiguredEmailSyncRuntime:
             database_path = sqlite_database_path(self._settings.database_url)
             database_path.parent.mkdir(parents=True, exist_ok=True)
             with sqlite3.connect(database_path) as sqlite_connection:
+                sync_state_repository = SyncStateRepository(sqlite_connection)
+                backfill_state_repository = BackfillStateRepository(sqlite_connection)
+                email_repository = EmailRepository(sqlite_connection)
+                sync_state_service = SyncService(
+                    sync_state_repository=sync_state_repository,
+                )
                 sync_service = EmailSyncService(
                     provider=self._email_provider,
                     page_size=self._settings.gmail_page_size,
-                    email_repository=EmailRepository(sqlite_connection),
-                    sync_service=SyncService(
-                        sync_state_repository=SyncStateRepository(sqlite_connection),
-                    ),
+                    email_repository=email_repository,
+                    sync_service=sync_state_service,
                     status_callback=self._status_store.set_status,
                 )
+                backfill_state = backfill_state_repository.fetch_state(connection.account)
+                sync_cursor = sync_state_repository.get_cursor(connection.account)
+                should_run_full_backfill = sync_cursor is None or (
+                    backfill_state is not None
+                    and backfill_state.status is not EmailBackfillStatus.COMPLETED
+                )
+                if should_run_full_backfill:
+                    return await sync_service.run_full_backfill(
+                        connection=connection,
+                        backfill_state_service=BackfillStateService(
+                            backfill_state_repository=backfill_state_repository,
+                            sync_state_repository=sync_state_repository,
+                        ),
+                    )
                 return await sync_service.run_manual_sync(connection=connection)
         finally:
             self._status_store.release_run()
@@ -104,10 +129,10 @@ def resolve_email_sync_connection(settings: AppSettings) -> EmailConnection | No
     if not database_path.exists():
         return None
 
-    with sqlite3.connect(database_path) as connection:
+    with sqlite3.connect(database_path) as sqlite_connection:
         try:
-            return EmailConnectionRepository(connection).fetch_latest_connection_metadata(
-                provider=EmailProviderName.GMAIL,
+            return EmailConnectionRepository(sqlite_connection).fetch_default_connection_metadata(
+                settings.email_provider,
             )
         except sqlite3.OperationalError as error:
             if "no such table: email_connections" in str(error):

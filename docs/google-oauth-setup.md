@@ -6,7 +6,8 @@ It maps to FR-0, FR-0.2, FR-1.1, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 1.
 Gmail message listing and retained-body fetching read OAuth token material only through `SecretStore`.
 The backend can start Gmail OAuth with `GET /auth/gmail` and complete the local callback with `GET /auth/gmail/callback`.
 The callback exchanges the authorization code, validates the returned `gmail.readonly` scope, stores token material through the configured `SecretStore`, and persists only non-secret connection metadata in SQLite.
-Manual sync resolves persisted Gmail connection metadata from local SQLite, while token refresh and concrete incremental transport remain later Gmail ingestion work.
+Default sync resolves the latest non-reauth Gmail connection metadata from SQLite, runs full backfill until the replacement history cursor is promoted, and then uses the persisted incremental cursor on later syncs.
+Token refresh remains later Gmail ingestion work.
 This guide documents the setup and runtime security contract the app must follow.
 
 ## Security Boundaries
@@ -164,8 +165,8 @@ Incremental sync cursors, metadata-only repository writes, and retained-body rep
 Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.
 Metadata-listing failures are mapped into public-safe provider errors: authorization failures ask the client to reconnect Gmail, insufficient scopes ask for read-only access, rate limits and temporary outages ask the client to try again later, invalid Gmail responses are reported without raw payloads, and generic provider failures do not expose OAuth tokens or Gmail response bodies.
 
-Richer Gmail transport behavior and additional connected-account persistence behavior remain separate Phase 1 work.
 Manual sync already uses the persisted non-secret connection metadata to pass a `SecretRef`-backed account to the Gmail provider.
+Token refresh and richer product-page behavior remain separate Phase 1 work.
 
 ## Retained Body Fetching Boundary
 

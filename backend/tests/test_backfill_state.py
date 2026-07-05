@@ -9,22 +9,35 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
-from app.db.repositories import BackfillStateRepository, SyncStateRepository
+from app.db.repositories import BackfillStateRepository, EmailRepository, SyncStateRepository
 from app.models.records import EmailBackfillStateRecord, EmailBackfillStatus
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
     EmailAttachmentPolicy,
+    EmailBodyBatch,
+    EmailBodyFetchFailure,
+    EmailBodyFetchFailureReason,
+    EmailBodyFetchRequest,
+    EmailBodySource,
     EmailConnection,
+    EmailMessageBody,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
     EmailMetadataPage,
     EmailProviderCapabilities,
     EmailProviderCursor,
+    EmailProviderError,
+    EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef
-from app.services.sync_service import BackfillStateService, EmailSyncService, SyncService
+from app.services.sync_service import (
+    BackfillStateService,
+    EmailSyncRunState,
+    EmailSyncService,
+    SyncService,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 7, 5, 14, 0, tzinfo=UTC)
@@ -403,6 +416,202 @@ def test_run_backfill_page_does_not_advance_state_before_page_is_recorded(
     assert state.processed_message_count == 0
 
 
+def test_full_backfill_orchestrates_metadata_body_retention_and_progress(
+    tmp_path: Path,
+) -> None:
+    database_connection = migrated_connection(tmp_path)
+    backfill_state_service = BackfillStateService(
+        backfill_state_repository=BackfillStateRepository(database_connection),
+        sync_state_repository=SyncStateRepository(database_connection),
+    )
+    provider = RetainedBodyBackfillProvider(
+        pages=(
+            EmailMetadataPage(
+                messages=(
+                    candidate_metadata(
+                        gmail_account(),
+                        "msg-candidate-1",
+                        from_addr="notifications@mail.greenhouse.io",
+                        subject="Weekly digest",
+                    ),
+                    candidate_metadata(
+                        gmail_account(),
+                        "msg-newsletter",
+                        from_addr="news@example.com",
+                        subject="Product newsletter",
+                    ),
+                ),
+                next_page_token="page-2",
+            ),
+            EmailMetadataPage(
+                messages=(
+                    candidate_metadata(
+                        gmail_account(),
+                        "msg-candidate-2",
+                        from_addr="recruiting@example.com",
+                        subject="Next steps for your interview",
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=gmail_account(),
+                    value="history-complete",
+                    issued_at=NOW + timedelta(minutes=1),
+                ),
+            ),
+        )
+    )
+    sync_service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(database_connection),
+        clock=lambda: NOW,
+    )
+    email_provider_connection = email_connection()
+
+    status = asyncio.run(
+        sync_service.run_full_backfill(
+            connection=email_provider_connection,
+            backfill_state_service=backfill_state_service,
+        )
+    )
+
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert status.mode is EmailSyncMode.FULL_BACKFILL
+    assert status.page_count == 2
+    assert status.message_count == 3
+    assert status.raw_email_count == 3
+    assert [request.page_token for request in provider.requests] == [None, "page-2"]
+    assert [[ref.message_id for ref in request.refs] for request in provider.body_requests] == [
+        ["msg-candidate-1"],
+        ["msg-candidate-2"],
+    ]
+    rows = database_connection.execute(
+        "SELECT id, body_retention_state, body_text FROM raw_emails ORDER BY id"
+    ).fetchall()
+    assert [tuple(row) for row in rows] == [
+        ("msg-candidate-1", "retained", "Retained body for msg-candidate-1"),
+        ("msg-candidate-2", "retained", "Retained body for msg-candidate-2"),
+        ("msg-newsletter", "metadata_only", None),
+    ]
+    state = backfill_state_service.get_backfill_state(email_provider_connection.account)
+    assert state is not None
+    assert state.status is EmailBackfillStatus.COMPLETED
+    assert state.processed_page_count == 2
+    assert state.processed_message_count == 3
+    assert state.sync_cursor == "history-complete"
+    promoted_cursor = SyncService(
+        sync_state_repository=SyncStateRepository(database_connection),
+    ).get_sync_cursor(email_provider_connection.account)
+    assert promoted_cursor is not None
+    assert promoted_cursor.value == "history-complete"
+
+
+def test_full_backfill_marks_failure_without_advancing_page_progress(
+    tmp_path: Path,
+) -> None:
+    database_connection = migrated_connection(tmp_path)
+    backfill_state_service = BackfillStateService(
+        backfill_state_repository=BackfillStateRepository(database_connection),
+        sync_state_repository=SyncStateRepository(database_connection),
+    )
+    provider = FailingRetainedBodyBackfillProvider(
+        pages=(
+            EmailMetadataPage(
+                messages=(
+                    candidate_metadata(
+                        gmail_account(),
+                        "msg-candidate-1",
+                        from_addr="notifications@mail.greenhouse.io",
+                        subject="Application received",
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=gmail_account(),
+                    value="history-complete",
+                    issued_at=NOW + timedelta(minutes=1),
+                ),
+            ),
+        )
+    )
+    sync_service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(database_connection),
+        clock=lambda: NOW,
+    )
+    email_provider_connection = email_connection()
+
+    with pytest.raises(EmailProviderError, match="Gmail body fetching failed"):
+        asyncio.run(
+            sync_service.run_full_backfill(
+                connection=email_provider_connection,
+                backfill_state_service=backfill_state_service,
+            )
+        )
+
+    state = backfill_state_service.get_backfill_state(email_provider_connection.account)
+    assert state is not None
+    assert state.status is EmailBackfillStatus.FAILED
+    assert state.next_page_token is None
+    assert state.processed_page_count == 0
+    assert state.processed_message_count == 0
+    assert state.last_error == "Gmail body fetching failed"
+    assert sync_service.current_status().state is EmailSyncRunState.FAILED
+    assert sync_service.current_status().last_error == "Gmail body fetching failed"
+
+
+def test_full_backfill_marks_body_batch_failures_without_advancing_page_progress(
+    tmp_path: Path,
+) -> None:
+    database_connection = migrated_connection(tmp_path)
+    backfill_state_service = BackfillStateService(
+        backfill_state_repository=BackfillStateRepository(database_connection),
+        sync_state_repository=SyncStateRepository(database_connection),
+    )
+    provider = BodyFailureBackfillProvider(
+        pages=(
+            EmailMetadataPage(
+                messages=(
+                    candidate_metadata(
+                        gmail_account(),
+                        "msg-candidate-1",
+                        from_addr="notifications@mail.greenhouse.io",
+                        subject="Application received",
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=gmail_account(),
+                    value="history-complete",
+                    issued_at=NOW + timedelta(minutes=1),
+                ),
+            ),
+        )
+    )
+    sync_service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(database_connection),
+        clock=lambda: NOW,
+    )
+    email_provider_connection = email_connection()
+
+    with pytest.raises(EmailProviderError, match="retained email bodies could not be fetched"):
+        asyncio.run(
+            sync_service.run_full_backfill(
+                connection=email_provider_connection,
+                backfill_state_service=backfill_state_service,
+            )
+        )
+
+    state = backfill_state_service.get_backfill_state(email_provider_connection.account)
+    assert state is not None
+    assert state.status is EmailBackfillStatus.FAILED
+    assert state.next_page_token is None
+    assert state.processed_page_count == 0
+    assert state.processed_message_count == 0
+    assert state.last_error == "One or more retained email bodies could not be fetched."
+
+
 class PaginatedBackfillProvider:
     name = EmailProviderName.GMAIL
     capabilities = EmailProviderCapabilities(
@@ -439,6 +648,72 @@ class PaginatedBackfillProvider:
                 account=connection.account,
                 value="history-complete",
                 issued_at=NOW + timedelta(minutes=1),
+            ),
+        )
+
+
+class RetainedBodyBackfillProvider(PaginatedBackfillProvider):
+    def __init__(self, *, pages: tuple[EmailMetadataPage, ...]) -> None:
+        self.requests: list[EmailMetadataListRequest] = []
+        self.body_requests: list[EmailBodyFetchRequest] = []
+        self._pages = list(pages)
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        del connection
+        self.requests.append(request)
+        return self._pages.pop(0)
+
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        del connection
+        self.body_requests.append(request)
+        return EmailBodyBatch(
+            bodies=tuple(
+                EmailMessageBody(
+                    ref=ref,
+                    body_text=f"Retained body for {ref.message_id}",
+                    body_source=EmailBodySource.TEXT_PLAIN,
+                    truncated=False,
+                    fetched_at=NOW,
+                )
+                for ref in request.refs
+            )
+        )
+
+
+class FailingRetainedBodyBackfillProvider(RetainedBodyBackfillProvider):
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        del connection
+        self.body_requests.append(request)
+        raise EmailProviderError(public_message="Gmail body fetching failed")
+
+
+class BodyFailureBackfillProvider(RetainedBodyBackfillProvider):
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        del connection
+        self.body_requests.append(request)
+        return EmailBodyBatch(
+            bodies=(),
+            failures=(
+                EmailBodyFetchFailure(
+                    ref=request.refs[0],
+                    reason=EmailBodyFetchFailureReason.PERMISSION_DENIED,
+                ),
             ),
         )
 
@@ -482,4 +757,25 @@ def metadata_page(
         ),
         next_page_token=next_page_token,
         next_sync_cursor=next_sync_cursor,
+    )
+
+
+def candidate_metadata(
+    account: EmailAccountRef,
+    message_id: str,
+    *,
+    from_addr: str,
+    subject: str,
+) -> EmailMessageMetadata:
+    return EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id=message_id,
+            thread_id=f"thread-{message_id}",
+        ),
+        from_addr=EmailAddress(address=from_addr),
+        to_addrs=(EmailAddress(address=account.account_id),),
+        subject=subject,
+        sent_at=NOW,
+        labels=("INBOX",),
     )

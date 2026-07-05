@@ -609,6 +609,116 @@ class EmailSyncService:
             state=state,
         )
 
+    async def run_full_backfill(
+        self,
+        *,
+        connection: EmailConnection,
+        backfill_state_service: BackfillStateService,
+    ) -> EmailSyncStatus:
+        """Run a resumable full metadata backfill and retain candidate bodies."""
+
+        if self._email_repository is None:
+            raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
+        if self._status.state is EmailSyncRunState.RUNNING:
+            raise SyncAlreadyRunningError("Email sync is already running.")
+
+        started_at = self._clock()
+        self._set_status(
+            EmailSyncStatus(
+                provider=connection.account.provider,
+                account_id=connection.account.account_id,
+                state=EmailSyncRunState.RUNNING,
+                mode=EmailSyncMode.FULL_BACKFILL,
+                started_at=started_at,
+            )
+        )
+
+        page_count = 0
+        message_count = 0
+        try:
+            while True:
+                page_result = await self.run_backfill_page(
+                    connection=connection,
+                    backfill_state_service=backfill_state_service,
+                    updated_at=self._clock(),
+                )
+                page = page_result.page
+                if page.messages:
+                    self._email_repository.upsert_metadata_only(
+                        page.messages,
+                        ingested_at=self._clock(),
+                    )
+                    if _can_fetch_retained_bodies(self._body_provider):
+                        body_batch = await self.fetch_retained_bodies(
+                            connection=connection,
+                            metadata=page.messages,
+                            candidate_query=build_broad_candidate_query(),
+                        )
+                        _raise_for_retained_body_failures(body_batch)
+                        if body_batch.bodies:
+                            self._email_repository.upsert_retained_bodies(
+                                body_batch.bodies,
+                                retention_state=RawEmailBodyRetentionState.RETAINED,
+                            )
+
+                state = backfill_state_service.record_backfill_page(
+                    connection.account,
+                    page=page,
+                    expected_page_token=page_result.state.next_page_token,
+                    updated_at=self._clock(),
+                )
+                page_count = state.processed_page_count
+                message_count = state.processed_message_count
+                self._set_status(
+                    EmailSyncStatus(
+                        provider=connection.account.provider,
+                        account_id=connection.account.account_id,
+                        state=EmailSyncRunState.RUNNING,
+                        mode=EmailSyncMode.FULL_BACKFILL,
+                        started_at=started_at,
+                        page_count=page_count,
+                        message_count=message_count,
+                        raw_email_count=self._email_repository.count_raw_emails(
+                            provider=connection.account.provider,
+                        ),
+                    )
+                )
+                if state.status is EmailBackfillStatus.COMPLETED:
+                    break
+        except Exception as error:
+            public_error = _public_sync_error_message(error)
+            backfill_state_service.mark_backfill_failed(
+                connection.account,
+                public_error=public_error,
+                updated_at=self._clock(),
+            )
+            self._set_status(
+                self._status.model_copy(
+                    update={
+                        "state": EmailSyncRunState.FAILED,
+                        "finished_at": self._clock(),
+                        "last_error": public_error,
+                    }
+                )
+            )
+            raise
+
+        status = EmailSyncStatus(
+            provider=connection.account.provider,
+            account_id=connection.account.account_id,
+            state=EmailSyncRunState.SUCCEEDED,
+            mode=EmailSyncMode.FULL_BACKFILL,
+            started_at=started_at,
+            finished_at=self._clock(),
+            page_count=page_count,
+            message_count=message_count,
+            raw_email_count=self._email_repository.count_raw_emails(
+                provider=connection.account.provider,
+            ),
+        )
+        self._set_status(status)
+        return status
+
     async def fetch_retained_bodies(
         self,
         *,
@@ -722,6 +832,7 @@ class EmailSyncService:
                         metadata=page_result.page.messages,
                         candidate_query=build_broad_candidate_query(),
                     )
+                    _raise_for_retained_body_failures(body_batch)
                     if body_batch.bodies:
                         self._email_repository.upsert_retained_bodies(
                             body_batch.bodies,
@@ -795,6 +906,13 @@ def _retained_body_batch_size(body_provider: RetainedBodyProvider) -> int | None
 
 def _can_fetch_retained_bodies(body_provider: object) -> bool:
     return callable(getattr(body_provider, "fetch_message_bodies", None))
+
+
+def _raise_for_retained_body_failures(body_batch: EmailBodyBatch) -> None:
+    if body_batch.failures:
+        raise EmailProviderError(
+            public_message="One or more retained email bodies could not be fetched."
+        )
 
 
 def _chunk_refs(
