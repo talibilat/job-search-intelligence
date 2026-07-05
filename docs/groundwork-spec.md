@@ -149,6 +149,7 @@ EmailProvider -> metadata-only raw_emails
                  ├─ incremental sync: persisted provider-owned cursor required
                  ├─ expired cursor: restart resumable full metadata reconciliation
                  ├─ candidate query applied after listing
+                 └─ retained bodies fetched only for selected candidate/reconciliation refs
                  └─ retained bodies fetched only for selected candidate or debugging/reconciliation refs
                     and normalized to plain text before storage
                  │
