@@ -26,6 +26,8 @@ from app.providers.email import (
     EmailMetadataListRequest,
     EmailMetadataPage,
     EmailProvider,
+    EmailProviderAuthError,
+    EmailProviderErrorCode,
     EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef
@@ -62,6 +64,17 @@ class FakeSyncRuntime:
 
     def current_status(self) -> EmailSyncStatus:
         return self.status
+
+
+class ProviderErrorSyncRuntime:
+    async def run_manual_sync(self) -> EmailSyncStatus:
+        raise EmailProviderAuthError(
+            public_message="Reconnect Gmail to continue syncing.",
+            error_code=EmailProviderErrorCode.AUTHORIZATION_REQUIRED,
+        )
+
+    def current_status(self) -> EmailSyncStatus:
+        return EmailSyncStatus(state=EmailSyncRunState.IDLE)
 
 
 class FakeMetadataProvider:
@@ -154,6 +167,29 @@ def test_post_sync_returns_typed_error_until_gmail_connection_is_configured() ->
             "code": "bad_request",
             "message": "Gmail connection is not configured yet.",
             "details": [],
+        }
+    }
+
+
+def test_post_sync_returns_provider_error_response_from_global_handler() -> None:
+    app = create_app()
+    app.dependency_overrides[get_email_sync_runtime] = ProviderErrorSyncRuntime
+    client = TestClient(app)
+
+    response = client.post("/sync")
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "error": {
+            "code": "email_authorization_required",
+            "message": "Reconnect Gmail to continue syncing.",
+            "details": [
+                {
+                    "field": "email_provider",
+                    "message": "reconnect_email",
+                    "type": "user_action",
+                }
+            ],
         }
     }
 

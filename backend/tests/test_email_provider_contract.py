@@ -439,6 +439,8 @@ def test_email_provider_errors_expose_only_public_message() -> None:
     error = EmailProviderAuthError(public_message="reauth required")
 
     assert error.public_message == "reauth required"
+    assert error.error_code == "email_authorization_required"
+    assert error.user_action == "reconnect_email"
     assert str(error) == "reauth required"
     assert error.args == ("reauth required",)
 

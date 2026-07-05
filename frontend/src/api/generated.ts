@@ -10,6 +10,13 @@ export const ApiErrorCode = {
   bad_gateway: "bad_gateway",
   bad_request: "bad_request",
   conflict: "conflict",
+  email_authorization_required: "email_authorization_required",
+  email_insufficient_scope: "email_insufficient_scope",
+  email_invalid_provider_response: "email_invalid_provider_response",
+  email_provider_request_failed: "email_provider_request_failed",
+  email_rate_limited: "email_rate_limited",
+  email_sync_cursor_expired: "email_sync_cursor_expired",
+  email_temporarily_unavailable: "email_temporarily_unavailable",
   forbidden: "forbidden",
   http_error: "http_error",
   internal_error: "internal_error",
@@ -777,16 +784,47 @@ export type syncNowSyncPostResponse400 = {
   status: 400;
 };
 
+export type syncNowSyncPostResponse401 = {
+  data: ApiErrorResponse;
+  status: 401;
+};
+
+export type syncNowSyncPostResponse403 = {
+  data: ApiErrorResponse;
+  status: 403;
+};
+
 export type syncNowSyncPostResponse409 = {
   data: ApiErrorResponse;
   status: 409;
+};
+
+export type syncNowSyncPostResponse429 = {
+  data: ApiErrorResponse;
+  status: 429;
+};
+
+export type syncNowSyncPostResponse502 = {
+  data: ApiErrorResponse;
+  status: 502;
+};
+
+export type syncNowSyncPostResponse503 = {
+  data: ApiErrorResponse;
+  status: 503;
 };
 
 export type syncNowSyncPostResponseSuccess = syncNowSyncPostResponse200 & {
   headers: Headers;
 };
 export type syncNowSyncPostResponseError = (
-  syncNowSyncPostResponse400 | syncNowSyncPostResponse409
+  | syncNowSyncPostResponse400
+  | syncNowSyncPostResponse401
+  | syncNowSyncPostResponse403
+  | syncNowSyncPostResponse409
+  | syncNowSyncPostResponse429
+  | syncNowSyncPostResponse502
+  | syncNowSyncPostResponse503
 ) & {
   headers: Headers;
 };

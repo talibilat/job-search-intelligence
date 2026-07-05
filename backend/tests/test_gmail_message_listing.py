@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from email.message import Message
+from io import BytesIO
 from urllib.error import HTTPError
 
 import pytest
@@ -14,6 +15,7 @@ from app.providers.email import (
     EmailProviderAuthError,
     EmailProviderCursor,
     EmailProviderError,
+    EmailProviderTransientError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
 )
@@ -623,6 +625,106 @@ def test_gmail_message_lister_rejects_page_sizes_above_gmail_limit() -> None:
         )
 
     assert transport.calls == []
+
+
+def test_gmail_message_lister_maps_auth_failures_to_reconnect_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_http_error(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise HTTPError(
+            url="https://gmail.googleapis.com/gmail/v1/users/me/messages",
+            code=401,
+            msg="Unauthorized access-token-leaked",
+            hdrs=Message(),
+            fp=BytesIO(b'{"error":{"status":"UNAUTHENTICATED"}}'),
+        )
+
+    monkeypatch.setattr("app.providers.email.gmail.urlopen", raise_http_error)
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token-leaked")),
+        transport=UrllibGmailApiTransport(),
+    )
+
+    with pytest.raises(EmailProviderAuthError) as exc_info:
+        asyncio.run(
+            lister.list_message_metadata(
+                _connection(),
+                EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=500),
+            )
+        )
+
+    assert exc_info.value.public_message == "Reconnect Gmail to continue syncing."
+    assert exc_info.value.error_code == "email_authorization_required"
+    assert exc_info.value.user_action == "reconnect_email"
+    assert "access-token-leaked" not in repr(exc_info.value)
+
+
+def test_gmail_message_lister_maps_rate_limits_to_try_again_later(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_http_error(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise HTTPError(
+            url="https://gmail.googleapis.com/gmail/v1/users/me/messages",
+            code=429,
+            msg="Too Many Requests",
+            hdrs=Message(),
+            fp=BytesIO(b'{"error":{"status":"RESOURCE_EXHAUSTED"}}'),
+        )
+
+    monkeypatch.setattr("app.providers.email.gmail.urlopen", raise_http_error)
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=UrllibGmailApiTransport(),
+    )
+
+    with pytest.raises(EmailProviderTransientError) as exc_info:
+        asyncio.run(
+            lister.list_message_metadata(
+                _connection(),
+                EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=500),
+            )
+        )
+
+    assert exc_info.value.public_message == "Gmail rate limit reached. Try syncing again later."
+    assert exc_info.value.error_code == "email_rate_limited"
+    assert exc_info.value.user_action == "try_again_later"
+
+
+def test_gmail_message_lister_maps_nested_403_rate_limit_reason_to_try_again_later(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_http_error(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise HTTPError(
+            url="https://gmail.googleapis.com/gmail/v1/users/me/messages",
+            code=403,
+            msg="Forbidden",
+            hdrs=Message(),
+            fp=BytesIO(
+                b'{"error":{"status":"PERMISSION_DENIED",'
+                b'"errors":[{"reason":"rateLimitExceeded"}]}}'
+            ),
+        )
+
+    monkeypatch.setattr("app.providers.email.gmail.urlopen", raise_http_error)
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=UrllibGmailApiTransport(),
+    )
+
+    with pytest.raises(EmailProviderTransientError) as exc_info:
+        asyncio.run(
+            lister.list_message_metadata(
+                _connection(),
+                EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=500),
+            )
+        )
+
+    assert exc_info.value.public_message == "Gmail rate limit reached. Try syncing again later."
+    assert exc_info.value.error_code == "email_rate_limited"
+    assert exc_info.value.user_action == "try_again_later"
 
 
 def _connection() -> EmailConnection:

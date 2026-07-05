@@ -30,6 +30,13 @@
           "bad_gateway",
           "bad_request",
           "conflict",
+          "email_authorization_required",
+          "email_insufficient_scope",
+          "email_invalid_provider_response",
+          "email_provider_request_failed",
+          "email_rate_limited",
+          "email_sync_cursor_expired",
+          "email_temporarily_unavailable",
           "forbidden",
           "http_error",
           "internal_error",
@@ -1431,6 +1438,26 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "409": {
             "content": {
               "application/json": {
@@ -1440,6 +1467,36 @@
               }
             },
             "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Sync Now",

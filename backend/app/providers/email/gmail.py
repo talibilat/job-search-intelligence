@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.utils import getaddresses, parsedate_to_datetime
-from typing import Protocol, cast
+from typing import NoReturn, Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -38,7 +38,9 @@ from app.providers.email.provider import (
     EmailProviderCapabilities,
     EmailProviderCursor,
     EmailProviderError,
+    EmailProviderErrorCode,
     EmailProviderTransientError,
+    EmailProviderUserAction,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
 )
@@ -442,6 +444,7 @@ class GmailApiTransport(Protocol):
 @dataclass(frozen=True)
 class GmailApiRequestError(RuntimeError):
     status_code: int | None
+    reason: str | None = None
 
 
 class UrllibGmailApiTransport:
@@ -492,7 +495,10 @@ class UrllibGmailApiTransport:
                 raise EmailSyncCursorExpiredError(
                     public_message="Gmail incremental sync cursor expired"
                 ) from error
-            raise GmailApiRequestError(status_code=error.code) from error
+            raise GmailApiRequestError(
+                status_code=error.code,
+                reason=_gmail_error_reason(error),
+            ) from error
         except URLError as error:
             raise GmailApiRequestError(status_code=None) from error
 
@@ -500,10 +506,16 @@ class UrllibGmailApiTransport:
             raw_response = response_body.decode("utf-8")
             decoded_response = json.loads(raw_response)
         except (UnicodeDecodeError, json.JSONDecodeError):
-            raise EmailProviderError(public_message=_INVALID_DATA_MESSAGE) from None
+            raise EmailProviderError(
+                public_message=_INVALID_DATA_MESSAGE,
+                error_code=EmailProviderErrorCode.INVALID_PROVIDER_RESPONSE,
+            ) from None
 
         if not isinstance(decoded_response, dict):
-            raise EmailProviderError(public_message=_INVALID_DATA_MESSAGE)
+            raise EmailProviderError(
+                public_message=_INVALID_DATA_MESSAGE,
+                error_code=EmailProviderErrorCode.INVALID_PROVIDER_RESPONSE,
+            )
         return cast(dict[str, object], decoded_response)
 
 
@@ -706,7 +718,7 @@ class GmailMessageLister:
     ) -> EmailMetadataPage:
         history_response = _validate_gmail_response(
             GmailHistoryListResponse,
-            await self._transport.get_json(
+            await self._get_metadata_json(
                 _HISTORY_PATH,
                 query=history_query,
                 access_token=access_token,
@@ -745,7 +757,7 @@ class GmailMessageLister:
     ) -> EmailProviderCursor:
         profile = _validate_gmail_response(
             GmailProfileResponse,
-            await self._transport.get_json(
+            await self._get_metadata_json(
                 _PROFILE_PATH,
                 query=_profile_query(),
                 access_token=access_token,
@@ -853,19 +865,7 @@ class GmailMessageLister:
                 access_token=access_token,
             )
         except GmailApiRequestError as error:
-            if path == _HISTORY_PATH and error.status_code == 404:
-                raise EmailSyncCursorExpiredError(
-                    public_message="Gmail incremental sync cursor expired"
-                ) from error
-            if error.status_code in {401, 403}:
-                raise EmailProviderAuthError(
-                    public_message="Gmail authorization is required"
-                ) from error
-            if error.status_code in {429, 500, 502, 503, 504, None}:
-                raise EmailProviderTransientError(
-                    public_message="Gmail metadata listing is temporarily unavailable"
-                ) from error
-            raise EmailProviderError(public_message="Gmail metadata listing failed") from error
+            _raise_gmail_api_request_error(path=path, error=error)
 
     async def _get_body_json(
         self,
@@ -881,7 +881,10 @@ class GmailMessageLister:
                 access_token=access_token,
             )
         except HTTPError as error:
-            raise GmailApiRequestError(status_code=error.code) from error
+            raise GmailApiRequestError(
+                status_code=error.code,
+                reason=_gmail_error_reason(error),
+            ) from error
         except URLError as error:
             raise GmailApiRequestError(status_code=None) from error
 
@@ -1267,4 +1270,86 @@ def _validate_gmail_response[ModelT: BaseModel](
     try:
         return model.model_validate(response)
     except ValidationError:
-        raise EmailProviderError(public_message=public_message) from None
+        raise EmailProviderError(
+            public_message=public_message,
+            error_code=EmailProviderErrorCode.INVALID_PROVIDER_RESPONSE,
+        ) from None
+
+
+def _raise_gmail_api_request_error(*, path: str, error: GmailApiRequestError) -> NoReturn:
+    if path == _HISTORY_PATH and error.status_code == 404:
+        raise EmailSyncCursorExpiredError(
+            public_message="Gmail incremental sync cursor expired"
+        ) from error
+
+    if error.status_code == 401:
+        raise EmailProviderAuthError(
+            public_message="Reconnect Gmail to continue syncing.",
+            error_code=EmailProviderErrorCode.AUTHORIZATION_REQUIRED,
+            user_action=EmailProviderUserAction.RECONNECT_EMAIL,
+        ) from error
+
+    if error.status_code == 403 and error.reason in {
+        "rateLimitExceeded",
+        "userRateLimitExceeded",
+        "quotaExceeded",
+        "RESOURCE_EXHAUSTED",
+    }:
+        raise EmailProviderTransientError(
+            public_message="Gmail rate limit reached. Try syncing again later.",
+            error_code=EmailProviderErrorCode.RATE_LIMITED,
+            user_action=EmailProviderUserAction.TRY_AGAIN_LATER,
+        ) from error
+
+    if error.status_code == 403:
+        raise EmailProviderAuthError(
+            public_message="Grant Gmail read-only access to continue syncing.",
+            error_code=EmailProviderErrorCode.INSUFFICIENT_SCOPE,
+            user_action=EmailProviderUserAction.RECONNECT_EMAIL,
+        ) from error
+
+    if error.status_code == 429:
+        raise EmailProviderTransientError(
+            public_message="Gmail rate limit reached. Try syncing again later.",
+            error_code=EmailProviderErrorCode.RATE_LIMITED,
+            user_action=EmailProviderUserAction.TRY_AGAIN_LATER,
+        ) from error
+
+    if error.status_code in {500, 502, 503, 504, None}:
+        raise EmailProviderTransientError(
+            public_message="Gmail is temporarily unavailable. Try syncing again later.",
+            error_code=EmailProviderErrorCode.TEMPORARILY_UNAVAILABLE,
+            user_action=EmailProviderUserAction.TRY_AGAIN_LATER,
+        ) from error
+
+    raise EmailProviderError(
+        public_message="Gmail metadata listing failed. Try syncing again later.",
+        error_code=EmailProviderErrorCode.PROVIDER_REQUEST_FAILED,
+        user_action=EmailProviderUserAction.TRY_AGAIN_LATER,
+    ) from error
+
+
+def _gmail_error_reason(error: HTTPError) -> str | None:
+    try:
+        payload = json.loads(error.read().decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+    error_payload = payload.get("error")
+    if not isinstance(error_payload, dict):
+        return None
+
+    errors = error_payload.get("errors")
+    if isinstance(errors, list):
+        for item in errors:
+            if not isinstance(item, dict):
+                continue
+            reason = item.get("reason")
+            if isinstance(reason, str) and reason:
+                return reason
+    status = error_payload.get("status")
+    if isinstance(status, str) and status:
+        return status
+    return None
