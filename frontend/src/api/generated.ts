@@ -506,7 +506,7 @@ export const getGetProviderConfigConfigProvidersGetUrl = () => {
 };
 
 /**
- * Return selected provider config and non-secret supported-provider metadata.
+ * Return selected provider config plus recommended classification mode.
  * @summary Get Provider Config
  */
 export const getProviderConfigConfigProvidersGet = async (
@@ -557,7 +557,7 @@ export const getUpdateProviderConfigConfigProvidersPutUrl = () => {
 };
 
 /**
- * Validate and update the in-process provider config shell.
+ * Validate and update provider config, applying recommendations on provider changes.
  * @summary Update Provider Config
  */
 export const updateProviderConfigConfigProvidersPut = async (
@@ -711,7 +711,7 @@ export const getSetupSubmitSetupPostUrl = () => {
 };
 
 /**
- * Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets.
+ * Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets. When classification_mode is omitted, the backend applies the selected provider recommendation before validation.
  * @summary Submit first-run setup choices
  */
 export const setupSubmitSetupPost = async (
@@ -754,7 +754,7 @@ export const getSetupStatusSetupStatusGetUrl = () => {
 };
 
 /**
- * Report the Phase 0 setup shell without validating or exposing secrets.
+ * Report setup status plus current and recommended classification modes.
  * @summary Setup Status
  */
 export const setupStatusSetupStatusGet = async (

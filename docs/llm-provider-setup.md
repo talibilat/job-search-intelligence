@@ -22,7 +22,7 @@ The current backend has the `SecretStore` protocol, backend selector settings, t
 Use Ollama when privacy and offline local execution matter more than model quality or speed.
 Use Azure OpenAI when you want stronger hosted model quality and accept that configured LLM requests leave the machine for your Azure resource.
 
-Default setup pairings should follow the selected provider.
+Default setup recommendations follow the selected provider when the user has not explicitly chosen a mode.
 Use `local` with Ollama by default.
 Use `hybrid` with Azure OpenAI for the default cost-controlled hosted path, where the heuristic filter narrows the inbox before hosted classification.
 Use `llm` only when you intentionally want every ingested email to go through the selected LLM provider; with Azure OpenAI this sends every ingested email selected for classification to the hosted model.
@@ -97,7 +97,7 @@ If you change model names, update both the setup value and any local model pulls
 ## Readiness Checklist
 
 - The selected LLM provider is either `azure_openai` or `ollama`.
-- `classification_mode` follows the intended default pairing for that provider unless the user explicitly chooses another supported non-local mode.
+- `classification_mode` follows the intended default pairing for that provider unless the user explicitly chooses another provider-valid mode; Azure OpenAI still rejects `local`.
 - Azure OpenAI has endpoint, API version, chat deployment, embedding deployment, and an API key stored through `SecretStore`.
 - Ollama has a reachable local base URL and the configured chat and embedding models are pulled locally.
 - Gmail setup still uses `gmail.readonly` and a user-owned Google OAuth client.

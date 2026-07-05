@@ -37,7 +37,7 @@ def get_provider_config(
     settings: Annotated[AppSettings, Depends(get_settings)],
     registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
 ) -> ProviderConfigResponse:
-    """Return selected provider config and non-secret supported-provider metadata."""
+    """Return selected provider config plus recommended classification mode."""
 
     return build_provider_config_response(settings, registry)
 
@@ -48,7 +48,7 @@ def update_provider_config(
     settings: Annotated[AppSettings, Depends(get_settings)],
     registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
 ) -> ProviderConfigResponse:
-    """Validate and update the in-process provider config shell."""
+    """Validate and update provider config, applying recommendations on provider changes."""
 
     try:
         return apply_provider_config_update(settings, request, registry)
