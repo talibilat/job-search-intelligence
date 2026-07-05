@@ -38,7 +38,7 @@ _INVALID_RESPONSE_MESSAGE = "Azure OpenAI returned an invalid response."
 class AzureOpenAIChatMessageResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    content: str = Field(min_length=1)
+    content: str | None = None
 
 
 class AzureOpenAIChatChoiceResponse(BaseModel):
@@ -81,6 +81,7 @@ class AzureOpenAITransport(Protocol):
 class AzureOpenAITransportError(RuntimeError):
     status_code: int | None
     reason: str | None = None
+    is_timeout: bool = False
 
 
 class UrllibAzureOpenAITransport:
@@ -128,11 +129,16 @@ class UrllibAzureOpenAITransport:
                 reason=error.reason,
             ) from error
         except TimeoutError as error:
-            raise AzureOpenAITransportError(status_code=None, reason="timeout") from error
+            raise AzureOpenAITransportError(
+                status_code=None,
+                reason="timeout",
+                is_timeout=True,
+            ) from error
         except URLError as error:
             raise AzureOpenAITransportError(
                 status_code=None,
                 reason=str(error.reason),
+                is_timeout=isinstance(error.reason, TimeoutError),
             ) from error
 
         try:
@@ -193,10 +199,12 @@ class AzureOpenAIProvider:
             raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from error
 
         choice = azure_response.choices[0]
+        finish_reason = _finish_reason(choice.finish_reason)
+        content = _completion_content(choice, finish_reason)
         return LLMGenerationResponse(
-            content=choice.message.content,
+            content=content,
             model=azure_response.model or deployment,
-            finish_reason=_finish_reason(choice.finish_reason),
+            finish_reason=finish_reason,
             usage=_token_usage(azure_response.usage),
         )
 
@@ -253,6 +261,18 @@ def _finish_reason(raw_finish_reason: str | None) -> LLMFinishReason:
     return LLMFinishReason.UNKNOWN
 
 
+def _completion_content(
+    choice: AzureOpenAIChatChoiceResponse,
+    finish_reason: LLMFinishReason,
+) -> str:
+    content = choice.message.content
+    if content:
+        return content
+    if finish_reason is LLMFinishReason.CONTENT_FILTER:
+        return ""
+    raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE)
+
+
 def _token_usage(usage: AzureOpenAIUsageResponse | None) -> LLMTokenUsage | None:
     if usage is None:
         return None
@@ -264,11 +284,11 @@ def _token_usage(usage: AzureOpenAIUsageResponse | None) -> LLMTokenUsage | None
 
 
 def _raise_provider_error_for_transport_error(error: AzureOpenAITransportError) -> NoReturn:
-    if error.status_code is None:
+    if error.is_timeout or error.reason == "timeout":
         raise LLMProviderTimeoutError(
             public_message="Azure OpenAI request timed out."
         ) from error
-    if error.status_code in _TRANSIENT_STATUS_CODES:
+    if error.status_code is None or error.status_code in _TRANSIENT_STATUS_CODES:
         raise LLMProviderUnavailableError(
             public_message="Azure OpenAI is temporarily unavailable."
         ) from error

@@ -13,6 +13,7 @@ from app.providers.llm import (
     LLMMessageRole,
     LLMProvider,
     LLMProviderResponseError,
+    LLMProviderTimeoutError,
     LLMProviderUnavailableError,
     LLMResponseFormat,
     LLMTokenUsage,
@@ -211,6 +212,29 @@ def test_azure_openai_provider_uses_request_model_as_deployment_override() -> No
     assert response.finish_reason is LLMFinishReason.LENGTH
 
 
+def test_azure_openai_provider_allows_empty_filtered_completion() -> None:
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=FakeSecretStore("secret-api-key"),
+        transport=FakeAzureTransport(
+            response={
+                "model": "gpt-4o-mini",
+                "choices": [
+                    {
+                        "message": {"content": ""},
+                        "finish_reason": "content_filter",
+                    }
+                ],
+            }
+        ),
+    )
+
+    response = asyncio.run(provider.generate(generation_request()))
+
+    assert response.content == ""
+    assert response.finish_reason is LLMFinishReason.CONTENT_FILTER
+
+
 def test_azure_openai_provider_requires_secret_store_api_key() -> None:
     transport = FakeAzureTransport()
     provider = AzureOpenAIProvider(
@@ -245,6 +269,39 @@ def test_azure_openai_provider_maps_transient_transport_errors() -> None:
         settings=azure_settings(),
         secret_store=FakeSecretStore("secret-api-key"),
         transport=FakeAzureTransport(error=AzureOpenAITransportError(status_code=429)),
+    )
+
+    with pytest.raises(LLMProviderUnavailableError) as error:
+        asyncio.run(provider.generate(generation_request()))
+
+    assert str(error.value) == "Azure OpenAI is temporarily unavailable."
+
+
+def test_azure_openai_provider_maps_timeout_transport_errors() -> None:
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=FakeSecretStore("secret-api-key"),
+        transport=FakeAzureTransport(
+            error=AzureOpenAITransportError(status_code=None, reason="timeout")
+        ),
+    )
+
+    with pytest.raises(LLMProviderTimeoutError) as error:
+        asyncio.run(provider.generate(generation_request()))
+
+    assert str(error.value) == "Azure OpenAI request timed out."
+
+
+def test_azure_openai_provider_maps_non_timeout_transport_errors() -> None:
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=FakeSecretStore("secret-api-key"),
+        transport=FakeAzureTransport(
+            error=AzureOpenAITransportError(
+                status_code=None,
+                reason="[Errno 8] nodename nor servname provided",
+            )
+        ),
     )
 
     with pytest.raises(LLMProviderUnavailableError) as error:
