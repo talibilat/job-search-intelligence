@@ -1,6 +1,7 @@
 """Email provider Strategy interface and implementations."""
 
 from .gmail import GmailEmailProvider
+from .html_normalization import normalize_email_html_to_text
 from .provider import (
     EmailAccountRef,
     EmailAddress,
@@ -30,7 +31,6 @@ from .provider import (
     EmailSyncCursorExpiredError,
     EmailSyncMode,
     build_broad_candidate_query,
-    normalize_email_html_to_text,
 )
 
 __all__ = [

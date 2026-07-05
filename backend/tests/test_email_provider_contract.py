@@ -294,8 +294,25 @@ def test_html_message_body_is_normalized_to_safe_text() -> None:
     assert body.body_text == (
         "Application update\n"
         "Thanks for applying to Example Corp.\n"
-        "View your status (https://example.test/status)."
+        "View your status."
     )
+
+
+def test_message_body_normalizes_html_even_when_provider_mislabels_source() -> None:
+    account = EmailAccountRef(
+        provider=EmailProviderName.GMAIL,
+        account_id="me@example.com",
+    )
+
+    body = EmailMessageBody(
+        ref=EmailMessageRef(account=account, message_id="msg-1"),
+        body_text="<p>Application <strong>update</strong></p>",
+        body_source=EmailBodySource.TEXT_PLAIN,
+        truncated=False,
+        fetched_at=NOW,
+    )
+
+    assert body.body_text == "Application update"
 
 
 def test_email_body_rejects_raw_html_storage_field() -> None:
