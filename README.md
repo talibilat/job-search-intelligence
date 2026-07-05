@@ -14,6 +14,7 @@ Phase 0 (Groundwork).
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health, setup, provider config, and local wipe-data routes, typed settings and API errors, the keyring-backed `SecretStore` adapter, provider registry, backend `LLMProvider` and `EmailProvider` Strategy interfaces, an async SQLite engine module with sqlite-vec loading, `vec_version()` verification, and Phase 0 connection PRAGMAs, shared SQLite URL parsing, shared SQLite repository helpers, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the synthetic fixture DTO contract, sample fixture, and SQLite fixture loader, the backend OpenAPI schema generator, root pre-commit configuration, backend and frontend CI workflows, and the frontend Vite React TypeScript shell with Orval API client generation, Recharts foundation, route-query helpers, shared accessible UI primitives, and npm API contract, typecheck, lint, Vitest, and build gate scripts.
 Concrete Gmail provider behavior and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health, setup, provider config, and local wipe-data routes, typed settings and API errors, the keyring-backed `SecretStore` adapter, provider registry, backend `LLMProvider` and `EmailProvider` Strategy interfaces, an async SQLite engine module with Phase 0 connection PRAGMAs, shared SQLite URL parsing, an Alembic migration environment, shared SQLite repository helpers, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the synthetic fixture DTO contract, sample fixture, and SQLite fixture loader, the backend OpenAPI schema generator, root pre-commit configuration, backend and frontend CI workflows, and the frontend Vite React TypeScript shell with Orval API client generation, Recharts foundation, route-query helpers, shared accessible UI primitives, setup and sync-readiness shell copy, npm API contract, typecheck, lint, Vitest, build gate scripts, and a Chromium Playwright smoke harness for the current Phase 0 browser shell.
+The frontend shell keeps the root overview page intact and adds a `/setup` first-run setup page shell with primary navigation, disabled setup actions, setup checklist, provider and classification mode copy, Gmail read-only boundary copy, privacy copy, and an explicit not-ready state until later backend persistence and OAuth wiring land.
 Concrete Gmail provider behavior, product pages, the first application schema revision, sqlite-vec engine loading, and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
@@ -160,7 +161,7 @@ From `frontend/`:
 npm run dev
 ```
 
-Vite serves the Phase 0 frontend shell locally, usually at `http://127.0.0.1:5173/`.
+Vite serves the Phase 0 frontend shell locally, usually at `http://127.0.0.1:5173/`, with the setup shell at `http://127.0.0.1:5173/setup`.
 Keep the backend running separately on `127.0.0.1:8000` when testing API-backed flows.
 
 ### 7. Smoke-check the local setup
@@ -234,7 +235,8 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - Current TypeScript API client generation: run `npm run generate:api` from `frontend/` to regenerate `src/api/openapi.json` through the backend script and then generate the Orval fetch client at `src/api/generated.ts`.
 - Frontend API contract check: `npm run check` includes `check:api` so stale generated API artifacts fail before typecheck, lint, and build.
 - Current backend type check: `uv run mypy` from `backend/`.
-- Current frontend setup copy: `frontend/src/setupWizardCopy.ts` defines the Phase 0 card copy for LLM provider, classification mode, Gmail read-only OAuth, and privacy-boundary choices while the full wizard flow is still scaffolded.
+- Current frontend setup page shell: `frontend/src/pages/SetupPage.tsx` renders the `/setup` Phase 0 shell with disabled setup actions, setup checklist, provider, classification mode, Gmail read-only OAuth, privacy-boundary, and not-ready copy while real setup persistence, secrets, and OAuth flows remain later work.
+- Current frontend setup copy: `frontend/src/setupWizardCopy.ts` defines the Phase 0 card copy that the setup page shell renders for LLM provider, classification mode, Gmail read-only OAuth, and privacy-boundary choices while the full wizard flow is still scaffolded.
 - Setup copy smoke test: `uv run pytest tests/test_setup_wizard_copy.py -v` from `backend/` verifies the static copy keeps the required provider, mode, Gmail, `SecretStore`, and privacy terms visible.
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
 - Current backend lint check: run `uv run ruff check .` from `backend/`.
