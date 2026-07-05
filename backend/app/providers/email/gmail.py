@@ -787,15 +787,18 @@ class GmailMessageLister:
                 failures.append(EmailBodyFetchFailure(ref=ref, reason=retained_body))
                 continue
 
-            bodies.append(
-                EmailMessageBody(
-                    ref=ref,
-                    body_text=retained_body.body_text,
-                    body_source=retained_body.body_source,
-                    truncated=retained_body.truncated,
-                    fetched_at=fetched_at,
+            try:
+                bodies.append(
+                    EmailMessageBody(
+                        ref=ref,
+                        body_text=retained_body.body_text,
+                        body_source=retained_body.body_source,
+                        truncated=retained_body.truncated,
+                        fetched_at=fetched_at,
+                    )
                 )
-            )
+            except ValidationError:
+                raise EmailProviderError(public_message=_INVALID_BODY_DATA_MESSAGE) from None
 
         return EmailBodyBatch(bodies=tuple(bodies), failures=tuple(failures))
 
@@ -1044,10 +1047,16 @@ def _retained_body_from_payload(
         else:
             html_parts.append((body_text, truncated))
 
-    if plain_parts:
-        return _retained_body_from_parts(plain_parts, EmailBodySource.TEXT_PLAIN)
-    if html_parts:
-        return _retained_body_from_parts(html_parts, EmailBodySource.HTML_CONVERTED)
+    plain_body = _retained_body_from_parts(plain_parts, EmailBodySource.TEXT_PLAIN)
+    html_body = _retained_body_from_parts(html_parts, EmailBodySource.HTML_CONVERTED)
+    if plain_body is not None and plain_body.body_text:
+        return plain_body
+    if html_body is not None and html_body.body_text:
+        return html_body
+    if plain_body is not None:
+        return plain_body
+    if html_body is not None:
+        return html_body
     if saw_text_payload:
         return EmailBodyFetchFailureReason.EMPTY
     return EmailBodyFetchFailureReason.UNSUPPORTED_CONTENT
@@ -1079,20 +1088,23 @@ def _decode_body_text(encoded_body: str, *, max_body_bytes: int | None) -> tuple
     except (binascii.Error, UnicodeEncodeError) as error:
         raise EmailProviderError(public_message=_INVALID_BODY_DATA_MESSAGE) from error
 
-    truncated = max_body_bytes is not None and len(body_bytes) > max_body_bytes
-    if max_body_bytes is not None:
-        body_bytes = body_bytes[:max_body_bytes]
-
     try:
-        return body_bytes.decode("utf-8"), truncated
+        body_text = body_bytes.decode("utf-8")
     except UnicodeDecodeError as error:
         raise EmailProviderError(public_message=_INVALID_BODY_DATA_MESSAGE) from error
+
+    truncated = max_body_bytes is not None and len(body_bytes) > max_body_bytes
+    if max_body_bytes is not None and truncated:
+        body_text = body_bytes[:max_body_bytes].decode("utf-8", errors="ignore")
+    return body_text, truncated
 
 
 def _retained_body_from_parts(
     parts: list[tuple[str, bool]],
     body_source: EmailBodySource,
-) -> RetainedGmailBody:
+) -> RetainedGmailBody | None:
+    if not parts:
+        return None
     body_text = "\n\n".join(text for text, _truncated in parts)
     return RetainedGmailBody(
         body_text=body_text,

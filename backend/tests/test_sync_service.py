@@ -108,6 +108,17 @@ class RecordingHistoryProvider:
 
 
 class RecordingRetainedBodyProvider(RecordingHistoryProvider):
+    capabilities = EmailProviderCapabilities(
+        provider=EmailProviderName.GMAIL,
+        required_scopes=(GMAIL_READONLY_SCOPE,),
+        supports_oauth=True,
+        supports_full_backfill=True,
+        supports_incremental_sync=True,
+        attachment_policy=EmailAttachmentPolicy.IGNORED,
+        max_metadata_page_size=500,
+        max_body_batch_size=100,
+    )
+
     def __init__(self) -> None:
         super().__init__()
         self.body_requests: list[EmailBodyFetchRequest] = []
@@ -727,6 +738,40 @@ def test_sync_service_fetches_retained_bodies_only_for_candidates_and_debug_refs
         "msg-debugging",
     ]
     assert provider.body_requests[0].max_body_bytes == 10_000
+
+
+def test_sync_service_chunks_retained_body_fetches_by_provider_limit() -> None:
+    provider = RecordingRetainedBodyProvider()
+    service = EmailSyncService(provider=provider, page_size=250)
+    connection = email_connection()
+    metadata = tuple(
+        EmailMessageMetadata(
+            ref=EmailMessageRef(
+                account=connection.account,
+                message_id=f"msg-candidate-{index}",
+                thread_id=f"thread-candidate-{index}",
+            ),
+            from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+            subject="Application received",
+            labels=("INBOX",),
+        )
+        for index in range(101)
+    )
+
+    batch = asyncio.run(
+        service.fetch_retained_bodies(
+            connection=connection,
+            metadata=metadata,
+            candidate_query=build_broad_candidate_query(),
+            max_body_bytes=10_000,
+        )
+    )
+
+    assert len(batch.bodies) == 101
+    assert [len(request.refs) for request in provider.body_requests] == [100, 1]
+    assert provider.body_requests[0].refs[0].message_id == "msg-candidate-0"
+    assert provider.body_requests[1].refs[0].message_id == "msg-candidate-100"
+    assert all(request.max_body_bytes == 10_000 for request in provider.body_requests)
 
 
 def email_connection() -> EmailConnection:

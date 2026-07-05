@@ -15,13 +15,16 @@ from app.models.records import EmailBackfillStateRecord, EmailBackfillStatus, Em
 from app.providers.email import (
     EmailAccountRef,
     EmailBodyBatch,
+    EmailBodyFetchFailure,
     EmailBodyFetchRequest,
     EmailCandidateQuery,
     EmailConnection,
+    EmailMessageBody,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
     EmailMetadataPage,
+    EmailProviderCapabilities,
     EmailProviderCursor,
     EmailProviderError,
     EmailSyncCursorExpiredError,
@@ -630,13 +633,23 @@ class EmailSyncService:
         if not selected_refs:
             return EmailBodyBatch(bodies=(), failures=())
 
-        return await self._body_provider.fetch_message_bodies(
-            connection,
-            EmailBodyFetchRequest(
-                refs=tuple(selected_refs),
-                max_body_bytes=max_body_bytes,
-            ),
-        )
+        bodies: list[EmailMessageBody] = []
+        failures: list[EmailBodyFetchFailure] = []
+        for ref_chunk in _chunk_refs(
+            selected_refs,
+            chunk_size=_retained_body_batch_size(self._body_provider) or len(selected_refs),
+        ):
+            batch = await self._body_provider.fetch_message_bodies(
+                connection,
+                EmailBodyFetchRequest(
+                    refs=ref_chunk,
+                    max_body_bytes=max_body_bytes,
+                ),
+            )
+            bodies.extend(batch.bodies)
+            failures.extend(batch.failures)
+
+        return EmailBodyBatch(bodies=tuple(bodies), failures=tuple(failures))
 
     async def _list_full_backfill_page(
         self,
@@ -754,6 +767,23 @@ class EmailSyncService:
             ),
             recovered_from_expired_cursor=recovered_from_expired_cursor,
         )
+
+
+def _retained_body_batch_size(body_provider: RetainedBodyProvider) -> int | None:
+    capabilities = getattr(body_provider, "capabilities", None)
+    if not isinstance(capabilities, EmailProviderCapabilities):
+        return None
+    return capabilities.max_body_batch_size
+
+
+def _chunk_refs(
+    refs: list[EmailMessageRef],
+    *,
+    chunk_size: int,
+) -> tuple[tuple[EmailMessageRef, ...], ...]:
+    return tuple(
+        tuple(refs[index : index + chunk_size]) for index in range(0, len(refs), chunk_size)
+    )
 
 
 def build_idle_sync_status(*, now: datetime | None = None) -> SyncJobStatus:

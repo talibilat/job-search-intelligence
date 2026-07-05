@@ -125,6 +125,50 @@ class FakeGmailTransport:
                 "payload": {"mimeType": "text/plain", "body": {}},
             }
 
+        if path == "/gmail/v1/users/me/messages/msg-mislabelled-html":
+            return {
+                "id": "msg-mislabelled-html",
+                "threadId": "thread-mislabelled-html",
+                "payload": {
+                    "mimeType": "text/plain",
+                    "body": {
+                        "data": _gmail_body_data(
+                            "<p>Sensitive application update from Example Corp.</p>"
+                        )
+                    },
+                },
+            }
+
+        if path == "/gmail/v1/users/me/messages/msg-empty-plain-with-html":
+            return {
+                "id": "msg-empty-plain-with-html",
+                "threadId": "thread-empty-plain-with-html",
+                "payload": {
+                    "mimeType": "multipart/alternative",
+                    "parts": [
+                        {"mimeType": "text/plain", "body": {"data": _gmail_body_data("")}},
+                        {
+                            "mimeType": "text/html",
+                            "body": {
+                                "data": _gmail_body_data(
+                                    "<h1>Application update</h1><p>Book an interview.</p>"
+                                )
+                            },
+                        },
+                    ],
+                },
+            }
+
+        if path == "/gmail/v1/users/me/messages/msg-unicode":
+            return {
+                "id": "msg-unicode",
+                "threadId": "thread-unicode",
+                "payload": {
+                    "mimeType": "text/plain",
+                    "body": {"data": _gmail_body_data("éé")},
+                },
+            }
+
         raise AssertionError(f"unexpected Gmail path: {path}")
 
 
@@ -453,3 +497,97 @@ def test_gmail_email_provider_returns_empty_failure_when_body_has_no_text() -> N
     assert len(batch.failures) == 1
     assert batch.failures[0].ref.message_id == "msg-empty"
     assert batch.failures[0].reason is EmailBodyFetchFailureReason.EMPTY
+
+
+def test_gmail_email_provider_sanitizes_body_dto_validation_errors() -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    provider = GmailEmailProvider(
+        settings=_settings(),
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=FakeGmailTransport(),
+    )
+    connection = _connection()
+
+    with pytest.raises(EmailProviderError) as error_info:
+        asyncio.run(
+            provider.fetch_message_bodies(
+                connection,
+                EmailBodyFetchRequest(
+                    refs=(
+                        EmailMessageRef(
+                            account=connection.account,
+                            message_id="msg-mislabelled-html",
+                            thread_id="thread-mislabelled-html",
+                        ),
+                    ),
+                ),
+            )
+        )
+
+    assert error_info.value.public_message == "Gmail body fetching returned invalid data"
+    assert "Sensitive application update" not in str(error_info.value)
+    assert error_info.value.__cause__ is None
+
+
+def test_gmail_email_provider_uses_html_when_plain_alternative_is_empty() -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    provider = GmailEmailProvider(
+        settings=_settings(),
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=FakeGmailTransport(),
+    )
+    connection = _connection()
+
+    batch = asyncio.run(
+        provider.fetch_message_bodies(
+            connection,
+            EmailBodyFetchRequest(
+                refs=(
+                    EmailMessageRef(
+                        account=connection.account,
+                        message_id="msg-empty-plain-with-html",
+                        thread_id="thread-empty-plain-with-html",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert batch.failures == ()
+    assert len(batch.bodies) == 1
+    assert batch.bodies[0].body_text == "Application update\nBook an interview."
+    assert batch.bodies[0].body_source is EmailBodySource.HTML_CONVERTED
+
+
+def test_gmail_email_provider_truncates_without_splitting_utf8_characters() -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    provider = GmailEmailProvider(
+        settings=_settings(),
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=FakeGmailTransport(),
+    )
+    connection = _connection()
+
+    batch = asyncio.run(
+        provider.fetch_message_bodies(
+            connection,
+            EmailBodyFetchRequest(
+                refs=(
+                    EmailMessageRef(
+                        account=connection.account,
+                        message_id="msg-unicode",
+                        thread_id="thread-unicode",
+                    ),
+                ),
+                max_body_bytes=3,
+            ),
+        )
+    )
+
+    assert batch.failures == ()
+    assert len(batch.bodies) == 1
+    assert batch.bodies[0].body_text == "é"
+    assert batch.bodies[0].truncated is True
