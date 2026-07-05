@@ -2,13 +2,28 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
 
+afterEach(() => {
+  cleanup();
+  window.history.pushState({}, "", "/");
+});
+
 describe("App", () => {
-  afterEach(() => {
-    cleanup();
-    window.history.pushState({}, "", "/");
+  it("renders the insights page shell on the insights route", () => {
+    window.history.pushState({}, "", "/insights");
+
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Insights" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Narrative insights are not generated yet."),
+    ).toBeTruthy();
   });
 
   it("shows a chart foundation empty state without implementing dashboard metrics", () => {
+    window.history.pushState({}, "", "/");
+
     render(<App />);
 
     expect(
