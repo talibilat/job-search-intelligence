@@ -84,6 +84,9 @@ Synthetic fixtures share the backend raw-email retention enum, so obsolete value
 
 Fixture enum values mirror the planned database contract:
 
+The first `body_retention_state` bullet is historical only and is not valid for current fixtures.
+Use the second `body_retention_state` bullet as the current contract.
+
 - `body_retention_state`: `metadata_only`, `retained`, `omitted`
 - `body_retention_state`: `metadata_only`, `retained`, `debugging`
 [JT-065 2026-07-05 v3] Current `body_retention_state` values are `metadata_only`, `retained`, and `debugging`; keep the previous line only as historical context.
