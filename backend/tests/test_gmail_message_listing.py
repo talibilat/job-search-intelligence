@@ -140,7 +140,12 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
     assert page.messages[0].body_text is None
     assert not hasattr(page.messages[0], "snippet")
 
-    list_path, list_query, list_token = transport.calls[0]
+    profile_path, profile_query, profile_token = transport.calls[0]
+    assert profile_path == "/gmail/v1/users/me/profile"
+    assert dict(profile_query) == {"fields": "historyId"}
+    assert profile_token == "access-token"
+
+    list_path, list_query, list_token = transport.calls[1]
     assert list_path == "/gmail/v1/users/me/messages"
     assert dict(list_query) == {
         "fields": "messages(id,threadId),nextPageToken",
@@ -148,7 +153,7 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
     }
     assert list_token == "access-token"
 
-    for path, query, token in transport.calls[1:]:
+    for path, query, token in transport.calls[2:]:
         assert path.startswith("/gmail/v1/users/me/messages/msg-")
         assert ("format", "metadata") in query
         assert token == "access-token"
@@ -191,12 +196,12 @@ def test_gmail_message_lister_handles_empty_pages_without_metadata_fetches() -> 
     assert page.next_sync_cursor is not None
     assert page.next_sync_cursor.value == "history-empty"
     assert [call[0] for call in transport.calls] == [
-        "/gmail/v1/users/me/messages",
         "/gmail/v1/users/me/profile",
+        "/gmail/v1/users/me/messages",
     ]
 
 
-def test_gmail_message_lister_returns_profile_history_id_on_final_page() -> None:
+def test_gmail_message_lister_returns_captured_profile_history_id_on_final_page() -> None:
     class FinalPageTransport(FakeGmailTransport):
         async def get_json(
             self,
@@ -229,8 +234,8 @@ def test_gmail_message_lister_returns_profile_history_id_on_final_page() -> None
     assert page.next_sync_cursor is not None
     assert page.next_sync_cursor.value == "history-complete"
     assert [call[0] for call in transport.calls] == [
-        "/gmail/v1/users/me/messages",
         "/gmail/v1/users/me/profile",
+        "/gmail/v1/users/me/messages",
     ]
 
 

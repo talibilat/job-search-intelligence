@@ -76,9 +76,6 @@ class FakeGmailTransport:
                 "sizeEstimate": 2048,
             }
 
-        if path == "/gmail/v1/users/me/profile":
-            return {"historyId": "history-complete"}
-
         raise AssertionError(f"unexpected Gmail path: {path}")
 
 
@@ -311,11 +308,11 @@ def test_gmail_email_provider_lists_message_metadata_with_configured_secret_stor
     assert message.body_text is None
     assert not hasattr(message, "snippet")
     assert page.next_sync_cursor is not None
-    assert page.next_sync_cursor.value == "history-complete"
+    assert page.next_sync_cursor.value == "12345"
 
     assert [call[0] for call in transport.calls] == [
+        "/gmail/v1/users/me/profile",
         "/gmail/v1/users/me/messages",
         "/gmail/v1/users/me/messages/msg-1",
-        "/gmail/v1/users/me/profile",
     ]
     assert {call[2] for call in transport.calls} == {"access-token"}
