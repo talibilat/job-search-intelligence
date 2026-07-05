@@ -30,23 +30,6 @@ class SyncService:
     def get_sync_cursor(self, account: EmailAccountRef) -> EmailProviderCursor | None:
         return self._sync_state_repository.get_cursor(account)
 
-    def get_sync_status(self, account: EmailAccountRef) -> EmailSyncStatus:
-        state = self._sync_state_repository.fetch_state(account)
-        if state is None:
-            return EmailSyncStatus(
-                account=account,
-                has_sync_cursor=False,
-                last_cursor_issued_at=None,
-                last_synced_at=None,
-            )
-
-        return EmailSyncStatus(
-            account=account,
-            has_sync_cursor=True,
-            last_cursor_issued_at=state.cursor_issued_at,
-            last_synced_at=state.updated_at,
-        )
-
     def store_sync_cursor(
         self,
         cursor: EmailProviderCursor,
@@ -57,17 +40,6 @@ class SyncService:
             cursor,
             updated_at=updated_at or datetime.now(UTC),
         )
-
-
-class EmailSyncStatus(BaseModel):
-    """Public sync status without exposing opaque provider cursor values."""
-
-    model_config = ConfigDict(frozen=True)
-
-    account: EmailAccountRef
-    has_sync_cursor: bool
-    last_cursor_issued_at: datetime | None
-    last_synced_at: datetime | None
 
 
 class MetadataListingProvider(Protocol):
@@ -151,39 +123,6 @@ class EmailSyncService:
             )
 
         return EmailSyncPageResult(mode=EmailSyncMode.INCREMENTAL, page=page)
-
-    async def list_metadata_pages(
-        self,
-        *,
-        connection: EmailConnection,
-        mode: EmailSyncMode | None = None,
-        sync_cursor: EmailProviderCursor | None = None,
-        page_token: str | None = None,
-    ) -> tuple[EmailSyncPageResult, ...]:
-        """List a complete provider metadata run by following page tokens."""
-
-        results: list[EmailSyncPageResult] = []
-        next_mode = mode
-        next_page_token = page_token
-
-        while True:
-            active_cursor = sync_cursor
-            if next_mode is EmailSyncMode.FULL_BACKFILL:
-                active_cursor = None
-
-            result = await self.list_metadata_page(
-                connection=connection,
-                mode=next_mode,
-                sync_cursor=active_cursor,
-                page_token=next_page_token,
-            )
-            results.append(result)
-
-            next_page_token = result.page.next_page_token
-            if next_page_token is None:
-                return tuple(results)
-
-            next_mode = result.mode
 
     async def _list_full_backfill_page(
         self,

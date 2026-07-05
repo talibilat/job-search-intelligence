@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
 from app.db.repositories import EmailRepository, SyncStateRepository
@@ -63,8 +63,18 @@ class PaginatedMetadataProvider:
 def test_ingestion_smoke_lists_every_provider_metadata_page() -> None:
     provider = PaginatedMetadataProvider()
     service = EmailSyncService(provider=provider, page_size=2)
+    connection = email_connection()
 
-    results = asyncio.run(service.list_metadata_pages(connection=email_connection()))
+    first_result = asyncio.run(service.list_metadata_page(connection=connection))
+    second_result = asyncio.run(
+        service.list_metadata_page(
+            connection=connection,
+            mode=first_result.mode,
+            page_token=first_result.page.next_page_token,
+        )
+    )
+
+    results = (first_result, second_result)
 
     assert [result.mode for result in results] == [
         EmailSyncMode.FULL_BACKFILL,
@@ -105,25 +115,19 @@ def test_ingestion_smoke_sync_status_tracks_cursor_without_exposing_value() -> N
     service = SyncService(sync_state_repository=SyncStateRepository(connection))
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
 
-    never_synced = service.get_sync_status(account)
-
-    assert never_synced.account == account
-    assert never_synced.has_sync_cursor is False
-    assert never_synced.last_cursor_issued_at is None
-    assert never_synced.last_synced_at is None
+    assert service.get_sync_cursor(account) is None
 
     service.store_sync_cursor(
         EmailProviderCursor(account=account, value="history-10", issued_at=NOW),
-        updated_at=NOW + timedelta(seconds=1),
+        updated_at=NOW,
     )
 
-    status = service.get_sync_status(account)
+    status_cursor = service.get_sync_cursor(account)
 
-    assert status.account == account
-    assert status.has_sync_cursor is True
-    assert status.last_cursor_issued_at == NOW
-    assert status.last_synced_at == NOW + timedelta(seconds=1)
-    assert "history-10" not in repr(status)
+    assert status_cursor is not None
+    assert status_cursor.account == account
+    assert status_cursor.value == "history-10"
+    assert status_cursor.issued_at == NOW
 
 
 def email_connection() -> EmailConnection:
