@@ -170,14 +170,12 @@ Before metadata leaves the Gmail adapter, opaque message IDs, thread IDs, and hi
 [JT-066 2026-07-05 v2] Backfill state and final replacement cursor promotion are repository-backed so full metadata backfills can resume safely.
 Incremental sync cursors, metadata-only repository writes, and retained-body repository writes now flow through the sync service, `email_sync_state`, and `raw_emails` tables.
 Broad job-search filter outcomes now flow through the sync service into `email_filter_decisions`, keyed by raw email ID and strategy.
-The sync service evaluates metadata pages as batches so same-page candidate thread siblings use the same deterministic decision path for retained-body selection and audit rows.
-Stored filter reasons are static signal tokens and must not include raw subjects, body text, snippets, OAuth tokens, Gmail thread IDs, or Gmail payloads.
+Stored filter reasons are static signal tokens and must not include raw subjects, body text, snippets, OAuth tokens, or Gmail payloads.
 Retained-body repository writes are insert-or-update, so an explicit candidate, debugging, or reconciliation body fetch can create a minimal `raw_emails` row before metadata arrives.
 Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.
 Metadata-listing failures are mapped into public-safe provider errors: authorization failures ask the client to reconnect Gmail, insufficient scopes ask for read-only access, rate limits and temporary outages ask the client to try again later, invalid Gmail responses are reported without raw payloads, and generic provider failures do not expose OAuth tokens or Gmail response bodies.
 
 Manual sync already uses the persisted non-secret connection metadata to pass a `SecretRef`-backed account to the Gmail provider and to persist public-safe filter decision audit rows after metadata persistence.
-Thread-promoted audit rows use the static `thread_signal:candidate_thread` reason and never store the raw Gmail thread ID.
 Expired credentials are refreshed inside the provider before Gmail metadata calls, and richer product-page behavior remains separate Phase 1 work.
 
 ## Retained Body Fetching Boundary
@@ -186,7 +184,7 @@ Current Gmail retained-body fetching is separate from broad metadata listing.
 Callers must provide selected message refs, such as broad job-search candidates or explicit debugging and reconciliation refs.
 The Gmail adapter fetches those messages with `format=full` and partial fields for IDs, thread IDs, and payload content only; it does not request snippets.
 It prefers `text/plain`, converts `text/html` MIME bodies to normalized plain text through the provider DTO path, ignores attachments, reports typed empty-body failures, and keeps token material behind `SecretStore`.
-Manual sync stores retained bodies for broad job-search candidate messages, including same-page candidate thread siblings, after metadata persistence.
+Manual sync stores retained bodies for broad job-search candidate messages after metadata persistence.
 Other explicit retained or debugging body fetches can be persisted safely even when the metadata row is not present yet.
 
 ## Preflight Checklist

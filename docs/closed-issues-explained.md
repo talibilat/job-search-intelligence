@@ -1016,7 +1016,7 @@ Real secrets should not be committed.
 
 Providers:
 You can see abstract provider contracts for email and LLM systems.
-Gmail can start read-only OAuth authorization, complete the callback with encrypted token persistence, refresh expired stored credentials, store non-secret connection metadata, resolve the default connected account for sync, list safe metadata-only full-backfill and incremental history pages, fetch retained bodies for selected refs when constructed with a `SecretStore`, run resumable full backfill until the replacement cursor is promoted, and store broad candidate plus same-page candidate thread sibling retained bodies during manual sync, but product pages and concrete LLM implementations are not done yet.
+Gmail can start read-only OAuth authorization, complete the callback with encrypted token persistence, refresh expired stored credentials, store non-secret connection metadata, resolve the default connected account for sync, list safe metadata-only full-backfill and incremental history pages, fetch retained bodies for selected refs when constructed with a `SecretStore`, run resumable full backfill until the replacement cursor is promoted, and store broad candidate retained bodies during manual sync, but product pages and concrete LLM implementations are not done yet.
 
 Privacy and safety:
 You can see early safety work for typed errors, secret references, safe configuration examples, and local data wiping.

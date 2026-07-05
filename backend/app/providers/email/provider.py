@@ -184,9 +184,6 @@ class EmailCandidateQuery(BaseModel):
     Candidate queries run over normalized metadata after provider listing instead
     of becoming provider-specific search filters, and keyword terms may also be
     applied to already-normalized retained body text when a caller has it.
-    Decisions are deterministic scored outcomes that expose public-safe signal
-    tokens; excluded labels reject before scoring, and batch evaluation can add a
-    static thread signal without serializing raw provider thread IDs.
     """
 
     model_config = ConfigDict(frozen=True)
