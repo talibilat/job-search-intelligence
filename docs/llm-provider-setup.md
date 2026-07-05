@@ -3,8 +3,8 @@
 This guide explains the values a user needs before the first-run setup wizard can configure an LLM provider.
 It maps to FR-0, FR-6, NFR-5, NFR-8, and Phase 0.
 
-The current Phase 0 app has a typed provider registry, setup status shell, and Gmail OAuth setup action.
-Concrete Azure OpenAI and Ollama adapters are implemented in later provider tickets, so this document is the setup contract for those screens and adapters.
+The current app has a typed provider registry, setup status shell, Gmail OAuth setup action, and a concrete local Ollama chat adapter behind `LLMProvider`.
+The Azure OpenAI adapter, Ollama embeddings, classification prompts, and downstream classification pipeline are implemented in later provider and Phase 2 tickets, so this document is the setup contract for those screens and adapters.
 The current backend has the `SecretStore` protocol, backend selector settings, the default keyring adapter, and the encrypted Fernet fallback.
 
 ## Setup Principles
@@ -72,7 +72,8 @@ Hosted Azure calls should be used through the configured provider path only, nev
 ## Ollama
 
 Ollama requires a local Ollama server and locally pulled chat and embedding models.
-It does not require an API key in the Phase 0 provider registry.
+The current backend can call the configured chat model through `OllamaLLMProvider`; embedding calls are still deferred.
+It does not require an API key in the provider registry.
 
 Install Ollama from `https://ollama.com/`, start the local server, then pull the configured models:
 
@@ -91,7 +92,8 @@ JOBTRACKER_OLLAMA_CHAT_MODEL=llama3.1
 JOBTRACKER_OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 ```
 
-Keep the base URL local unless a later hosting decision explicitly approves a remote Ollama endpoint.
+Keep the base URL local: the provider registry and runtime adapter reject non-local Ollama hosts so prompt content is not silently sent to a remote endpoint.
+Local calls use a proxy-disabled urllib opener so environment or system HTTP proxy settings do not reroute Ollama traffic.
 If you change model names, update both the setup value and any local model pulls so the provider adapter can resolve them consistently.
 
 ## Readiness Checklist
