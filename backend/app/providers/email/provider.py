@@ -125,7 +125,7 @@ class EmailProviderCursor(BaseModel):
 
 
 class EmailCandidateQuery(BaseModel):
-    """Provider-neutral static signals for finding likely job-search messages."""
+    """Provider-neutral metadata signals for selecting body-retention candidates."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -149,6 +149,30 @@ class EmailCandidateQuery(BaseModel):
             msg = "candidate query requires at least one sender domain or keyword signal"
             raise ValueError(msg)
         return self
+
+    def matches_metadata(self, metadata: EmailMessageMetadata) -> bool:
+        normalized_labels = {label.strip().lower() for label in metadata.labels}
+        if normalized_labels.intersection(self.excluded_label_terms):
+            return False
+        return self._matches_sender_domain(metadata) or self._matches_subject_keyword(metadata)
+
+    def _matches_sender_domain(self, metadata: EmailMessageMetadata) -> bool:
+        if metadata.from_addr is None:
+            return False
+        _local_part, separator, domain = (
+            metadata.from_addr.address.strip().lower().rpartition("@")
+        )
+        if not separator or not domain:
+            return False
+        domain = domain.strip(">")
+        return any(
+            domain == term or domain.endswith(f".{term}")
+            for term in self.sender_domain_terms
+        )
+
+    def _matches_subject_keyword(self, metadata: EmailMessageMetadata) -> bool:
+        subject = (metadata.subject or "").lower()
+        return any(term in subject for term in self.keyword_terms)
 
 
 def build_broad_candidate_query() -> EmailCandidateQuery:
@@ -206,13 +230,12 @@ class EmailMetadataListRequest(BaseModel):
     incremental sync.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     mode: EmailSyncMode
     page_size: int = Field(ge=1)
     page_token: str | None = Field(default=None, min_length=1)
     sync_cursor: EmailProviderCursor | None = None
-    candidate_query: EmailCandidateQuery | None = None
 
     @model_validator(mode="after")
     def validate_cursor_for_mode(self) -> EmailMetadataListRequest:
