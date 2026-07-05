@@ -1,15 +1,12 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
+import styles from "./index.css?raw";
 
 afterEach(() => {
   cleanup();
   window.history.pushState({}, "", "/");
 });
-
-const styles = readFileSync(join(process.cwd(), "src", "index.css"), "utf8");
 
 describe("App", () => {
   it("renders the insights page shell on the insights route", () => {
@@ -79,7 +76,9 @@ describe("App", () => {
       "disabled",
       true,
     );
-    expect(screen.getByText(/chat agent work arrives in phase 5/i)).toBeTruthy();
+    expect(
+      screen.getByText(/chat agent work arrives in phase 5/i),
+    ).toBeTruthy();
   });
 
   it("keeps the chat shell constrained on narrow mobile viewports", () => {

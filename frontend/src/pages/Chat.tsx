@@ -5,23 +5,31 @@ function Chat() {
         <p className="eyebrow">Phase 0 chat route shell</p>
         <h1 id="page-title">Ask your job search history.</h1>
         <p className="hero-copy">
-          Chat agent work arrives in Phase 5. This shell reserves the route without implementing streaming, persisted history, retrieval, or provider calls.
+          Chat agent work arrives in Phase 5. This shell reserves the route
+          without implementing streaming, persisted history, retrieval, or
+          provider calls.
         </p>
       </section>
 
       <section className="chat-panel" aria-labelledby="chat-shell-title">
         <div className="chat-panel__header">
           <p className="eyebrow">Grounded answers later</p>
-          <h2 id="chat-shell-title">The conversation surface is intentionally empty.</h2>
+          <h2 id="chat-shell-title">
+            The conversation surface is intentionally empty.
+          </h2>
           <p>
-            Future answers will cite application records, source emails, or deterministic metric outputs. Quantitative chat answers will use constrained tools rather than raw SQL from an LLM.
+            Future answers will cite application records, source emails, or
+            deterministic metric outputs. Quantitative chat answers will use
+            constrained tools rather than raw SQL from an LLM.
           </p>
         </div>
 
         <div className="chat-card" role="status" aria-label="Chat unavailable">
           <p className="chat-card__title">Chat is not connected yet.</p>
           <p>
-            The route is present so later RAG agent tickets can attach streaming responses and local chat history without changing the page entry point.
+            The route is present so later RAG agent tickets can attach streaming
+            responses and local chat history without changing the page entry
+            point.
           </p>
         </div>
 
@@ -38,7 +46,8 @@ function Chat() {
             rows={4}
           />
           <p className="chat-composer__hint" id="chat-message-hint">
-            Disabled until the backend chat endpoint, history store, and grounding checks exist.
+            Disabled until the backend chat endpoint, history store, and
+            grounding checks exist.
           </p>
         </form>
       </section>
