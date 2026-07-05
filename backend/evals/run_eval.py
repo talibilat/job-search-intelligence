@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, ValidationError
 
 from app.pipeline.classify import AcceptedLLMExtraction, parse_llm_extraction_response
-from app.providers.llm import LLMGenerationResponse
+from app.providers.llm import LLMFinishReason, LLMGenerationResponse
 
 MIN_PRECISION = 0.90
 MIN_RECALL = 0.85
@@ -161,7 +161,7 @@ def _synthetic_llm_response_from_case(case: GoldenSetCase) -> LLMGenerationRespo
             }
         ),
         model="synthetic-golden-set",
-        finish_reason="stop",
+        finish_reason=LLMFinishReason.STOP,
     )
 
 
