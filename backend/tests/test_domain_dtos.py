@@ -127,3 +127,34 @@ def test_application_correction_record_parses_json_object_columns() -> None:
 
     assert correction.before_json == {"current_status": "applied"}
     assert correction.after_json == {"current_status": "rejected"}
+
+
+def test_chat_message_record_validates_role_and_json_array_columns() -> None:
+    message = models.ChatMessageRecord.model_validate(
+        {
+            "id": 1,
+            "conversation_id": "conversation-1",
+            "role": "assistant",
+            "content": "You have one overdue follow-up.",
+            "citations_json": '[{"email_id":"email-1"}]',
+            "tool_outputs_json": '[{"tool":"structured_query"}]',
+            "created_at": NOW,
+        },
+    )
+
+    assert message.role == "assistant"
+    assert message.citations_json == [{"email_id": "email-1"}]
+    assert message.tool_outputs_json == [{"tool": "structured_query"}]
+
+    with pytest.raises(ValidationError):
+        models.ChatMessageRecord.model_validate(
+            {
+                "id": 1,
+                "conversation_id": "conversation-1",
+                "role": "sql_writer",
+                "content": "You have one overdue follow-up.",
+                "citations_json": "[]",
+                "tool_outputs_json": "[]",
+                "created_at": NOW,
+            },
+        )

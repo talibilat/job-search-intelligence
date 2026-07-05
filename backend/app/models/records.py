@@ -7,7 +7,7 @@ from app.models.application import (
     SponsorshipStatus,
     WorkMode,
 )
-from app.models.chat import ChatMessageRecord
+from app.models.chat import ChatMessageRecord, ChatMessageRole
 from app.models.chunk import EmailChunkRecord
 from app.models.classification import EmailClassificationRecord, JobEmailCategory
 from app.models.connection import EmailConnectionRecord
@@ -34,6 +34,7 @@ __all__ = [
     "ApplicationSource",
     "ApplicationStatus",
     "ChatMessageRecord",
+    "ChatMessageRole",
     "CorrectionType",
     "EmailBackfillStateRecord",
     "EmailBackfillStatus",

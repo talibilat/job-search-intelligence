@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
 from app.models._json import parse_json_column
 from app.models.correction import JsonObjectList
 
+type ChatMessageRole = Literal["user", "assistant", "tool", "system"]
+
 
 class ChatMessageRecord(BaseModel):
     id: int
     conversation_id: str
-    role: str
+    role: ChatMessageRole
     content: str
     citations_json: JsonObjectList
     tool_outputs_json: JsonObjectList

@@ -150,6 +150,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "application_events",
             "application_corrections",
             "insights",
+            "chat_messages",
             "email_chunks",
         }.issubset(table_names)
         assert sqlite_column_names(connection, "raw_emails") == [
@@ -224,6 +225,15 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "reason",
             "created_at",
         ]
+        assert sqlite_column_names(connection, "chat_messages") == [
+            "id",
+            "conversation_id",
+            "role",
+            "content",
+            "citations_json",
+            "tool_outputs_json",
+            "created_at",
+        ]
         assert sqlite_column_names(connection, "insights") == [
             "id",
             "type",
@@ -255,6 +265,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
         assert foreign_key_targets(connection, "application_corrections") == {
             ("application_id", "applications", "id"),
         }
+        assert foreign_key_targets(connection, "chat_messages") == set()
 
 
 def test_application_corrections_store_audited_manual_overrides(
@@ -423,6 +434,102 @@ def test_application_corrections_cascade_with_application_deletes(
         assert connection.execute(
             "SELECT COUNT(*) FROM application_corrections",
         ).fetchone() == (0,)
+
+
+def test_chat_messages_store_compact_history_rows(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO chat_messages (
+                conversation_id,
+                role,
+                content,
+                citations_json,
+                tool_outputs_json,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "conversation-1",
+                "assistant",
+                "You have one overdue follow-up.",
+                '[{"application_id": "app_1", "email_id": "email_1"}]',
+                '[{"tool": "structured_query", "result_id": "metric_1"}]',
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        row = connection.execute(
+            """
+            SELECT
+                conversation_id,
+                role,
+                content,
+                citations_json,
+                tool_outputs_json,
+                created_at
+            FROM chat_messages
+            WHERE conversation_id = ?
+            """,
+            ("conversation-1",),
+        ).fetchone()
+
+    assert row == (
+        "conversation-1",
+        "assistant",
+        "You have one overdue follow-up.",
+        '[{"application_id": "app_1", "email_id": "email_1"}]',
+        '[{"tool": "structured_query", "result_id": "metric_1"}]',
+        "2026-07-31T00:00:00Z",
+    )
+
+
+def test_chat_messages_reject_unknown_role(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with (
+        sqlite3.connect(database_path) as connection,
+        pytest.raises(sqlite3.IntegrityError),
+    ):
+        insert_chat_message(connection, role="sql_writer")
+
+
+@pytest.mark.parametrize(
+    ("citations_json", "tool_outputs_json"),
+    [
+        ("not json", "[]"),
+        ("{}", "[]"),
+        ("[]", "not json"),
+        ("[]", "{}"),
+    ],
+)
+def test_chat_messages_reject_non_array_json_payloads(
+    tmp_path: Path,
+    citations_json: str,
+    tool_outputs_json: str,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with (
+        sqlite3.connect(database_path) as connection,
+        pytest.raises(sqlite3.IntegrityError),
+    ):
+        insert_chat_message(
+            connection,
+            citations_json=citations_json,
+            tool_outputs_json=tool_outputs_json,
+        )
 
 
 def test_application_events_allow_ghost_inferred_without_email(tmp_path: Path) -> None:
@@ -632,8 +739,23 @@ def test_alembic_downgrade_removes_jt020_core_schema(tmp_path: Path) -> None:
         assert "applications" not in table_names
         assert "application_events" not in table_names
         assert "application_corrections" not in table_names
+        assert "chat_messages" not in table_names
         assert "insights" not in table_names
         assert not any(table_name.startswith("email_chunks") for table_name in table_names)
+
+
+def test_alembic_downgrade_removes_chat_history_schema(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "20260705_0005")
+
+    with sqlite3.connect(database_path) as connection:
+        table_names = sqlite_table_names(connection)
+
+        assert "application_corrections" in table_names
+        assert "chat_messages" not in table_names
 
 
 def test_alembic_env_uses_shared_sqlite_vec_loader() -> None:
@@ -693,6 +815,35 @@ def insert_application(connection: sqlite3.Connection) -> None:
             "2026-07-01T00:00:00Z",
             "2026-07-01T00:00:00Z",
             "2026-07-01T00:00:00Z",
+        ),
+    )
+
+
+def insert_chat_message(
+    connection: sqlite3.Connection,
+    *,
+    role: str = "assistant",
+    citations_json: str = "[]",
+    tool_outputs_json: str = "[]",
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO chat_messages (
+            conversation_id,
+            role,
+            content,
+            citations_json,
+            tool_outputs_json,
+            created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "conversation-1",
+            role,
+            "You have one overdue follow-up.",
+            citations_json,
+            tool_outputs_json,
+            "2026-07-31T00:00:00Z",
         ),
     )
 
