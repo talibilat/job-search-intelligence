@@ -105,7 +105,12 @@ _BASE_ROLES: tuple[_BaseRole, ...] = (
 
 
 def normalize_role_title(role_title: str | None) -> str | None:
-    """Return a deterministic grouping key for a role title."""
+    """Return a deterministic grouping key for an extracted role title.
+
+    The key folds casing, punctuation, seniority, title levels, common
+    abbreviations, location noise, and work-arrangement phrases while retaining
+    descriptors that distinguish role families.
+    """
     if role_title is None:
         return None
 
