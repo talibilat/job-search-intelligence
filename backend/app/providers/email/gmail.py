@@ -50,6 +50,7 @@ _MESSAGE_LIST_FIELDS = "messages(id,threadId),nextPageToken"
 _MESSAGE_METADATA_FIELDS = "id,threadId,labelIds,sizeEstimate,payload/headers(name,value)"
 _INVALID_DATA_MESSAGE = "Gmail metadata listing returned invalid data"
 
+
 class GoogleOAuthInstalledClientConfig(BaseModel):
     """Subset of a Google Desktop OAuth client JSON needed to start auth."""
 
