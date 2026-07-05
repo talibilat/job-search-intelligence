@@ -24,6 +24,12 @@ If that file is missing, the backend generates a key on the first secret write a
 If the key file already exists, the backend reuses it to decrypt previously stored secrets.
 If the key is lost, the encrypted secrets cannot be recovered and must be deleted and re-entered through setup.
 
+## Gmail OAuth Payloads
+
+Gmail OAuth access tokens and refresh tokens are stored only as `SecretStore` payloads referenced by non-secret `email_connections` rows.
+When a stored access token is expired, the Gmail provider reads the refresh token from `SecretStore`, exchanges it for a new access token, preserves the existing refresh token, validates the granted scope remains `gmail.readonly`, and writes the refreshed payload back through `SecretStore`.
+The refreshed `EmailConnection` returned to callers contains only non-secret metadata such as granted scopes and credential expiry.
+
 ## Operator Notes
 
 Keep `JOBTRACKER_FERNET_KEY_FILE` and `JOBTRACKER_DATA_DIR/secrets/` out of git.

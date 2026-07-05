@@ -27,12 +27,12 @@ Baseline coding standards for every agent and contributor.
 - Public sync status crosses the API boundary through the `EmailSyncStatus` DTO and must expose only run state, mode, deterministic counts, sanitized errors, and timestamps, never provider payloads, OAuth tokens, raw cursors, page tokens, or email content.
 - Sync scheduling stays backend-process local: `SyncScheduler` owns APScheduler start and shutdown through the FastAPI lifespan, registers only injected async sync jobs, and remains stopped when `sync_on_open` is false.
 - Broad job-search candidate selection belongs in provider-neutral DTOs over normalized metadata; provider metadata listing requests must not accept body content, snippets, or provider-specific candidate filters.
-- Gmail OAuth setup and auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, provider-owned authorization URLs, callback codes as `SecretStr`, and token material routed through `SecretStore`.
+- Gmail OAuth setup and auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, provider-owned authorization URLs, callback codes as `SecretStr`, refresh-token reuse behind the provider seam, and token material routed through `SecretStore`.
 - Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
 - Raw email repository writes must be idempotent by provider message ID and must preserve existing `retained` or `debugging` body text when later metadata-only reconciliation pages replay the same message.
 - Downstream pipeline code should use `RawEmailRecord.has_retained_body` to test body availability instead of re-checking retention enum values directly.
 - [JT-020 2026-07-05 v1] Application event DTOs and schema constraints allow a null `email_id` only for `ghost_inferred` events; evidence-backed events must keep a source email reference.
-- Gmail OAuth setup and future auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, and non-secret connection metadata persisted separately from `SecretStore` token material.
+- Gmail OAuth connection records must persist non-secret metadata separately from `SecretStore` token material.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Alembic migrations run in SQLite batch mode; sqlite-vec and other virtual or vector tables are excluded from autogenerate and must be managed by hand-written revisions.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
