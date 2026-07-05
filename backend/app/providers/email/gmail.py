@@ -69,11 +69,17 @@ class GoogleOAuthClientConfig(BaseModel):
 
 
 class GmailEmailProvider:
-    """Provider-specific Gmail email adapter."""
+    """Gmail adapter with OAuth start and optional SecretStore-backed metadata listing."""
 
     name = EmailProviderName.GMAIL
 
-    def __init__(self, *, settings: AppSettings) -> None:
+    def __init__(
+        self,
+        *,
+        settings: AppSettings,
+        secret_store: SecretStore | None = None,
+        transport: GmailApiTransport | None = None,
+    ) -> None:
         if tuple(settings.gmail_scopes) != (GMAIL_READONLY_SCOPE,):
             raise EmailProviderError(
                 public_message="Gmail provider requires only the gmail.readonly scope."
@@ -90,6 +96,11 @@ class GmailEmailProvider:
             attachment_policy=EmailAttachmentPolicy.IGNORED,
             max_metadata_page_size=settings.gmail_page_size,
             max_body_batch_size=_GMAIL_MAX_BODY_BATCH_SIZE,
+        )
+        self._message_lister = (
+            GmailMessageLister(secret_store=secret_store, transport=transport)
+            if secret_store is not None
+            else None
         )
 
     async def start_authorization(
@@ -132,7 +143,9 @@ class GmailEmailProvider:
         connection: EmailConnection,
         request: EmailMetadataListRequest,
     ) -> EmailMetadataPage:
-        raise EmailProviderError(public_message="Gmail metadata sync is not implemented yet.")
+        if self._message_lister is None:
+            raise EmailProviderError(public_message="Gmail metadata sync is not implemented yet.")
+        return await self._message_lister.list_message_metadata(connection, request)
 
     async def fetch_message_bodies(
         self,

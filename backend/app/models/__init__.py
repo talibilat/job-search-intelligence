@@ -22,6 +22,7 @@ from .records import (
     RawEmailRecord,
 )
 from .setup import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
+from .sync import SyncJobCounts, SyncJobError, SyncJobPhase, SyncJobStatus
 from .synthetic_fixture import (
     SyntheticApplication,
     SyntheticApplicationEvent,
@@ -60,6 +61,10 @@ __all__ = [
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",
+    "SyncJobCounts",
+    "SyncJobError",
+    "SyncJobPhase",
+    "SyncJobStatus",
     "SyntheticApplication",
     "SyntheticApplicationEvent",
     "SyntheticApplicationSource",

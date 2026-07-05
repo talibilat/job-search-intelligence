@@ -63,7 +63,7 @@ job-search-intelligence/
 │   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
-│   │   │   ├── email/              # EmailProvider protocol + gmail.py skeleton/metadata lister + retained-body text normalization + future outlook.py/imap.py
+│   │   │   ├── email/              # EmailProvider protocol + Gmail OAuth start/metadata lister + retained-body text normalization + future outlook.py/imap.py
 │   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
@@ -182,6 +182,8 @@ EmailProvider -> metadata-only raw_emails
 `SyncStateRepository` persists only the opaque cursor value and timestamps, keyed by provider and account, so incremental sync can resume without storing token material or email content in sync state.
 `SyncService` exposes the persisted sync-state cursor snapshot for service-level status checks; public `POST /sync` and `GET /sync/status` route behavior remains part of the sync API phase work.
 The sync service coordinates one metadata page at a time, carries provider page tokens forward, and turns expired incremental cursors into resumable full metadata reconciliation so callers can persist the next page token and replacement sync cursor.
+`SyncScheduler` owns the APScheduler lifecycle inside the FastAPI lifespan: when `sync_on_open` is true, it registers an immediate interval job for the injected async sync runner, and on shutdown it stops APScheduler without waiting.
+Until the concrete Gmail sync runner lands, the default app factory uses a safe no-op sync job while tests and later wiring can inject the real async runner.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
@@ -198,9 +200,11 @@ Show a **pre-run cost estimate** and track tokens per run.
 
 - **Health:** `GET /health` returns a liveness-only `{ "status": "ok" }` response for Phase 0 smoke checks.
 - **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only; `GET /auth/gmail` starts Gmail OAuth by returning a provider-built Google authorization URL, generated state value, and the read-only Gmail scope without returning client secrets or tokens.
-  `GET /auth/gmail/callback`, token exchange, token persistence, and Gmail message access remain later Phase 1 endpoints and adapters.
+  `GET /auth/gmail/callback`, token exchange, token persistence, endpoint-driven Gmail message sync, incremental sync, and retained-body access remain later Phase 1 work.
 - **Local data:** `POST /local-data/wipe` removes configured local app data and derived artifacts after the exact confirmation phrase `wipe-local-data`; unsafe configured filesystem targets return the standard typed `400` API error.
 - **Sync:** `POST /sync`, `GET /sync/status`
+  `GET /sync/status` returns a public-safe `SyncJobStatus` DTO with sync phase, optional provider and account identifiers, deterministic counts, sanitized error summaries, timestamps, last-run timestamp, and `0..1` progress.
+  The current JT-072 implementation exposes the DTO and an idle zero-progress snapshot only; sync execution, scheduling, persistence, and provider behavior remain later Phase 1 work.
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit
 - **Metrics (deterministic):** `GET /metrics/summary`, `/metrics/rates`, `/metrics/funnel`, `/metrics/timeseries`, `/metrics/breakdown?dimension=role|source|salary|tech|sponsorship|seniority|work_mode`, `/metrics/diagnostics`
 - **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
