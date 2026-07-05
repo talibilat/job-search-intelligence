@@ -151,6 +151,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "application_corrections",
             "insights",
             "chat_messages",
+            "classification_runs",
             "email_chunks",
         }.issubset(table_names)
         assert sqlite_column_names(connection, "raw_emails") == [
@@ -187,6 +188,20 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "model",
             "prompt_version",
             "classified_at",
+        ]
+        assert sqlite_column_names(connection, "classification_runs") == [
+            "id",
+            "provider",
+            "model",
+            "prompt_version",
+            "started_at",
+            "completed_at",
+            "candidate_count",
+            "classified_count",
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "estimated_cost_usd",
         ]
         assert sqlite_column_names(connection, "applications") == [
             "id",
@@ -474,6 +489,73 @@ def test_chat_messages_store_compact_history_rows(tmp_path: Path) -> None:
     )
 
 
+def test_classification_runs_store_tokens_and_estimated_cost(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        insert_classification_run(connection)
+
+        row = connection.execute(
+            """
+            SELECT
+                provider,
+                model,
+                prompt_version,
+                candidate_count,
+                classified_count,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+                estimated_cost_usd
+            FROM classification_runs
+            WHERE id = ?
+            """,
+            ("classification-run-1",),
+        ).fetchone()
+
+    assert row is not None
+    assert row[:-1] == (
+        "azure_openai",
+        "gpt-4.1-mini",
+        "prompt-v1",
+        3,
+        3,
+        120,
+        30,
+        150,
+    )
+    assert float(row[-1]) == pytest.approx(0.00045)
+
+
+@pytest.mark.parametrize(
+    ("override", "value"),
+    [
+        ("candidate_count", -1),
+        ("classified_count", 4),
+        ("total_tokens", 149),
+        ("estimated_cost_usd", -0.000001),
+    ],
+)
+def test_classification_runs_reject_invalid_accounting_values(
+    tmp_path: Path,
+    override: str,
+    value: object,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with (
+        sqlite3.connect(database_path) as connection,
+        pytest.raises(sqlite3.IntegrityError),
+    ):
+        insert_classification_run(connection, **{override: value})
+
+
 def test_chat_messages_reject_unknown_role(tmp_path: Path) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
     config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
@@ -725,6 +807,7 @@ def test_alembic_downgrade_removes_jt020_core_schema(tmp_path: Path) -> None:
         assert "application_events" not in table_names
         assert "application_corrections" not in table_names
         assert "chat_messages" not in table_names
+        assert "classification_runs" not in table_names
         assert "insights" not in table_names
         assert not any(table_name.startswith("email_chunks") for table_name in table_names)
 
@@ -741,6 +824,7 @@ def test_alembic_downgrade_removes_chat_history_schema(tmp_path: Path) -> None:
 
         assert "application_corrections" in table_names
         assert "chat_messages" not in table_names
+        assert "classification_runs" not in table_names
 
 
 def test_alembic_env_uses_shared_sqlite_vec_loader() -> None:
@@ -829,6 +913,58 @@ def insert_chat_message(
             citations_json,
             tool_outputs_json,
             "2026-07-31T00:00:00Z",
+        ),
+    )
+
+
+def insert_classification_run(
+    connection: sqlite3.Connection,
+    **overrides: object,
+) -> None:
+    values = {
+        "id": "classification-run-1",
+        "provider": "azure_openai",
+        "model": "gpt-4.1-mini",
+        "prompt_version": "prompt-v1",
+        "started_at": "2026-07-05T12:00:00+00:00",
+        "completed_at": "2026-07-05T12:02:00+00:00",
+        "candidate_count": 3,
+        "classified_count": 3,
+        "prompt_tokens": 120,
+        "completion_tokens": 30,
+        "total_tokens": 150,
+        "estimated_cost_usd": 0.00045,
+    } | overrides
+    connection.execute(
+        """
+        INSERT INTO classification_runs (
+            id,
+            provider,
+            model,
+            prompt_version,
+            started_at,
+            completed_at,
+            candidate_count,
+            classified_count,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+            estimated_cost_usd
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            values["id"],
+            values["provider"],
+            values["model"],
+            values["prompt_version"],
+            values["started_at"],
+            values["completed_at"],
+            values["candidate_count"],
+            values["classified_count"],
+            values["prompt_tokens"],
+            values["completion_tokens"],
+            values["total_tokens"],
+            values["estimated_cost_usd"],
         ),
     )
 
