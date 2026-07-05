@@ -142,6 +142,7 @@ EmailProvider -> metadata-only raw_emails
                  │
                  ├─ full backfill: paginated metadata pages, no body snippets
                  ├─ incremental sync: provider-owned cursor required
+                 ├─ expired cursor: restart resumable full metadata reconciliation
                  └─ retained bodies fetched only for selected candidate/reconciliation refs
                  │
                  ▼
@@ -170,6 +171,7 @@ EmailProvider -> metadata-only raw_emails
 ```
 
 `EmailProvider` adapters own provider-specific auth, metadata normalization, pagination, opaque sync cursors, and retained-body fetching.
+The sync service coordinates one metadata page at a time, carries provider page tokens forward, and turns expired incremental cursors into resumable full metadata reconciliation so callers can persist the next page token and replacement sync cursor.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, and ignores attachment content in v1.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
