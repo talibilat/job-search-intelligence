@@ -76,7 +76,7 @@ job-search-intelligence/
 │   │   ├── api/                    # routers, typed API errors, setup, auth, sync, applications, metrics, insights, chat
 │   │   └── setup/                  # first-run wizard logic
 │   ├── evals/
-│   │   ├── golden_set.jsonl        # ~30 hand-labeled emails
+│   │   ├── golden_set.jsonl        # ~30 private-data-free labeled email cases
 │   │   └── run_eval.py             # classification accuracy report
 │   ├── tests/                      # minimal pytest (pipeline + metrics smoke)
 │   │   └── fixtures/synthetic/      # private-data-free synthetic fixture JSON
@@ -318,7 +318,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, ch
 
 - **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** starts with the Phase 0 shell for setup copy, overview sync affordance, and dashboard empty-state coverage; later critical paths add dashboard fixture load and chat citation smoke checks as those pages exist.
-- **Carve-out - the golden set:** ~30 hand-labeled emails in `evals/golden_set.jsonl`; `evals/run_eval.py` reports classification precision/recall. Run it whenever the classify prompt/model changes. _This is the one thing that keeps the dashboard honest._
+- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `backend/evals/run_eval.py` reports classification precision/recall once the runner lands. Run it whenever the classify prompt/model changes. _This is the one thing that keeps the dashboard honest._
 
 ---
 

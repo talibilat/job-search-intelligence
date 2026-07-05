@@ -3,6 +3,9 @@
 Synthetic fixtures are private-data-free JSON files for backend tests and later dashboard smoke paths.
 They model the same factual spine described in the PRD: emails, classifications, applications, and application events.
 
+The Phase 2 golden-set classification fixture is separate from the SQLite smoke fixture format below.
+`backend/evals/golden_set.jsonl` is JSONL, and each line carries one private-data-free synthetic Gmail case with an expected job-vs-not label and classification category.
+
 ## Format
 
 The canonical DTOs live in `backend/app/models/synthetic_fixture.py`.
@@ -129,4 +132,24 @@ Validate the loader with:
 
 ```bash
 uv run pytest tests/test_synthetic_fixture_loader.py -v
+```
+
+## Golden Set Fixture
+
+The golden-set scaffold is `backend/evals/golden_set.jsonl`.
+It supports `FR-2.7` and feeds the later `backend/evals/run_eval.py` precision and recall runner without checking private inbox content into the repository.
+
+Each JSONL record has these fields:
+
+- `schema_version`: required, currently only `"1"`.
+- `case_id`: required unique case identifier.
+- `contains_private_data`: required, must be `false`.
+- `email`: synthetic Gmail payload with `provider`, `from_addr`, `subject`, and `body_text`.
+- `expected`: expected classifier output with `is_job_related` and `category`.
+- `rationale`: required explanation for the label.
+
+Validate the golden-set fixture from `backend/` with:
+
+```bash
+uv run pytest tests/test_golden_set_fixture.py -v
 ```
