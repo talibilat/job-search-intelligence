@@ -59,4 +59,22 @@ describe("App", () => {
     expect(screen.getByText("Choose provider")).toBeTruthy();
     expect(screen.getByText("Connect Gmail read-only")).toBeTruthy();
   });
+
+  it("renders the empty chat shell at the chat route", () => {
+    window.history.pushState({}, "", "/chat");
+
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /ask your job search history/i,
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: /message/i })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByText(/chat agent work arrives in phase 5/i)).toBeTruthy();
+  });
 });
