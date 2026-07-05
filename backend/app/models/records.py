@@ -24,6 +24,11 @@ from app.models.correction import (
     JsonObjectList,
 )
 from app.models.event import ApplicationEventRecord, ApplicationEventType
+from app.models.filter_decision import (
+    EmailCandidateQueryStrategy,
+    EmailFilterDecisionOutcome,
+    EmailFilterDecisionRecord,
+)
 from app.models.insight import InsightRecord, InsightType
 from app.models.raw_email import RawEmailBodyRetentionState, RawEmailRecord
 from app.models.sync_state import (
@@ -45,11 +50,14 @@ __all__ = [
     "CorrectionType",
     "EmailBackfillStateRecord",
     "EmailBackfillStatus",
+    "EmailCandidateQueryStrategy",
     "EmailChunkRecord",
     "EmailClassificationCandidate",
     "EmailClassificationRecord",
     "EmailClassificationResult",
     "EmailConnectionRecord",
+    "EmailFilterDecisionOutcome",
+    "EmailFilterDecisionRecord",
     "EmailSyncStateRecord",
     "InsightRecord",
     "InsightType",

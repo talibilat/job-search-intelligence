@@ -448,6 +448,21 @@ def create_sync_tables(database_path: Path) -> None:
         )
         connection.execute(
             """
+            CREATE TABLE email_filter_decisions (
+                email_id TEXT NOT NULL,
+                strategy TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                decided_at TEXT NOT NULL,
+                CHECK (strategy IN ('broad_job_search')),
+                CHECK (outcome IN ('candidate', 'rejected')),
+                PRIMARY KEY (email_id, strategy),
+                FOREIGN KEY (email_id) REFERENCES raw_emails(id) ON DELETE CASCADE
+            )
+            """,
+        )
+        connection.execute(
+            """
             CREATE TABLE email_connections (
                 provider TEXT NOT NULL,
                 account_id TEXT NOT NULL,

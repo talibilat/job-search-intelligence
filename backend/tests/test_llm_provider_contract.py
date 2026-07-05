@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, get_type_hints
 
 import pytest
+from app.api.provider_config import get_configured_llm_provider
 from app.providers.llm import (
     LLMFinishReason,
     LLMGenerationOptions,
@@ -65,8 +66,28 @@ class FakeLLMProvider:
         )
 
 
+class MissingHealthCheckLLMProvider:
+    provider_name = "missing-health-check"
+
+    async def generate(self, request: LLMGenerationRequest) -> LLMGenerationResponse:
+        return LLMGenerationResponse(
+            content=request.messages[-1].content,
+            model=request.model or "fake-model",
+        )
+
+
 def test_fake_provider_satisfies_llm_provider_protocol() -> None:
-    assert isinstance(FakeLLMProvider(), LLMProvider)
+    provider: LLMProvider = FakeLLMProvider()
+
+    assert isinstance(provider, LLMProvider)
+
+
+def test_llm_provider_protocol_requires_health_check() -> None:
+    assert not isinstance(MissingHealthCheckLLMProvider(), LLMProvider)
+
+
+def test_configured_llm_provider_dependency_returns_protocol() -> None:
+    assert get_type_hints(get_configured_llm_provider)["return"] is LLMProvider
 
 
 def test_llm_provider_generation_round_trip() -> None:
