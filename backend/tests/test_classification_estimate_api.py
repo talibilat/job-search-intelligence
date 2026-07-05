@@ -108,6 +108,39 @@ def test_get_classification_estimate_reports_zero_cost_for_local_mode(
     assert response.json()["model"] == "llama3.1"
 
 
+@pytest.mark.parametrize(
+    ("input_rate", "output_rate"),
+    [(1.0, 0.0), (0.0, 2.0)],
+)
+def test_get_classification_estimate_requires_complete_non_local_pricing(
+    tmp_path: Path,
+    input_rate: float,
+    output_rate: float,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_classification_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, "partial-pricing-candidate", body_text="candidate body")
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        classification_mode=ClassificationMode.HYBRID,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        azure_openai_chat_deployment="gpt-4o-mini",
+        classification_input_cost_per_1k_units_usd=input_rate,
+        classification_output_cost_per_1k_units_usd=output_rate,
+    )
+    client = TestClient(app)
+
+    response = client.get("/classification/estimate")
+
+    assert response.status_code == 200
+    assert response.json()["estimated_cost_usd"] is None
+    assert response.json()["cost_estimate_available"] is False
+
+
 def test_get_classification_estimate_does_not_create_missing_database(
     tmp_path: Path,
 ) -> None:

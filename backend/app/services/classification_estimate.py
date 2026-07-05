@@ -70,7 +70,7 @@ def _estimate_cost_usd(
 
     input_rate = settings.classification_input_cost_per_1k_units_usd
     output_rate = settings.classification_output_cost_per_1k_units_usd
-    if input_rate == 0 and output_rate == 0:
+    if input_rate == 0 or output_rate == 0:
         return None, False
 
     cost = (prompt_tokens / 1000 * input_rate) + (completion_tokens / 1000 * output_rate)
