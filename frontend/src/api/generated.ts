@@ -7,12 +7,14 @@
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
 
 export const ApiErrorCode = {
+  bad_gateway: "bad_gateway",
   bad_request: "bad_request",
   conflict: "conflict",
   forbidden: "forbidden",
   http_error: "http_error",
   internal_error: "internal_error",
   not_found: "not_found",
+  service_unavailable: "service_unavailable",
   unauthorized: "unauthorized",
   validation_error: "validation_error",
 } as const;

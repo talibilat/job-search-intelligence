@@ -126,7 +126,6 @@ class EmailSyncStateRecord(BaseModel):
     next_page_token: str | None = None
     updated_at: datetime
 
-
 class EmailBackfillStateRecord(BaseModel):
     """Persisted full-backfill cursor and page progress for one email account."""
 
@@ -162,6 +161,25 @@ class EmailBackfillStateRecord(BaseModel):
             raise ValueError(msg)
 
         return self
+
+
+class EmailConnectionRecord(BaseModel):
+    provider: str
+    account_id: str
+    display_email: str | None
+    credential_ref_kind: str
+    credential_ref_provider: str
+    credential_ref_name: str
+    granted_scopes: list[str]
+    connected_at: datetime
+    credential_expires_at: datetime | None
+    reauth_required: bool
+    updated_at: datetime
+
+    @field_validator("granted_scopes", mode="before")
+    @classmethod
+    def parse_granted_scopes(cls, value: object) -> object:
+        return parse_json_column(value)
 
 
 class ApplicationRecord(BaseModel):

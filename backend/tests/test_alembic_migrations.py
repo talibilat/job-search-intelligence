@@ -143,6 +143,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
         table_names = sqlite_table_names(connection)
 
         assert {
+            "email_connections",
             "raw_emails",
             "email_classifications",
             "applications",
@@ -162,6 +163,19 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "labels",
             "provider",
             "ingested_at",
+        ]
+        assert sqlite_column_names(connection, "email_connections") == [
+            "provider",
+            "account_id",
+            "display_email",
+            "credential_ref_kind",
+            "credential_ref_provider",
+            "credential_ref_name",
+            "granted_scopes",
+            "connected_at",
+            "credential_expires_at",
+            "reauth_required",
+            "updated_at",
         ]
         assert sqlite_column_names(connection, "email_classifications") == [
             "email_id",

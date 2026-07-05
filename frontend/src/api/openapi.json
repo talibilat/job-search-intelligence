@@ -27,12 +27,14 @@
       },
       "ApiErrorCode": {
         "enum": [
+          "bad_gateway",
           "bad_request",
           "conflict",
           "forbidden",
           "http_error",
           "internal_error",
           "not_found",
+          "service_unavailable",
           "unauthorized",
           "validation_error"
         ],
