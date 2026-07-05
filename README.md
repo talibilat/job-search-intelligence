@@ -144,6 +144,7 @@ Keep Google OAuth client JSON outside the repository, for example at `~/.config/
 Keep `JOBTRACKER_GMAIL_SCOPES` set to `https://www.googleapis.com/auth/gmail.readonly` for v1 ingestion.
 `GET /auth/gmail` reads the client JSON to build a Google authorization URL, returns the generated state and requested read-only scope, and never returns the Google client secret or tokens.
 The default `JOBTRACKER_DATA_DIR=./.jobtracker` is local app storage and is ignored by git.
+Set `JOBTRACKER_SYNC_ON_OPEN=false` to disable the backend lifecycle scheduler; `JOBTRACKER_SYNC_INTERVAL_SECONDS` controls the APScheduler interval and must be at least 1 second.
 
 ### 4. Run the backend
 
@@ -153,11 +154,14 @@ From `backend/`:
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Current backend endpoints include `GET /health`, `GET /setup/status`, `POST /setup`, `GET|PUT /config/providers`, `GET /auth/gmail`, and `POST /local-data/wipe`.
+Current backend endpoints include `GET /health`, `GET /setup/status`, `POST /setup`, `GET|PUT /config/providers`, `GET /auth/gmail`, `GET /sync/status`, and `POST /local-data/wipe`.
 The health endpoint returns `{"status":"ok"}`.
 The setup status endpoint returns typed first-run readiness fields without reading or returning secrets.
 The Gmail auth-start endpoint returns a provider-built Google authorization URL for `gmail.readonly` and maps missing, unreadable, or invalid client config files to typed `400` errors.
+The sync status endpoint returns the public-safe `SyncJobStatus` contract with phase, provider/account identifiers when available, deterministic counts, sanitized error summaries, timestamps, last-run timestamp, and `0..1` progress; until sync orchestration lands, it reports an idle zero-progress snapshot only.
 The wipe-data endpoint requires the exact confirmation phrase `wipe-local-data` before deleting configured local app data.
+On backend startup, the FastAPI lifespan creates `SyncScheduler`; with sync-on-open enabled it schedules an immediate interval job, and with sync-on-open disabled it leaves the scheduler stopped.
+The concrete Gmail sync runner is not wired yet, so the production app uses a safe no-op sync job until a later Phase 1 ticket injects the real runner.
 
 ### 5. Install frontend dependencies
 
@@ -233,7 +237,7 @@ The database engine creates the configured local database parent directory, acce
 The backend database schema is migration-owned; `uv run alembic ensure_version` can initialize the Alembic version table without applying schema revisions.
 The first Alembic schema revision creates `email_sync_state`; run `uv run alembic upgrade head` before using sync-state repository behavior against a fresh local database.
 
-- Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn`, `keyring`, `cryptography`, `sqlalchemy[asyncio]`, `aiosqlite`, `sqlite-vec`, and `alembic` as runtime dependencies, and uses `ruff`, `mypy`, `pytest`, and `pre-commit` as dev-dependency verification tooling; `backend/pyproject.toml` also holds the strict mypy defaults.
+- Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn`, `apscheduler`, `keyring`, `cryptography`, `sqlalchemy[asyncio]`, `aiosqlite`, `sqlite-vec`, and `alembic` as runtime dependencies, and uses `ruff`, `mypy`, `pytest`, and `pre-commit` as dev-dependency verification tooling; `backend/pyproject.toml` also holds the strict mypy defaults.
 - Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
 - Repository base contract: import `BaseRepository` and the shared `SqlParameters` type from `app.db.repositories`; `uv run pytest tests/test_repository_base.py -v` verifies typed row mapping, parameterized statements, transactions, and the package export contract.
 - SQLite engine test: `uv run pytest tests/test_sqlite_engine.py -v` from `backend/` verifies async engine creation, sync-to-async SQLite URL normalization, sqlite-vec loading and `vec_version()` availability, connection PRAGMAs, transaction commit/rollback behavior, and local database parent directory creation.
@@ -246,6 +250,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Backend smoke test: `uv run pytest tests/test_health.py -q` from `backend/`.
 - Email provider contract test: `uv run pytest tests/test_email_provider_contract.py -v` from `backend/` verifies the provider boundary keeps OAuth token material behind `SecretRef`, separates metadata from retained body fetching, supports full and incremental cursor shapes, excludes body-derived metadata snippets, excludes attachment content, normalizes HTML bodies to retained plain text, and rejects raw HTML retention fields.
 - Sync service test: `uv run pytest tests/test_sync_service.py -v` from `backend/` verifies metadata-page coordination, expired history cursor fallback to full reconciliation, continuation page-token forwarding, and ambiguity rejection when paginated sync includes a cursor without an explicit mode.
+- Sync status test: `uv run pytest tests/test_sync_status.py -v` from `backend/` verifies the `SyncJobStatus` DTO, timestamp and progress validation, the idle status helper, and the OpenAPI-documented `GET /sync/status` response.
 - Email candidate query test: `uv run pytest tests/test_email_candidate_query.py -v` from `backend/` verifies broad job-search candidate signals, label exclusions, no body or snippet fields in the query, and that candidate filters stay out of provider metadata listing requests.
 - Gmail provider test: `uv run pytest tests/test_gmail_email_provider.py -v` from `backend/` verifies readonly scope enforcement, advertised read-only ingestion capabilities, attachment exclusion, public-safe not-implemented runtime errors for deferred behavior, and provider-level safe metadata listing when a `SecretStore` is configured.
 - Gmail message listing test: `uv run pytest tests/test_gmail_message_listing.py -v` from `backend/` verifies Gmail full-backfill pagination, SecretStore token access, metadata-only Gmail partial responses, public-safe provider errors, empty pages, and the 500-message page-size limit.
