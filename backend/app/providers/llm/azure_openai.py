@@ -19,8 +19,16 @@ from app.providers.llm.errors import (
 )
 from app.providers.llm.types import (
     LLMFinishReason,
+    LLMGenerationOptions,
     LLMGenerationRequest,
     LLMGenerationResponse,
+    LLMMessage,
+    LLMMessageRole,
+    LLMModelHealthCheck,
+    LLMModelHealthStatus,
+    LLMModelKind,
+    LLMProviderHealthCheckRequest,
+    LLMProviderHealthCheckResponse,
     LLMResponseFormat,
     LLMTokenUsage,
 )
@@ -206,6 +214,37 @@ class AzureOpenAIProvider:
             model=azure_response.model or deployment,
             finish_reason=finish_reason,
             usage=_token_usage(azure_response.usage),
+        )
+
+    async def health_check(
+        self,
+        request: LLMProviderHealthCheckRequest,
+    ) -> LLMProviderHealthCheckResponse:
+        await self.generate(
+            LLMGenerationRequest(
+                messages=(
+                    LLMMessage(role=LLMMessageRole.SYSTEM, content="Health check."),
+                    LLMMessage(role=LLMMessageRole.USER, content="Reply with ok."),
+                ),
+                model=request.chat_model,
+                options=LLMGenerationOptions(temperature=0, max_output_tokens=4),
+            )
+        )
+        return LLMProviderHealthCheckResponse(
+            provider_name=self.provider_name,
+            status=LLMModelHealthStatus.AVAILABLE,
+            checks=(
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.CHAT,
+                    model=request.chat_model,
+                    status=LLMModelHealthStatus.AVAILABLE,
+                ),
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.EMBEDDING,
+                    model=request.embedding_model,
+                    status=LLMModelHealthStatus.AVAILABLE,
+                ),
+            ),
         )
 
     async def _read_api_key(self) -> SecretStr:
