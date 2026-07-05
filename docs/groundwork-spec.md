@@ -67,7 +67,7 @@ job-search-intelligence/
 │   │   │   └── llm/                # LLMProvider protocol + generation/health DTOs + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
-│   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords)
+│   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords, labels, thread context)
 │   │   │   ├── classify.py         # LLM classify + structured extract validation
 │   │   │   └── aggregate.py        # emails → applications + event timeline (dedup)
 │   │   ├── services/               # sync_service, metrics_service, insights_service, chat_service
@@ -130,7 +130,7 @@ job-search-intelligence/
 - **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `in_progress_mode`, `next_page_token`, `updated_at`; stores opaque provider-owned incremental sync anchors plus resumable page progress scoped to one connected account.
 - **`email_connections`** - `provider`, `account_id`, `display_email`, credential `SecretRef` fields, granted scopes, `connected_at`, optional `credential_expires_at`, `reauth_required`, `updated_at`; stores only non-secret connection metadata for one Gmail account while token payloads live in the configured `SecretStore`.
 - **`email_filter_decisions`** - `email_id` (FK), `strategy` (`broad_job_search`), `outcome` (`candidate | rejected`), `reason`, `decided_at`; stores one idempotent heuristic filter audit decision per raw email and strategy.
-  Reasons are public-safe static signal tokens such as `sender_domain:greenhouse.io`, `subject_keyword:interview`, `excluded_label:spam`, or `no_filter_signal`, not raw subjects or body text.
+  Reasons are public-safe static signal tokens such as `sender_domain:greenhouse.io`, `subject_keyword:interview`, `excluded_label:spam`, `thread_signal:candidate_thread`, or `no_filter_signal`, not raw subjects, thread IDs, or body text.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, timezone-aware `classified_at`.
 - **`classification_runs`** - `id`, `provider`, `model`, `prompt_version`, `started_at`, `completed_at`, `candidate_count`, `classified_count`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `estimated_cost_usd`; stores one local accounting row per completed classification run.
@@ -175,12 +175,15 @@ EmailProvider -> metadata-only raw_emails
                  │
                  ▼
    1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
-     - provider-neutral `EmailCandidateQuery` static signals for broad job-search selection
+     - provider-neutral `EmailCandidateQuery` static signals and score threshold for broad job-search selection
      - known ATS/recruiter sender domains (greenhouse, lever, workday,
        ashby, icims, workable, smartrecruiters, myworkday, ...)
      - keyword signals across subjects and already-normalized retained body text
        when available ("application", "unfortunately", "interview",
        "next steps", "offer", "assessment", "regret to inform")
+     - excluded labels are hard rejections, and same-page thread siblings can
+       be promoted through the public-safe `thread_signal:candidate_thread`
+       token without exposing raw provider thread IDs
                  │  candidates only
                  ▼
    2. classify.py  LLM classify + structured extract  (LLMProvider)
@@ -221,6 +224,7 @@ The sync service coordinates one metadata page at a time, carries provider page 
 `SyncScheduler` owns the APScheduler lifecycle inside the FastAPI lifespan: when `sync_on_open` is true, it registers an immediate interval job for the injected async sync runner, and on shutdown it stops APScheduler without waiting.
 The configured sync runtime resolves the latest non-reauth Gmail connection metadata from SQLite, runs full backfill until durable backfill state is completed and the replacement cursor is promoted, and then uses incremental sync on later manual runs.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
+Candidate decisions carry a deterministic score plus public-safe signal tokens; sender-domain, subject-keyword, and same-thread signals contribute to the threshold, while excluded labels reject regardless of positive signals.
 The same static keyword terms may be applied to already-normalized retained body text when a caller has it, but broad provider metadata listing and body-retention selection remain metadata-only.
 The sync runtime persists the broad job-search filter outcome and public-safe reason for every evaluated normalized metadata record in `email_filter_decisions`, keyed by raw email ID and strategy so re-runs update the same audit row.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
