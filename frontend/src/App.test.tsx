@@ -8,7 +8,33 @@ function renderAtPath(pathname: string) {
   return render(<App />);
 }
 
-function mockFetchResponses(responses: Record<string, object>) {
+type MockResponseBody = Record<string, unknown>;
+
+type MockResponse =
+  | MockResponseBody
+  | {
+      body: MockResponseBody;
+      status: number;
+    };
+
+type MockResponseConfig = MockResponse | MockResponse[];
+
+function isMockResponseConfig(
+  value: MockResponse,
+): value is { body: object; status: number } {
+  return "body" in value && "status" in value;
+}
+
+function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
+  const responseQueues = new Map<string, MockResponse[]>();
+
+  for (const [path, response] of Object.entries(responses)) {
+    responseQueues.set(
+      path,
+      Array.isArray(response) ? [...response] : [response],
+    );
+  }
+
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url =
       typeof input === "string"
@@ -17,16 +43,27 @@ function mockFetchResponses(responses: Record<string, object>) {
           ? input.href
           : input.url;
     const path = url.startsWith("http") ? new URL(url).pathname : url;
-    const body = responses[path];
+    const config = responseQueues.get(path);
 
-    if (!body) {
+    if (!config) {
       throw new Error(`Unhandled fetch request: ${path}`);
     }
+
+    const nextConfig = config.length > 1 ? config.shift() : config[0];
+
+    if (!nextConfig) {
+      throw new Error(`No mock fetch responses left for: ${path}`);
+    }
+
+    const body = isMockResponseConfig(nextConfig)
+      ? nextConfig.body
+      : nextConfig;
+    const status = isMockResponseConfig(nextConfig) ? nextConfig.status : 200;
 
     return Promise.resolve(
       new Response(JSON.stringify(body), {
         headers: { "Content-Type": "application/json" },
-        status: 200,
+        status,
       }),
     );
   });
@@ -37,6 +74,7 @@ function mockFetchResponses(responses: Record<string, object>) {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   window.history.pushState({}, "", "/");
 });
@@ -68,6 +106,102 @@ describe("App", () => {
 
     expect(emptyState.textContent).toContain(
       "Future deterministic dashboard metrics will render here after the metrics API exists.",
+    );
+  });
+
+  it("starts manual sync from the overview page and renders the returned status", async () => {
+    const fetchMock = mockFetchResponses({
+      "/sync/status": {
+        state: "idle",
+      },
+      "/sync": {
+        account_id: "me@example.com",
+        finished_at: "2026-07-05T12:00:00Z",
+        last_error: null,
+        message_count: 2,
+        mode: "full_backfill",
+        page_count: 1,
+        provider: "gmail",
+        raw_email_count: 2,
+        recovered_from_expired_cursor: false,
+        started_at: "2026-07-05T12:00:00Z",
+        state: "succeeded",
+      },
+    });
+
+    renderAtPath("/");
+
+    expect(await screen.findByText("Current sync state: Idle")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+
+    expect(await screen.findByText("Last sync succeeded")).toBeTruthy();
+    expect(screen.getByText("2 messages")).toBeTruthy();
+    expect(screen.getByText("2 raw emails")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/sync",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("shows typed sync API errors when manual sync cannot start", async () => {
+    mockFetchResponses({
+      "/sync/status": {
+        state: "idle",
+      },
+      "/sync": {
+        body: {
+          error: {
+            code: "bad_request",
+            details: [],
+            message: "Gmail connection is not configured yet.",
+          },
+        },
+        status: 400,
+      },
+    });
+
+    renderAtPath("/");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Gmail connection is not configured yet.",
+    );
+  });
+
+  it("refreshes running sync status until the sync action is available again", async () => {
+    mockFetchResponses({
+      "/sync/status": [
+        {
+          message_count: 1,
+          raw_email_count: 1,
+          state: "running",
+        },
+        {
+          finished_at: "2026-07-05T12:00:00Z",
+          message_count: 3,
+          raw_email_count: 3,
+          state: "succeeded",
+        },
+      ],
+    });
+
+    renderAtPath("/");
+
+    expect(await screen.findByText("Sync is running")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Syncing" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    expect(
+      await screen.findByText("Last sync succeeded", {}, { timeout: 4000 }),
+    ).toBeTruthy();
+    expect(screen.getByText("3 messages")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sync now" })).toHaveProperty(
+      "disabled",
+      false,
     );
   });
 
