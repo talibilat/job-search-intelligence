@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,6 +20,86 @@ from app.providers.email import (
     EmailSyncCursorExpiredError,
     EmailSyncMode,
 )
+
+SyncJob = Callable[[], Awaitable[None]]
+SYNC_ON_OPEN_JOB_ID = "gmail-sync-on-open"
+
+
+class ScheduledJobScheduler(Protocol):
+    def add_job(
+        self,
+        func: Callable[[], Awaitable[None]],
+        trigger: str,
+        *,
+        seconds: int,
+        id: str,
+        replace_existing: bool,
+        next_run_time: datetime | None,
+    ) -> object:
+        """Schedule one async job."""
+        ...
+
+    def start(self) -> None:
+        """Start executing scheduled jobs."""
+        ...
+
+    def shutdown(self, *, wait: bool) -> None:
+        """Stop executing scheduled jobs."""
+        ...
+
+
+def create_apscheduler() -> ScheduledJobScheduler:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
+
+    return cast(ScheduledJobScheduler, AsyncIOScheduler())
+
+
+async def noop_sync_job() -> None:
+    """Safe placeholder until the concrete Gmail sync runner is wired in."""
+
+
+class SyncScheduler:
+    """Own APScheduler lifetime for sync jobs while the backend process runs."""
+
+    def __init__(
+        self,
+        *,
+        sync_on_open: bool,
+        interval_seconds: int,
+        sync_job: SyncJob,
+        scheduler: ScheduledJobScheduler | None = None,
+    ) -> None:
+        if interval_seconds < 1:
+            msg = "interval_seconds must be at least 1"
+            raise ValueError(msg)
+
+        self._sync_on_open = sync_on_open
+        self._interval_seconds = interval_seconds
+        self._sync_job = sync_job
+        self._scheduler = scheduler or create_apscheduler()
+        self._started = False
+
+    def start(self) -> None:
+        if not self._sync_on_open or self._started:
+            return
+
+        self._scheduler.add_job(
+            self._sync_job,
+            "interval",
+            seconds=self._interval_seconds,
+            id=SYNC_ON_OPEN_JOB_ID,
+            replace_existing=True,
+            next_run_time=datetime.now(UTC),
+        )
+        self._scheduler.start()
+        self._started = True
+
+    def shutdown(self) -> None:
+        if not self._started:
+            return
+
+        self._scheduler.shutdown(wait=False)
+        self._started = False
 
 
 class SyncService:

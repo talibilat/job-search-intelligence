@@ -20,7 +20,7 @@ from app.providers.email import (
     EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef
-from app.services.sync_service import EmailSyncService
+from app.services.sync_service import EmailSyncService, SyncScheduler
 
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 
@@ -92,6 +92,40 @@ class RecordingHistoryProvider:
         )
 
 
+class RecordingScheduler:
+    def __init__(self) -> None:
+        self.jobs: list[dict[str, object]] = []
+        self.started = False
+        self.shutdown_wait: bool | None = None
+
+    def add_job(
+        self,
+        func: object,
+        trigger: str,
+        *,
+        seconds: int,
+        id: str,
+        replace_existing: bool,
+        next_run_time: datetime | None,
+    ) -> None:
+        self.jobs.append(
+            {
+                "func": func,
+                "trigger": trigger,
+                "seconds": seconds,
+                "id": id,
+                "replace_existing": replace_existing,
+                "next_run_time": next_run_time,
+            }
+        )
+
+    def start(self) -> None:
+        self.started = True
+
+    def shutdown(self, *, wait: bool) -> None:
+        self.shutdown_wait = wait
+
+
 def test_expired_history_id_falls_back_to_resumable_reconciliation() -> None:
     provider = ExpiringHistoryProvider()
     service = EmailSyncService(provider=provider, page_size=250)
@@ -121,6 +155,77 @@ def test_expired_history_id_falls_back_to_resumable_reconciliation() -> None:
     assert provider.requests[0].sync_cursor == expired_cursor
     assert provider.requests[1].sync_cursor is None
     assert provider.requests[1].page_size == 250
+
+
+def test_sync_scheduler_starts_immediate_interval_job_when_enabled() -> None:
+    scheduler_backend = RecordingScheduler()
+    calls = 0
+
+    async def sync_job() -> None:
+        nonlocal calls
+        calls += 1
+
+    scheduler = SyncScheduler(
+        sync_on_open=True,
+        interval_seconds=300,
+        sync_job=sync_job,
+        scheduler=scheduler_backend,
+    )
+
+    scheduler.start()
+
+    assert scheduler_backend.started is True
+    assert len(scheduler_backend.jobs) == 1
+    job = scheduler_backend.jobs[0]
+    assert job["trigger"] == "interval"
+    assert job["seconds"] == 300
+    assert job["id"] == "gmail-sync-on-open"
+    assert job["replace_existing"] is True
+    assert isinstance(job["next_run_time"], datetime)
+    job_func = job["func"]
+    assert callable(job_func)
+    asyncio.run(job_func())
+    assert calls == 1
+
+
+def test_sync_scheduler_does_not_start_when_sync_on_open_disabled() -> None:
+    scheduler_backend = RecordingScheduler()
+
+    async def sync_job() -> None:
+        raise AssertionError("disabled scheduler must not run sync")
+
+    scheduler = SyncScheduler(
+        sync_on_open=False,
+        interval_seconds=300,
+        sync_job=sync_job,
+        scheduler=scheduler_backend,
+    )
+
+    scheduler.start()
+    scheduler.shutdown()
+
+    assert scheduler_backend.started is False
+    assert scheduler_backend.jobs == []
+    assert scheduler_backend.shutdown_wait is None
+
+
+def test_sync_scheduler_shutdown_stops_started_scheduler_without_waiting() -> None:
+    scheduler_backend = RecordingScheduler()
+
+    async def sync_job() -> None:
+        return None
+
+    scheduler = SyncScheduler(
+        sync_on_open=True,
+        interval_seconds=300,
+        sync_job=sync_job,
+        scheduler=scheduler_backend,
+    )
+
+    scheduler.start()
+    scheduler.shutdown()
+
+    assert scheduler_backend.shutdown_wait is False
 
 
 def test_incremental_metadata_page_forwards_resume_page_token() -> None:

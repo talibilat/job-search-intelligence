@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.20",
     "alembic>=1.16",
+    "apscheduler>=3.11",
     "cryptography>=43",
     "fastapi>=0.115",
     "keyring>=25.6",
