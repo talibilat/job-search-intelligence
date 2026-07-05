@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
+from ipaddress import ip_address
 from typing import Protocol, cast
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -34,11 +36,8 @@ _INVALID_RESPONSE_MESSAGE = "Ollama returned invalid generation data."
 class OllamaTransport(Protocol):
     async def post_json(
         self,
-        path: str,
-        *,
-        payload: dict[str, object],
-        timeout_seconds: int,
-    ) -> dict[str, object]:
+        request: OllamaChatTransportRequest,
+    ) -> OllamaChatResponse:
         """POST a JSON request to Ollama without logging prompt content."""
         ...
 
@@ -62,28 +61,23 @@ class UrllibOllamaTransport:
 
     async def post_json(
         self,
-        path: str,
-        *,
-        payload: dict[str, object],
-        timeout_seconds: int,
-    ) -> dict[str, object]:
+        request: OllamaChatTransportRequest,
+    ) -> OllamaChatResponse:
         return await asyncio.to_thread(
             self._post_json_sync,
-            path,
-            payload=payload,
-            timeout_seconds=timeout_seconds,
+            request,
         )
 
     def _post_json_sync(
         self,
-        path: str,
-        *,
-        payload: dict[str, object],
-        timeout_seconds: int,
-    ) -> dict[str, object]:
-        request = Request(
-            _join_ollama_url(self._base_url, path),
-            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        transport_request: OllamaChatTransportRequest,
+    ) -> OllamaChatResponse:
+        http_request = Request(
+            _join_ollama_url(self._base_url, transport_request.path),
+            data=json.dumps(
+                transport_request.payload.model_dump(exclude_none=True, mode="json"),
+                separators=(",", ":"),
+            ).encode("utf-8"),
             headers={
                 "Accept": "application/json",
                 "Content-Type": "application/json",
@@ -92,7 +86,7 @@ class UrllibOllamaTransport:
         )
 
         try:
-            with urlopen(request, timeout=timeout_seconds) as response:
+            with urlopen(http_request, timeout=transport_request.timeout_seconds) as response:
                 response_body = response.read()
         except TimeoutError as error:
             raise OllamaTransportTimeoutError from error
@@ -110,7 +104,10 @@ class UrllibOllamaTransport:
 
         if not isinstance(decoded_response, dict):
             raise OllamaTransportInvalidResponseError
-        return cast(dict[str, object], decoded_response)
+        try:
+            return OllamaChatResponse.model_validate(cast(dict[str, object], decoded_response))
+        except ValidationError:
+            raise OllamaTransportInvalidResponseError from None
 
 
 class OllamaChatMessagePayload(BaseModel):
@@ -135,6 +132,14 @@ class OllamaChatRequestPayload(BaseModel):
     stream: bool = False
     format: str | None = Field(default=None, min_length=1)
     options: OllamaRequestOptions | None = None
+
+
+class OllamaChatTransportRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    path: str = Field(min_length=1)
+    payload: OllamaChatRequestPayload
+    timeout_seconds: int = Field(ge=1)
 
 
 class OllamaChatResponseMessage(BaseModel):
@@ -166,21 +171,19 @@ class OllamaLLMProvider:
         settings: AppSettings,
         transport: OllamaTransport | None = None,
     ) -> None:
+        _validate_local_base_url(settings.ollama_base_url)
         self._chat_model = settings.ollama_chat_model
         self._timeout_seconds = settings.llm_timeout_seconds
         self._transport = transport or UrllibOllamaTransport(base_url=settings.ollama_base_url)
 
     async def generate(self, request: LLMGenerationRequest) -> LLMGenerationResponse:
-        payload = _chat_request_payload(request, default_model=self._chat_model).model_dump(
-            exclude_none=True,
-            mode="json",
+        transport_request = OllamaChatTransportRequest(
+            path=_OLLAMA_CHAT_PATH,
+            payload=_chat_request_payload(request, default_model=self._chat_model),
+            timeout_seconds=self._timeout_seconds,
         )
         try:
-            response_payload = await self._transport.post_json(
-                _OLLAMA_CHAT_PATH,
-                payload=payload,
-                timeout_seconds=self._timeout_seconds,
-            )
+            response = await self._transport.post_json(transport_request)
         except OllamaTransportTimeoutError as error:
             raise LLMProviderTimeoutError(public_message="Ollama request timed out.") from error
         except OllamaTransportInvalidResponseError as error:
@@ -192,7 +195,7 @@ class OllamaLLMProvider:
                 ) from error
             raise LLMProviderRequestError(public_message="Ollama request failed.") from error
 
-        return _generation_response(response_payload)
+        return _generation_response(response)
 
 
 def _chat_request_payload(
@@ -227,12 +230,7 @@ def _request_options(options: LLMGenerationOptions) -> OllamaRequestOptions | No
     )
 
 
-def _generation_response(payload: dict[str, object]) -> LLMGenerationResponse:
-    try:
-        response = OllamaChatResponse.model_validate(payload)
-    except ValidationError as error:
-        raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from error
-
+def _generation_response(response: OllamaChatResponse) -> LLMGenerationResponse:
     if not response.done:
         raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE)
 
@@ -273,3 +271,25 @@ def _join_ollama_url(base_url: str, path: str) -> str:
     if path.startswith("/"):
         return f"{base_url}{path}"
     return f"{base_url}/{path}"
+
+
+def _validate_local_base_url(base_url: str) -> None:
+    parsed = urlsplit(base_url)
+    if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+        raise LLMProviderUnavailableError(
+            public_message="Ollama base URL must point to a local host."
+        )
+    if not _is_local_hostname(parsed.hostname):
+        raise LLMProviderUnavailableError(
+            public_message="Ollama base URL must point to a local host."
+        )
+
+
+def _is_local_hostname(hostname: str) -> bool:
+    normalized = hostname.strip().lower()
+    if normalized == "localhost" or normalized.endswith(".localhost"):
+        return True
+    try:
+        return ip_address(normalized).is_loopback
+    except ValueError:
+        return False

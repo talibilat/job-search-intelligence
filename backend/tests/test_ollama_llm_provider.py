@@ -20,8 +20,11 @@ from app.providers.llm import (
     LLMTokenUsage,
 )
 from app.providers.llm.ollama import (
+    OllamaChatResponse,
+    OllamaChatTransportRequest,
     OllamaLLMProvider,
     OllamaTransportError,
+    OllamaTransportInvalidResponseError,
     OllamaTransportTimeoutError,
 )
 
@@ -30,21 +33,18 @@ class FakeOllamaTransport:
     def __init__(
         self,
         *,
-        response: dict[str, object] | None = None,
+        response: OllamaChatResponse | None = None,
         error: Exception | None = None,
     ) -> None:
         self._response = response or _ollama_response()
         self._error = error
-        self.calls: list[tuple[str, dict[str, object], int]] = []
+        self.calls: list[OllamaChatTransportRequest] = []
 
     async def post_json(
         self,
-        path: str,
-        *,
-        payload: dict[str, object],
-        timeout_seconds: int,
-    ) -> dict[str, object]:
-        self.calls.append((path, payload, timeout_seconds))
+        request: OllamaChatTransportRequest,
+    ) -> OllamaChatResponse:
+        self.calls.append(request)
         if self._error is not None:
             raise self._error
         return self._response
@@ -86,15 +86,17 @@ def _ollama_response(
     content: str = "application_confirmation",
     model: str = "llama3.1",
     done_reason: str = "stop",
-) -> dict[str, object]:
-    return {
-        "model": model,
-        "message": {"role": "assistant", "content": content},
-        "done": True,
-        "done_reason": done_reason,
-        "prompt_eval_count": 7,
-        "eval_count": 11,
-    }
+) -> OllamaChatResponse:
+    return OllamaChatResponse.model_validate(
+        {
+            "model": model,
+            "message": {"role": "assistant", "content": content},
+            "done": True,
+            "done_reason": done_reason,
+            "prompt_eval_count": 7,
+            "eval_count": 11,
+        }
+    )
 
 
 def test_ollama_provider_satisfies_protocol_and_builds_chat_payload() -> None:
@@ -121,9 +123,10 @@ def test_ollama_provider_satisfies_protocol_and_builds_chat_payload() -> None:
     )
 
     assert len(transport.calls) == 1
-    path, payload, timeout_seconds = transport.calls[0]
-    assert path == "/api/chat"
-    assert timeout_seconds == 12
+    transport_request = transport.calls[0]
+    payload = transport_request.payload.model_dump(exclude_none=True, mode="json")
+    assert transport_request.path == "/api/chat"
+    assert transport_request.timeout_seconds == 12
     assert payload["model"] == "llama3.1"
     assert payload["stream"] is False
     assert payload["messages"] == [
@@ -154,7 +157,7 @@ def test_ollama_provider_uses_request_model_override_and_json_format() -> None:
     )
 
     assert response.model == "mistral"
-    _, payload, _ = transport.calls[0]
+    payload = transport.calls[0].payload.model_dump(exclude_none=True, mode="json")
     assert payload["model"] == "mistral"
     assert payload["format"] == "json"
     assert "options" not in payload
@@ -170,9 +173,7 @@ def test_ollama_provider_maps_length_finish_reason() -> None:
 
 
 def test_ollama_provider_rejects_invalid_response_without_private_payload() -> None:
-    transport = FakeOllamaTransport(
-        response={"model": "llama3.1", "message": {"content": ""}, "done": True}
-    )
+    transport = FakeOllamaTransport(error=OllamaTransportInvalidResponseError())
     provider = OllamaLLMProvider(settings=_settings(), transport=transport)
 
     with pytest.raises(LLMProviderResponseError) as error_info:
@@ -180,6 +181,26 @@ def test_ollama_provider_rejects_invalid_response_without_private_payload() -> N
 
     assert error_info.value.public_message == "Ollama returned invalid generation data."
     assert "synthetic job email" not in str(error_info.value)
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://ollama.example.com",
+        "http://192.0.2.10:11434",
+    ],
+)
+def test_ollama_provider_rejects_non_local_base_url(base_url: str) -> None:
+    transport = FakeOllamaTransport()
+
+    with pytest.raises(LLMProviderUnavailableError) as error_info:
+        OllamaLLMProvider(
+            settings=AppSettings(_env_file=None, ollama_base_url=base_url),
+            transport=transport,
+        )
+
+    assert error_info.value.public_message == "Ollama base URL must point to a local host."
+    assert transport.calls == []
 
 
 @pytest.mark.parametrize(
