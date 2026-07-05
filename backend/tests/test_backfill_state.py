@@ -16,6 +16,8 @@ from app.providers.email import (
     EmailAddress,
     EmailAttachmentPolicy,
     EmailBodyBatch,
+    EmailBodyFetchFailure,
+    EmailBodyFetchFailureReason,
     EmailBodyFetchRequest,
     EmailBodySource,
     EmailConnection,
@@ -523,7 +525,11 @@ def test_full_backfill_marks_failure_without_advancing_page_progress(
                         subject="Application received",
                     ),
                 ),
-                next_page_token="page-2",
+                next_sync_cursor=EmailProviderCursor(
+                    account=gmail_account(),
+                    value="history-complete",
+                    issued_at=NOW + timedelta(minutes=1),
+                ),
             ),
         )
     )
@@ -552,6 +558,58 @@ def test_full_backfill_marks_failure_without_advancing_page_progress(
     assert state.last_error == "Gmail body fetching failed"
     assert sync_service.current_status().state is EmailSyncRunState.FAILED
     assert sync_service.current_status().last_error == "Gmail body fetching failed"
+
+
+def test_full_backfill_marks_body_batch_failures_without_advancing_page_progress(
+    tmp_path: Path,
+) -> None:
+    database_connection = migrated_connection(tmp_path)
+    backfill_state_service = BackfillStateService(
+        backfill_state_repository=BackfillStateRepository(database_connection),
+        sync_state_repository=SyncStateRepository(database_connection),
+    )
+    provider = BodyFailureBackfillProvider(
+        pages=(
+            EmailMetadataPage(
+                messages=(
+                    candidate_metadata(
+                        gmail_account(),
+                        "msg-candidate-1",
+                        from_addr="notifications@mail.greenhouse.io",
+                        subject="Application received",
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=gmail_account(),
+                    value="history-complete",
+                    issued_at=NOW + timedelta(minutes=1),
+                ),
+            ),
+        )
+    )
+    sync_service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(database_connection),
+        clock=lambda: NOW,
+    )
+    email_provider_connection = email_connection()
+
+    with pytest.raises(EmailProviderError, match="retained email bodies could not be fetched"):
+        asyncio.run(
+            sync_service.run_full_backfill(
+                connection=email_provider_connection,
+                backfill_state_service=backfill_state_service,
+            )
+        )
+
+    state = backfill_state_service.get_backfill_state(email_provider_connection.account)
+    assert state is not None
+    assert state.status is EmailBackfillStatus.FAILED
+    assert state.next_page_token is None
+    assert state.processed_page_count == 0
+    assert state.processed_message_count == 0
+    assert state.last_error == "One or more retained email bodies could not be fetched."
 
 
 class PaginatedBackfillProvider:
@@ -639,6 +697,25 @@ class FailingRetainedBodyBackfillProvider(RetainedBodyBackfillProvider):
         del connection
         self.body_requests.append(request)
         raise EmailProviderError(public_message="Gmail body fetching failed")
+
+
+class BodyFailureBackfillProvider(RetainedBodyBackfillProvider):
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        del connection
+        self.body_requests.append(request)
+        return EmailBodyBatch(
+            bodies=(),
+            failures=(
+                EmailBodyFetchFailure(
+                    ref=request.refs[0],
+                    reason=EmailBodyFetchFailureReason.PERMISSION_DENIED,
+                ),
+            ),
+        )
 
 
 def email_connection() -> EmailConnection:

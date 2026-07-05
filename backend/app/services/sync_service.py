@@ -654,6 +654,7 @@ class EmailSyncService:
                             metadata=page.messages,
                             candidate_query=build_broad_candidate_query(),
                         )
+                        _raise_for_retained_body_failures(body_batch)
                         if body_batch.bodies:
                             self._email_repository.upsert_retained_bodies(
                                 body_batch.bodies,
@@ -831,6 +832,7 @@ class EmailSyncService:
                         metadata=page_result.page.messages,
                         candidate_query=build_broad_candidate_query(),
                     )
+                    _raise_for_retained_body_failures(body_batch)
                     if body_batch.bodies:
                         self._email_repository.upsert_retained_bodies(
                             body_batch.bodies,
@@ -904,6 +906,13 @@ def _retained_body_batch_size(body_provider: RetainedBodyProvider) -> int | None
 
 def _can_fetch_retained_bodies(body_provider: object) -> bool:
     return callable(getattr(body_provider, "fetch_message_bodies", None))
+
+
+def _raise_for_retained_body_failures(body_batch: EmailBodyBatch) -> None:
+    if body_batch.failures:
+        raise EmailProviderError(
+            public_message="One or more retained email bodies could not be fetched."
+        )
 
 
 def _chunk_refs(

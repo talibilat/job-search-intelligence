@@ -97,11 +97,10 @@ class EmailConnectionRepository(BaseRepository[EmailConnectionRecord]):
         record = self.fetch_connection(account)
         if record is None:
             return None
-        return self._connection_from_record(record)
+        return _connection_from_record(record)
 
-    def fetch_latest_connection_metadata(
+    def fetch_default_connection_metadata(
         self,
-        *,
         provider: EmailProviderName,
     ) -> EmailConnection | None:
         record = self.fetch_one(
@@ -119,35 +118,36 @@ class EmailConnectionRepository(BaseRepository[EmailConnectionRecord]):
                 reauth_required,
                 updated_at
             FROM email_connections
-            WHERE provider = ?
-            ORDER BY updated_at DESC, connected_at DESC, account_id ASC
+            WHERE provider = ? AND reauth_required = 0
+            ORDER BY connected_at DESC, updated_at DESC
             LIMIT 1
             """,
             (provider.value,),
         )
         if record is None:
             return None
-        return self._connection_from_record(record)
-
-    def _connection_from_record(self, record: EmailConnectionRecord) -> EmailConnection:
-        return EmailConnection(
-            account=EmailAccountRef(
-                provider=EmailProviderName(record.provider),
-                account_id=record.account_id,
-            ),
-            display_email=None
-            if record.display_email is None
-            else EmailAddress(address=record.display_email),
-            credential_ref=SecretRef(
-                kind=SecretKind(record.credential_ref_kind),
-                provider=record.credential_ref_provider,
-                name=record.credential_ref_name,
-            ),
-            granted_scopes=tuple(record.granted_scopes),
-            connected_at=record.connected_at,
-            credential_expires_at=record.credential_expires_at,
-            reauth_required=record.reauth_required,
-        )
+        return _connection_from_record(record)
 
     def map_row(self, row: sqlite3.Row) -> EmailConnectionRecord:
         return EmailConnectionRecord.model_validate(row_to_dict(row))
+
+
+def _connection_from_record(record: EmailConnectionRecord) -> EmailConnection:
+    return EmailConnection(
+        account=EmailAccountRef(
+            provider=EmailProviderName(record.provider),
+            account_id=record.account_id,
+        ),
+        display_email=None
+        if record.display_email is None
+        else EmailAddress(address=record.display_email),
+        credential_ref=SecretRef(
+            kind=SecretKind(record.credential_ref_kind),
+            provider=record.credential_ref_provider,
+            name=record.credential_ref_name,
+        ),
+        granted_scopes=tuple(record.granted_scopes),
+        connected_at=record.connected_at,
+        credential_expires_at=record.credential_expires_at,
+        reauth_required=record.reauth_required,
+    )

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.auth import get_gmail_secret_store
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
-from app.config import AppSettings, EmailProviderName, get_settings
+from app.config import AppSettings, get_settings
 from app.db.repositories import (
     BackfillStateRepository,
     EmailConnectionRepository,
@@ -129,10 +129,10 @@ def resolve_email_sync_connection(settings: AppSettings) -> EmailConnection | No
     if not database_path.exists():
         return None
 
-    with sqlite3.connect(database_path) as connection:
+    with sqlite3.connect(database_path) as sqlite_connection:
         try:
-            return EmailConnectionRepository(connection).fetch_latest_connection_metadata(
-                provider=EmailProviderName.GMAIL,
+            return EmailConnectionRepository(sqlite_connection).fetch_default_connection_metadata(
+                settings.email_provider,
             )
         except sqlite3.OperationalError as error:
             if "no such table: email_connections" in str(error):

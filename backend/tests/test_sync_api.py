@@ -22,6 +22,7 @@ from app.config import (
     SecretStoreBackend,
     get_settings,
 )
+from app.db.repositories import EmailConnectionRepository
 from app.main import create_app
 from app.providers.email import (
     EmailAccountRef,
@@ -247,38 +248,13 @@ def test_post_sync_returns_provider_error_response_from_global_handler() -> None
     }
 
 
-def test_post_sync_uses_persisted_gmail_connection_when_available(
+def test_post_sync_uses_persisted_gmail_connection_metadata(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
     create_sync_tables(database_path)
-    persist_email_connection(database_path)
-    provider = FakeMetadataProvider()
-    status_store = EmailSyncStatusStore()
-    app = create_app()
-    app.dependency_overrides[get_settings] = lambda: AppSettings(
-        _env_file=None,
-        database_url=f"sqlite+aiosqlite:///{database_path}",
-        gmail_page_size=33,
-    )
-    app.dependency_overrides[get_sync_email_provider] = lambda: provider
-    app.dependency_overrides[get_sync_status_store] = lambda: status_store
-    client = TestClient(app)
-
-    response = client.post("/sync")
-
-    assert response.status_code == 200
-    assert response.json()["state"] == "succeeded"
-    assert response.json()["account_id"] == "me@example.com"
-    assert len(provider.requests) == 1
-    assert provider.requests[0].page_size == 33
-
-
-def test_post_sync_uses_dependency_wired_provider_repositories_and_connection(
-    tmp_path: Path,
-) -> None:
-    database_path = tmp_path / "jobtracker.sqlite3"
-    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        EmailConnectionRepository(connection).save_connection(email_connection())
     provider = FakeMetadataProvider()
     status_store = EmailSyncStatusStore()
     app = create_app()
@@ -288,7 +264,6 @@ def test_post_sync_uses_dependency_wired_provider_repositories_and_connection(
         gmail_page_size=77,
     )
     app.dependency_overrides[get_sync_email_provider] = lambda: provider
-    app.dependency_overrides[get_email_sync_connection_resolver] = lambda: email_connection
     app.dependency_overrides[get_sync_status_store] = lambda: status_store
     client = TestClient(app)
 
@@ -507,38 +482,4 @@ def create_sync_tables(database_path: Path) -> None:
                 PRIMARY KEY (provider, account_id)
             )
             """,
-        )
-
-
-def persist_email_connection(database_path: Path) -> None:
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            """
-            INSERT INTO email_connections (
-                provider,
-                account_id,
-                display_email,
-                credential_ref_kind,
-                credential_ref_provider,
-                credential_ref_name,
-                granted_scopes,
-                connected_at,
-                credential_expires_at,
-                reauth_required,
-                updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "gmail",
-                "me@example.com",
-                "me@example.com",
-                "oauth_token",
-                "gmail",
-                "me-example-com",
-                f'["{GMAIL_READONLY_SCOPE}"]',
-                NOW.isoformat(),
-                None,
-                0,
-                NOW.isoformat(),
-            ),
         )
