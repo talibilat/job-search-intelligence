@@ -34,6 +34,7 @@ The frontend shell keeps the root overview page intact, adds a backend-backed ov
 [JT-067 2026-07-05] Default sync now resolves the latest non-reauth Gmail connection, runs resumable full backfill until `email_backfill_state` is completed and an incremental cursor is promoted, and then uses incremental sync on later runs.
 [JT-021 2026-07-05] The Alembic chain now creates `application_corrections` for audited manual aggregation overrides with constrained correction types, valid JSON snapshots, application delete cascade, and a per-application timestamp index.
 [JT-022 2026-07-05] The Alembic chain now creates `chat_messages` for compact local chat history storage with constrained roles, JSON-array citation and tool-output payloads, and a conversation/time index for future history reads.
+[JT-099 2026-07-05] The Phase 2 golden-set fixture scaffold now lives at `backend/evals/golden_set.jsonl` with 30 private-data-free synthetic Gmail cases and a focused pytest contract check.
 
 ## Architecture at a glance
 
@@ -121,7 +122,7 @@ Developer instructions:
 - `AGENTS.md` - the canonical local agent guide with workflows and non-negotiable constraints.
 - `docs/conventions.md` - baseline coding standards.
 - `docs/google-oauth-setup.md` - Google OAuth setup guide for user-created Gmail credentials.
-- `docs/synthetic-fixtures.md` - private-data-free backend fixture format and SQLite loader for deterministic backend, aggregation, and dashboard smoke work.
+- `docs/synthetic-fixtures.md` - private-data-free backend fixture formats, including SQLite smoke fixtures and the Phase 2 golden-set JSONL scaffold.
 - `.editorconfig` - shared editor defaults.
 - Project-local agent worktrees and scratch checkouts under `.worktrees/` are ignored; ticket source-of-truth files stay tracked under `tickets/`.
 
@@ -295,6 +296,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - [JT-020 2026-07-05 v3] Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` also verifies that only `ghost_inferred` events may use `email_id: null`; evidence-backed events require source email references.
 - Synthetic fixture loader test: `uv run pytest tests/test_synthetic_fixture_loader.py -v` from `backend/` verifies JSON fixture loading into the four core SQLite tables, typed per-table load counts, repository reads, and idempotent reloads.
 - [JT-020 2026-07-05 v3] Synthetic fixture loader test: `uv run pytest tests/test_synthetic_fixture_loader.py -v` from `backend/` also verifies loading a `ghost_inferred` application event without an email reference.
+- Golden-set fixture test: `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/` verifies the private-data-free JSONL eval scaffold, synthetic sender domains, unique case IDs, negative examples, and core positive category coverage.
 - Backfill reconciliation service: `build_backfill_reconciliation_metrics` compares provider metadata pages with local `raw_emails` rows for one provider, reports provider page count, total and unique provider message counts, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a deterministic `reconciled` flag; `uv run pytest tests/test_sync_service_reconciliation.py -v` verifies duplicate provider paging and missing or extra local rows.
 - Repository stubs: import `EmailRepository`, `EmailConnectionRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports, raw-email retention-state invariants, retained-body repr redaction, email connection upserts, and row-to-record mapping for focused domain DTOs.
 - Domain DTOs: `uv run pytest tests/test_domain_dtos.py -v` from `backend/` verifies package exports, classification category and confidence validation, application salary-range validation, email chunk embedding shape and repr redaction, JSON object parsing for correction snapshots, and chat message role plus JSON-array validation.
@@ -362,6 +364,6 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Frontend CI: `.github/workflows/frontend-ci.yml` runs on pushes and pull requests to `main`, installs `uv`, sets up Python 3.12, syncs locked backend dependencies, sets up Node.js with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` from `frontend/`, and runs `npm run check` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Classification changes: run the golden-set eval at `backend/evals/run_eval.py`; regressions block merges.
+- Classification changes: run the golden-set eval at `backend/evals/run_eval.py` once the runner exists; fixture-only changes to `backend/evals/golden_set.jsonl` must pass `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 
 Never claim work is complete without fresh verification evidence.

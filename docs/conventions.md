@@ -59,7 +59,7 @@ Baseline coding standards for every agent and contributor.
 - Use conventional commit messages.
 - Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; route secrets through `SecretStore` and store them encrypted at rest.
 - Use the redaction helpers exported by `app.security` before logging structured data that may contain secrets or retained email bodies.
-- Synthetic fixtures must be private-data-free, must set `contains_private_data` to `false`, and must use synthetic domains and content instead of copied inbox data.
+- Synthetic fixtures and golden-set fixtures must be private-data-free, must set `contains_private_data` to `false`, and must use synthetic domains and content instead of copied inbox data.
 - Do not add telemetry, shared credentials, auto-apply, or autonomous outbound email.
 
 ## Verification
@@ -69,7 +69,8 @@ Baseline coding standards for every agent and contributor.
 - Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Frontend browser smoke changes: run `npm run test:smoke` from `frontend/` after installing Chromium with `npx playwright install chromium` once per machine.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
-- Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
+- Classification changes: run the golden-set eval when the runner exists; regressions block merges unless explicitly accepted.
+- Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.
 
