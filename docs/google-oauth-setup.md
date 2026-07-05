@@ -3,10 +3,10 @@
 This guide documents the user-created Google OAuth client needed for Gmail ingestion.
 It maps to FR-0, FR-0.2, FR-1.1, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 1.
 
-Gmail message listing reads OAuth token material only through `SecretStore`.
+Gmail message listing and retained-body fetching read OAuth token material only through `SecretStore`.
 The backend can start Gmail OAuth with `GET /auth/gmail` and complete the local callback with `GET /auth/gmail/callback`.
 The callback exchanges the authorization code, validates the returned `gmail.readonly` scope, stores token material through the configured `SecretStore`, and persists only non-secret connection metadata in SQLite.
-Token refresh and retained body fetching remain later Gmail ingestion work.
+Token refresh, endpoint-driven sync, and repository writes for retained bodies remain later Gmail ingestion work.
 This guide documents the setup and runtime security contract the app must follow.
 
 ## Security Boundaries
@@ -161,7 +161,14 @@ They deliberately exclude snippets, payload bodies, raw MIME content, and attach
 Incremental sync cursors and metadata-only repository writes now flow through the sync service, `email_sync_state`, and `raw_emails` tables.
 Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.
 
-Retained body fetching, richer normalization, and connected-account persistence remain separate Phase 1 work.
+Retained-body repository writes, richer normalization, and connected-account persistence remain separate Phase 1 work.
+
+## Retained Body Fetching Boundary
+
+Current Gmail retained-body fetching is separate from broad metadata listing.
+Callers must provide selected message refs, such as broad job-search candidates or explicit debugging and reconciliation refs.
+The Gmail adapter fetches those messages with `format=full` and partial fields for IDs, thread IDs, and payload content only; it does not request snippets.
+It prefers `text/plain`, converts `text/html` MIME bodies to normalized plain text through the provider DTO path, ignores attachments, reports typed empty-body failures, and keeps token material behind `SecretStore`.
 
 ## Preflight Checklist
 
