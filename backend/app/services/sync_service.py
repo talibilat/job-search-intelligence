@@ -221,6 +221,7 @@ class SyncService:
             updated_at=updated_at or datetime.now(UTC),
         )
 
+
 class EmailSyncStateStatus(BaseModel):
     """Persisted sync cursor snapshot for service-level status checks."""
 
