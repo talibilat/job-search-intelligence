@@ -145,6 +145,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
         assert {
             "email_connections",
             "raw_emails",
+            "email_filter_decisions",
             "email_classifications",
             "applications",
             "application_events",
@@ -202,6 +203,13 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "completion_tokens",
             "total_tokens",
             "estimated_cost_usd",
+        ]
+        assert sqlite_column_names(connection, "email_filter_decisions") == [
+            "email_id",
+            "strategy",
+            "outcome",
+            "reason",
+            "decided_at",
         ]
         assert sqlite_column_names(connection, "applications") == [
             "id",
@@ -271,6 +279,9 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
         assert email_chunks_sql is not None
         assert "+content TEXT" in email_chunks_sql[0]
         assert foreign_key_targets(connection, "email_classifications") == {
+            ("email_id", "raw_emails", "id"),
+        }
+        assert foreign_key_targets(connection, "email_filter_decisions") == {
             ("email_id", "raw_emails", "id"),
         }
         assert foreign_key_targets(connection, "application_events") == {

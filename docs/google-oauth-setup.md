@@ -169,11 +169,13 @@ They deliberately exclude snippets, payload bodies, raw MIME content, and attach
 Before metadata leaves the Gmail adapter, opaque message IDs, thread IDs, and history cursors are trimmed without case changes; email addresses are lowercased and deduplicated; display names and headers are trimmed; Gmail system labels are canonicalized while custom label IDs keep their casing; and parsed message timestamps are converted to timezone-aware UTC.
 [JT-066 2026-07-05 v2] Backfill state and final replacement cursor promotion are repository-backed so full metadata backfills can resume safely.
 Incremental sync cursors, metadata-only repository writes, and retained-body repository writes now flow through the sync service, `email_sync_state`, and `raw_emails` tables.
+Broad job-search filter outcomes now flow through the sync service into `email_filter_decisions`, keyed by raw email ID and strategy.
+Stored filter reasons are static signal tokens and must not include raw subjects, body text, snippets, OAuth tokens, or Gmail payloads.
 Retained-body repository writes are insert-or-update, so an explicit candidate, debugging, or reconciliation body fetch can create a minimal `raw_emails` row before metadata arrives.
 Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.
 Metadata-listing failures are mapped into public-safe provider errors: authorization failures ask the client to reconnect Gmail, insufficient scopes ask for read-only access, rate limits and temporary outages ask the client to try again later, invalid Gmail responses are reported without raw payloads, and generic provider failures do not expose OAuth tokens or Gmail response bodies.
 
-Manual sync already uses the persisted non-secret connection metadata to pass a `SecretRef`-backed account to the Gmail provider.
+Manual sync already uses the persisted non-secret connection metadata to pass a `SecretRef`-backed account to the Gmail provider and to persist public-safe filter decision audit rows after metadata persistence.
 Expired credentials are refreshed inside the provider before Gmail metadata calls, and richer product-page behavior remains separate Phase 1 work.
 
 ## Retained Body Fetching Boundary
@@ -197,5 +199,5 @@ Other explicit retained or debugging body fetches can be persisted safely even w
 - The `/setup` page can start Gmail OAuth and must show only the backend-built authorization URL, requested scope, and non-secret setup status.
 - `GET /auth/gmail` returns a Google authorization URL and never returns client secrets or tokens.
 - `GET /auth/gmail/callback` returns only non-secret connection metadata and stores token material through `SecretStore`.
-- `POST /sync` uses the persisted non-secret Gmail connection metadata, refreshes expired Gmail credentials behind the provider seam, and keeps OAuth token material behind `SecretStore`.
+- `POST /sync` uses the persisted non-secret Gmail connection metadata, refreshes expired Gmail credentials behind the provider seam, persists only public-safe filter decision reasons, and keeps OAuth token material behind `SecretStore`.
 - No credentials, tokens, client JSON, or secret-store files are committed or logged.

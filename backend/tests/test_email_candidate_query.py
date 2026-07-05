@@ -8,6 +8,7 @@ from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
+    EmailCandidateDecisionOutcome,
     EmailCandidateQuery,
     EmailCandidateQueryStrategy,
     EmailMessageMetadata,
@@ -147,6 +148,41 @@ def test_broad_candidate_query_does_not_match_broad_consumer_platform_roots() ->
     assert not query.matches_metadata(linkedin_update)
     assert not query.matches_metadata(indeed_update)
     assert query.matches_metadata(indeed_job_signal)
+
+
+def test_candidate_query_explains_filter_outcome_and_reason_without_private_metadata() -> None:
+    account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
+    query = build_broad_candidate_query()
+    sender_domain_match = EmailMessageMetadata(
+        ref=EmailMessageRef(account=account, message_id="msg-1"),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Your weekly newsletter",
+        labels=("INBOX",),
+    )
+    blocked_label_match = EmailMessageMetadata(
+        ref=EmailMessageRef(account=account, message_id="msg-2"),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Application received",
+        labels=("SPAM",),
+    )
+    no_signal_match = EmailMessageMetadata(
+        ref=EmailMessageRef(account=account, message_id="msg-3"),
+        from_addr=EmailAddress(address="news@example.com"),
+        subject="Personal inbox subject that should not be stored",
+        labels=("INBOX",),
+    )
+
+    sender_decision = query.evaluate_metadata(sender_domain_match)
+    blocked_decision = query.evaluate_metadata(blocked_label_match)
+    no_signal_decision = query.evaluate_metadata(no_signal_match)
+
+    assert sender_decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE
+    assert sender_decision.reason == "sender_domain:greenhouse.io"
+    assert blocked_decision.outcome is EmailCandidateDecisionOutcome.REJECTED
+    assert blocked_decision.reason == "excluded_label:spam"
+    assert no_signal_decision.outcome is EmailCandidateDecisionOutcome.REJECTED
+    assert no_signal_decision.reason == "no_filter_signal"
+    assert "Personal inbox subject" not in no_signal_decision.model_dump_json()
 
 
 def test_candidate_query_excludes_metadata_with_blocked_labels() -> None:

@@ -13,6 +13,7 @@ from app.config import AppSettings, get_settings
 from app.db.repositories import (
     BackfillStateRepository,
     EmailConnectionRepository,
+    EmailFilterDecisionRepository,
     EmailRepository,
     SyncStateRepository,
 )
@@ -82,6 +83,7 @@ class ConfiguredEmailSyncRuntime:
                 sync_state_repository = SyncStateRepository(sqlite_connection)
                 backfill_state_repository = BackfillStateRepository(sqlite_connection)
                 email_repository = EmailRepository(sqlite_connection)
+                filter_decision_repository = EmailFilterDecisionRepository(sqlite_connection)
                 sync_state_service = SyncService(
                     sync_state_repository=sync_state_repository,
                 )
@@ -89,6 +91,7 @@ class ConfiguredEmailSyncRuntime:
                     provider=self._email_provider,
                     page_size=self._settings.gmail_page_size,
                     email_repository=email_repository,
+                    filter_decision_repository=filter_decision_repository,
                     sync_service=sync_state_service,
                     status_callback=self._status_store.set_status,
                 )
