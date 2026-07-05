@@ -125,10 +125,14 @@ job-search-intelligence/
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
+[JT-020 2026-07-05 v2] - **`application_events`** - `id`, `application_id` (FK), nullable `email_id` (FK; null for inferred events such as `ghost_inferred`), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
 - **`application_corrections`** - `id`, `application_id`, `correction_type` (`merge | split | status_edit | event_edit | reset_lock`), `before_json`, `after_json`, `reason`, `created_at`.
 - **`insights`** - `id`, `type` (`why_rejected | skill_gaps | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
 - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, `embedding`.
+[JT-020 2026-07-05 v2] - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, 1536-dimensional `embedding`.
 - **`chat_messages`** - `id`, `conversation_id`, `role`, `content`, `citations_json`, `tool_outputs_json`, `created_at`.
+
+[JT-020 2026-07-05 v1] The initial core schema migration enforces enum, confidence, salary-range, and raw-email retention invariants with SQLite `CHECK` constraints, uses foreign keys for email/application relationships, and adds practical lookup indexes for the regular tables.
 
 ### Aggregation rule (the hard part)
 

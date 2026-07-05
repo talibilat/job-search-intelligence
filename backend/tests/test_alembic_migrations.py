@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+from importlib import import_module
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -128,3 +130,356 @@ def test_alembic_can_create_version_table_against_sqlite(tmp_path: Path) -> None
         }
 
     assert "alembic_version" in table_names
+
+
+def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        load_sqlite_vec(connection)
+        table_names = sqlite_table_names(connection)
+
+        assert {
+            "raw_emails",
+            "email_classifications",
+            "applications",
+            "application_events",
+            "insights",
+            "email_chunks",
+        }.issubset(table_names)
+        assert sqlite_column_names(connection, "raw_emails") == [
+            "id",
+            "thread_id",
+            "from_addr",
+            "to_addr",
+            "subject",
+            "sent_at",
+            "body_text",
+            "body_retention_state",
+            "labels",
+            "provider",
+            "ingested_at",
+        ]
+        assert sqlite_column_names(connection, "email_classifications") == [
+            "email_id",
+            "is_job_related",
+            "category",
+            "confidence",
+            "model",
+            "prompt_version",
+            "classified_at",
+        ]
+        assert sqlite_column_names(connection, "applications") == [
+            "id",
+            "company",
+            "role_title",
+            "source",
+            "first_seen_at",
+            "current_status",
+            "salary_min",
+            "salary_max",
+            "currency",
+            "location",
+            "work_mode",
+            "seniority",
+            "sponsorship",
+            "tech_stack",
+            "last_activity_at",
+            "manual_lock",
+            "created_at",
+            "updated_at",
+        ]
+        assert sqlite_column_names(connection, "application_events") == [
+            "id",
+            "application_id",
+            "email_id",
+            "event_type",
+            "event_at",
+            "extract_note",
+        ]
+        assert sqlite_column_names(connection, "insights") == [
+            "id",
+            "type",
+            "content",
+            "inputs_hash",
+            "is_stale",
+            "model",
+            "generated_at",
+        ]
+        assert sqlite_column_names(connection, "email_chunks") == [
+            "rowid",
+            "email_id",
+            "chunk_index",
+            "content",
+            "embedding",
+        ]
+        email_chunks_sql = connection.execute(
+            "SELECT sql FROM sqlite_schema WHERE name = 'email_chunks'",
+        ).fetchone()
+        assert email_chunks_sql is not None
+        assert "+content TEXT" in email_chunks_sql[0]
+        assert foreign_key_targets(connection, "email_classifications") == {
+            ("email_id", "raw_emails", "id"),
+        }
+        assert foreign_key_targets(connection, "application_events") == {
+            ("application_id", "applications", "id"),
+            ("email_id", "raw_emails", "id"),
+        }
+
+
+def test_application_events_allow_ghost_inferred_without_email(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(
+            """
+            INSERT INTO applications (
+                id,
+                company,
+                role_title,
+                source,
+                first_seen_at,
+                current_status,
+                last_activity_at,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "Example Co",
+                "Software Engineer",
+                "company_site",
+                "2026-07-01T00:00:00Z",
+                "ghosted",
+                "2026-07-31T00:00:00Z",
+                "2026-07-01T00:00:00Z",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        connection.execute(
+            """
+            INSERT INTO application_events (
+                id,
+                application_id,
+                email_id,
+                event_type,
+                event_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "event_1",
+                "app_1",
+                None,
+                "ghost_inferred",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        assert connection.execute(
+            "SELECT email_id FROM application_events WHERE id = 'event_1'",
+        ).fetchone() == (None,)
+
+
+def test_application_events_reject_ghost_inferred_with_email(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(
+            """
+            INSERT INTO raw_emails (
+                id,
+                body_retention_state,
+                labels,
+                provider,
+                ingested_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "email_1",
+                "metadata_only",
+                "[]",
+                "gmail",
+                "2026-07-01T00:00:00Z",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO applications (
+                id,
+                company,
+                role_title,
+                source,
+                first_seen_at,
+                current_status,
+                last_activity_at,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "Example Co",
+                "Software Engineer",
+                "company_site",
+                "2026-07-01T00:00:00Z",
+                "ghosted",
+                "2026-07-31T00:00:00Z",
+                "2026-07-01T00:00:00Z",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO application_events (
+                    id,
+                    application_id,
+                    email_id,
+                    event_type,
+                    event_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "event_1",
+                    "app_1",
+                    "email_1",
+                    "ghost_inferred",
+                    "2026-07-31T00:00:00Z",
+                ),
+            )
+
+
+def test_application_events_require_email_for_evidence_backed_events(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(
+            """
+            INSERT INTO applications (
+                id,
+                company,
+                role_title,
+                source,
+                first_seen_at,
+                current_status,
+                last_activity_at,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "Example Co",
+                "Software Engineer",
+                "company_site",
+                "2026-07-01T00:00:00Z",
+                "rejected",
+                "2026-07-31T00:00:00Z",
+                "2026-07-01T00:00:00Z",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO application_events (
+                    id,
+                    application_id,
+                    email_id,
+                    event_type,
+                    event_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "event_1",
+                    "app_1",
+                    None,
+                    "rejection",
+                    "2026-07-31T00:00:00Z",
+                ),
+            )
+
+
+def test_alembic_downgrade_removes_jt020_core_schema(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "20260705_0001")
+
+    with sqlite3.connect(database_path) as connection:
+        table_names = sqlite_table_names(connection)
+
+        assert "email_sync_state" in table_names
+        assert "raw_emails" not in table_names
+        assert "email_classifications" not in table_names
+        assert "applications" not in table_names
+        assert "application_events" not in table_names
+        assert "insights" not in table_names
+        assert not any(table_name.startswith("email_chunks") for table_name in table_names)
+
+
+def test_alembic_env_uses_shared_sqlite_vec_loader() -> None:
+    env_py = BACKEND_ROOT / "app" / "db" / "migrations" / "env.py"
+
+    env_source = env_py.read_text()
+
+    assert "load_sqlite_vec_sync" in env_source
+    assert "settings.sqlite_vec_extension_path" in env_source
+
+
+def sqlite_table_names(connection: sqlite3.Connection) -> set[str]:
+    return {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'",
+        )
+    }
+
+
+def sqlite_column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:
+    return [str(row[1]) for row in connection.execute(f"PRAGMA table_info({table_name})")]
+
+
+def foreign_key_targets(
+    connection: sqlite3.Connection,
+    table_name: str,
+) -> set[tuple[str, str, str]]:
+    return {
+        (str(row[3]), str(row[2]), str(row[4]))
+        for row in connection.execute(f"PRAGMA foreign_key_list({table_name})")
+    }
+
+
+def load_sqlite_vec(connection: sqlite3.Connection) -> None:
+    sqlite_vec = import_module("sqlite_vec")
+    load = getattr(sqlite_vec, "load", None)
+    if not callable(load):
+        raise RuntimeError("sqlite_vec.load is unavailable")
+
+    connection.enable_load_extension(True)
+    try:
+        load(connection)
+    finally:
+        connection.enable_load_extension(False)

@@ -47,7 +47,7 @@ def _register_sqlite_connection_setup(
     @event.listens_for(engine.sync_engine, "connect")
     def configure_sqlite_connection(dbapi_connection: Any, _connection_record: Any) -> None:
         _load_sqlite_vec(dbapi_connection, sqlite_vec_extension_path)
-        _verify_sqlite_vec(dbapi_connection)
+        verify_sqlite_vec(dbapi_connection)
         _set_sqlite_pragmas(dbapi_connection)
 
 
@@ -63,13 +63,22 @@ def _set_sqlite_pragmas(dbapi_connection: Any) -> None:
 
 
 def _load_sqlite_vec(dbapi_connection: Any, sqlite_vec_extension_path: Path | None) -> None:
-    extension_path = str(sqlite_vec_extension_path or _bundled_sqlite_vec_extension_path())
+    extension_path = _sqlite_vec_extension_path(sqlite_vec_extension_path)
     dbapi_connection.run_async(
         lambda driver_connection: _load_sqlite_extension_async(
             driver_connection,
             extension_path,
         ),
     )
+
+
+def load_sqlite_vec_sync(dbapi_connection: Any, sqlite_vec_extension_path: Path | None) -> None:
+    extension_path = _sqlite_vec_extension_path(sqlite_vec_extension_path)
+    _load_sqlite_extension_sync(dbapi_connection, extension_path)
+
+
+def _sqlite_vec_extension_path(sqlite_vec_extension_path: Path | None) -> str:
+    return str(sqlite_vec_extension_path or _bundled_sqlite_vec_extension_path())
 
 
 async def _load_sqlite_extension_async(
@@ -83,7 +92,15 @@ async def _load_sqlite_extension_async(
         await driver_connection.enable_load_extension(False)
 
 
-def _verify_sqlite_vec(dbapi_connection: Any) -> None:
+def _load_sqlite_extension_sync(dbapi_connection: Any, extension_path: str) -> None:
+    dbapi_connection.enable_load_extension(True)
+    try:
+        dbapi_connection.load_extension(extension_path)
+    finally:
+        dbapi_connection.enable_load_extension(False)
+
+
+def verify_sqlite_vec(dbapi_connection: Any) -> None:
     cursor = dbapi_connection.cursor()
     try:
         cursor.execute("SELECT vec_version()")

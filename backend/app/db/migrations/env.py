@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from logging.config import fileConfig
+from pathlib import Path
+from typing import Any
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import Engine, engine_from_config, event, pool
 
 from app.config import AppSettings
+from app.db.engine import load_sqlite_vec_sync, verify_sqlite_vec
 from app.db.migrations.config import migration_context_options
 from app.db.sqlite_url import sqlite_database_path, sqlite_sync_database_url
 
@@ -57,6 +60,8 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    settings = AppSettings()
+    _register_sqlite_vec_loader(connectable, settings.sqlite_vec_extension_path)
 
     with connectable.connect() as connection:
         context.configure(
@@ -67,6 +72,16 @@ def run_migrations_online() -> None:
 
         with context.begin_transaction():
             context.run_migrations()
+
+
+def _register_sqlite_vec_loader(
+    connectable: Engine,
+    sqlite_vec_extension_path: Path | None,
+) -> None:
+    @event.listens_for(connectable, "connect")
+    def load_sqlite_vec(dbapi_connection: Any, _connection_record: Any) -> None:
+        load_sqlite_vec_sync(dbapi_connection, sqlite_vec_extension_path)
+        verify_sqlite_vec(dbapi_connection)
 
 
 if context.is_offline_mode():

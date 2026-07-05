@@ -102,10 +102,14 @@ class SyntheticFixtureRepository(BaseRepository[sqlite3.Row]):
             CREATE TABLE IF NOT EXISTS application_events (
                 id TEXT PRIMARY KEY,
                 application_id TEXT NOT NULL,
-                email_id TEXT NOT NULL,
+                email_id TEXT,
                 event_type TEXT NOT NULL,
                 event_at TEXT NOT NULL,
                 extract_note TEXT,
+                CHECK (
+                    (event_type = 'ghost_inferred' AND email_id IS NULL)
+                    OR (event_type != 'ghost_inferred' AND email_id IS NOT NULL)
+                ),
                 FOREIGN KEY (application_id) REFERENCES applications (id) ON DELETE CASCADE,
                 FOREIGN KEY (email_id) REFERENCES raw_emails (id) ON DELETE CASCADE
             )
