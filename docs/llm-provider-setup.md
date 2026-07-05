@@ -3,6 +3,8 @@
 This guide explains the values a user needs before the first-run setup wizard can configure an LLM provider.
 It maps to FR-0, FR-6, NFR-5, NFR-8, and Phase 0.
 
+The current Phase 0 app has a typed provider registry, setup status shell, Gmail OAuth setup action, and Azure OpenAI chat-completions adapter.
+The Ollama adapter and Azure embedding calls are implemented in later provider tickets, so this document remains the setup contract for those screens and adapters.
 The current app has a typed provider registry, setup status shell, Gmail OAuth setup action, and a concrete local Ollama chat adapter behind `LLMProvider`.
 The Azure OpenAI adapter, Ollama embeddings, classification prompts, and downstream classification pipeline are implemented in later provider and Phase 2 tickets, so this document is the setup contract for those screens and adapters.
 The current backend has the `SecretStore` protocol, backend selector settings, the default keyring adapter, and the encrypted Fernet fallback.
@@ -31,6 +33,7 @@ Use `llm` only when you intentionally want every ingested email to go through th
 
 Azure OpenAI requires a user-owned Azure OpenAI resource, one chat deployment, one embedding deployment, and one API key stored through `SecretStore`.
 The API key is secret material and must not be placed in `backend/.env`.
+The current Azure adapter supports chat-completions generation; embedding usage remains a later provider slice.
 
 Set these non-secret values through the setup wizard or local environment overrides:
 
