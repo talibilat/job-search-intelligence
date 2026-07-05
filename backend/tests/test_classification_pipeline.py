@@ -167,6 +167,53 @@ def test_parse_llm_extraction_response_rejects_numeric_event_at(
     assert not hasattr(result, "classification")
 
 
+@pytest.mark.parametrize(
+    "category",
+    [
+        "recruiter_outreach",
+        "follow_up",
+        "other",
+    ],
+)
+def test_parse_llm_extraction_response_rejects_lifecycle_fields_for_non_lifecycle_categories(
+    category: str,
+) -> None:
+    result = parse_llm_extraction_response(
+        email_id="email-1",
+        response=LLMGenerationResponse(
+            content=(
+                "{"
+                '"is_job_related":true,'
+                f'"category":"{category}",'
+                '"confidence":0.92,'
+                '"company":"Example Systems",'
+                '"role_title":"Backend Engineer",'
+                '"application_status":"rejected",'
+                '"event_type":"rejection",'
+                '"event_at":null,'
+                '"salary_min":null,'
+                '"salary_max":null,'
+                '"currency":null,'
+                '"location":null,'
+                '"work_mode":null,'
+                '"seniority":null,'
+                '"sponsorship":"unknown",'
+                '"tech_stack":[],'
+                '"rejection_reason":null'
+                "}"
+            ),
+            model="llama3.1",
+            finish_reason=LLMFinishReason.STOP,
+        ),
+        prompt_version="classification-v1",
+        classified_at=NOW,
+    )
+
+    assert isinstance(result, MalformedLLMExtraction)
+    assert result.reason is MalformedLLMExtractionReason.INVALID_SCHEMA
+    assert not hasattr(result, "classification")
+
+
 def test_parse_llm_extraction_response_rejects_duplicate_json_keys() -> None:
     result = parse_llm_extraction_response(
         email_id="email-1",

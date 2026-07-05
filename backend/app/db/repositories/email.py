@@ -205,6 +205,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             WHERE raw_emails.provider = ?
                 AND raw_emails.body_retention_state = ?
                 AND raw_emails.body_text IS NOT NULL
+                AND LENGTH(TRIM(raw_emails.body_text)) > 0
                 AND (
                     email_classifications.email_id IS NULL
                     OR email_classifications.model != ?
@@ -415,6 +416,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             WHERE raw_emails.provider = ?
                 AND raw_emails.body_retention_state = ?
                 AND raw_emails.body_text IS NOT NULL
+                AND LENGTH(TRIM(raw_emails.body_text)) > 0
                 AND (
                     email_classifications.email_id IS NULL
                     OR email_classifications.model != ?

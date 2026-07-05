@@ -68,6 +68,32 @@ def test_upsert_retained_bodies_inserts_missing_raw_email_and_survives_metadata_
     assert stored.body_retention_state is retention_state
 
 
+def test_classification_candidate_queries_skip_empty_retained_body_text(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    repository = EmailRepository(connection)
+    insert_raw_email(connection, "empty-retained", body_text="")
+    insert_raw_email(connection, "nonempty-retained", body_text="Candidate body.")
+    connection.commit()
+
+    stats = repository.get_classification_candidate_stats(
+        provider=EmailProviderName.GMAIL,
+        model="llama3.1",
+        prompt_version="v2",
+    )
+    candidates = repository.list_classification_candidates(
+        provider=EmailProviderName.GMAIL,
+        model="llama3.1",
+        prompt_version="v2",
+        limit=10,
+    )
+
+    assert stats.candidate_count == 1
+    assert stats.body_text_char_count == len("Candidate body.")
+    assert [candidate.email_id for candidate in candidates] == ["nonempty-retained"]
+
+
 def migrated_connection(tmp_path: Path) -> sqlite3.Connection:
     database_path = tmp_path / "jobtracker.sqlite3"
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
@@ -103,4 +129,42 @@ def email_message_ref(message_id: str) -> EmailMessageRef:
         account=account,
         message_id=message_id,
         thread_id=f"thread-{message_id}",
+    )
+
+
+def insert_raw_email(
+    connection: sqlite3.Connection,
+    email_id: str,
+    *,
+    body_text: str | None,
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO raw_emails (
+            id,
+            thread_id,
+            from_addr,
+            to_addr,
+            subject,
+            sent_at,
+            body_text,
+            body_retention_state,
+            labels,
+            provider,
+            ingested_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            email_id,
+            f"thread-{email_id}",
+            "jobs@example.test",
+            "me@example.test",
+            "Application update",
+            NOW.isoformat(),
+            body_text,
+            RawEmailBodyRetentionState.RETAINED.value,
+            "[]",
+            EmailProviderName.GMAIL.value,
+            NOW.isoformat(),
+        ),
     )

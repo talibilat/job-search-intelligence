@@ -5,10 +5,12 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from app.config import AppSettings, ClassificationMode, LLMProviderName
 from app.db.repositories import ClassificationRunRepository, EmailRepository
+from app.models import ClassificationRunRecord
 from app.providers.llm import (
     LLMFinishReason,
     LLMGenerationRequest,
@@ -108,6 +110,53 @@ def test_structured_extraction_service_stores_only_accepted_classifications(
     assert "not-json" not in repr(result.malformed_results[0])
 
 
+def test_structured_extraction_service_rolls_back_classifications_when_run_accounting_fails(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "accepted-email", body_text="Your application was rejected.")
+    connection.commit()
+    service = StructuredExtractionService(
+        settings=AppSettings(
+            _env_file=None,
+            classification_mode=ClassificationMode.LOCAL,
+            llm_provider=LLMProviderName.OLLAMA,
+            ollama_chat_model="llama3.1",
+            classification_prompt_version="v2",
+            classification_batch_size=10,
+        ),
+        email_repository=EmailRepository(connection),
+        classification_run_repository=FailingClassificationRunRepository(connection),
+        llm_provider=FakeLLMProvider(
+            responses=(
+                LLMGenerationResponse(
+                    content=valid_structured_response_json(),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            ),
+        ),
+        clock=lambda: NOW,
+        run_id_factory=lambda: "run-1",
+    )
+
+    with pytest.raises(RuntimeError, match="run accounting failed"):
+        asyncio.run(service.run_batch())
+
+    stored_classification_count = connection.execute(
+        "SELECT COUNT(*) FROM email_classifications WHERE email_id = ?",
+        ("accepted-email",),
+    ).fetchone()
+    stored_run_count = connection.execute(
+        "SELECT COUNT(*) FROM classification_runs WHERE id = ?",
+        ("run-1",),
+    ).fetchone()
+    assert stored_classification_count is not None
+    assert stored_classification_count[0] == 0
+    assert stored_run_count is not None
+    assert stored_run_count[0] == 0
+
+
 class FakeLLMProvider:
     provider_name = "ollama"
 
@@ -126,6 +175,11 @@ class FakeLLMProvider:
         request: LLMProviderHealthCheckRequest,
     ) -> LLMProviderHealthCheckResponse:
         raise NotImplementedError
+
+
+class FailingClassificationRunRepository(ClassificationRunRepository):
+    def upsert_run(self, record: ClassificationRunRecord) -> None:
+        raise RuntimeError("run accounting failed")
 
 
 def migrated_connection(tmp_path: Path) -> sqlite3.Connection:

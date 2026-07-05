@@ -94,9 +94,6 @@ class StructuredExtractionService:
             else:
                 malformed_results.append(extraction_result)
 
-        self._email_repository.upsert_email_classifications(
-            result.classification for result in accepted_results
-        )
         completed_at = self._clock()
         run_record = ClassificationRunRecord(
             id=self._run_id_factory(),
@@ -116,7 +113,14 @@ class StructuredExtractionService:
                 completion_tokens=token_usage.completion_tokens,
             ),
         )
-        self._classification_run_repository.upsert_run(run_record)
+        should_commit = not self._email_repository.connection.in_transaction
+        with self._email_repository.transaction():
+            self._email_repository.upsert_email_classifications(
+                result.classification for result in accepted_results
+            )
+            self._classification_run_repository.upsert_run(run_record)
+        if should_commit:
+            self._email_repository.connection.commit()
         return StructuredExtractionRunResult(
             run_record=run_record,
             accepted_results=tuple(accepted_results),
