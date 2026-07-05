@@ -294,7 +294,9 @@ class EmailMetadataPage(BaseModel):
 
     `next_page_token` continues the current listing run.
     `next_sync_cursor` is the opaque cursor the sync service can persist after a
-    successful provider page or run, depending on adapter semantics.
+    successful provider page or run, depending on adapter semantics. Full
+    backfills only complete when the final page carries a replacement sync
+    cursor that can be promoted atomically with page progress.
     """
 
     model_config = ConfigDict(frozen=True)

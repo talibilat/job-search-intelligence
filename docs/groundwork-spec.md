@@ -111,6 +111,7 @@ job-search-intelligence/
 ```
 
 [JT-069 2026-07-05 v2] `backend/app/db/repositories/` now includes `SyncStateRepository` for provider-owned sync anchors.
+[JT-066 2026-07-05 v2] `backend/app/db/repositories/` now includes `BackfillStateRepository` for durable full-backfill page progress.
 
 ---
 
@@ -122,6 +123,8 @@ job-search-intelligence/
   `body_retention_state` is `metadata_only`, `retained`, or `debugging`; metadata-only rows must not carry `body_text`, while retained and debugging rows must carry it.
   Raw email writes are idempotent by provider message ID, and metadata-only reconciliation replays must not downgrade previously retained or debugging body text.
 - **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `updated_at`; stores opaque provider-owned incremental sync anchors scoped to one connected account.
+[JT-066 2026-07-05 v2] **`email_backfill_state`** stores `provider`, `account_id`, `status`, `next_page_token`, page and message counters, replacement sync cursor fields, timestamps, and public-safe failure text for one connected account.
+[JT-066 2026-07-05 v2] `status` is `running`, `completed`, or `failed`; completed backfills clear `next_page_token`, require a replacement provider cursor with issued timestamp, promote that cursor to `email_sync_state`, and failures preserve page progress with `last_error` only when public-safe.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
@@ -186,6 +189,9 @@ EmailProvider -> metadata-only raw_emails
 `SyncStateRepository` persists only the opaque cursor value and timestamps, keyed by provider and account, so incremental sync can resume without storing token material or email content in sync state.
 `SyncService` exposes the persisted sync-state cursor snapshot for service-level status checks; public `POST /sync` and `GET /sync/status` route behavior remains part of the sync API phase work.
 The sync service coordinates one metadata page at a time, carries provider page tokens forward, and turns expired incremental cursors into resumable full metadata reconciliation so callers can persist the next page token and replacement sync cursor.
+[JT-066 2026-07-05 v2] Full-backfill page recording and final replacement-cursor promotion must share one local SQLite connection so a completed page and its promoted `email_sync_state` cursor commit atomically.
+[JT-066 2026-07-05 v2] Full-backfill orchestration is two-step: `run_backfill_page` lists the next provider page from the stored resume token without advancing durable progress, then the caller persists raw emails and records the page with the expected token.
+[JT-066 2026-07-05 v2] Recording the page advances counters, stores the next page token, and completes the run only when the final page carries a replacement provider cursor.
 `SyncScheduler` owns the APScheduler lifecycle inside the FastAPI lifespan: when `sync_on_open` is true, it registers an immediate interval job for the injected async sync runner, and on shutdown it stops APScheduler without waiting.
 Until the concrete Gmail sync runner lands, the default app factory uses a safe no-op sync job while tests and later wiring can inject the real async runner.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.

@@ -7,16 +7,17 @@ from typing import Protocol, cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import EmailProviderName
-from app.db.repositories import EmailRepository
+from app.db.repositories import BackfillStateRepository, EmailRepository
 from app.db.repositories.sync_state import SyncStateRepository
 from app.models import SyncJobCounts, SyncJobPhase, SyncJobStatus
-from app.models.records import EmailSyncStateRecord
+from app.models.records import EmailBackfillStateRecord, EmailBackfillStatus, EmailSyncStateRecord
 from app.providers.email import (
     EmailAccountRef,
     EmailConnection,
     EmailMetadataListRequest,
     EmailMetadataPage,
     EmailProviderCursor,
+    EmailProviderError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
 )
@@ -154,6 +155,153 @@ class EmailSyncStateStatus(BaseModel):
     last_state_update_at: datetime
 
 
+class BackfillStateService:
+    """Business seam for durable full-backfill progress and resumability."""
+
+    def __init__(
+        self,
+        *,
+        backfill_state_repository: BackfillStateRepository,
+        sync_state_repository: SyncStateRepository,
+    ) -> None:
+        if backfill_state_repository.connection is not sync_state_repository.connection:
+            msg = "backfill and sync state repositories must share one connection"
+            raise ValueError(msg)
+        self._backfill_state_repository = backfill_state_repository
+        self._sync_state_repository = sync_state_repository
+
+    def get_backfill_state(self, account: EmailAccountRef) -> EmailBackfillStateRecord | None:
+        return self._backfill_state_repository.fetch_state(account)
+
+    def start_or_resume_backfill(
+        self,
+        account: EmailAccountRef,
+        *,
+        started_at: datetime,
+    ) -> EmailBackfillStateRecord:
+        existing = self._backfill_state_repository.fetch_state(account)
+        if existing is not None and existing.status is not EmailBackfillStatus.COMPLETED:
+            return self._backfill_state_repository.save_state(
+                existing.model_copy(
+                    update={
+                        "status": EmailBackfillStatus.RUNNING,
+                        "updated_at": started_at,
+                        "completed_at": None,
+                        "last_error": None,
+                    }
+                )
+            )
+
+        return self._backfill_state_repository.save_state(
+            EmailBackfillStateRecord(
+                provider=account.provider.value,
+                account_id=account.account_id,
+                status=EmailBackfillStatus.RUNNING,
+                next_page_token=None,
+                processed_page_count=0,
+                processed_message_count=0,
+                sync_cursor=None,
+                cursor_issued_at=None,
+                started_at=started_at,
+                updated_at=started_at,
+                completed_at=None,
+                last_error=None,
+            )
+        )
+
+    def record_backfill_page(
+        self,
+        account: EmailAccountRef,
+        *,
+        page: EmailMetadataPage,
+        expected_page_token: str | None = None,
+        updated_at: datetime,
+    ) -> EmailBackfillStateRecord:
+        existing = self._backfill_state_repository.fetch_state(account)
+        if existing is None:
+            existing = self.start_or_resume_backfill(account, started_at=updated_at)
+
+        if existing.status is EmailBackfillStatus.COMPLETED:
+            msg = "completed backfill pages cannot be recorded again"
+            raise ValueError(msg)
+
+        if expected_page_token != existing.next_page_token:
+            msg = "recorded backfill page does not match current resume token"
+            raise ValueError(msg)
+
+        is_final_page = page.next_page_token is None
+        if is_final_page and page.next_sync_cursor is None:
+            msg = "completed backfills require a replacement sync cursor"
+            raise ValueError(msg)
+
+        if page.next_sync_cursor is not None and page.next_sync_cursor.account != account:
+            msg = "replacement sync cursor must belong to the same account"
+            raise ValueError(msg)
+
+        sync_cursor = page.next_sync_cursor.value if page.next_sync_cursor is not None else None
+        cursor_issued_at = (
+            page.next_sync_cursor.issued_at if page.next_sync_cursor is not None else None
+        )
+
+        status = (
+            EmailBackfillStatus.RUNNING
+            if page.next_page_token is not None
+            else EmailBackfillStatus.COMPLETED
+        )
+
+        connection = self._backfill_state_repository.connection
+        should_commit = not connection.in_transaction
+        with self._backfill_state_repository.transaction():
+            record = self._backfill_state_repository.save_state(
+                EmailBackfillStateRecord(
+                    provider=account.provider.value,
+                    account_id=account.account_id,
+                    status=status,
+                    next_page_token=page.next_page_token,
+                    processed_page_count=existing.processed_page_count + 1,
+                    processed_message_count=existing.processed_message_count + len(page.messages),
+                    sync_cursor=sync_cursor,
+                    cursor_issued_at=cursor_issued_at,
+                    started_at=existing.started_at,
+                    updated_at=updated_at,
+                    completed_at=updated_at if status is EmailBackfillStatus.COMPLETED else None,
+                    last_error=None,
+                )
+            )
+            if page.next_sync_cursor is not None and status is EmailBackfillStatus.COMPLETED:
+                self._sync_state_repository.save_cursor(
+                    page.next_sync_cursor,
+                    updated_at=updated_at,
+                )
+
+        if should_commit:
+            connection.commit()
+
+        return record
+
+    def mark_backfill_failed(
+        self,
+        account: EmailAccountRef,
+        *,
+        public_error: str,
+        updated_at: datetime,
+    ) -> EmailBackfillStateRecord:
+        existing = self._backfill_state_repository.fetch_state(account)
+        if existing is None:
+            existing = self.start_or_resume_backfill(account, started_at=updated_at)
+
+        return self._backfill_state_repository.save_state(
+            existing.model_copy(
+                update={
+                    "status": EmailBackfillStatus.FAILED,
+                    "updated_at": updated_at,
+                    "completed_at": None,
+                    "last_error": public_error,
+                }
+            )
+        )
+
+
 class MetadataListingProvider(Protocol):
     async def list_message_metadata(
         self,
@@ -172,6 +320,16 @@ class EmailSyncPageResult(BaseModel):
     mode: EmailSyncMode
     page: EmailMetadataPage
     recovered_from_expired_cursor: bool = False
+
+
+class EmailBackfillPageResult(BaseModel):
+    """One full-backfill page plus the durable state used to select its resume token."""
+
+    model_config = ConfigDict(frozen=True)
+
+    mode: EmailSyncMode = EmailSyncMode.FULL_BACKFILL
+    page: EmailMetadataPage
+    state: EmailBackfillStateRecord
 
 
 class EmailSyncService:
@@ -235,6 +393,39 @@ class EmailSyncService:
             )
 
         return EmailSyncPageResult(mode=EmailSyncMode.INCREMENTAL, page=page)
+
+    async def run_backfill_page(
+        self,
+        *,
+        connection: EmailConnection,
+        backfill_state_service: BackfillStateService,
+        updated_at: datetime | None = None,
+    ) -> EmailBackfillPageResult:
+        """List one page; callers persist raw emails before recording page progress."""
+
+        timestamp = updated_at or datetime.now(UTC)
+        state = backfill_state_service.start_or_resume_backfill(
+            connection.account,
+            started_at=timestamp,
+        )
+
+        try:
+            page = await self._list_full_backfill_page(
+                connection,
+                page_token=state.next_page_token,
+            )
+        except EmailProviderError as error:
+            backfill_state_service.mark_backfill_failed(
+                connection.account,
+                public_error=error.public_message,
+                updated_at=timestamp,
+            )
+            raise
+
+        return EmailBackfillPageResult(
+            page=page,
+            state=state,
+        )
 
     async def _list_full_backfill_page(
         self,

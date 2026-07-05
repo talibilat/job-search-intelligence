@@ -159,6 +159,8 @@ def test_gmail_message_lister_handles_empty_pages_without_metadata_fetches() -> 
             access_token: SecretStr,
         ) -> dict[str, object]:
             self.calls.append((path, query, access_token.get_secret_value()))
+            if path == "/gmail/v1/users/me/profile":
+                return {"historyId": "history-empty"}
             return {"messages": []}
 
     transport = EmptyTransport()
@@ -176,7 +178,50 @@ def test_gmail_message_lister_handles_empty_pages_without_metadata_fetches() -> 
 
     assert page.messages == ()
     assert page.next_page_token is None
-    assert [call[0] for call in transport.calls] == ["/gmail/v1/users/me/messages"]
+    assert page.next_sync_cursor is not None
+    assert page.next_sync_cursor.value == "history-empty"
+    assert [call[0] for call in transport.calls] == [
+        "/gmail/v1/users/me/messages",
+        "/gmail/v1/users/me/profile",
+    ]
+
+
+def test_gmail_message_lister_returns_profile_history_id_on_final_page() -> None:
+    class FinalPageTransport(FakeGmailTransport):
+        async def get_json(
+            self,
+            path: str,
+            *,
+            query: tuple[tuple[str, str], ...],
+            access_token: SecretStr,
+        ) -> dict[str, object]:
+            self.calls.append((path, query, access_token.get_secret_value()))
+            if path == "/gmail/v1/users/me/messages":
+                return {"messages": []}
+            if path == "/gmail/v1/users/me/profile":
+                return {"historyId": "history-complete"}
+            raise AssertionError(f"unexpected Gmail path: {path}")
+
+    transport = FinalPageTransport()
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=transport,
+    )
+
+    page = asyncio.run(
+        lister.list_message_metadata(
+            _connection(),
+            EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=500),
+        )
+    )
+
+    assert page.next_page_token is None
+    assert page.next_sync_cursor is not None
+    assert page.next_sync_cursor.value == "history-complete"
+    assert [call[0] for call in transport.calls] == [
+        "/gmail/v1/users/me/messages",
+        "/gmail/v1/users/me/profile",
+    ]
 
 
 def test_gmail_message_lister_requires_stored_oauth_secret() -> None:
