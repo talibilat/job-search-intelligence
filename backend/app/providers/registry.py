@@ -232,9 +232,8 @@ class ProviderRegistry:
                 message="Azure OpenAI cannot be used with local classification mode.",
             )
 
-        if (
-            settings.llm_provider is LLMProviderName.OLLAMA
-            and not is_local_ollama_base_url(settings.ollama_base_url)
+        if settings.llm_provider is LLMProviderName.OLLAMA and not is_local_ollama_base_url(
+            settings.ollama_base_url
         ):
             raise ProviderConfigurationError(
                 provider_name=settings.llm_provider.value,

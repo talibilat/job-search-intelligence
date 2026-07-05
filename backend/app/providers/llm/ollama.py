@@ -194,9 +194,7 @@ class OllamaLLMProvider:
             except OllamaTransportTimeoutError as error:
                 if attempt_index < self._max_retries:
                     continue
-                raise LLMProviderTimeoutError(
-                    public_message="Ollama request timed out."
-                ) from error
+                raise LLMProviderTimeoutError(public_message="Ollama request timed out.") from error
             except OllamaTransportInvalidResponseError as error:
                 raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from error
             except OllamaTransportError as error:
