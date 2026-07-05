@@ -313,14 +313,6 @@ export interface LLMModelHealthCheck {
   status: LLMModelHealthStatus;
 }
 
-export type LLMProviderName =
-  (typeof LLMProviderName)[keyof typeof LLMProviderName];
-
-export const LLMProviderName = {
-  azure_openai: "azure_openai",
-  ollama: "ollama",
-} as const;
-
 /**
  * LLM provider metadata exposed by the provider config API shell.
  */
