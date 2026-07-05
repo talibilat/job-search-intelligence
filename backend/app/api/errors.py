@@ -19,6 +19,13 @@ from app.providers.email.provider import (
     EmailProviderTransientError,
     EmailSyncCursorExpiredError,
 )
+from app.providers.llm import (
+    LLMProviderError,
+    LLMProviderRequestError,
+    LLMProviderResponseError,
+    LLMProviderTimeoutError,
+    LLMProviderUnavailableError,
+)
 
 
 class ApiErrorCode(StrEnum):
@@ -35,6 +42,10 @@ class ApiErrorCode(StrEnum):
     FORBIDDEN = "forbidden"
     HTTP_ERROR = "http_error"
     INTERNAL_ERROR = "internal_error"
+    LLM_PROVIDER_INVALID_RESPONSE = "llm_provider_invalid_response"
+    LLM_PROVIDER_REQUEST_FAILED = "llm_provider_request_failed"
+    LLM_PROVIDER_TIMEOUT = "llm_provider_timeout"
+    LLM_PROVIDER_UNAVAILABLE = "llm_provider_unavailable"
     NOT_FOUND = "not_found"
     SERVICE_UNAVAILABLE = "service_unavailable"
     UNAUTHORIZED = "unauthorized"
@@ -105,6 +116,13 @@ _EMAIL_PROVIDER_ERROR_CODES: Final[dict[EmailProviderErrorCode, ApiErrorCode]] =
     EmailProviderErrorCode.RATE_LIMITED: ApiErrorCode.EMAIL_RATE_LIMITED,
     EmailProviderErrorCode.SYNC_CURSOR_EXPIRED: ApiErrorCode.EMAIL_SYNC_CURSOR_EXPIRED,
     EmailProviderErrorCode.TEMPORARILY_UNAVAILABLE: ApiErrorCode.EMAIL_TEMPORARILY_UNAVAILABLE,
+}
+
+_LLM_PROVIDER_ERROR_CODES: Final[dict[type[LLMProviderError], ApiErrorCode]] = {
+    LLMProviderUnavailableError: ApiErrorCode.LLM_PROVIDER_UNAVAILABLE,
+    LLMProviderRequestError: ApiErrorCode.LLM_PROVIDER_REQUEST_FAILED,
+    LLMProviderResponseError: ApiErrorCode.LLM_PROVIDER_INVALID_RESPONSE,
+    LLMProviderTimeoutError: ApiErrorCode.LLM_PROVIDER_TIMEOUT,
 }
 
 
@@ -181,6 +199,19 @@ def _email_provider_error_code(exception: EmailProviderError) -> ApiErrorCode:
     return _EMAIL_PROVIDER_ERROR_CODES.get(
         exception.error_code,
         ApiErrorCode.EMAIL_PROVIDER_REQUEST_FAILED,
+    )
+
+
+def _llm_provider_status_code(exception: LLMProviderError) -> int:
+    if isinstance(exception, LLMProviderTimeoutError | LLMProviderUnavailableError):
+        return 503
+    return 502
+
+
+def _llm_provider_error_code(exception: LLMProviderError) -> ApiErrorCode:
+    return _LLM_PROVIDER_ERROR_CODES.get(
+        type(exception),
+        ApiErrorCode.LLM_PROVIDER_REQUEST_FAILED,
     )
 
 
@@ -265,6 +296,23 @@ def register_exception_handlers(app: FastAPI) -> None:
             ),
         )
 
+    async def llm_provider_error_handler(
+        request: Request,
+        exception: Exception,
+    ) -> JSONResponse:
+        del request
+        if not isinstance(exception, LLMProviderError):
+            return _error_response(
+                status_code=500,
+                code=ApiErrorCode.INTERNAL_ERROR,
+                message="Internal server error.",
+            )
+        return _error_response(
+            status_code=_llm_provider_status_code(exception),
+            code=_llm_provider_error_code(exception),
+            message=exception.public_message,
+        )
+
     async def unhandled_exception_handler(
         request: Request,
         exception: Exception,
@@ -278,6 +326,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(EmailProviderError, email_provider_error_handler)
+    app.add_exception_handler(LLMProviderError, llm_provider_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

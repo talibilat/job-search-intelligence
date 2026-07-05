@@ -20,6 +20,10 @@ export const ApiErrorCode = {
   forbidden: "forbidden",
   http_error: "http_error",
   internal_error: "internal_error",
+  llm_provider_invalid_response: "llm_provider_invalid_response",
+  llm_provider_request_failed: "llm_provider_request_failed",
+  llm_provider_timeout: "llm_provider_timeout",
+  llm_provider_unavailable: "llm_provider_unavailable",
   not_found: "not_found",
   service_unavailable: "service_unavailable",
   unauthorized: "unauthorized",
@@ -226,6 +230,32 @@ export const HealthResponseValue = {
 } as const;
 export type HealthResponse = typeof HealthResponseValue;
 
+export type LLMModelKind = (typeof LLMModelKind)[keyof typeof LLMModelKind];
+
+export const LLMModelKind = {
+  chat: "chat",
+  embedding: "embedding",
+} as const;
+
+export type LLMModelHealthStatus =
+  (typeof LLMModelHealthStatus)[keyof typeof LLMModelHealthStatus];
+
+export const LLMModelHealthStatus = {
+  available: "available",
+  unavailable: "unavailable",
+} as const;
+
+/**
+ * Availability result for one configured provider model.
+ */
+export interface LLMModelHealthCheck {
+  detail?: string | null;
+  kind: LLMModelKind;
+  /** @minLength 1 */
+  model: string;
+  status: LLMModelHealthStatus;
+}
+
 export type LLMProviderName =
   (typeof LLMProviderName)[keyof typeof LLMProviderName];
 
@@ -243,6 +273,17 @@ export interface LLMProviderConfigResponse {
   is_local: boolean;
   name: LLMProviderName;
   secret_requirements: ProviderSecretRequirementResponse[];
+}
+
+/**
+ * Provider-neutral health-check result for the selected LLM provider.
+ */
+export interface LLMProviderHealthCheckResponse {
+  /** @minItems 1 */
+  checks: LLMModelHealthCheck[];
+  /** @minLength 1 */
+  provider_name: string;
+  status: LLMModelHealthStatus;
 }
 
 /**
@@ -578,6 +619,48 @@ export const updateProviderConfigConfigProvidersPut = async (
     status: res.status,
     headers: res.headers,
   } as updateProviderConfigConfigProvidersPutResponse;
+};
+
+export type checkLlmProviderHealthConfigProvidersLlmHealthPostResponse200 = {
+  data: LLMProviderHealthCheckResponse;
+  status: 200;
+};
+
+export type checkLlmProviderHealthConfigProvidersLlmHealthPostResponseSuccess =
+  checkLlmProviderHealthConfigProvidersLlmHealthPostResponse200 & {
+    headers: Headers;
+  };
+export type checkLlmProviderHealthConfigProvidersLlmHealthPostResponse =
+  checkLlmProviderHealthConfigProvidersLlmHealthPostResponseSuccess;
+
+export const getCheckLlmProviderHealthConfigProvidersLlmHealthPostUrl = () => {
+  return `/config/providers/llm/health`;
+};
+
+/**
+ * Verify selected LLM provider models through the configured provider adapter.
+ * @summary Check Llm Provider Health
+ */
+export const checkLlmProviderHealthConfigProvidersLlmHealthPost = async (
+  options?: RequestInit,
+): Promise<checkLlmProviderHealthConfigProvidersLlmHealthPostResponse> => {
+  const res = await fetch(
+    getCheckLlmProviderHealthConfigProvidersLlmHealthPostUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: checkLlmProviderHealthConfigProvidersLlmHealthPostResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as checkLlmProviderHealthConfigProvidersLlmHealthPostResponse;
 };
 
 export type healthHealthGetResponse200 = {
