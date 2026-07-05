@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 from typing import Protocol
 
 from app.config import AppSettings, EmailProviderName
@@ -21,14 +20,10 @@ def build_setup_status(
 ) -> SetupStatusResponse:
     gmail_connected = False
     if connection_reader is not None:
-        try:
-            gmail_connected = (
-                connection_reader.fetch_default_connection_metadata(settings.email_provider)
-                is not None
-            )
-        except sqlite3.OperationalError as error:
-            if "no such table: email_connections" not in str(error):
-                raise
+        gmail_connected = (
+            connection_reader.fetch_default_connection_metadata(settings.email_provider)
+            is not None
+        )
 
     return SetupStatusResponse(
         setup_complete=False,

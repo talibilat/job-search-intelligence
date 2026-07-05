@@ -66,6 +66,18 @@ def save_gmail_connection(database_path: Path) -> None:
         )
 
 
+def test_connection_repository_reports_no_default_connection_before_migrations(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    with sqlite3.connect(database_path) as connection:
+        default_connection = EmailConnectionRepository(
+            connection,
+        ).fetch_default_connection_metadata(EmailProviderName.GMAIL)
+
+    assert default_connection is None
+
+
 def test_setup_status_endpoint_returns_phase_zero_shell_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

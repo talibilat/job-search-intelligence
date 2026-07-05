@@ -103,27 +103,32 @@ class EmailConnectionRepository(BaseRepository[EmailConnectionRecord]):
         self,
         provider: EmailProviderName,
     ) -> EmailConnection | None:
-        record = self.fetch_one(
-            """
-            SELECT
-                provider,
-                account_id,
-                display_email,
-                credential_ref_kind,
-                credential_ref_provider,
-                credential_ref_name,
-                granted_scopes,
-                connected_at,
-                credential_expires_at,
-                reauth_required,
-                updated_at
-            FROM email_connections
-            WHERE provider = ? AND reauth_required = 0
-            ORDER BY connected_at DESC, updated_at DESC
-            LIMIT 1
-            """,
-            (provider.value,),
-        )
+        try:
+            record = self.fetch_one(
+                """
+                SELECT
+                    provider,
+                    account_id,
+                    display_email,
+                    credential_ref_kind,
+                    credential_ref_provider,
+                    credential_ref_name,
+                    granted_scopes,
+                    connected_at,
+                    credential_expires_at,
+                    reauth_required,
+                    updated_at
+                FROM email_connections
+                WHERE provider = ? AND reauth_required = 0
+                ORDER BY connected_at DESC, updated_at DESC
+                LIMIT 1
+                """,
+                (provider.value,),
+            )
+        except sqlite3.OperationalError as error:
+            if _is_missing_email_connections_table(error):
+                return None
+            raise
         if record is None:
             return None
         return _connection_from_record(record)
@@ -151,3 +156,7 @@ def _connection_from_record(record: EmailConnectionRecord) -> EmailConnection:
         credential_expires_at=record.credential_expires_at,
         reauth_required=record.reauth_required,
     )
+
+
+def _is_missing_email_connections_table(error: sqlite3.OperationalError) -> bool:
+    return "no such table: email_connections" in str(error)
