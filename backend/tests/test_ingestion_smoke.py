@@ -109,7 +109,30 @@ def test_ingestion_smoke_raw_email_writes_are_idempotent() -> None:
     assert stored == email
 
 
-def test_ingestion_smoke_sync_status_tracks_cursor_without_exposing_value() -> None:
+def test_ingestion_smoke_metadata_replay_preserves_retained_raw_email_body() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    repository = EmailRepository(connection)
+    retained_email = raw_email_record(
+        "provider-msg-1",
+        body_text="Retained synthetic body.",
+        body_retention_state=RawEmailBodyRetentionState.RETAINED,
+    )
+    metadata_only_replay = raw_email_record("provider-msg-1")
+
+    repository.upsert_raw_emails((retained_email,))
+    repository.upsert_raw_emails((metadata_only_replay,))
+
+    stored = repository.fetch_one(
+        "SELECT * FROM raw_emails WHERE id = ?",
+        ("provider-msg-1",),
+    )
+    assert stored is not None
+    assert stored.body_text == "Retained synthetic body."
+    assert stored.body_retention_state is RawEmailBodyRetentionState.RETAINED
+
+
+def test_ingestion_smoke_sync_state_tracks_latest_cursor() -> None:
     connection = sqlite3.connect(":memory:")
     create_email_sync_state_table(connection)
     service = SyncService(sync_state_repository=SyncStateRepository(connection))
@@ -169,7 +192,12 @@ def metadata_page(
     )
 
 
-def raw_email_record(message_id: str) -> RawEmailRecord:
+def raw_email_record(
+    message_id: str,
+    *,
+    body_text: str | None = None,
+    body_retention_state: RawEmailBodyRetentionState = RawEmailBodyRetentionState.METADATA_ONLY,
+) -> RawEmailRecord:
     return RawEmailRecord(
         id=message_id,
         thread_id=f"thread-{message_id}",
@@ -177,8 +205,8 @@ def raw_email_record(message_id: str) -> RawEmailRecord:
         to_addr="me@example.com",
         subject="Application received",
         sent_at=NOW,
-        body_text=None,
-        body_retention_state=RawEmailBodyRetentionState.METADATA_ONLY,
+        body_text=body_text,
+        body_retention_state=body_retention_state,
         labels=["INBOX"],
         provider=EmailProviderName.GMAIL.value,
         ingested_at=NOW,

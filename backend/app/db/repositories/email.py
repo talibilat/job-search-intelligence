@@ -43,11 +43,22 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                     to_addr = excluded.to_addr,
                     subject = excluded.subject,
                     sent_at = excluded.sent_at,
-                    body_text = excluded.body_text,
-                    body_retention_state = excluded.body_retention_state,
+                    body_text = CASE
+                        WHEN raw_emails.body_retention_state IN ('retained', 'debugging')
+                            AND excluded.body_retention_state = 'metadata_only'
+                        THEN raw_emails.body_text
+                        ELSE excluded.body_text
+                    END,
+                    body_retention_state = CASE
+                        WHEN raw_emails.body_retention_state IN ('retained', 'debugging')
+                            AND excluded.body_retention_state = 'metadata_only'
+                        THEN raw_emails.body_retention_state
+                        ELSE excluded.body_retention_state
+                    END,
                     labels = excluded.labels,
                     provider = excluded.provider,
                     ingested_at = excluded.ingested_at
+                WHERE raw_emails.provider = excluded.provider
                 """,
                 [
                     (
