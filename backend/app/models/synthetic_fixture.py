@@ -8,12 +8,9 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.config import EmailProviderName
+from app.models.records import RawEmailBodyRetentionState
 
-
-class SyntheticBodyRetentionState(StrEnum):
-    METADATA_ONLY = "metadata_only"
-    RETAINED = "retained"
-    OMITTED = "omitted"
+SyntheticBodyRetentionState = RawEmailBodyRetentionState
 
 
 class SyntheticJobEmailCategory(StrEnum):
@@ -85,6 +82,28 @@ class SyntheticRawEmail(BaseModel):
     body_retention_state: SyntheticBodyRetentionState = SyntheticBodyRetentionState.METADATA_ONLY
     labels: tuple[str, ...] = ()
     ingested_at: datetime
+
+    @model_validator(mode="after")
+    def validate_body_retention_state(self) -> Self:
+        if (
+            self.body_retention_state is SyntheticBodyRetentionState.METADATA_ONLY
+            and self.body_text is not None
+        ):
+            msg = "metadata-only raw emails cannot retain body_text"
+            raise ValueError(msg)
+
+        if (
+            self.body_retention_state
+            in {
+                SyntheticBodyRetentionState.RETAINED,
+                SyntheticBodyRetentionState.DEBUGGING,
+            }
+            and self.body_text is None
+        ):
+            msg = "retained raw emails must include body_text"
+            raise ValueError(msg)
+
+        return self
 
 
 class SyntheticEmailClassification(BaseModel):

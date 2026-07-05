@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Literal, cast
+from enum import StrEnum
+from typing import Literal, Self, cast
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 type ApplicationSource = Literal[
     "linkedin",
@@ -53,6 +54,14 @@ type JsonObject = dict[str, object]
 type JsonObjectList = list[JsonObject]
 
 
+class RawEmailBodyRetentionState(StrEnum):
+    """Explicit body retention state for raw email DTO boundaries."""
+
+    METADATA_ONLY = "metadata_only"
+    RETAINED = "retained"
+    DEBUGGING = "debugging"
+
+
 class RawEmailRecord(BaseModel):
     id: str
     thread_id: str | None
@@ -60,8 +69,8 @@ class RawEmailRecord(BaseModel):
     to_addr: str | None
     subject: str | None
     sent_at: datetime | None
-    body_text: str | None
-    body_retention_state: str
+    body_text: str | None = Field(repr=False)
+    body_retention_state: RawEmailBodyRetentionState
     labels: list[str]
     provider: str
     ingested_at: datetime
@@ -70,6 +79,30 @@ class RawEmailRecord(BaseModel):
     @classmethod
     def parse_labels(cls, value: object) -> object:
         return parse_json_column(value)
+
+    @model_validator(mode="after")
+    def validate_body_retention_state(self) -> Self:
+        if (
+            self.body_retention_state is RawEmailBodyRetentionState.METADATA_ONLY
+            and self.body_text is not None
+        ):
+            msg = "metadata-only raw emails cannot retain body_text"
+            raise ValueError(msg)
+
+        if self.has_retained_body and self.body_text is None:
+            msg = "retained raw emails must include body_text"
+            raise ValueError(msg)
+
+        return self
+
+    @property
+    def has_retained_body(self) -> bool:
+        """Return whether this row carries body text for pipeline stages."""
+
+        return self.body_retention_state in {
+            RawEmailBodyRetentionState.RETAINED,
+            RawEmailBodyRetentionState.DEBUGGING,
+        }
 
 
 class ApplicationRecord(BaseModel):

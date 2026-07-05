@@ -1,5 +1,6 @@
-"""Email provider Strategy interface."""
+"""Email provider Strategy interface and implementations."""
 
+from .gmail import GmailEmailProvider
 from .provider import (
     EmailAccountRef,
     EmailAddress,
@@ -60,4 +61,5 @@ __all__ = [
     "EmailSyncCursorExpiredError",
     "EmailSyncMode",
     "build_broad_candidate_query",
+    "GmailEmailProvider",
 ]

@@ -22,19 +22,6 @@ test("renders the Phase 0 setup, sync, and dashboard shell", async ({
   ).toBeVisible();
 
   await expect(
-    page.getByRole("heading", {
-      name: "The wizard must make each privacy and provider choice explicit.",
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Choose your LLM provider" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Connect Gmail read-only" }),
-  ).toBeVisible();
-  await expect(page.getByText("No telemetry")).toBeVisible();
-
-  await expect(
     page.getByRole("heading", { name: "Sync status ready for backend wiring" }),
   ).toBeVisible();
   await expect(
@@ -51,4 +38,23 @@ test("renders the Phase 0 setup, sync, and dashboard shell", async ({
   ).toContainText(
     "Future deterministic dashboard metrics will render here after the metrics API exists.",
   );
+
+  await page.getByRole("link", { name: "Setup" }).click();
+
+  await expect(page).toHaveURL("/setup");
+  await expect(
+    page.getByRole("heading", { name: "Set up JobTracker locally" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "The wizard must make each privacy and provider choice explicit.",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Choose your LLM provider" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Connect Gmail read-only" }),
+  ).toBeVisible();
+  await expect(page.getByText("No telemetry")).toBeVisible();
 });

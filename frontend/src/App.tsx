@@ -1,5 +1,5 @@
 import { ChartPanel } from "./components/charts";
-import { setupWizardSections } from "./setupWizardCopy";
+import { SetupPage } from "./pages/SetupPage";
 
 const phaseItems = [
   "Connect Gmail through a local-only setup flow",
@@ -7,7 +7,12 @@ const phaseItems = [
   "Answer factual dashboard questions from deterministic data",
 ] as const;
 
-function App() {
+const navigationItems = [
+  { href: "/", label: "Overview" },
+  { href: "/setup", label: "Setup" },
+] as const;
+
+function OverviewPage() {
   return (
     <main className="app-shell">
       <section className="hero" aria-labelledby="page-title">
@@ -58,38 +63,34 @@ function App() {
         }}
         title="Chart foundation"
       />
+    </main>
+  );
+}
 
-      <section className="wizard-copy" aria-labelledby="wizard-title">
-        <div className="section-heading">
-          <p className="eyebrow">First-run setup copy</p>
-          <h2 id="wizard-title">
-            The wizard must make each privacy and provider choice explicit.
-          </h2>
-          <p>
-            These cards provide the setup-screen copy for provider, mode, Gmail,
-            and privacy choices while the full wizard flow is still being
-            scaffolded.
-          </p>
-        </div>
+function App() {
+  const currentPath = window.location.pathname === "/setup" ? "/setup" : "/";
 
-        <div className="wizard-grid">
-          {setupWizardSections.map((section) => (
-            <article className="wizard-card" key={section.title}>
-              <h3>{section.title}</h3>
-              <p>{section.body}</p>
-              <ul>
-                {section.options.map((option) => (
-                  <li key={option.label}>
-                    <strong>{option.label}</strong>
-                    <span>{option.body}</span>
-                  </li>
-                ))}
-              </ul>
-            </article>
+  return (
+    <>
+      <nav className="app-nav" aria-label="Primary">
+        <a className="app-nav__brand" href="/">
+          JobTracker
+        </a>
+        <div className="app-nav__links">
+          {navigationItems.map((item) => (
+            <a
+              aria-current={currentPath === item.href ? "page" : undefined}
+              className="app-nav__link"
+              href={item.href}
+              key={item.href}
+            >
+              {item.label}
+            </a>
           ))}
         </div>
-      </section>
-    </main>
+      </nav>
+      {currentPath === "/setup" ? <SetupPage /> : <OverviewPage />}
+    </>
   );
 }
 

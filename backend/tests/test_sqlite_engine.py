@@ -126,6 +126,20 @@ async def test_sqlite_engine_applies_phase_zero_pragmas(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
+async def test_sqlite_engine_loads_and_verifies_sqlite_vec(tmp_path: Path) -> None:
+    engine = create_sqlite_engine(settings_for_database(tmp_path / "jobtracker.sqlite3"))
+
+    try:
+        async with sqlite_transaction(engine) as connection:
+            version = await connection.scalar(text("SELECT vec_version()"))
+
+        assert isinstance(version, str)
+        assert version
+    finally:
+        await dispose_sqlite_engine(engine)
+
+
+@pytest.mark.anyio
 async def test_sqlite_transaction_rolls_back_failed_work(tmp_path: Path) -> None:
     engine = create_sqlite_engine(settings_for_database(tmp_path / "jobtracker.sqlite3"))
 
