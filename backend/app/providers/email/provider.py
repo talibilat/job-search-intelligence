@@ -291,7 +291,7 @@ class EmailCandidateQuery(BaseModel):
             score += self.SUBJECT_KEYWORD_SIGNAL_SCORE
             signals.append(f"subject_keyword:{matched_subject_keyword}")
 
-        if not signals and metadata.ref.thread_id in candidate_thread_ids:
+        if metadata.ref.thread_id in candidate_thread_ids:
             score += self.THREAD_SIGNAL_SCORE
             signals.append(self.THREAD_SIGNAL_TOKEN)
 

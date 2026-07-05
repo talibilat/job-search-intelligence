@@ -270,6 +270,48 @@ def test_candidate_query_promotes_same_thread_messages_after_direct_signal() -> 
     assert "Friday follow-up" not in decisions[1].model_dump_json()
 
 
+def test_candidate_query_combines_direct_and_thread_signals_for_threshold() -> None:
+    account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
+    query = EmailCandidateQuery(
+        strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
+        sender_domain_terms=("greenhouse.io",),
+        keyword_terms=("application",),
+        candidate_score_threshold=4,
+    )
+    direct_candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id="msg-direct",
+            thread_id="thread-job-search",
+        ),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Application received",
+        labels=("INBOX",),
+    )
+    thread_sibling_with_subject_signal = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=account,
+            message_id="msg-thread-sibling",
+            thread_id="thread-job-search",
+        ),
+        from_addr=EmailAddress(address="person@example.com"),
+        subject="Application follow-up",
+        labels=("INBOX",),
+    )
+
+    _direct_decision, sibling_decision = query.evaluate_metadata_batch(
+        (direct_candidate, thread_sibling_with_subject_signal),
+    )
+
+    assert sibling_decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE
+    assert sibling_decision.score == query.candidate_score_threshold
+    assert sibling_decision.signals == (
+        "subject_keyword:application",
+        "thread_signal:candidate_thread",
+    )
+    assert "thread-job-search" not in sibling_decision.model_dump_json()
+
+
 def test_candidate_query_excludes_metadata_with_blocked_labels() -> None:
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
     query = build_broad_candidate_query()
