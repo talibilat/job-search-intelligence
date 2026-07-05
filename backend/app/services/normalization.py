@@ -152,15 +152,18 @@ _BASE_ROLES: tuple[_BaseRole, ...] = (
 def normalize_company_name(company: str) -> str:
     """Return a deterministic grouping key for extracted company names."""
 
-    tokens = _company_tokens(company)
+    decoded_company = html.unescape(company)
+    tokens = _company_tokens(decoded_company)
     if not tokens:
         return ""
 
     tokens = _drop_leading_terms(tokens, _LEADING_ARTICLES)
-    if _looks_like_domain(company):
+    looks_like_domain = _looks_like_domain(decoded_company)
+    if looks_like_domain:
         tokens = _drop_leading_terms(tokens, _DOMAIN_PREFIXES)
-        tokens = _drop_trailing_terms(tokens, _DOMAIN_SUFFIXES)
     tokens = _drop_trailing_legal_suffixes(tokens)
+    if looks_like_domain:
+        tokens = _drop_trailing_terms(tokens, _DOMAIN_SUFFIXES)
 
     return " ".join(tokens)
 
@@ -189,7 +192,7 @@ def normalize_role_title(role_title: str | None) -> str | None:
 
 
 def _company_tokens(company: str) -> list[str]:
-    normalized = _strip_combining_marks(html.unescape(company)).casefold()
+    normalized = _strip_combining_marks(company).casefold()
     normalized = normalized.replace("&", " and ")
     chars = [char if char.isalnum() else " " for char in normalized]
     return "".join(chars).split()
