@@ -54,6 +54,9 @@ class FakeGmailTransport:
         access_token: SecretStr,
     ) -> dict[str, object]:
         self.calls.append((path, query, access_token.get_secret_value()))
+        if path == "/gmail/v1/users/me/profile":
+            return {"historyId": "12345"}
+
         if path == "/gmail/v1/users/me/messages":
             return {"messages": [{"id": "msg-1", "threadId": "thread-1"}]}
 

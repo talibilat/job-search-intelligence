@@ -32,6 +32,7 @@ from app.providers.email.provider import (
     EmailProviderCursor,
     EmailProviderError,
     EmailProviderTransientError,
+    EmailSyncCursorExpiredError,
     EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef, SecretStore, SecretStoreUnavailableError
@@ -48,12 +49,14 @@ GMAIL_METADATA_HEADERS = (
 GMAIL_API_BASE_URL = "https://gmail.googleapis.com"
 GMAIL_MAX_METADATA_PAGE_SIZE = 500
 _GMAIL_MAX_BODY_BATCH_SIZE = 100
-_MESSAGES_PATH = "/gmail/v1/users/me/messages"
 _PROFILE_PATH = "/gmail/v1/users/me/profile"
+_MESSAGES_PATH = "/gmail/v1/users/me/messages"
+_HISTORY_PATH = "/gmail/v1/users/me/history"
 _MESSAGE_LIST_FIELDS = "messages(id,threadId),nextPageToken"
 _MESSAGE_METADATA_FIELDS = "id,threadId,labelIds,sizeEstimate,payload/headers(name,value)"
 _PROFILE_EMAIL_FIELDS = "emailAddress"
 _PROFILE_HISTORY_FIELDS = "historyId"
+_HISTORY_LIST_FIELDS = "history(id,messagesAdded(message(id,threadId))),nextPageToken,historyId"
 _INVALID_DATA_MESSAGE = "Gmail metadata listing returned invalid data"
 
 
@@ -451,6 +454,10 @@ class UrllibGmailApiTransport:
             with urlopen(request, timeout=self._timeout_seconds) as response:
                 response_body = response.read()
         except HTTPError as error:
+            if path == _HISTORY_PATH and error.code == 404:
+                raise EmailSyncCursorExpiredError(
+                    public_message="Gmail incremental sync cursor expired"
+                ) from error
             if error.code in {401, 403}:
                 raise EmailProviderAuthError(
                     public_message="Gmail authorization is required"
@@ -496,6 +503,30 @@ class GmailProfileResponse(BaseModel):
     history_id: str = Field(min_length=1, alias="historyId")
 
 
+class GmailHistoryMessageAdded(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore", populate_by_name=True)
+
+    message: GmailMessageListItem
+
+
+class GmailHistoryRecord(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore", populate_by_name=True)
+
+    id: str | None = None
+    messages_added: tuple[GmailHistoryMessageAdded, ...] = Field(
+        default=(),
+        alias="messagesAdded",
+    )
+
+
+class GmailHistoryListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore", populate_by_name=True)
+
+    history: tuple[GmailHistoryRecord, ...] = ()
+    next_page_token: str | None = Field(default=None, alias="nextPageToken")
+    history_id: str = Field(min_length=1, alias="historyId")
+
+
 class GmailMessageHeader(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -536,17 +567,36 @@ class GmailMessageLister:
         connection: EmailConnection,
         request: EmailMetadataListRequest,
     ) -> EmailMetadataPage:
-        if request.mode is not EmailSyncMode.FULL_BACKFILL:
-            raise EmailProviderError(
-                public_message="Gmail incremental metadata sync is not implemented yet"
+        if request.mode is EmailSyncMode.FULL_BACKFILL:
+            list_query = _list_query(request)
+            stored_token = await self._secret_store.get_secret(connection.credential_ref)
+            if stored_token is None:
+                raise EmailProviderAuthError(public_message="Gmail authorization is required")
+            access_token = _stored_access_token(stored_token)
+            return await self._list_full_backfill_metadata(
+                connection=connection,
+                list_query=list_query,
+                access_token=access_token,
             )
 
-        list_query = _list_query(request)
         stored_token = await self._secret_store.get_secret(connection.credential_ref)
         if stored_token is None:
             raise EmailProviderAuthError(public_message="Gmail authorization is required")
         access_token = _stored_access_token(stored_token)
+        history_query = _history_query(request)
+        return await self._list_incremental_metadata(
+            connection=connection,
+            history_query=history_query,
+            access_token=access_token,
+        )
 
+    async def _list_full_backfill_metadata(
+        self,
+        *,
+        connection: EmailConnection,
+        list_query: tuple[tuple[str, str], ...],
+        access_token: SecretStr,
+    ) -> EmailMetadataPage:
         list_response = _validate_gmail_response(
             GmailMessageListResponse,
             await self._transport.get_json(
@@ -568,24 +618,71 @@ class GmailMessageLister:
 
         next_sync_cursor = None
         if list_response.next_page_token is None:
-            profile = _validate_gmail_response(
-                GmailProfileResponse,
-                await self._transport.get_json(
-                    _PROFILE_PATH,
-                    query=_profile_query(),
-                    access_token=access_token,
-                ),
-            )
-            next_sync_cursor = EmailProviderCursor(
-                account=connection.account,
-                value=profile.history_id,
-                issued_at=datetime.now(UTC),
+            next_sync_cursor = await self._fetch_current_history_cursor(
+                connection=connection,
+                access_token=access_token,
             )
 
         return EmailMetadataPage(
             messages=tuple(metadata_messages),
             next_page_token=list_response.next_page_token,
             next_sync_cursor=next_sync_cursor,
+        )
+
+    async def _list_incremental_metadata(
+        self,
+        *,
+        connection: EmailConnection,
+        history_query: tuple[tuple[str, str], ...],
+        access_token: SecretStr,
+    ) -> EmailMetadataPage:
+        history_response = _validate_gmail_response(
+            GmailHistoryListResponse,
+            await self._transport.get_json(
+                _HISTORY_PATH,
+                query=history_query,
+                access_token=access_token,
+            ),
+        )
+
+        metadata_messages: list[EmailMessageMetadata] = []
+        for list_item in _history_added_messages(history_response):
+            metadata_messages.append(
+                await self._fetch_message_metadata(
+                    connection=connection,
+                    message=list_item,
+                    access_token=access_token,
+                )
+            )
+
+        return EmailMetadataPage(
+            messages=tuple(metadata_messages),
+            next_page_token=history_response.next_page_token,
+            next_sync_cursor=EmailProviderCursor(
+                account=connection.account,
+                value=history_response.history_id,
+                issued_at=datetime.now(UTC),
+            ),
+        )
+
+    async def _fetch_current_history_cursor(
+        self,
+        *,
+        connection: EmailConnection,
+        access_token: SecretStr,
+    ) -> EmailProviderCursor:
+        profile = _validate_gmail_response(
+            GmailProfileResponse,
+            await self._transport.get_json(
+                _PROFILE_PATH,
+                query=_profile_query(),
+                access_token=access_token,
+            ),
+        )
+        return EmailProviderCursor(
+            account=connection.account,
+            value=profile.history_id,
+            issued_at=datetime.now(UTC),
         )
 
     async def _fetch_message_metadata(
@@ -631,6 +728,38 @@ def _list_query(request: EmailMetadataListRequest) -> tuple[tuple[str, str], ...
     if request.page_token is not None:
         query.append(("pageToken", request.page_token))
     return tuple(query)
+
+
+def _history_query(request: EmailMetadataListRequest) -> tuple[tuple[str, str], ...]:
+    if request.page_size > GMAIL_MAX_METADATA_PAGE_SIZE:
+        raise EmailProviderError(
+            public_message=f"Gmail metadata page size cannot exceed {GMAIL_MAX_METADATA_PAGE_SIZE}"
+        )
+    if request.sync_cursor is None:
+        raise EmailProviderError(public_message="Gmail incremental sync requires a cursor")
+
+    query = [
+        ("fields", _HISTORY_LIST_FIELDS),
+        ("historyTypes", "messageAdded"),
+        ("maxResults", str(request.page_size)),
+        ("startHistoryId", request.sync_cursor.value),
+    ]
+    if request.page_token is not None:
+        query.append(("pageToken", request.page_token))
+    return tuple(query)
+
+
+def _history_added_messages(response: GmailHistoryListResponse) -> tuple[GmailMessageListItem, ...]:
+    messages: list[GmailMessageListItem] = []
+    seen_message_ids: set[str] = set()
+    for history_record in response.history:
+        for added_message in history_record.messages_added:
+            message = added_message.message
+            if message.id in seen_message_ids:
+                continue
+            seen_message_ids.add(message.id)
+            messages.append(message)
+    return tuple(messages)
 
 
 def _metadata_query() -> tuple[tuple[str, str], ...]:
