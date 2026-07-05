@@ -161,7 +161,6 @@
           },
           "model": {
             "description": "Configured classification model identifier used to decide stale rows.",
-            "minLength": 1,
             "title": "Model",
             "type": "string"
           },
@@ -191,6 +190,96 @@
           "token_estimate_method"
         ],
         "title": "ClassificationPreRunEstimate",
+        "type": "object"
+      },
+      "ClassificationReprocessingPlan": {
+        "description": "Public read-only plan for controlled classification reprocessing.",
+        "properties": {
+          "blocked_by_missing_target_model_count": {
+            "minimum": 0.0,
+            "title": "Blocked By Missing Target Model Count",
+            "type": "integer"
+          },
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "email_provider": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "reprocess_count": {
+            "minimum": 0.0,
+            "title": "Reprocess Count",
+            "type": "integer"
+          },
+          "retained_candidate_count": {
+            "minimum": 0.0,
+            "title": "Retained Candidate Count",
+            "type": "integer"
+          },
+          "selection_policy": {
+            "minLength": 1,
+            "title": "Selection Policy",
+            "type": "string"
+          },
+          "should_reprocess": {
+            "title": "Should Reprocess",
+            "type": "boolean"
+          },
+          "stale_model_count": {
+            "minimum": 0.0,
+            "title": "Stale Model Count",
+            "type": "integer"
+          },
+          "stale_prompt_version_count": {
+            "minimum": 0.0,
+            "title": "Stale Prompt Version Count",
+            "type": "integer"
+          },
+          "target_model": {
+            "title": "Target Model",
+            "type": "string"
+          },
+          "target_model_configured": {
+            "title": "Target Model Configured",
+            "type": "boolean"
+          },
+          "target_prompt_version": {
+            "minLength": 1,
+            "title": "Target Prompt Version",
+            "type": "string"
+          },
+          "unclassified_count": {
+            "minimum": 0.0,
+            "title": "Unclassified Count",
+            "type": "integer"
+          },
+          "up_to_date_count": {
+            "minimum": 0.0,
+            "title": "Up To Date Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "retained_candidate_count",
+          "up_to_date_count",
+          "unclassified_count",
+          "stale_model_count",
+          "stale_prompt_version_count",
+          "blocked_by_missing_target_model_count",
+          "reprocess_count",
+          "email_provider",
+          "classification_mode",
+          "llm_provider",
+          "target_model",
+          "target_model_configured",
+          "target_prompt_version",
+          "should_reprocess",
+          "selection_policy"
+        ],
+        "title": "ClassificationReprocessingPlan",
         "type": "object"
       },
       "EmailAccountRef": {
@@ -1414,6 +1503,28 @@
           }
         },
         "summary": "Estimate Classification Run",
+        "tags": [
+          "classification"
+        ]
+      }
+    },
+    "/classification/reprocessing-plan": {
+      "get": {
+        "description": "Returns deterministic prompt/model-version buckets for retained classification candidates without calling an LLM or exposing email content.",
+        "operationId": "classification_reprocessing_plan_classification_reprocessing_plan_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassificationReprocessingPlan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plan Classification Reprocessing",
         "tags": [
           "classification"
         ]
