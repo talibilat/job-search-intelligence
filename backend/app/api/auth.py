@@ -51,7 +51,7 @@ def get_email_connection_repository(
 ) -> Iterator[EmailConnectionRepository]:
     database_path = sqlite_database_path(settings.database_url)
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
     try:
         yield EmailConnectionRepository(connection)
     finally:

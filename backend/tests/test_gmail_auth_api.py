@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from alembic import command
+from alembic.config import Config
 from app.api.auth import (
     get_email_connection_repository,
     get_gmail_email_provider,
@@ -27,6 +30,8 @@ from app.providers.email import (
 from app.security import SecretKind, SecretRef
 from app.services.gmail_auth import InMemoryOAuthStateStore
 from fastapi.testclient import TestClient
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def write_google_oauth_client_config(tmp_path: Path) -> Path:
@@ -53,6 +58,12 @@ def create_test_client(settings: AppSettings) -> TestClient:
     fastapi_app = create_app()
     fastapi_app.dependency_overrides[get_settings] = lambda: settings
     return TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+
+
+def migrate_test_database(database_path: Path) -> None:
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
+    command.upgrade(config, "head")
 
 
 class FakeGmailProvider:
@@ -239,6 +250,44 @@ def test_gmail_auth_callback_completes_authorization_without_echoing_code() -> N
     assert fake_provider.callback_request.state == state
     assert fake_provider.callback_request.code.get_secret_value() == "authorization-code"
     assert connection_repository.saved_connections
+
+
+def test_gmail_auth_callback_persists_connection_with_real_repository_dependency(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    migrate_test_database(database_path)
+    fastapi_app = create_app()
+    fake_provider = FakeGmailProvider()
+    state_store = InMemoryOAuthStateStore()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_oauth_state_store] = lambda: state_store
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+    state = client.get("/auth/gmail").json()["state"]
+
+    response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["account"] == {
+        "provider": "gmail",
+        "account_id": "me@example.com",
+    }
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT provider, account_id, credential_ref_name
+            FROM email_connections
+            """,
+        ).fetchall()
+
+    assert rows == [("gmail", "me@example.com", "me-example-com")]
 
 
 def test_gmail_auth_callback_rejects_unissued_state_before_token_exchange() -> None:
