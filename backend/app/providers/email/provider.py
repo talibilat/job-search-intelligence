@@ -7,11 +7,14 @@ from typing import Protocol, cast, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
+from app.models import EmailFilterDecisionOutcome
 from app.providers.email.html_normalization import (
     email_body_contains_html,
     normalize_email_html_to_text,
 )
 from app.security import SecretRef
+
+EmailCandidateDecisionOutcome = EmailFilterDecisionOutcome
 
 
 class EmailSyncMode(StrEnum):
@@ -21,6 +24,16 @@ class EmailSyncMode(StrEnum):
 
 class EmailCandidateQueryStrategy(StrEnum):
     BROAD_JOB_SEARCH = "broad_job_search"
+
+
+class EmailCandidateDecision(BaseModel):
+    """Safe, provider-neutral heuristic filter decision."""
+
+    model_config = ConfigDict(frozen=True)
+
+    strategy: EmailCandidateQueryStrategy
+    outcome: EmailCandidateDecisionOutcome
+    reason: str = Field(min_length=1)
 
 
 class EmailAttachmentPolicy(StrEnum):
@@ -193,13 +206,7 @@ class EmailCandidateQuery(BaseModel):
         return self
 
     def matches_metadata(self, metadata: EmailMessageMetadata) -> bool:
-        normalized_labels = {label.strip().lower() for label in metadata.labels}
-        if normalized_labels.intersection(self.excluded_label_terms):
-            return False
-        return self._matches_sender_domain(metadata) or self.matches_keywords(
-            subject=metadata.subject,
-            normalized_body_text=None,
-        )
+        return self.evaluate_metadata(metadata).outcome is EmailCandidateDecisionOutcome.CANDIDATE
 
     def matches_keywords(
         self,
@@ -213,20 +220,66 @@ class EmailCandidateQuery(BaseModel):
             normalized_body_text,
         )
 
-    def _matches_sender_domain(self, metadata: EmailMessageMetadata) -> bool:
-        if metadata.from_addr is None:
-            return False
-        _local_part, separator, domain = metadata.from_addr.address.strip().lower().rpartition("@")
-        if not separator or not domain:
-            return False
-        domain = domain.strip(">")
-        return any(
-            domain == term or domain.endswith(f".{term}") for term in self.sender_domain_terms
+    def evaluate_metadata(self, metadata: EmailMessageMetadata) -> EmailCandidateDecision:
+        normalized_labels = {label.strip().lower() for label in metadata.labels}
+        for excluded_label in self.excluded_label_terms:
+            if excluded_label in normalized_labels:
+                return EmailCandidateDecision(
+                    strategy=self.strategy,
+                    outcome=EmailCandidateDecisionOutcome.REJECTED,
+                    reason=f"excluded_label:{excluded_label}",
+                )
+
+        matched_sender_domain = self._matching_sender_domain(metadata)
+        if matched_sender_domain is not None:
+            return EmailCandidateDecision(
+                strategy=self.strategy,
+                outcome=EmailCandidateDecisionOutcome.CANDIDATE,
+                reason=f"sender_domain:{matched_sender_domain}",
+            )
+
+        matched_subject_keyword = self._matching_subject_keyword(metadata)
+        if matched_subject_keyword is not None:
+            return EmailCandidateDecision(
+                strategy=self.strategy,
+                outcome=EmailCandidateDecisionOutcome.CANDIDATE,
+                reason=f"subject_keyword:{matched_subject_keyword}",
+            )
+
+        return EmailCandidateDecision(
+            strategy=self.strategy,
+            outcome=EmailCandidateDecisionOutcome.REJECTED,
+            reason="no_filter_signal",
         )
 
     def _matches_keyword_text(self, text: str | None) -> bool:
         normalized_text = (text or "").lower()
         return any(term in normalized_text for term in self.keyword_terms)
+
+    def _matches_sender_domain(self, metadata: EmailMessageMetadata) -> bool:
+        return self._matching_sender_domain(metadata) is not None
+
+    def _matching_sender_domain(self, metadata: EmailMessageMetadata) -> str | None:
+        if metadata.from_addr is None:
+            return None
+        _local_part, separator, domain = metadata.from_addr.address.strip().lower().rpartition("@")
+        if not separator or not domain:
+            return None
+        domain = domain.strip(">")
+        for term in self.sender_domain_terms:
+            if domain == term or domain.endswith(f".{term}"):
+                return term
+        return None
+
+    def _matches_subject_keyword(self, metadata: EmailMessageMetadata) -> bool:
+        return self._matching_subject_keyword(metadata) is not None
+
+    def _matching_subject_keyword(self, metadata: EmailMessageMetadata) -> str | None:
+        subject = (metadata.subject or "").lower()
+        for term in self.keyword_terms:
+            if term in subject:
+                return term
+        return None
 
 
 def build_broad_candidate_query() -> EmailCandidateQuery:

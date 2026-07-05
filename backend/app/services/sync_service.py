@@ -8,12 +8,17 @@ from typing import Protocol, cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import EmailProviderName
-from app.db.repositories import BackfillStateRepository, EmailRepository
+from app.db.repositories import (
+    BackfillStateRepository,
+    EmailFilterDecisionRepository,
+    EmailRepository,
+)
 from app.db.repositories.sync_state import SyncStateRepository
 from app.models import SyncJobCounts, SyncJobPhase, SyncJobStatus
 from app.models.records import (
     EmailBackfillStateRecord,
     EmailBackfillStatus,
+    EmailFilterDecisionRecord,
     EmailSyncStateRecord,
     RawEmailBodyRetentionState,
 )
@@ -446,6 +451,7 @@ class EmailSyncService:
         clock: Callable[[], datetime] | None = None,
         status_callback: Callable[[EmailSyncStatus], None] | None = None,
         body_provider: RetainedBodyProvider | None = None,
+        filter_decision_repository: EmailFilterDecisionRepository | None = None,
     ) -> None:
         if page_size < 1:
             msg = "page_size must be at least 1"
@@ -457,6 +463,7 @@ class EmailSyncService:
         self._sync_service = sync_service
         self._clock = clock or _utcnow
         self._status_callback = status_callback
+        self._filter_decision_repository = filter_decision_repository
         self._status = EmailSyncStatus(state=EmailSyncRunState.IDLE)
 
     def current_status(self) -> EmailSyncStatus:
@@ -648,6 +655,10 @@ class EmailSyncService:
                         page.messages,
                         ingested_at=self._clock(),
                     )
+                    self._persist_filter_decisions(
+                        page.messages,
+                        candidate_query=build_broad_candidate_query(),
+                    )
                     if _can_fetch_retained_bodies(self._body_provider):
                         body_batch = await self.fetch_retained_bodies(
                             connection=connection,
@@ -826,6 +837,10 @@ class EmailSyncService:
                     page_result.page.messages,
                     ingested_at=self._clock(),
                 )
+                self._persist_filter_decisions(
+                    page_result.page.messages,
+                    candidate_query=build_broad_candidate_query(),
+                )
                 if _can_fetch_retained_bodies(self._body_provider):
                     body_batch = await self.fetch_retained_bodies(
                         connection=connection,
@@ -894,6 +909,28 @@ class EmailSyncService:
                 provider=connection.account.provider,
             ),
             recovered_from_expired_cursor=recovered_from_expired_cursor,
+        )
+
+    def _persist_filter_decisions(
+        self,
+        metadata: Iterable[EmailMessageMetadata],
+        *,
+        candidate_query: EmailCandidateQuery,
+    ) -> None:
+        if self._filter_decision_repository is None:
+            return
+
+        decided_at = self._clock()
+        self._filter_decision_repository.upsert_filter_decisions(
+            EmailFilterDecisionRecord(
+                email_id=message.ref.message_id,
+                strategy=decision.strategy.value,
+                outcome=decision.outcome,
+                reason=decision.reason,
+                decided_at=decided_at,
+            )
+            for message in metadata
+            for decision in (candidate_query.evaluate_metadata(message),)
         )
 
 

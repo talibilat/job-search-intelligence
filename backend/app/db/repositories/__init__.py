@@ -9,6 +9,7 @@ from .connection import EmailConnectionRepository
 from .correction import CorrectionRepository
 from .email import EmailRepository
 from .event import EventRepository
+from .filter_decision import EmailFilterDecisionRepository
 from .insight import InsightRepository
 from .sync_state import SyncStateRepository
 from .synthetic_fixture import SyntheticFixtureRepository
@@ -22,6 +23,7 @@ __all__ = [
     "CorrectionRepository",
     "EmailRepository",
     "EmailConnectionRepository",
+    "EmailFilterDecisionRepository",
     "EventRepository",
     "InsightRepository",
     "SqlParameters",
