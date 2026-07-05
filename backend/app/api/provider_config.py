@@ -36,9 +36,7 @@ def get_configured_llm_provider(
     except ProviderConfigurationError as error:
         raise _provider_configuration_error(error) from error
 
-    raise LLMProviderUnavailableError(
-        public_message="LLM provider adapter is not configured."
-    )
+    raise LLMProviderUnavailableError(public_message="LLM provider adapter is not configured.")
 
 
 def _settings_validation_details(error: ValidationError) -> list[ApiErrorDetail]:
