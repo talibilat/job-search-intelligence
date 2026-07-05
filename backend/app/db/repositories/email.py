@@ -296,9 +296,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             stale_model_count=stale_model_count,
             stale_prompt_version_count=stale_prompt_version_count,
             blocked_by_missing_target_model_count=0,
-            reprocess_count=(
-                unclassified_count + stale_model_count + stale_prompt_version_count
-            ),
+            reprocess_count=(unclassified_count + stale_model_count + stale_prompt_version_count),
         )
 
     def get_classification_reprocessing_stats_without_target_model(

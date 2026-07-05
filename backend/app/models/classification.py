@@ -240,9 +240,7 @@ class ClassificationReprocessingStats(BaseModel):
             raise ValueError(msg)
 
         reprocess_total = (
-            self.unclassified_count
-            + self.stale_model_count
-            + self.stale_prompt_version_count
+            self.unclassified_count + self.stale_model_count + self.stale_prompt_version_count
         )
         if self.reprocess_count != reprocess_total:
             msg = "reprocess_count must sum all non-current buckets"
