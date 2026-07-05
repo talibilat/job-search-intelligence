@@ -31,6 +31,7 @@ The frontend shell keeps the root overview page intact, adds a `/setup` first-ru
 [JT-073 2026-07-05 v1] Manual sync routes now orchestrate metadata sync through `EmailSyncService`, persist metadata-only raw-email rows without downgrading retained bodies, store broad candidate retained bodies when supported, store running and last-run status, and return typed not-configured responses when no Gmail connection is configured.
 [JT-074 2026-07-05] Manual sync now resolves the latest non-reauth Gmail connection metadata from local SQLite, while token refresh, product pages, and remaining backend pieces fill in over subsequent Phase 1 tickets.
 [JT-067 2026-07-05] Default sync now resolves the latest non-reauth Gmail connection, runs resumable full backfill until `email_backfill_state` is completed and an incremental cursor is promoted, and then uses incremental sync on later runs.
+[JT-021 2026-07-05] The Alembic chain now creates `application_corrections` for audited manual aggregation overrides with constrained correction types, valid JSON snapshots, application delete cascade, and a per-application timestamp index.
 
 ## Architecture at a glance
 
@@ -131,6 +132,7 @@ Use this path for a fresh local checkout in Phase 0.
 The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment and first sync-state schema revision exist.
 [JT-020 2026-07-05 v2] The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment can load sqlite-vec for hand-written vector-table revisions.
 [JT-020 2026-07-05 v1] The migration chain creates `email_sync_state` first, then the core `raw_emails`, `email_classifications`, `applications`, `application_events`, `insights`, and `email_chunks` schema.
+[JT-021 2026-07-05] The migration chain also creates `application_corrections` for audited manual aggregation overrides.
 [JT-073 2026-07-05 v1] The sync service uses the migrated `email_sync_state` and core `raw_emails` tables for manual metadata sync orchestration.
 Run Alembic upgrades before using repository code that expects migrated tables.
 The synthetic fixture loader can still populate caller-provided local SQLite connections for deterministic backend tests.
@@ -267,6 +269,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 [JT-066 2026-07-05 v2] The next Phase 1 schema revision creates `email_backfill_state`; run `uv run alembic upgrade head` before using backfill-state repository behavior against a fresh local database.
 [JT-020 2026-07-05 v2] The first Alembic schema revision creates `email_sync_state`; the next core schema revision creates `raw_emails`, `email_classifications`, `applications`, `application_events`, `insights`, and `email_chunks` with SQLite constraints, foreign keys, lookup indexes, and a 1536-dimensional sqlite-vec embedding column.
 [JT-056 2026-07-05] The Alembic chain also creates `email_connections` for non-secret provider account metadata and credential `SecretRef` fields.
+[JT-021 2026-07-05] The Alembic chain also creates `application_corrections` with a cascade foreign key to `applications`, constrained correction types, valid JSON before/after snapshots, and an `(application_id, created_at)` lookup index.
 [JT-020 2026-07-05 v2] Run `uv run alembic upgrade head` before using repository behavior against a fresh local database.
 [JT-073 2026-07-05 v1] The backend sync route and service now cover manual metadata sync orchestration, metadata-only upserts, broad candidate retained-body upserts, persisted provider cursor and page progress, running and failed status, and typed not-configured and concurrency API responses.
 [JT-067 2026-07-05] The configured sync runtime now resolves persisted Gmail connection metadata, records full-backfill page progress only after metadata and retained-body writes complete, promotes the final replacement cursor, and fails safely when retained-body fetching fails.
@@ -277,6 +280,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - SQLite engine test: `uv run pytest tests/test_sqlite_engine.py -v` from `backend/` verifies async engine creation, sync-to-async SQLite URL normalization, sqlite-vec loading and `vec_version()` availability, connection PRAGMAs, transaction commit/rollback behavior, and local database parent directory creation.
 - Alembic migration test: `uv run pytest tests/test_alembic_migrations.py -v` from `backend/` verifies the Alembic config, SQLite batch mode, sync migration URL normalization, virtual-table autogenerate exclusion, and SQLite version-table creation.
 - [JT-056 2026-07-05] Alembic migration test: `uv run pytest tests/test_alembic_migrations.py -v` from `backend/` verifies the Alembic config, SQLite batch mode, sync migration URL normalization, virtual-table autogenerate exclusion, SQLite version-table creation, core schema creation, email connection schema creation, sqlite-vec migration loading, nullable ghost-inferred event email references, and downgrade behavior.
+- [JT-021 2026-07-05] Alembic migration test: `uv run pytest tests/test_alembic_migrations.py -v` from `backend/` verifies `application_corrections` table creation, foreign key shape, correction type validation, JSON snapshot validation, cascade behavior, and downgrade cleanup.
 - Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, shared raw-email retention enum validation, retained-body repr redaction, and the checked-in sample fixture.
 - [JT-020 2026-07-05 v3] Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` also verifies that only `ghost_inferred` events may use `email_id: null`; evidence-backed events require source email references.
 - Synthetic fixture loader test: `uv run pytest tests/test_synthetic_fixture_loader.py -v` from `backend/` verifies JSON fixture loading into the four core SQLite tables, typed per-table load counts, repository reads, and idempotent reloads.
