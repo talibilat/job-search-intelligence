@@ -47,7 +47,7 @@ The frontend exists as a Vite React TypeScript project.
 The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
 The frontend also has a primary navigation shell with a `/setup` Phase 0 setup page for provider, mode, Gmail read-only, privacy, checklist, disabled action, and not-ready copy.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
-There are typed provider interfaces for future Gmail and LLM implementations.
+There are typed provider interfaces for future Gmail and LLM implementations, plus an exported Gmail provider skeleton.
 There is configuration infrastructure, a keyring-backed secret-store path, Alembic migration infrastructure, and lint/type/test tooling.
 
 What does not exist yet is the full product.
@@ -55,7 +55,7 @@ There is no working Gmail sync yet.
 There is no application database schema or ingestion pipeline yet.
 There is no real dashboard yet.
 There is no chat agent yet.
-There is no concrete Azure OpenAI, Ollama, or Gmail adapter yet.
+There is no concrete Azure OpenAI or Ollama adapter yet.
 
 ## #1 JT-001 - Create Private GitHub Repository
 
@@ -618,7 +618,7 @@ The import command should print `full_backfill`.
 
 Caveat:
 This does not implement Gmail yet.
-It only defines the interface that the future Gmail adapter must implement.
+It only defines the interface that the Gmail adapter must implement; JT-058 later added the Gmail provider skeleton.
 
 ## #27 JT-027 - Define LLMProvider Interface
 
@@ -909,6 +909,40 @@ Caveat:
 This ticket adds frontend CI only.
 It does not add frontend tests, backend CI, application behavior, data model changes, secrets, telemetry, or backend API surfaces.
 
+## #58 JT-058 - Add Gmail Provider Skeleton
+
+GitHub issue: <https://github.com/talibilat/job-search-intelligence/issues/58>
+
+What was done:
+The backend got an exported `GmailEmailProvider` skeleton in `backend/app/providers/email/gmail.py`.
+It implements the existing `EmailProvider` protocol shape without calling live Google APIs.
+It enforces the v1 `gmail.readonly` scope, advertises read-only ingestion capabilities, ignores attachments, and returns public-safe `EmailProviderError` values for runtime methods deferred to later Gmail tickets.
+
+Why it was done:
+The ingestion pipeline needs a concrete Gmail adapter boundary before the later OAuth, refresh, metadata listing, retained body fetching, and sync orchestration tickets can fill in runtime behavior.
+This keeps Gmail-specific behavior behind the provider seam while preserving local-first storage, bring-your-own credentials, and no outbound email behavior.
+
+Area:
+Backend email provider skeleton and privacy boundary.
+
+Important files to inspect:
+`backend/app/providers/email/gmail.py` defines the Gmail provider skeleton.
+`backend/app/providers/email/__init__.py` exports it.
+`backend/tests/test_gmail_email_provider.py` verifies protocol conformance, readonly scopes, capabilities, attachment exclusion, and public-safe not-implemented errors.
+
+How to test it:
+
+```bash
+cd backend
+uv run pytest tests/test_gmail_email_provider.py -v
+```
+
+Expected result:
+The three Gmail provider skeleton tests should pass.
+
+Caveat:
+This ticket does not implement live Gmail OAuth, token refresh, metadata listing, retained body fetching, sync orchestration, database writes, or API routes.
+
 ## Quick Testing Checklist
 
 Run these backend checks from `backend/`:
@@ -975,8 +1009,8 @@ You can see typed settings and a safe `.env.example`.
 Real secrets should not be committed.
 
 Providers:
-You can see abstract provider contracts for email and LLM systems.
-Concrete Gmail and LLM implementations are not done yet.
+You can see abstract provider contracts for email and LLM systems, plus an exported Gmail provider skeleton.
+Working Gmail runtime behavior and concrete LLM implementations are not done yet.
 
 Privacy and safety:
 You can see early safety work for typed errors, secret references, safe configuration examples, and local data wiping.
@@ -992,5 +1026,5 @@ Frontend CI now runs the existing frontend typecheck, lint, unit test, and build
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, initialize Alembic's version table, run tests, lint, and type checks.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation and a non-persistent `/setup` page shell.
 Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
-The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
+The provider interfaces prepare the app for Gmail and LLM integrations, and Gmail now has an exported skeleton while runtime behavior remains deferred.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, Alembic migrations, and the wipe-data endpoint.
