@@ -89,9 +89,7 @@ def test_golden_set_fixture_uses_unique_ids_and_synthetic_addresses() -> None:
 
 def test_golden_set_fixture_covers_job_vs_not_and_core_categories() -> None:
     cases = load_golden_set_cases()
-    positive_categories = {
-        case.expected.category for case in cases if case.expected.is_job_related
-    }
+    positive_categories = {case.expected.category for case in cases if case.expected.is_job_related}
     negative_cases = [case for case in cases if not case.expected.is_job_related]
 
     assert REQUIRED_POSITIVE_CATEGORIES.issubset(positive_categories)
