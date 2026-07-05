@@ -69,6 +69,7 @@ scripts/          repository-level developer and operational scripts
 - Candidate selection uses provider-neutral static sender-domain, subject keyword, and excluded-label signals after metadata listing, so broad Gmail metadata queries do not expose snippets or body content.
 - Retained email bodies are stored as normalized plain text: HTML MIME bodies are converted to text, raw HTML fields are rejected, and mislabelled plain-text bodies that still look like HTML fail validation.
 - Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate, debugging, or reconciliation messages, and raw email DTOs track `metadata_only`, `retained`, or `debugging` retention state.
+[JT-065 2026-07-05 v4] Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate, debugging, or reconciliation messages, and raw email DTOs track `metadata_only`, `retained`, or `debugging` retention state.
 - Broad email metadata excludes body-derived snippets, and v1 ignores attachment content.
 - Current Gmail metadata listing requests Gmail `format=metadata` plus partial fields for message IDs, thread IDs, labels, size estimates, and selected headers only.
 - Incremental sync anchors are stored in local SQLite as opaque provider cursor values scoped by provider and account; they are not OAuth token material or email content.
