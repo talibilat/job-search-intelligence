@@ -3,9 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.event import ApplicationEventType
+
+NonEmptyString = Annotated[str, Field(min_length=1)]
 
 
 class JobEmailCategory(StrEnum):
@@ -19,16 +24,62 @@ class JobEmailCategory(StrEnum):
     OTHER = "other"
 
 
-class EmailClassificationRecord(BaseModel):
-    """Stored classification result for one raw email."""
+_CATEGORY_APPLICATION_STATUS = {
+    JobEmailCategory.APPLICATION_CONFIRMATION: "applied",
+    JobEmailCategory.REJECTION: "rejected",
+    JobEmailCategory.INTERVIEW_INVITE: "interview",
+    JobEmailCategory.OFFER: "offer",
+    JobEmailCategory.ASSESSMENT: "assessment",
+}
+
+_CATEGORY_EVENT_TYPE = {
+    JobEmailCategory.APPLICATION_CONFIRMATION: "applied",
+    JobEmailCategory.REJECTION: "rejection",
+    JobEmailCategory.INTERVIEW_INVITE: "interview_scheduled",
+    JobEmailCategory.OFFER: "offer",
+    JobEmailCategory.ASSESSMENT: "assessment",
+}
+
+
+class EmailClassificationCandidate(BaseModel):
+    """Retained email content prepared for the classification stage."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
 
     email_id: str = Field(min_length=1)
+    subject: str | None = Field(default=None, min_length=1)
+    from_addr: str | None = Field(default=None, min_length=1)
+    sent_at: datetime | None = None
+    body_text: str = Field(min_length=1, repr=False)
+
+    @field_validator("sent_at")
+    @classmethod
+    def validate_sent_at(cls, value: datetime | None) -> datetime | None:
+        return _validate_timezone_aware(value, field_name="sent_at")
+
+
+class EmailClassificationResult(BaseModel):
+    """Provider-neutral classification output plus reproducibility metadata."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
+
     is_job_related: bool
     category: JobEmailCategory
     confidence: float = Field(ge=0, le=1)
     model: str = Field(min_length=1)
     prompt_version: str = Field(min_length=1)
     classified_at: datetime
+
+    @field_validator("classified_at")
+    @classmethod
+    def validate_classified_at(cls, value: datetime) -> datetime:
+        return _validate_timezone_aware(value, field_name="classified_at")
+
+
+class EmailClassificationRecord(EmailClassificationResult):
+    """Stored classification result for one raw email."""
+
+    email_id: str = Field(min_length=1)
 
 
 class ClassificationRunRecord(BaseModel):
@@ -59,3 +110,95 @@ class ClassificationRunRecord(BaseModel):
             raise ValueError(msg)
 
         return self
+
+
+class ClassificationPromptOutput(BaseModel):
+    """Structured LLM output expected from the classification prompt."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    is_job_related: bool
+    category: JobEmailCategory
+    confidence: float = Field(ge=0, le=1)
+    company: str | None = Field(min_length=1)
+    role_title: str | None = Field(min_length=1)
+    application_status: ApplicationStatus | None
+    event_type: ApplicationEventType | None
+    event_at: datetime | None
+    salary_min: int | None = Field(ge=0)
+    salary_max: int | None = Field(ge=0)
+    currency: str | None = Field(min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
+    location: str | None = Field(min_length=1)
+    work_mode: WorkMode | None
+    seniority: str | None = Field(min_length=1)
+    sponsorship: SponsorshipStatus
+    tech_stack: tuple[NonEmptyString, ...]
+    rejection_reason: str | None = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_extraction_shape(self) -> Self:
+        if (
+            self.salary_min is not None
+            and self.salary_max is not None
+            and self.salary_min > self.salary_max
+        ):
+            msg = "salary_min must be less than or equal to salary_max"
+            raise ValueError(msg)
+
+        if self.is_job_related:
+            expected_status = _CATEGORY_APPLICATION_STATUS.get(self.category)
+            if (
+                expected_status is not None
+                and self.application_status is not None
+                and self.application_status != expected_status
+            ):
+                msg = "application_status contradicts category"
+                raise ValueError(msg)
+
+            expected_event_type = _CATEGORY_EVENT_TYPE.get(self.category)
+            if (
+                expected_event_type is not None
+                and self.event_type is not None
+                and self.event_type != expected_event_type
+            ):
+                msg = "event_type contradicts category"
+                raise ValueError(msg)
+
+            return self
+
+        if self.category is not JobEmailCategory.OTHER:
+            msg = "non-job-related outputs must use category other"
+            raise ValueError(msg)
+
+        extracted_values = (
+            self.company,
+            self.role_title,
+            self.application_status,
+            self.event_type,
+            self.event_at,
+            self.salary_min,
+            self.salary_max,
+            self.currency,
+            self.location,
+            self.work_mode,
+            self.seniority,
+            self.rejection_reason,
+        )
+        if (
+            any(value is not None for value in extracted_values)
+            or self.sponsorship != "unknown"
+            or self.tech_stack
+        ):
+            msg = "non-job-related outputs cannot include extracted application data"
+            raise ValueError(msg)
+
+        return self
+
+
+def _validate_timezone_aware[
+    DatetimeT: datetime | None,
+](value: DatetimeT, *, field_name: str) -> DatetimeT:
+    if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+        msg = f"{field_name} must be timezone-aware"
+        raise ValueError(msg)
+    return value

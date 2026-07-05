@@ -76,7 +76,7 @@ job-search-intelligence/
 │   │   ├── api/                    # routers, typed API errors, setup, auth, sync, applications, metrics, insights, chat
 │   │   └── setup/                  # first-run wizard logic
 │   ├── evals/
-│   │   ├── golden_set.jsonl        # ~30 hand-labeled emails
+│   │   ├── golden_set.jsonl        # ~30 private-data-free labeled email cases
 │   │   └── run_eval.py             # classification accuracy report
 │   ├── tests/                      # minimal pytest (pipeline + metrics smoke)
 │   │   └── fixtures/synthetic/      # private-data-free synthetic fixture JSON
@@ -132,6 +132,7 @@ job-search-intelligence/
 - **`email_filter_decisions`** - `email_id` (FK), `strategy` (`broad_job_search`), `outcome` (`candidate | rejected`), `reason`, `decided_at`; stores one idempotent heuristic filter audit decision per raw email and strategy.
   Reasons are public-safe static signal tokens such as `sender_domain:greenhouse.io`, `subject_keyword:interview`, `excluded_label:spam`, or `no_filter_signal`, not raw subjects or body text.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
+- **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, timezone-aware `classified_at`.
 - **`classification_runs`** - `id`, `provider`, `model`, `prompt_version`, `started_at`, `completed_at`, `candidate_count`, `classified_count`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `estimated_cost_usd`; stores one local accounting row per completed classification run.
   Counts, token totals, and estimated cost are non-negative; `classified_count` cannot exceed `candidate_count`, and `total_tokens` must cover prompt plus completion tokens.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
@@ -183,10 +184,16 @@ EmailProvider -> metadata-only raw_emails
                  │  candidates only
                  ▼
    2. classify.py  LLM classify + structured extract  (LLMProvider)
-     - one structured call per candidate -> Pydantic model
-     - fields: company, role, status, dates, salary, location,
-       work_mode, seniority, sponsorship, tech_stack, rejection_reason
-     - store model + prompt_version per row (reproducible re-runs)
+      - one provider-neutral JSON-object request per retained candidate -> Pydantic model
+      - prompt version embedded in the system prompt for reproducible re-runs
+      - retained `EmailClassificationCandidate` inputs and provider-neutral
+        `EmailClassificationResult` outputs reject unknown fields, keep retained
+        body text out of repr output, and require timezone-aware timestamps
+      - fields: company, role, status, dates, salary, location,
+        work_mode, seniority, sponsorship, tech_stack, rejection_reason
+      - malformed JSON, extra fields, invalid enums, contradictory category/status
+        pairs, inverted salary ranges, and extracted non-job data are rejected
+      - store model + prompt_version per row (reproducible re-runs)
                  │
                  ▼
    3. aggregate.py  emails -> applications + application_events (dedup)
@@ -217,19 +224,21 @@ The same static keyword terms may be applied to already-normalized retained body
 The sync runtime persists the broad job-search filter outcome and public-safe reason for every evaluated normalized metadata record in `email_filter_decisions`, keyed by raw email ID and strategy so re-runs update the same audit row.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
+Classification prompt requests are built by `app.pipeline.classify.build_classification_prompt_request`, require retained email body text, request `LLMResponseFormat.JSON_OBJECT`, use temperature `0`, and embed `CLASSIFICATION_PROMPT_VERSION` in the system prompt.
+Provider responses must pass `app.pipeline.classify.parse_classification_prompt_output` before any downstream classification storage or aggregation.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 
 **Cost control:** `classification_mode` config - `hybrid` (filter -> LLM), `llm` (LLM on everything), `local` (Ollama, offline/free).
-Setup asks explicitly and preselects `hybrid` when Azure OpenAI credentials are configured, or `local` when only Ollama is configured.
-Show a **pre-run cost estimate** and track tokens per run; completed-run accounting is stored locally in `classification_runs` through `ClassificationRunRepository`.
+Setup asks explicitly and recommends `hybrid` for Azure OpenAI, or `local` for Ollama, when the user has not explicitly selected a provider-valid mode.
+Show a **pre-run cost estimate** and track tokens per run.
 
 ---
 
 ## 5. API surface (REST)
 
 - **Health:** `GET /health` returns a liveness-only `{ "status": "ok" }` response for Phase 0 smoke checks.
-- **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only; `POST /config/providers/llm/health` validates selected non-secret LLM provider settings, calls the configured provider adapter to check the selected chat and embedding models, validates that the response covers those configured models, and returns a typed provider-neutral availability response; `GET /auth/gmail` starts Gmail OAuth by returning a provider-built Google authorization URL, generated state value, and the read-only Gmail scope without returning client secrets or tokens; `GET /auth/gmail/callback` consumes the issued state, passes the authorization code as `SecretStr`, exchanges it through the Gmail provider, validates the returned read-only scope, stores token material through the configured `SecretStore`, persists only non-secret `email_connections` metadata, and returns an `EmailConnection` DTO without raw tokens.
+- **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell plus current and recommended classification modes without exposing secrets; `POST /setup` accepts non-secret first-run choices, applies the provider-based classification recommendation when `classification_mode` is omitted, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, recommended classification mode, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only, applying the provider-based classification recommendation only when `llm_provider` changes and `classification_mode` is omitted; `GET /auth/gmail` starts Gmail OAuth by returning a provider-built Google authorization URL, generated state value, and the read-only Gmail scope without returning client secrets or tokens; `GET /auth/gmail/callback` consumes the issued state, passes the authorization code as `SecretStr`, exchanges it through the Gmail provider, validates the returned read-only scope, stores token material through the configured `SecretStore`, persists only non-secret `email_connections` metadata, and returns an `EmailConnection` DTO without raw tokens.
   Gmail full and incremental metadata listing exists behind `SecretStore`; retained-body fetching exists behind the provider seam for caller-selected refs, expired stored Gmail credentials are refreshed before metadata or retained-body reads, default sync resolves the latest non-reauth Gmail connection metadata from SQLite, and manual sync stores retained bodies for broad candidate messages after metadata persistence; the overview page can trigger and display manual sync state through backend APIs while deeper product pages remain later Phase 1 work.
 - **Local data:** `POST /local-data/wipe` removes configured local app data and derived artifacts after the exact confirmation phrase `wipe-local-data`; unsafe configured filesystem targets return the standard typed `400` API error.
 - **Sync:** `POST /sync` resolves the latest non-reauth Gmail connection metadata, runs full backfill until durable backfill state is completed and the replacement cursor is promoted, stores metadata-only `raw_emails` without overwriting retained bodies, persists `email_filter_decisions` audit rows for broad job-search filter outcomes, stores retained bodies for broad job-search candidates when the provider supports body fetching, persists provider cursors and resumable page progress, returns a typed not-configured `400` when no Gmail connection is configured, returns typed `409` for concurrent manual runs, and maps email-provider failures to typed `401`, `403`, `409`, `429`, `502`, or `503` responses with email-specific error codes and a `user_action` detail; `GET /sync/status` reports current or last-run state, provider, account, mode, timestamps, page count, message count, raw-email count, expired-cursor recovery, and public error text.
@@ -300,7 +309,7 @@ Phase 1 raw email population tracks `metadata_only`, `retained`, and `debugging`
 Historical retention note: before JT-065, Phase 1 wording described retained bodies for candidate messages without the explicit debugging retention state.
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
-Heuristic filter, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
+Heuristic filter, provider-neutral classification prompt contract, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
 **DoD:** `applications` populated; golden-set classification ≥90% precision AND ≥85% recall on job-vs-not; re-runs idempotent.
 
 **Phase 3 - Dashboard (deterministic)** -> Tiers 1-3 (+ 3.5 diagnostics -> Tier 4)
@@ -323,7 +332,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, ch
 
 - **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** starts with the Phase 0 shell for setup copy, overview sync affordance, and dashboard empty-state coverage; later critical paths add dashboard fixture load and chat citation smoke checks as those pages exist.
-- **Carve-out - the golden set:** ~30 hand-labeled emails in `evals/golden_set.jsonl`; `evals/run_eval.py` reports classification precision/recall. Run it whenever the classify prompt/model changes. _This is the one thing that keeps the dashboard honest._
+- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `uv run python -m evals.run_eval` from `backend/` validates records through the classification contract and reports classification precision/recall. Run it whenever the classify prompt, model, categories, or extraction schema changes. _This is the one thing that keeps the dashboard honest._
 
 ---
 

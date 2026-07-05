@@ -149,8 +149,8 @@ Gmail ingestion · classification + extraction + aggregation · deterministic da
   *Accept:* ghost status appears correctly; threshold is configurable.
 - **FR-2.6 Reproducible re-runs** *(P0)* - Re-processing is deterministic and incremental; stored prompt/model versions allow controlled re-classification.
   *Accept:* re-run on unchanged mail produces no changes; changing the prompt version re-classifies cleanly.
-- **FR-2.7 Golden-set eval** *(P0, mandatory gate)* - ~30 hand-labeled emails + an accuracy report run whenever the classify prompt/model changes.
-  *Accept:* `evals/run_eval.py` prints precision/recall; Phase 2 gate is ≥90% precision AND ≥85% recall on job-vs-not; regressions block merges unless explicitly accepted.
+- **FR-2.7 Golden-set eval** *(P0, mandatory gate)* - ~30 private-data-free labeled emails + an accuracy report run whenever the classify prompt/model changes.
+  *Accept:* `uv run python -m evals.run_eval` from `backend/` prints precision/recall; Phase 2 gate is ≥90% precision AND ≥85% recall on job-vs-not; regressions block merges unless explicitly accepted.
 - **FR-2.8 Manual correction path** *(P0)* - Support audited merge, split, status edit, and event edit operations for aggregation mistakes.
   *Accept:* user-corrected grouping and status are locked from automatic overwrite by default, conflicts are surfaced when new evidence disagrees, and corrections can be explicitly reset.
 

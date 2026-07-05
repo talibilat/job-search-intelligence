@@ -50,14 +50,14 @@ The frontend also has an empty `/dashboard` page shell with placeholder filter a
 The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
 The frontend also has an empty `/chat` route shell with a disabled composer for the later Phase 5 RAG chat work.
 There are backend endpoints for health, setup status, setup submission, provider config, Gmail auth start and callback, manual sync, sync status, and wiping local data.
-There are typed provider interfaces for Gmail and future LLM implementations, plus an exported Gmail provider adapter with read-only OAuth URL construction, callback token exchange and persistence, non-secret connection metadata persistence, provider-level token refresh, safe metadata-only full-backfill and incremental history listing, and retained-body fetching when a `SecretStore` is configured.
+There are typed provider interfaces for Gmail and LLM implementations, plus an exported Gmail provider adapter with read-only OAuth URL construction, callback token exchange and persistence, non-secret connection metadata persistence, provider-level token refresh, safe metadata-only full-backfill and incremental history listing, retained-body fetching when a `SecretStore` is configured, and an Azure OpenAI chat-completions adapter behind the LLM provider seam.
 There is configuration infrastructure, a keyring-backed secret-store path, Alembic migration infrastructure, raw-email metadata and retained-body persistence, sync-state persistence, and lint/type/test tooling.
 
 What does not exist yet is the full product.
 There is no full Gmail ingestion pipeline yet because classification and aggregation remain pending.
 There is no populated metrics dashboard yet.
 There is no backend chat agent, retrieval, streaming, or chat history endpoint/UI yet; only the compact local chat history table exists.
-There is no concrete Azure OpenAI or Ollama adapter yet.
+There is a concrete Azure OpenAI chat-completions adapter, while the Ollama adapter remains pending.
 
 ## #1 JT-001 - Create Private GitHub Repository
 
@@ -658,7 +658,8 @@ The tests should pass.
 The import command should print a typed LLM message.
 
 Caveat:
-This does not implement Azure OpenAI, Ollama, OpenAI, or Anthropic.
+This ticket did not implement Azure OpenAI, Ollama, OpenAI, or Anthropic.
+JT-087 later added Ollama chat generation behind the `LLMProvider` seam.
 Embeddings were also deferred to a later ticket.
 
 ## #29 JT-029 - Add Setup Status API Shell
@@ -712,7 +713,8 @@ Expected result:
   "llm_configured": false,
   "email_provider": "gmail",
   "llm_provider": "ollama",
-  "classification_mode": "local"
+  "classification_mode": "local",
+  "recommended_classification_mode": "local"
 }
 ```
 
@@ -988,6 +990,8 @@ curl -s -X POST http://127.0.0.1:8765/setup \
   -H 'content-type: application/json' \
   -d '{"email_provider":"gmail","llm_provider":"ollama","classification_mode":"local"}'
 ```
+
+`classification_mode` may be omitted; setup then applies `local` for Ollama or `hybrid` for Azure OpenAI before provider validation.
 
 Run the frontend manually from `frontend/`:
 

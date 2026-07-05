@@ -1,5 +1,6 @@
 """Pydantic DTOs used at application boundaries."""
 
+from .classification import ClassificationPromptOutput
 from .health import HealthResponse
 from .provider_config import (
     EmailProviderConfigResponse,
@@ -22,7 +23,9 @@ from .records import (
     EmailBackfillStatus,
     EmailCandidateQueryStrategy,
     EmailChunkRecord,
+    EmailClassificationCandidate,
     EmailClassificationRecord,
+    EmailClassificationResult,
     EmailConnectionRecord,
     EmailFilterDecisionOutcome,
     EmailFilterDecisionRecord,
@@ -52,6 +55,7 @@ from .synthetic_fixture import (
 from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
+    "ClassificationPromptOutput",
     "EmailProviderConfigResponse",
     "HealthResponse",
     "LLMProviderConfigResponse",
@@ -71,7 +75,9 @@ __all__ = [
     "EmailBackfillStatus",
     "EmailCandidateQueryStrategy",
     "EmailChunkRecord",
+    "EmailClassificationCandidate",
     "EmailClassificationRecord",
+    "EmailClassificationResult",
     "EmailConnectionRecord",
     "EmailFilterDecisionOutcome",
     "EmailFilterDecisionRecord",

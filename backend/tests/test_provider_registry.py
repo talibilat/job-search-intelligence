@@ -125,6 +125,22 @@ def test_gmail_requirements_are_declarative_metadata_not_selection_validation() 
     provider_registry.validate_settings(settings)
 
 
+def test_ollama_rejects_non_local_base_url() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.OLLAMA,
+        classification_mode=ClassificationMode.LOCAL,
+        ollama_base_url="https://ollama.example.com",
+    )
+
+    with pytest.raises(ProviderConfigurationError) as error:
+        provider_registry.validate_settings(settings)
+
+    assert error.value.provider_name == "ollama"
+    assert error.value.message == "Ollama base URL must point to a local host."
+    assert error.value.missing_settings == ("ollama_base_url",)
+
+
 def test_azure_openai_rejects_whitespace_only_provider_metadata() -> None:
     settings = AppSettings(
         _env_file=None,

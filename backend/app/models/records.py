@@ -11,7 +11,9 @@ from app.models.chat import ChatMessageRecord, ChatMessageRole
 from app.models.chunk import EmailChunkRecord
 from app.models.classification import (
     ClassificationRunRecord,
+    EmailClassificationCandidate,
     EmailClassificationRecord,
+    EmailClassificationResult,
     JobEmailCategory,
 )
 from app.models.connection import EmailConnectionRecord
@@ -50,7 +52,9 @@ __all__ = [
     "EmailBackfillStatus",
     "EmailCandidateQueryStrategy",
     "EmailChunkRecord",
+    "EmailClassificationCandidate",
     "EmailClassificationRecord",
+    "EmailClassificationResult",
     "EmailConnectionRecord",
     "EmailFilterDecisionOutcome",
     "EmailFilterDecisionRecord",

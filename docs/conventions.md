@@ -9,13 +9,16 @@ Baseline coding standards for every agent and contributor.
 - Cross every boundary with a Pydantic v2 DTO, never a raw dict.
 - Keep core storage DTOs in focused `app.models` domain modules, and preserve stable aggregate imports through `app.models` and `app.models.records` for shared repository and pipeline code.
 - Validate structured LLM output with Pydantic and reject malformed output instead of storing it.
+- Classification provider responses must be parsed through `ClassificationPromptOutput` before any storage or aggregation code can consume extracted fields.
 
 ## Architecture patterns
 
 - Repository pattern for all database access; no raw SQL scattered through services.
 - Strategy pattern for `EmailProvider` and `LLMProvider`; provider-specific code stays behind the interface.
 - Provider selection metadata belongs in `app.providers.provider_registry`; it declares supported providers, non-secret setting requirements, and `SecretRef` metadata without instantiating adapters or reading secrets.
-- LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation and health-check DTOs; concrete provider adapters own vendor payloads, credential lookup, and model-availability checks.
+- LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
+- Ollama provider adapters must keep local mode local: reject non-local base URLs, do not use HTTP proxy routing for local calls, and map transport failures to public-safe LLM provider errors without prompt or completion content.
+- Classification prompt requests go through `app.pipeline.classify.build_classification_prompt_request`, request `LLMResponseFormat.JSON_OBJECT`, embed `CLASSIFICATION_PROMPT_VERSION`, and send only retained email candidate fields needed for classification.
 - `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, normalize retained HTML bodies to plain text, reject raw HTML retention fields, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
 - Gmail metadata listing must keep full backfill and incremental sync metadata-only: use message list pages for full backfill, `users.history.list` `messageAdded` records for incremental sync, withhold replacement history cursors until paginated listing is fully drained, and map Gmail history `404` responses to expired-cursor recovery.
 - Sync services persist provider-owned cursors through `SyncStateRepository`, keyed by provider and account, without treating cursor values as OAuth token material or email content.
@@ -31,6 +34,7 @@ Baseline coding standards for every agent and contributor.
 - Persisted broad job-search filter decisions must use the `email_filter_decisions` audit table, upsert by raw email ID and strategy, and store only static public-safe reason tokens rather than raw subjects, snippets, bodies, or provider payloads.
 - Gmail OAuth setup and auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, provider-owned authorization URLs, callback codes as `SecretStr`, refresh-token reuse behind the provider seam, and token material routed through `SecretStore`.
 - Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
+- Classification DTO boundaries use retained `EmailClassificationCandidate` inputs, provider-neutral `EmailClassificationResult` outputs, and stored `EmailClassificationRecord` rows; they reject unknown fields, keep retained body text out of repr output, and require timezone-aware candidate and classification timestamps.
 - Raw email repository writes must be idempotent by provider message ID and must preserve existing `retained` or `debugging` body text when later metadata-only reconciliation pages replay the same message.
 - Raw email retained and debugging body writes must insert a minimal `raw_emails` row when metadata is not present yet, then allow later metadata-only replays to fill metadata without downgrading the retained body state.
 - Downstream pipeline code should use `RawEmailRecord.has_retained_body` to test body availability instead of re-checking retention enum values directly.
@@ -62,7 +66,7 @@ Baseline coding standards for every agent and contributor.
 - Use conventional commit messages.
 - Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; route secrets through `SecretStore` and store them encrypted at rest.
 - Use the redaction helpers exported by `app.security` before logging structured data that may contain secrets or retained email bodies.
-- Synthetic fixtures must be private-data-free, must set `contains_private_data` to `false`, and must use synthetic domains and content instead of copied inbox data.
+- Synthetic fixtures and golden-set fixtures must be private-data-free, must set `contains_private_data` to `false`, and must use synthetic domains and content instead of copied inbox data.
 - Do not add telemetry, shared credentials, auto-apply, or autonomous outbound email.
 
 ## Verification
@@ -72,7 +76,8 @@ Baseline coding standards for every agent and contributor.
 - Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Frontend browser smoke changes: run `npm run test:smoke` from `frontend/` after installing Chromium with `npx playwright install chromium` once per machine.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
-- Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
+- Classification changes: run `uv run python -m evals.run_eval` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
+- Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.
 

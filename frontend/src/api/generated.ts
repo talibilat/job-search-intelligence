@@ -316,6 +316,7 @@ export interface ProviderConfigValues {
 export interface ProviderConfigResponse {
   email_providers: EmailProviderConfigResponse[];
   llm_providers: LLMProviderConfigResponse[];
+  recommended_classification_mode: ClassificationMode;
   selection: ProviderSelection;
   settings: ProviderConfigValues;
 }
@@ -347,6 +348,7 @@ export interface SetupStatusResponse {
   gmail_connected: boolean;
   llm_configured: boolean;
   llm_provider: LLMProviderName;
+  recommended_classification_mode: ClassificationMode;
   setup_complete: boolean;
 }
 
@@ -358,7 +360,7 @@ export interface SetupSubmitRequest {
   azure_openai_chat_deployment?: string | null;
   azure_openai_embedding_deployment?: string | null;
   azure_openai_endpoint?: string | null;
-  classification_mode: ClassificationMode;
+  classification_mode?: ClassificationMode | null;
   email_provider?: EmailProviderName;
   gmail_client_config_file?: string | null;
   llm_provider: LLMProviderName;
@@ -376,6 +378,7 @@ export interface SetupSubmitResponse {
   gmail_connected: boolean;
   llm_configured: boolean;
   llm_provider: LLMProviderName;
+  recommended_classification_mode: ClassificationMode;
   setup_complete: boolean;
   status: "accepted";
 }
@@ -544,7 +547,7 @@ export const getGetProviderConfigConfigProvidersGetUrl = () => {
 };
 
 /**
- * Return selected provider config and non-secret supported-provider metadata.
+ * Return selected provider config plus recommended classification mode.
  * @summary Get Provider Config
  */
 export const getProviderConfigConfigProvidersGet = async (
@@ -595,7 +598,7 @@ export const getUpdateProviderConfigConfigProvidersPutUrl = () => {
 };
 
 /**
- * Validate and update the in-process provider config shell.
+ * Validate and update provider config, applying recommendations on provider changes.
  * @summary Update Provider Config
  */
 export const updateProviderConfigConfigProvidersPut = async (
@@ -791,7 +794,7 @@ export const getSetupSubmitSetupPostUrl = () => {
 };
 
 /**
- * Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets.
+ * Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets. When classification_mode is omitted, the backend applies the selected provider recommendation before validation.
  * @summary Submit first-run setup choices
  */
 export const setupSubmitSetupPost = async (
@@ -834,7 +837,7 @@ export const getSetupStatusSetupStatusGetUrl = () => {
 };
 
 /**
- * Report the Phase 0 setup shell without validating or exposing secrets.
+ * Report setup status plus current and recommended classification modes.
  * @summary Setup Status
  */
 export const setupStatusSetupStatusGet = async (
