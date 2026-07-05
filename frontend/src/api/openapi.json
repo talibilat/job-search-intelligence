@@ -89,6 +89,50 @@
         "title": "ClassificationMode",
         "type": "string"
       },
+      "EmailAccountRef": {
+        "description": "Provider-neutral stable reference to a connected mailbox account.",
+        "properties": {
+          "account_id": {
+            "minLength": 1,
+            "title": "Account Id",
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          }
+        },
+        "required": [
+          "provider",
+          "account_id"
+        ],
+        "title": "EmailAccountRef",
+        "type": "object"
+      },
+      "EmailAddress": {
+        "properties": {
+          "address": {
+            "minLength": 1,
+            "title": "Address",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "title": "EmailAddress",
+        "type": "object"
+      },
       "EmailAuthorizationStartResult": {
         "description": "Provider-neutral authorization URL and scope request.",
         "properties": {
@@ -121,6 +165,65 @@
           "requested_scopes"
         ],
         "title": "EmailAuthorizationStartResult",
+        "type": "object"
+      },
+      "EmailConnection": {
+        "description": "Stored account connection metadata without raw OAuth token material.",
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/EmailAccountRef"
+          },
+          "connected_at": {
+            "format": "date-time",
+            "title": "Connected At",
+            "type": "string"
+          },
+          "credential_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Expires At"
+          },
+          "credential_ref": {
+            "$ref": "#/components/schemas/SecretRef"
+          },
+          "display_email": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "granted_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Granted Scopes",
+            "type": "array"
+          },
+          "reauth_required": {
+            "default": false,
+            "title": "Reauth Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "account",
+          "credential_ref",
+          "granted_scopes",
+          "connected_at"
+        ],
+        "title": "EmailConnection",
         "type": "object"
       },
       "EmailProviderConfigResponse": {
@@ -1070,6 +1173,71 @@
           }
         },
         "summary": "Gmail Auth Url",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/gmail/callback": {
+      "get": {
+        "operationId": "gmail_auth_callback_auth_gmail_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "format": "password",
+              "minLength": 1,
+              "title": "Code",
+              "type": "string",
+              "writeOnly": true
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailConnection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gmail Auth Callback",
         "tags": [
           "auth"
         ]

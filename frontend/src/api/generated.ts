@@ -50,6 +50,21 @@ export const EmailProviderName = {
 } as const;
 
 /**
+ * Provider-neutral stable reference to a connected mailbox account.
+ */
+export interface EmailAccountRef {
+  /** @minLength 1 */
+  account_id: string;
+  provider: EmailProviderName;
+}
+
+export interface EmailAddress {
+  /** @minLength 1 */
+  address: string;
+  display_name?: string | null;
+}
+
+/**
  * Provider-neutral authorization URL and scope request.
  */
 export interface EmailAuthorizationStartResult {
@@ -60,24 +75,6 @@ export interface EmailAuthorizationStartResult {
   requested_scopes: string[];
   /** @minLength 1 */
   state: string;
-}
-
-export type ProviderRequirementEnforcement =
-  (typeof ProviderRequirementEnforcement)[keyof typeof ProviderRequirementEnforcement];
-
-export const ProviderRequirementEnforcement = {
-  declarative: "declarative",
-  selection: "selection",
-} as const;
-
-/**
- * Non-secret provider setting required by a supported provider.
- */
-export interface ProviderConfigRequirementResponse {
-  enforcement: ProviderRequirementEnforcement;
-  label: string;
-  required: boolean;
-  setting_name: string;
 }
 
 export type SecretKind = (typeof SecretKind)[keyof typeof SecretKind];
@@ -104,6 +101,38 @@ export interface SecretRef {
    * @pattern ^[a-z0-9][a-z0-9_.:-]*$
    */
   provider: string;
+}
+
+/**
+ * Stored account connection metadata without raw OAuth token material.
+ */
+export interface EmailConnection {
+  account: EmailAccountRef;
+  connected_at: string;
+  credential_expires_at?: string | null;
+  credential_ref: SecretRef;
+  display_email?: EmailAddress | null;
+  /** @minItems 1 */
+  granted_scopes: string[];
+  reauth_required?: boolean;
+}
+
+export type ProviderRequirementEnforcement =
+  (typeof ProviderRequirementEnforcement)[keyof typeof ProviderRequirementEnforcement];
+
+export const ProviderRequirementEnforcement = {
+  declarative: "declarative",
+  selection: "selection",
+} as const;
+
+/**
+ * Non-secret provider setting required by a supported provider.
+ */
+export interface ProviderConfigRequirementResponse {
+  enforcement: ProviderRequirementEnforcement;
+  label: string;
+  required: boolean;
+  setting_name: string;
 }
 
 /**
@@ -332,6 +361,17 @@ export interface WipeDataResponse {
   status: "wiped";
 }
 
+export type GmailAuthCallbackAuthGmailCallbackGetParams = {
+  /**
+   * @minLength 1
+   */
+  code: string;
+  /**
+   * @minLength 1
+   */
+  state: string;
+};
+
 export type gmailAuthUrlAuthGmailGetResponse200 = {
   data: EmailAuthorizationStartResult;
   status: 200;
@@ -380,6 +420,78 @@ export const gmailAuthUrlAuthGmailGet = async (
     status: res.status,
     headers: res.headers,
   } as gmailAuthUrlAuthGmailGetResponse;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponse200 = {
+  data: EmailConnection;
+  status: 200;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponseSuccess =
+  gmailAuthCallbackAuthGmailCallbackGetResponse200 & {
+    headers: Headers;
+  };
+export type gmailAuthCallbackAuthGmailCallbackGetResponseError = (
+  | gmailAuthCallbackAuthGmailCallbackGetResponse400
+  | gmailAuthCallbackAuthGmailCallbackGetResponse422
+) & {
+  headers: Headers;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponse =
+  | gmailAuthCallbackAuthGmailCallbackGetResponseSuccess
+  | gmailAuthCallbackAuthGmailCallbackGetResponseError;
+
+export const getGmailAuthCallbackAuthGmailCallbackGetUrl = (
+  params: GmailAuthCallbackAuthGmailCallbackGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/auth/gmail/callback?${stringifiedParams}`
+    : `/auth/gmail/callback`;
+};
+
+/**
+ * @summary Gmail Auth Callback
+ */
+export const gmailAuthCallbackAuthGmailCallbackGet = async (
+  params: GmailAuthCallbackAuthGmailCallbackGetParams,
+  options?: RequestInit,
+): Promise<gmailAuthCallbackAuthGmailCallbackGetResponse> => {
+  const res = await fetch(getGmailAuthCallbackAuthGmailCallbackGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: gmailAuthCallbackAuthGmailCallbackGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as gmailAuthCallbackAuthGmailCallbackGetResponse;
 };
 
 export type getProviderConfigConfigProvidersGetResponse200 = {

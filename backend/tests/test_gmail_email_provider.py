@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from app.config import GMAIL_READONLY_SCOPE, AppSettings, EmailProviderName
@@ -26,15 +28,18 @@ NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 class FakeSecretStore:
     def __init__(self, secret: SecretStr | None) -> None:
         self.secret = secret
+        self.secrets: dict[SecretRef, SecretStr] = {}
 
     async def get_secret(self, ref: SecretRef) -> SecretStr | None:
-        return self.secret
+        return self.secrets.get(ref, self.secret)
 
     async def set_secret(self, ref: SecretRef, value: SecretStr) -> None:
         self.secret = value
+        self.secrets[ref] = value
 
     async def delete_secret(self, ref: SecretRef) -> None:
         self.secret = None
+        self.secrets.pop(ref, None)
 
 
 class FakeGmailTransport:
@@ -72,6 +77,60 @@ class FakeGmailTransport:
             return {"historyId": "history-complete"}
 
         raise AssertionError(f"unexpected Gmail path: {path}")
+
+
+class FakeGmailProfileTransport(FakeGmailTransport):
+    async def get_json(
+        self,
+        path: str,
+        *,
+        query: tuple[tuple[str, str], ...],
+        access_token: SecretStr,
+    ) -> dict[str, object]:
+        self.calls.append((path, query, access_token.get_secret_value()))
+        if path == "/gmail/v1/users/me/profile":
+            return {"emailAddress": "Me@Example.com"}
+        return await super().get_json(path, query=query, access_token=access_token)
+
+
+class FakeOAuthTokenTransport:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[tuple[str, str], ...]]] = []
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: tuple[tuple[str, str], ...],
+    ) -> dict[str, object]:
+        self.calls.append((url, form))
+        return {
+            "access_token": "gmail-access-token",
+            "refresh_token": "gmail-refresh-token",
+            "expires_in": 3600,
+            "scope": GMAIL_READONLY_SCOPE,
+            "token_type": "Bearer",
+        }
+
+
+def write_google_oauth_client_config(tmp_path: Path) -> Path:
+    client_config = tmp_path / "google-oauth-client.json"
+    client_config.write_text(
+        json.dumps(
+            {
+                "installed": {
+                    "client_id": "client-id.apps.googleusercontent.com",
+                    "project_id": "jobtracker-local",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "client_secret": "super-secret-client-secret",
+                    "redirect_uris": ["http://localhost"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return client_config
 
 
 def _settings() -> AppSettings:
@@ -123,15 +182,9 @@ def test_gmail_email_provider_rejects_non_readonly_scope_configuration() -> None
         _gmail_provider(settings)
 
 
-def test_gmail_email_provider_skeleton_raises_public_safe_errors() -> None:
+def test_gmail_email_provider_remaining_placeholders_raise_public_safe_errors() -> None:
     provider = _gmail_provider(_settings())
 
-    callback_request = EmailAuthorizationCallbackRequest(
-        provider=EmailProviderName.GMAIL,
-        redirect_uri="http://127.0.0.1:8000/auth/gmail/callback",
-        state="csrf-state",
-        code=SecretStr("authorization-code"),
-    )
     connection = _connection()
     metadata_request = EmailMetadataListRequest(
         mode=EmailSyncMode.FULL_BACKFILL,
@@ -142,7 +195,6 @@ def test_gmail_email_provider_skeleton_raises_public_safe_errors() -> None:
     )
 
     operations = (
-        provider.complete_authorization(callback_request),
         provider.refresh_connection(connection),
         provider.list_message_metadata(connection, metadata_request),
         provider.fetch_message_bodies(connection, body_request),
@@ -156,6 +208,75 @@ def test_gmail_email_provider_skeleton_raises_public_safe_errors() -> None:
         assert "authorization-code" not in str(error_info.value)
         assert "csrf-state" not in str(error_info.value)
         assert "me@example.com" not in str(error_info.value)
+
+
+def test_gmail_email_provider_completes_authorization_and_persists_tokens(
+    tmp_path: Path,
+) -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    secret_store = FakeSecretStore(None)
+    token_transport = FakeOAuthTokenTransport()
+    gmail_transport = FakeGmailProfileTransport()
+    provider = GmailEmailProvider(
+        settings=AppSettings(
+            _env_file=None,
+            gmail_client_config_file=write_google_oauth_client_config(tmp_path),
+        ),
+        secret_store=secret_store,
+        transport=gmail_transport,
+        token_transport=token_transport,
+    )
+
+    connection = asyncio.run(
+        provider.complete_authorization(
+            EmailAuthorizationCallbackRequest(
+                provider=EmailProviderName.GMAIL,
+                redirect_uri="http://127.0.0.1:8000/auth/gmail/callback",
+                state="csrf-state",
+                code=SecretStr("authorization-code"),
+            )
+        )
+    )
+
+    assert connection.account.account_id == "me@example.com"
+    assert connection.display_email is not None
+    assert connection.display_email.address == "me@example.com"
+    assert connection.credential_ref.kind is SecretKind.OAUTH_TOKEN
+    assert connection.credential_ref.provider == "gmail"
+    assert "@" not in connection.credential_ref.name
+    assert connection.granted_scopes == (GMAIL_READONLY_SCOPE,)
+    assert connection.credential_expires_at is not None
+    assert connection.credential_expires_at > connection.connected_at
+    assert "authorization-code" not in connection.model_dump_json()
+    assert "gmail-access-token" not in connection.model_dump_json()
+    assert "gmail-refresh-token" not in connection.model_dump_json()
+
+    stored_secret = secret_store.secrets[connection.credential_ref]
+    stored_payload = json.loads(stored_secret.get_secret_value())
+    assert stored_payload["access_token"] == "gmail-access-token"
+    assert stored_payload["refresh_token"] == "gmail-refresh-token"
+    assert stored_payload["scope"] == GMAIL_READONLY_SCOPE
+
+    assert token_transport.calls == [
+        (
+            "https://oauth2.googleapis.com/token",
+            (
+                ("client_id", "client-id.apps.googleusercontent.com"),
+                ("client_secret", "super-secret-client-secret"),
+                ("code", "authorization-code"),
+                ("grant_type", "authorization_code"),
+                ("redirect_uri", "http://127.0.0.1:8000/auth/gmail/callback"),
+            ),
+        )
+    ]
+    assert gmail_transport.calls == [
+        (
+            "/gmail/v1/users/me/profile",
+            (("fields", "emailAddress"),),
+            "gmail-access-token",
+        )
+    ]
 
 
 def test_gmail_email_provider_lists_message_metadata_with_configured_secret_store() -> None:

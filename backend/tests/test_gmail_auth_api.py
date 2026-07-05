@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -8,11 +9,16 @@ from app.api.auth import get_gmail_email_provider
 from app.config import GMAIL_READONLY_SCOPE, AppSettings, EmailProviderName, get_settings
 from app.main import create_app
 from app.providers.email import (
+    EmailAccountRef,
+    EmailAddress,
     EmailAttachmentPolicy,
+    EmailAuthorizationCallbackRequest,
     EmailAuthorizationStartRequest,
     EmailAuthorizationStartResult,
+    EmailConnection,
     EmailProviderCapabilities,
 )
+from app.security import SecretKind, SecretRef
 from fastapi.testclient import TestClient
 
 
@@ -57,6 +63,7 @@ class FakeGmailProvider:
 
     def __init__(self) -> None:
         self.start_request: EmailAuthorizationStartRequest | None = None
+        self.callback_request: EmailAuthorizationCallbackRequest | None = None
 
     async def start_authorization(
         self,
@@ -68,6 +75,26 @@ class FakeGmailProvider:
             authorization_url=f"https://example.test/oauth?state={request.state}",
             state=request.state,
             requested_scopes=self.capabilities.required_scopes,
+        )
+
+    async def complete_authorization(
+        self,
+        request: EmailAuthorizationCallbackRequest,
+    ) -> EmailConnection:
+        self.callback_request = request
+        return EmailConnection(
+            account=EmailAccountRef(
+                provider=request.provider,
+                account_id="me@example.com",
+            ),
+            display_email=EmailAddress(address="me@example.com"),
+            credential_ref=SecretRef(
+                kind=SecretKind.OAUTH_TOKEN,
+                provider="gmail",
+                name="me-example-com",
+            ),
+            granted_scopes=(GMAIL_READONLY_SCOPE,),
+            connected_at=datetime(2026, 7, 5, 12, 0, tzinfo=UTC),
         )
 
 
@@ -139,3 +166,37 @@ def test_gmail_auth_endpoint_uses_injected_email_provider() -> None:
     assert fake_provider.start_request is not None
     assert fake_provider.start_request.provider is EmailProviderName.GMAIL
     assert fake_provider.start_request.redirect_uri == "http://127.0.0.1:8000/auth/gmail/callback"
+
+
+def test_gmail_auth_callback_completes_authorization_without_echoing_code() -> None:
+    fastapi_app = create_app()
+    fake_provider = FakeGmailProvider()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(_env_file=None)
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+
+    response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": "csrf-state"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["account"] == {"provider": "gmail", "account_id": "me@example.com"}
+    assert payload["display_email"] == {"address": "me@example.com", "display_name": None}
+    assert payload["credential_ref"] == {
+        "kind": "oauth_token",
+        "provider": "gmail",
+        "name": "me-example-com",
+    }
+    assert payload["granted_scopes"] == [GMAIL_READONLY_SCOPE]
+    assert "authorization-code" not in response.text
+    assert "csrf-state" not in response.text
+
+    assert fake_provider.callback_request is not None
+    assert fake_provider.callback_request.provider is EmailProviderName.GMAIL
+    assert fake_provider.callback_request.redirect_uri == (
+        "http://127.0.0.1:8000/auth/gmail/callback"
+    )
+    assert fake_provider.callback_request.state == "csrf-state"
+    assert fake_provider.callback_request.code.get_secret_value() == "authorization-code"

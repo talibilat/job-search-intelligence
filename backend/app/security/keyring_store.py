@@ -8,6 +8,7 @@ from keyring.errors import KeyringError, PasswordDeleteError
 from pydantic import SecretStr
 
 from app.config import AppSettings, SecretStoreBackend
+from app.security.fernet_secret_store import FernetSecretStore
 from app.security.secret_store import SecretRef, SecretStore, SecretStoreUnavailableError
 
 KEYRING_SERVICE_NAME = "job-search-intelligence"
@@ -77,9 +78,7 @@ def create_secret_store(
         return KeyringSecretStore(keyring_backend=keyring_backend)
 
     if settings.secret_store_backend is SecretStoreBackend.FERNET:
-        raise SecretStoreUnavailableError(
-            "Fernet secret store fallback is not implemented yet; JT-015 owns it."
-        )
+        return FernetSecretStore.from_settings(settings)
 
     raise SecretStoreUnavailableError("unsupported secret store backend")
 
