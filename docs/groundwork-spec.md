@@ -64,7 +64,7 @@ job-search-intelligence/
 │   │   ├── models/                 # Focused Pydantic DTO modules plus stable aggregate exports
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider protocol + Gmail OAuth start/callback/metadata lister + retained-body text normalization + future outlook.py/imap.py
-│   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)
+│   │   │   └── llm/                # LLMProvider protocol + azure_openai.py (+ future ollama/openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
 │   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords)
