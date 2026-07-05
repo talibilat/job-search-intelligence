@@ -283,7 +283,7 @@ def test_html_message_body_is_normalized_to_safe_text() -> None:
             "<script>alert('x')</script></head>"
             "<body><h1>Application update</h1>"
             "<p>Thanks&nbsp;for applying to <strong>Example Corp</strong>.</p>"
-            "<p>View <a href=\"https://example.test/status\">your status</a>.</p>"
+            '<p>View <a href="https://example.test/status">your status</a>.</p>'
             "</body></html>"
         ),
         body_source=EmailBodySource.HTML_CONVERTED,
@@ -292,9 +292,7 @@ def test_html_message_body_is_normalized_to_safe_text() -> None:
     )
 
     assert body.body_text == (
-        "Application update\n"
-        "Thanks for applying to Example Corp.\n"
-        "View your status."
+        "Application update\nThanks for applying to Example Corp.\nView your status."
     )
 
 

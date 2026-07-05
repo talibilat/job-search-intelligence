@@ -63,9 +63,7 @@ class _EmailHTMLTextExtractor(HTMLParser):
             "title",
         }
     )
-    _PUNCTUATION_WITHOUT_LEADING_SPACE = frozenset(
-        {".", ",", ";", ":", "!", "?", ")", "]", "}"}
-    )
+    _PUNCTUATION_WITHOUT_LEADING_SPACE = frozenset({".", ",", ";", ":", "!", "?", ")", "]", "}"})
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -74,10 +72,7 @@ class _EmailHTMLTextExtractor(HTMLParser):
 
     @property
     def text(self) -> str:
-        lines = [
-            re.sub(r"[ \t]+", " ", line).strip()
-            for line in "".join(self._parts).splitlines()
-        ]
+        lines = [re.sub(r"[ \t]+", " ", line).strip() for line in "".join(self._parts).splitlines()]
         return "\n".join(line for line in lines if line)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
