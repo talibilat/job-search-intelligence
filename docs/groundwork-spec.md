@@ -353,3 +353,6 @@ sqlite-vec and other virtual/vector tables are managed by hand-written revisions
 
 **Resolved:** approved backlog decisions are recorded in `docs/backlog-decisions.md`.
 The approved ticket plan is recorded in `docs/github-backlog-plan.md`.
+
+[JT-103 2026-07-05 v1] Services layout now includes `backend/app/services/normalization.py` for deterministic role-title grouping logic.
+[JT-103 2026-07-05 v1] Aggregation `normalized_role` uses `normalize_role_title()` to fold casing, punctuation, seniority labels, title levels, role abbreviations, common location tokens, and work-arrangement notes while preserving meaningful descriptors such as `back end`, `front end`, `growth`, and `machine learning`.

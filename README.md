@@ -370,3 +370,6 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Classification changes: run the golden-set eval at `backend/evals/run_eval.py`; regressions block merges.
 
 Never claim work is complete without fresh verification evidence.
+
+[JT-103 2026-07-05 v1] Backend role normalization: `normalize_role_title()` in `backend/app/services/normalization.py` produces deterministic Phase 2 role grouping keys without schema or API changes.
+[JT-103 2026-07-05 v1] Backend role normalization test: `uv run --project backend pytest backend/tests/test_role_normalization.py -v` verifies casing, punctuation, seniority labels, title levels, abbreviations, location noise, work-arrangement notes, and missing titles.
