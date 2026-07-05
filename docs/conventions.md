@@ -49,6 +49,7 @@ Baseline coding standards for every agent and contributor.
 - Backend changes: run `ruff`, `mypy`, and the relevant `pytest` tests.
 - Frontend changes: after backend dependencies are synced with `uv`, run `npm run check` from `frontend/`; it generates the OpenAPI schema through the backend, then runs type checking, linting, Vitest, and build verification.
 - Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
+- Frontend browser smoke changes: run `npm run test:smoke` from `frontend/` after installing Chromium with `npx playwright install chromium` once per machine.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
 - Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
 - Aggregation changes: verify idempotency and no duplicate applications.

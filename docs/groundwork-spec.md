@@ -10,31 +10,31 @@
 
 A **local-first web app** that connects to your email (Gmail first), mines your entire job-search history, and answers 54 questions about it - from "how many jobs did I apply to" up to "why am I getting rejected and what should I fix" - through a **dashboard** and a **conversational RAG agent**.
 
-**Core principle:** every question is a *read* against one clean `applications` table. Get ingestion + classification right, and 40+ questions become nearly free. That's why Phases 0–2 are make-or-break.
+**Core principle:** every question is a _read_ against one clean `applications` table. Get ingestion + classification right, and 40+ questions become nearly free. That's why Phases 0–2 are make-or-break.
 
 ---
 
 ## 1. Locked architecture decisions (ADR-lite)
 
-| Area | Decision | Why |
-|---|---|---|
-| Backend | **FastAPI**, Python 3.12, async | Your stack; async fits I/O-bound email + LLM work |
-| Frontend | **React + TypeScript + Vite** | Your stack; fast dev loop |
-| Database | **SQLite** (single file) | Local-first, zero-ops, portable |
-| Vector store | **sqlite-vec** | Embeddings live in the *same* SQLite file → whole app is one file |
-| LLM | **Pluggable provider** (Azure OpenAI / Ollama first, OpenAI / Anthropic later) | Chosen in setup wizard; not locked to one vendor |
-| Deployment | **Local-only** (localhost), coded hosting-ready | Gmail Testing mode = no verification/CASA; remote/phone access is a later phase |
-| API style | **REST**, resource-oriented, FastAPI auto-OpenAPI | Simple, well-understood |
-| Wire type-safety | **Typed TS client generated from OpenAPI with Orval** | Frontend + backend contracts can't silently drift |
-| Stage contracts | **Pydantic v2** DTOs at every boundary | One source of truth for shapes |
-| Config/secrets | **pydantic-settings** + `.env` + first-run wizard; keyring default with Fernet fallback owned by JT-015; keys **encrypted at rest** | Safe defaults for eventual open-source |
-| Secret store seam | **`SecretStore` protocol** with default OS keyring adapter plus Pydantic `SecretRef` and `SecretStr` values | OAuth tokens and LLM keys flow through one typed adapter boundary |
-| Migrations | **Alembic** (batch mode; vec/virtual tables hand-written) | Schema will churn (aggregation, versioning, later phases); reversible revision graph supports idempotent re-runs |
-| Background sync | **APScheduler** in-process while backend is running | "sync on open" / "sync now" without extra infra |
-| Python tooling | **uv** + **ruff** + **mypy** + **pre-commit** | Modern, fast, low-friction |
-| RAG agent | **LangGraph** hybrid (router → structured-query tool + semantic retrieval) | Correct *counts* and semantic recall |
-| Ticketing | **GitHub Issues** via reviewed manifest and `gh` CLI | Free, trackable, agent-readable via `gh`, ties into future OSS repo |
-| Testing | **Minimal smoke tests** + **golden-set classification eval** + tiny Playwright smoke suite | Speed, but don't trust unverified classification or critical UI paths |
+| Area              | Decision                                                                                                                            | Why                                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Backend           | **FastAPI**, Python 3.12, async                                                                                                     | Your stack; async fits I/O-bound email + LLM work                                                                |
+| Frontend          | **React + TypeScript + Vite**                                                                                                       | Your stack; fast dev loop                                                                                        |
+| Database          | **SQLite** (single file)                                                                                                            | Local-first, zero-ops, portable                                                                                  |
+| Vector store      | **sqlite-vec**                                                                                                                      | Embeddings live in the _same_ SQLite file → whole app is one file                                                |
+| LLM               | **Pluggable provider** (Azure OpenAI / Ollama first, OpenAI / Anthropic later)                                                      | Chosen in setup wizard; not locked to one vendor                                                                 |
+| Deployment        | **Local-only** (localhost), coded hosting-ready                                                                                     | Gmail Testing mode = no verification/CASA; remote/phone access is a later phase                                  |
+| API style         | **REST**, resource-oriented, FastAPI auto-OpenAPI                                                                                   | Simple, well-understood                                                                                          |
+| Wire type-safety  | **Typed TS client generated from OpenAPI with Orval**                                                                               | Frontend + backend contracts can't silently drift                                                                |
+| Stage contracts   | **Pydantic v2** DTOs at every boundary                                                                                              | One source of truth for shapes                                                                                   |
+| Config/secrets    | **pydantic-settings** + `.env` + first-run wizard; keyring default with Fernet fallback owned by JT-015; keys **encrypted at rest** | Safe defaults for eventual open-source                                                                           |
+| Secret store seam | **`SecretStore` protocol** with default OS keyring adapter plus Pydantic `SecretRef` and `SecretStr` values                         | OAuth tokens and LLM keys flow through one typed adapter boundary                                                |
+| Migrations        | **Alembic** (batch mode; vec/virtual tables hand-written)                                                                           | Schema will churn (aggregation, versioning, later phases); reversible revision graph supports idempotent re-runs |
+| Background sync   | **APScheduler** in-process while backend is running                                                                                 | "sync on open" / "sync now" without extra infra                                                                  |
+| Python tooling    | **uv** + **ruff** + **mypy** + **pre-commit**                                                                                       | Modern, fast, low-friction                                                                                       |
+| RAG agent         | **LangGraph** hybrid (router → structured-query tool + semantic retrieval)                                                          | Correct _counts_ and semantic recall                                                                             |
+| Ticketing         | **GitHub Issues** via reviewed manifest and `gh` CLI                                                                                | Free, trackable, agent-readable via `gh`, ties into future OSS repo                                              |
+| Testing           | **Minimal smoke tests** + **golden-set classification eval** + tiny Playwright smoke suite                                          | Speed, but don't trust unverified classification or critical UI paths                                            |
 
 ### Design-pattern set
 
@@ -127,7 +127,7 @@ job-search-intelligence/
 
 ### Aggregation rule (the hard part)
 
-An **application** is reconstructed from *many* emails: a confirmation + later a rejection = **one** application whose `current_status` = `rejected`, with two `application_events`.
+An **application** is reconstructed from _many_ emails: a confirmation + later a rejection = **one** application whose `current_status` = `rejected`, with two `application_events`.
 Grouping key is approximately `(normalized_company, normalized_role, thread/time-window)`.
 `ghosted` is **inferred** when an application has an `applied` event but no response after your personal ghost-threshold (default 30 days, tunable).
 Aggregation must be **idempotent** - re-runs never duplicate.
@@ -214,7 +214,7 @@ question -> router -> mixed -> both tools -> synthesize -> answer (+ citations)
 - **`semantic_search`** - sqlite-vec retrieval over `email_chunks` for "what did the recruiter say" style questions; returns citations to real emails/applications.
 - **synthesize** - composes the final answer, always grounded in tool output (no free-floating claims).
 
-This is why counts are right (vectors can't count) *and* content recall works.
+This is why counts are right (vectors can't count) _and_ content recall works.
 
 ---
 
@@ -222,17 +222,17 @@ This is why counts are right (vectors can't count) *and* content recall works.
 
 Full list in `docs/questions.md`. Mapping:
 
-| Tier | Questions | Capability | Phase |
-|---|---|---|---|
-| 1 - Foundational counts | 1-10 | `COUNT` on classified emails | **3** Dashboard |
-| 2 - Rates, funnels, time | 11-21 | ratios + date math | **3** Dashboard |
-| 3 - Segmentation | 22-31 | `GROUP BY` | **3** Dashboard |
-| 4 - Diagnostic/comparative | 32-39 | deterministic/light-statistics diagnostics | **3.5** Diagnostics |
-| 5 - Narrative "why" | 40-46 | LLM synthesis, cached | **4** Insights |
-| 6 - Conversational recall | 47-50 | hybrid RAG | **5** Chat |
-| 7 - Predictive/external | 51-54 | external data / APIs | **Future** |
+| Tier                       | Questions | Capability                                 | Phase               |
+| -------------------------- | --------- | ------------------------------------------ | ------------------- |
+| 1 - Foundational counts    | 1-10      | `COUNT` on classified emails               | **3** Dashboard     |
+| 2 - Rates, funnels, time   | 11-21     | ratios + date math                         | **3** Dashboard     |
+| 3 - Segmentation           | 22-31     | `GROUP BY`                                 | **3** Dashboard     |
+| 4 - Diagnostic/comparative | 32-39     | deterministic/light-statistics diagnostics | **3.5** Diagnostics |
+| 5 - Narrative "why"        | 40-46     | LLM synthesis, cached                      | **4** Insights      |
+| 6 - Conversational recall  | 47-50     | hybrid RAG                                 | **5** Chat          |
+| 7 - Predictive/external    | 51-54     | external data / APIs                       | **Future**          |
 
-**Each question becomes a ticket** whose acceptance criterion is: *"the app answers this question on screen (or in chat), and the answer reconciles with the underlying data."*
+**Each question becomes a ticket** whose acceptance criterion is: _"the app answers this question on screen (or in chat), and the answer reconciles with the underlying data."_
 
 ---
 
@@ -246,7 +246,7 @@ Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite s
 Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, retained body text for candidate messages, incremental sync via `historyId`, `raw_emails` populated.
 **DoD:** your inbox backfilled; incremental pulls only new messages; local count reconciles with Gmail.
 
-**Phase 2 - Classify + extract + aggregate** *(make-or-break)*
+**Phase 2 - Classify + extract + aggregate** _(make-or-break)_
 Heuristic filter, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
 **DoD:** `applications` populated; golden-set classification ≥90% precision AND ≥85% recall on job-vs-not; re-runs idempotent.
 
@@ -269,8 +269,8 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, pe
 ## 9. Testing (minimal + one carve-out)
 
 - **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
-- **Tiny Playwright smoke suite:** setup, sync status, dashboard fixture load, and chat citation smoke paths.
-- **Carve-out - the golden set:** ~30 hand-labeled emails in `evals/golden_set.jsonl`; `evals/run_eval.py` reports classification precision/recall. Run it whenever the classify prompt/model changes. *This is the one thing that keeps the dashboard honest.*
+- **Tiny Playwright smoke suite:** starts with the Phase 0 shell for setup copy, sync readiness, and dashboard empty-state coverage; later critical paths add dashboard fixture load and chat citation smoke checks as those pages exist.
+- **Carve-out - the golden set:** ~30 hand-labeled emails in `evals/golden_set.jsonl`; `evals/run_eval.py` reports classification precision/recall. Run it whenever the classify prompt/model changes. _This is the one thing that keeps the dashboard honest._
 
 ---
 

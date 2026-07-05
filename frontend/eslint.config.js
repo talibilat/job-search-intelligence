@@ -7,7 +7,12 @@ export default tseslint.config(
     ignores: ["dist", "node_modules", "src/api/generated.ts"],
   },
   {
-    files: ["src/**/*.{ts,tsx}", "vite.config.ts"],
+    files: [
+      "src/**/*.{ts,tsx}",
+      "tests/**/*.ts",
+      "vite.config.ts",
+      "playwright.config.ts",
+    ],
     extends: [
       js.configs.recommended,
       ...tseslint.configs.recommendedTypeChecked,
