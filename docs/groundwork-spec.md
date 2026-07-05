@@ -140,6 +140,7 @@ job-search-intelligence/
 
 [JT-020 2026-07-05 v1] The initial core schema migration enforces enum, confidence, salary-range, and raw-email retention invariants with SQLite `CHECK` constraints, uses foreign keys for email/application relationships, and adds practical lookup indexes for the regular tables.
 [JT-021 2026-07-05] The manual override schema migration creates `application_corrections` with constrained correction types, valid JSON before/after snapshots, application delete cascade, and an `(application_id, created_at)` lookup index for per-application audit history.
+[JT-022 2026-07-05] The chat history schema migration creates `chat_messages`; `role` is constrained to `user | assistant | tool | system`, `citations_json` and `tool_outputs_json` must be valid JSON arrays, and `(conversation_id, created_at)` is indexed for history reads.
 
 ### Aggregation rule (the hard part)
 
@@ -299,7 +300,7 @@ Insights service + page (why-rejected, skill-gaps, role-fit, weekly actions, sto
 **DoD:** insights render and cite the applications/emails they're drawn from.
 
 **Phase 5 - RAG chat (LangGraph)** -> Tier 6
-Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, persisted chat history, streaming chat UI in the web app.
+Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, chat history API/UI behavior backed by persisted storage, and streaming chat UI in the web app.
 **DoD:** quantitative questions return numbers matching the dashboard; content questions cite real emails.
 
 **Later phases:** more providers (Outlook/Graph, IMAP for Yahoo/iCloud) · draft-writing (review-then-send, never autonomous) · hosting + phone/voice access · auto-apply · benchmarking (Tier 7) · open-source hardening (ship-no-data, bring-your-own-credentials).
