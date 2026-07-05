@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+from collections.abc import Iterable
 
 from app.config import EmailProviderName
 from app.db.repositories._row import row_to_dict
@@ -10,6 +12,74 @@ from app.models.records import RawEmailRecord
 
 class EmailRepository(BaseRepository[RawEmailRecord]):
     """Repository seam for raw email records with typed retention validation."""
+
+    def upsert_raw_emails(self, records: Iterable[RawEmailRecord]) -> None:
+        """Write raw email rows idempotently without downgrading retained bodies."""
+
+        record_tuple = tuple(records)
+        if not record_tuple:
+            return
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            self.execute_many(
+                """
+                INSERT INTO raw_emails (
+                    id,
+                    thread_id,
+                    from_addr,
+                    to_addr,
+                    subject,
+                    sent_at,
+                    body_text,
+                    body_retention_state,
+                    labels,
+                    provider,
+                    ingested_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    thread_id = excluded.thread_id,
+                    from_addr = excluded.from_addr,
+                    to_addr = excluded.to_addr,
+                    subject = excluded.subject,
+                    sent_at = excluded.sent_at,
+                    body_text = CASE
+                        WHEN raw_emails.body_retention_state IN ('retained', 'debugging')
+                            AND excluded.body_retention_state = 'metadata_only'
+                        THEN raw_emails.body_text
+                        ELSE excluded.body_text
+                    END,
+                    body_retention_state = CASE
+                        WHEN raw_emails.body_retention_state IN ('retained', 'debugging')
+                            AND excluded.body_retention_state = 'metadata_only'
+                        THEN raw_emails.body_retention_state
+                        ELSE excluded.body_retention_state
+                    END,
+                    labels = excluded.labels,
+                    provider = excluded.provider,
+                    ingested_at = excluded.ingested_at
+                WHERE raw_emails.provider = excluded.provider
+                """,
+                [
+                    (
+                        record.id,
+                        record.thread_id,
+                        record.from_addr,
+                        record.to_addr,
+                        record.subject,
+                        record.sent_at.isoformat() if record.sent_at is not None else None,
+                        record.body_text,
+                        record.body_retention_state.value,
+                        json.dumps(record.labels, separators=(",", ":")),
+                        record.provider,
+                        record.ingested_at.isoformat(),
+                    )
+                    for record in record_tuple
+                ],
+            )
+
+        if should_commit:
+            self.connection.commit()
 
     def count_raw_emails(self, *, provider: EmailProviderName | None = None) -> int:
         if provider is None:

@@ -111,6 +111,27 @@ class SyncService:
     def get_sync_cursor(self, account: EmailAccountRef) -> EmailProviderCursor | None:
         return self._sync_state_repository.get_cursor(account)
 
+    def get_sync_status(self, account: EmailAccountRef) -> EmailSyncStateStatus | None:
+        state = self._sync_state_repository.fetch_state(account)
+        if state is None:
+            return None
+
+        return EmailSyncStateStatus(
+            account=EmailAccountRef(
+                provider=EmailProviderName(state.provider),
+                account_id=state.account_id,
+            ),
+            cursor=EmailProviderCursor(
+                account=EmailAccountRef(
+                    provider=EmailProviderName(state.provider),
+                    account_id=state.account_id,
+                ),
+                value=state.sync_cursor,
+                issued_at=state.cursor_issued_at,
+            ),
+            last_state_update_at=state.updated_at,
+        )
+
     def store_sync_cursor(
         self,
         cursor: EmailProviderCursor,
@@ -121,6 +142,16 @@ class SyncService:
             cursor,
             updated_at=updated_at or datetime.now(UTC),
         )
+
+
+class EmailSyncStateStatus(BaseModel):
+    """Persisted sync cursor snapshot for service-level status checks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    account: EmailAccountRef
+    cursor: EmailProviderCursor | None
+    last_state_update_at: datetime
 
 
 class MetadataListingProvider(Protocol):
