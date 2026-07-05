@@ -1,4 +1,4 @@
-"""Email provider Strategy interface."""
+"""Email provider Strategy interface and implementations."""
 
 from .gmail import GmailEmailProvider
 from .provider import (
