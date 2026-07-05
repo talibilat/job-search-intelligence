@@ -161,7 +161,7 @@ They deliberately exclude snippets, payload bodies, raw MIME content, and attach
 Incremental sync cursors and metadata-only repository writes now flow through the sync service, `email_sync_state`, and `raw_emails` tables.
 Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.
 
-Retained-body repository writes, richer normalization, and connected-account persistence remain separate Phase 1 work.
+Retained-body repository writes, richer normalization, and additional connected-account persistence behavior remain separate Phase 1 work.
 
 ## Retained Body Fetching Boundary
 

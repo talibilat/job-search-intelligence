@@ -143,6 +143,21 @@ class RecordingRetainedBodyProvider(RecordingHistoryProvider):
         )
 
 
+class PagingRetainedBodyProvider(RecordingRetainedBodyProvider):
+    def __init__(self, pages: tuple[EmailMetadataPage, ...]) -> None:
+        super().__init__()
+        self._pages = list(pages)
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        del connection
+        self.requests.append(request)
+        return self._pages.pop(0)
+
+
 class RecordingScheduler:
     def __init__(self) -> None:
         self.jobs: list[dict[str, object]] = []
@@ -414,6 +429,8 @@ def test_paginated_sync_with_cursor_requires_explicit_mode() -> None:
         )
 
     assert provider.requests == []
+
+
 def test_manual_sync_backfills_all_pages_and_persists_latest_cursor() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -637,6 +654,69 @@ def test_manual_sync_metadata_upsert_preserves_existing_retained_body() -> None:
     assert tuple(row) == ("Retained candidate body", "retained", "Application received")
 
 
+def test_manual_sync_persists_retained_bodies_for_candidate_messages() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    mailbox = email_connection()
+    provider = PagingRetainedBodyProvider(
+        (
+            EmailMetadataPage(
+                messages=(
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-candidate",
+                            thread_id="thread-candidate",
+                        ),
+                        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Application received",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-newsletter",
+                            thread_id="thread-newsletter",
+                        ),
+                        from_addr=EmailAddress(address="news@example.com"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Product newsletter",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-next",
+                    issued_at=NOW,
+                ),
+            ),
+        )
+    )
+    service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
+        clock=lambda: NOW,
+    )
+
+    asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    rows = connection.execute(
+        "SELECT id, body_text, body_retention_state FROM raw_emails ORDER BY id"
+    ).fetchall()
+    assert [tuple(row) for row in rows] == [
+        ("gmail-candidate", "Retained body for gmail-candidate", "retained"),
+        ("gmail-newsletter", None, "metadata_only"),
+    ]
+    assert len(provider.body_requests) == 1
+    assert [ref.message_id for ref in provider.body_requests[0].refs] == ["gmail-candidate"]
+
+
 def test_manual_sync_updates_running_status_between_pages() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -685,6 +765,8 @@ def test_manual_sync_records_failed_status_when_provider_fails() -> None:
     assert status.state is EmailSyncRunState.FAILED
     assert status.last_error == "Sync failed."
     assert status.finished_at == NOW
+
+
 def test_sync_service_fetches_retained_bodies_only_for_candidates_and_debug_refs() -> None:
     provider = RecordingRetainedBodyProvider()
     service = EmailSyncService(provider=provider, page_size=250)

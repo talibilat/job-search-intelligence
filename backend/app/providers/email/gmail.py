@@ -422,6 +422,11 @@ class GmailApiTransport(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class GmailApiRequestError(RuntimeError):
+    status_code: int | None
+
+
 class UrllibGmailApiTransport:
     def __init__(self, *, base_url: str = GMAIL_API_BASE_URL, timeout_seconds: int = 30) -> None:
         self._base_url = base_url.rstrip("/")
@@ -466,23 +471,9 @@ class UrllibGmailApiTransport:
             with urlopen(request, timeout=self._timeout_seconds) as response:
                 response_body = response.read()
         except HTTPError as error:
-            if path == _HISTORY_PATH and error.code == 404:
-                raise EmailSyncCursorExpiredError(
-                    public_message="Gmail incremental sync cursor expired"
-                ) from error
-            if error.code in {401, 403}:
-                raise EmailProviderAuthError(
-                    public_message="Gmail authorization is required"
-                ) from error
-            if error.code in {429, 500, 502, 503, 504}:
-                raise EmailProviderTransientError(
-                    public_message="Gmail metadata listing is temporarily unavailable"
-                ) from error
-            raise EmailProviderError(public_message="Gmail metadata listing failed") from error
+            raise GmailApiRequestError(status_code=error.code) from error
         except URLError as error:
-            raise EmailProviderTransientError(
-                public_message="Gmail metadata listing is temporarily unavailable"
-            ) from error
+            raise GmailApiRequestError(status_code=None) from error
 
         try:
             raw_response = response_body.decode("utf-8")
@@ -653,7 +644,7 @@ class GmailMessageLister:
 
         list_response = _validate_gmail_response(
             GmailMessageListResponse,
-            await self._transport.get_json(
+            await self._get_metadata_json(
                 _MESSAGES_PATH,
                 query=list_query,
                 access_token=access_token,
@@ -752,9 +743,7 @@ class GmailMessageLister:
     ) -> EmailBodyBatch:
         if len(request.refs) > _GMAIL_MAX_BODY_BATCH_SIZE:
             raise EmailProviderError(
-                public_message=(
-                    f"Gmail body batch size cannot exceed {_GMAIL_MAX_BODY_BATCH_SIZE}"
-                )
+                public_message=(f"Gmail body batch size cannot exceed {_GMAIL_MAX_BODY_BATCH_SIZE}")
             )
 
         stored_token = await self._secret_store.get_secret(connection.credential_ref)
@@ -767,15 +756,42 @@ class GmailMessageLister:
         fetched_at = datetime.now(UTC)
 
         for ref in request.refs:
-            gmail_body = _validate_gmail_response(
-                GmailMessageBodyResponse,
-                await self._transport.get_json(
-                    f"{_MESSAGES_PATH}/{ref.message_id}",
-                    query=_body_query(),
-                    access_token=access_token,
-                ),
-                public_message=_INVALID_BODY_DATA_MESSAGE,
-            )
+            try:
+                gmail_body = _validate_gmail_response(
+                    GmailMessageBodyResponse,
+                    await self._get_body_json(
+                        f"{_MESSAGES_PATH}/{ref.message_id}",
+                        query=_body_query(),
+                        access_token=access_token,
+                    ),
+                    public_message=_INVALID_BODY_DATA_MESSAGE,
+                )
+            except GmailApiRequestError as error:
+                if error.status_code == 404:
+                    failures.append(
+                        EmailBodyFetchFailure(
+                            ref=ref,
+                            reason=EmailBodyFetchFailureReason.NOT_FOUND,
+                        )
+                    )
+                    continue
+                if error.status_code == 403:
+                    failures.append(
+                        EmailBodyFetchFailure(
+                            ref=ref,
+                            reason=EmailBodyFetchFailureReason.PERMISSION_DENIED,
+                        )
+                    )
+                    continue
+                if error.status_code in {429, 500, 502, 503, 504, None}:
+                    raise EmailProviderTransientError(
+                        public_message="Gmail body fetching is temporarily unavailable"
+                    ) from error
+                raise EmailProviderError(public_message="Gmail body fetching failed") from error
+            except URLError as error:
+                raise EmailProviderTransientError(
+                    public_message="Gmail body fetching is temporarily unavailable"
+                ) from error
             if gmail_body.id != ref.message_id:
                 raise EmailProviderError(public_message=_INVALID_BODY_DATA_MESSAGE)
 
@@ -802,6 +818,52 @@ class GmailMessageLister:
 
         return EmailBodyBatch(bodies=tuple(bodies), failures=tuple(failures))
 
+    async def _get_metadata_json(
+        self,
+        path: str,
+        *,
+        query: tuple[tuple[str, str], ...],
+        access_token: SecretStr,
+    ) -> dict[str, object]:
+        try:
+            return await self._transport.get_json(
+                path,
+                query=query,
+                access_token=access_token,
+            )
+        except GmailApiRequestError as error:
+            if path == _HISTORY_PATH and error.status_code == 404:
+                raise EmailSyncCursorExpiredError(
+                    public_message="Gmail incremental sync cursor expired"
+                ) from error
+            if error.status_code in {401, 403}:
+                raise EmailProviderAuthError(
+                    public_message="Gmail authorization is required"
+                ) from error
+            if error.status_code in {429, 500, 502, 503, 504, None}:
+                raise EmailProviderTransientError(
+                    public_message="Gmail metadata listing is temporarily unavailable"
+                ) from error
+            raise EmailProviderError(public_message="Gmail metadata listing failed") from error
+
+    async def _get_body_json(
+        self,
+        path: str,
+        *,
+        query: tuple[tuple[str, str], ...],
+        access_token: SecretStr,
+    ) -> dict[str, object]:
+        try:
+            return await self._transport.get_json(
+                path,
+                query=query,
+                access_token=access_token,
+            )
+        except HTTPError as error:
+            raise GmailApiRequestError(status_code=error.code) from error
+        except URLError as error:
+            raise GmailApiRequestError(status_code=None) from error
+
     async def _fetch_message_metadata(
         self,
         *,
@@ -811,7 +873,7 @@ class GmailMessageLister:
     ) -> EmailMessageMetadata:
         gmail_metadata = _validate_gmail_response(
             GmailMessageMetadataResponse,
-            await self._transport.get_json(
+            await self._get_metadata_json(
                 f"{_MESSAGES_PATH}/{message.id}",
                 query=_metadata_query(),
                 access_token=access_token,
@@ -1097,6 +1159,7 @@ def _decode_body_text(encoded_body: str, *, max_body_bytes: int | None) -> tuple
     if max_body_bytes is not None and truncated:
         body_text = body_bytes[:max_body_bytes].decode("utf-8", errors="ignore")
     return body_text, truncated
+
 
 def _retained_body_from_parts(
     parts: list[tuple[str, bool]],

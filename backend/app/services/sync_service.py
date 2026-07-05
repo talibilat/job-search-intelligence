@@ -11,7 +11,12 @@ from app.config import EmailProviderName
 from app.db.repositories import BackfillStateRepository, EmailRepository
 from app.db.repositories.sync_state import SyncStateRepository
 from app.models import SyncJobCounts, SyncJobPhase, SyncJobStatus
-from app.models.records import EmailBackfillStateRecord, EmailBackfillStatus, EmailSyncStateRecord
+from app.models.records import (
+    EmailBackfillStateRecord,
+    EmailBackfillStatus,
+    EmailSyncStateRecord,
+    RawEmailBodyRetentionState,
+)
 from app.providers.email import (
     EmailAccountRef,
     EmailBodyBatch,
@@ -29,6 +34,7 @@ from app.providers.email import (
     EmailProviderError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
+    build_broad_candidate_query,
 )
 
 SyncJob = Callable[[], Awaitable[None]]
@@ -710,6 +716,17 @@ class EmailSyncService:
                     page_result.page.messages,
                     ingested_at=self._clock(),
                 )
+                if _can_fetch_retained_bodies(self._body_provider):
+                    body_batch = await self.fetch_retained_bodies(
+                        connection=connection,
+                        metadata=page_result.page.messages,
+                        candidate_query=build_broad_candidate_query(),
+                    )
+                    if body_batch.bodies:
+                        self._email_repository.upsert_retained_bodies(
+                            body_batch.bodies,
+                            retention_state=RawEmailBodyRetentionState.RETAINED,
+                        )
             if page_result.page.next_sync_cursor is not None:
                 latest_cursor = page_result.page.next_sync_cursor
             self._set_status(
@@ -774,6 +791,10 @@ def _retained_body_batch_size(body_provider: RetainedBodyProvider) -> int | None
     if not isinstance(capabilities, EmailProviderCapabilities):
         return None
     return capabilities.max_body_batch_size
+
+
+def _can_fetch_retained_bodies(body_provider: object) -> bool:
+    return callable(getattr(body_provider, "fetch_message_bodies", None))
 
 
 def _chunk_refs(

@@ -4,7 +4,9 @@ import asyncio
 import base64
 import json
 from datetime import UTC, datetime
+from email.message import Message
 from pathlib import Path
+from urllib.error import HTTPError
 
 import pytest
 from app.config import GMAIL_READONLY_SCOPE, AppSettings, EmailProviderName
@@ -182,6 +184,19 @@ class FakeGmailProfileTransport(FakeGmailTransport):
         self.calls.append((path, query, access_token.get_secret_value()))
         if path == "/gmail/v1/users/me/profile":
             return {"emailAddress": "Me@Example.com"}
+        return await super().get_json(path, query=query, access_token=access_token)
+
+
+class DeletedMessageGmailTransport(FakeGmailTransport):
+    async def get_json(
+        self,
+        path: str,
+        *,
+        query: tuple[tuple[str, str], ...],
+        access_token: SecretStr,
+    ) -> dict[str, object]:
+        if path == "/gmail/v1/users/me/messages/msg-deleted":
+            raise HTTPError(path, 404, "not found", hdrs=Message(), fp=None)
         return await super().get_json(path, query=query, access_token=access_token)
 
 
@@ -496,6 +511,42 @@ def test_gmail_email_provider_returns_empty_failure_when_body_has_no_text() -> N
     assert len(batch.failures) == 1
     assert batch.failures[0].ref.message_id == "msg-empty"
     assert batch.failures[0].reason is EmailBodyFetchFailureReason.EMPTY
+
+
+def test_gmail_email_provider_returns_not_found_failure_for_deleted_body_message() -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    provider = GmailEmailProvider(
+        settings=_settings(),
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=DeletedMessageGmailTransport(),
+    )
+    connection = _connection()
+
+    batch = asyncio.run(
+        provider.fetch_message_bodies(
+            connection,
+            EmailBodyFetchRequest(
+                refs=(
+                    EmailMessageRef(
+                        account=connection.account,
+                        message_id="msg-deleted",
+                        thread_id="thread-deleted",
+                    ),
+                    EmailMessageRef(
+                        account=connection.account,
+                        message_id="msg-1",
+                        thread_id="thread-1",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert [body.ref.message_id for body in batch.bodies] == ["msg-1"]
+    assert len(batch.failures) == 1
+    assert batch.failures[0].ref.message_id == "msg-deleted"
+    assert batch.failures[0].reason is EmailBodyFetchFailureReason.NOT_FOUND
 
 
 def test_gmail_email_provider_sanitizes_body_dto_validation_errors() -> None:
