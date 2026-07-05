@@ -60,7 +60,8 @@ job-search-intelligence/
 │   │   ├── db/
 │   │   │   ├── engine.py           # SQLite engine, sqlite-vec loading, and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
-│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, BackfillStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
+│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
+[JT-066 2026-07-05 v2] │   │   │   └── repositories/       # EmailRepo, SyncStateRepo, BackfillStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider protocol + Gmail OAuth start/metadata lister + retained-body text normalization + future outlook.py/imap.py
@@ -124,7 +125,7 @@ job-search-intelligence/
   Raw email writes are idempotent by provider message ID, and metadata-only reconciliation replays must not downgrade previously retained or debugging body text.
 - **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `updated_at`; stores opaque provider-owned incremental sync anchors scoped to one connected account.
 [JT-066 2026-07-05 v2] **`email_backfill_state`** stores `provider`, `account_id`, `status`, `next_page_token`, page and message counters, replacement sync cursor fields, timestamps, and public-safe failure text for one connected account.
-  `status` is `running`, `completed`, or `failed`; completed backfills clear `next_page_token`, require a replacement provider cursor with issued timestamp, promote that cursor to `email_sync_state`, and failures preserve page progress with `last_error` only when public-safe.
+[JT-066 2026-07-05 v2]   `status` is `running`, `completed`, or `failed`; completed backfills clear `next_page_token`, require a replacement provider cursor with issued timestamp, promote that cursor to `email_sync_state`, and failures preserve page progress with `last_error` only when public-safe.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
