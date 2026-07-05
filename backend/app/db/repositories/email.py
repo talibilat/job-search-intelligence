@@ -115,7 +115,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         *,
         retention_state: RawEmailBodyRetentionState = RawEmailBodyRetentionState.RETAINED,
     ) -> int:
-        """Attach retained body text to existing raw-email metadata rows."""
+        """Attach retained body text, creating a raw-email row when needed."""
 
         body_tuple = tuple(bodies)
         if not body_tuple:
@@ -128,16 +128,32 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         with self.transaction():
             self.execute_many(
                 """
-                UPDATE raw_emails
-                SET body_text = ?, body_retention_state = ?
-                WHERE id = ? AND provider = ?
+                INSERT INTO raw_emails (
+                    id,
+                    thread_id,
+                    from_addr,
+                    to_addr,
+                    subject,
+                    sent_at,
+                    body_text,
+                    body_retention_state,
+                    labels,
+                    provider,
+                    ingested_at
+                ) VALUES (?, ?, NULL, NULL, NULL, NULL, ?, ?, '[]', ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    body_text = excluded.body_text,
+                    body_retention_state = excluded.body_retention_state
+                WHERE raw_emails.provider = excluded.provider
                 """,
                 [
                     (
+                        body.ref.message_id,
+                        body.ref.thread_id,
                         body.body_text,
                         retention_state.value,
-                        body.ref.message_id,
                         body.ref.account.provider.value,
+                        body.fetched_at.isoformat(),
                     )
                     for body in body_tuple
                 ],
