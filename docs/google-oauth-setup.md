@@ -7,8 +7,8 @@ Gmail message listing and retained-body fetching read OAuth token material only 
 The setup page can start Gmail OAuth through `GET /auth/gmail`, show the backend-built Google authorization URL, and report callback completion from `GET /setup/status`.
 The backend completes the local callback with `GET /auth/gmail/callback`.
 The callback exchanges the authorization code, validates the returned `gmail.readonly` scope, stores token material through the configured `SecretStore`, and persists only non-secret connection metadata in SQLite.
+The Gmail provider refreshes expired stored credentials before metadata listing or retained-body fetching, preserves the stored refresh token, and keeps refreshed token material behind `SecretStore`.
 Default sync resolves the latest non-reauth Gmail connection metadata from SQLite, runs full backfill until the replacement history cursor is promoted, and then uses the persisted incremental cursor on later syncs.
-Token refresh remains later Gmail ingestion work.
 This guide documents the setup and runtime security contract the app must follow.
 
 ## Security Boundaries
@@ -151,6 +151,7 @@ Before migrations or OAuth have created `email_connections`, setup status safely
 Current Gmail metadata listing reads access tokens through the existing `SecretStore` seam.
 OAuth callback codes are treated as secret values at the API boundary.
 Access tokens and refresh tokens flow through `SecretStore`.
+Refresh requests read the stored refresh token from `SecretStore`, exchange it with Google, validate the granted scope remains `gmail.readonly`, preserve the existing refresh token, and write the refreshed payload back through `SecretStore`.
 The configured `SecretStore` adapter must store token material encrypted at rest, using OS keyring by default or the documented Fernet fallback.
 
 Provider connection records persist only non-secret metadata and a `SecretRef` to the stored token.
@@ -172,7 +173,7 @@ Gmail history `404` responses are treated as expired sync cursors so the sync se
 Metadata-listing failures are mapped into public-safe provider errors: authorization failures ask the client to reconnect Gmail, insufficient scopes ask for read-only access, rate limits and temporary outages ask the client to try again later, invalid Gmail responses are reported without raw payloads, and generic provider failures do not expose OAuth tokens or Gmail response bodies.
 
 Manual sync already uses the persisted non-secret connection metadata to pass a `SecretRef`-backed account to the Gmail provider.
-Token refresh and richer product-page behavior remain separate Phase 1 work.
+Expired credentials are refreshed inside the provider before Gmail metadata calls, and richer product-page behavior remains separate Phase 1 work.
 
 ## Retained Body Fetching Boundary
 
@@ -194,6 +195,5 @@ Manual sync stores retained bodies for broad job-search candidate messages after
 - The `/setup` page can start Gmail OAuth and must show only the backend-built authorization URL, requested scope, and non-secret setup status.
 - `GET /auth/gmail` returns a Google authorization URL and never returns client secrets or tokens.
 - `GET /auth/gmail/callback` returns only non-secret connection metadata and stores token material through `SecretStore`.
-- `GET /setup/status` reports Gmail connected only from persisted non-secret connection metadata.
-- `POST /sync` uses the persisted non-secret Gmail connection metadata and keeps OAuth token material behind `SecretStore`.
+- `POST /sync` uses the persisted non-secret Gmail connection metadata, refreshes expired Gmail credentials behind the provider seam, and keeps OAuth token material behind `SecretStore`.
 - No credentials, tokens, client JSON, or secret-store files are committed or logged.

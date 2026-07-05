@@ -70,6 +70,7 @@ _MESSAGE_BODY_FIELDS = "id,threadId,payload"
 _INVALID_DATA_MESSAGE = "Gmail metadata listing returned invalid data"
 _INVALID_BODY_DATA_MESSAGE = "Gmail body fetching returned invalid data"
 _FULL_BACKFILL_PAGE_TOKEN_PREFIX = "gmail-full-backfill:"
+_TOKEN_REFRESH_SKEW = timedelta(minutes=5)
 _GMAIL_SYSTEM_LABELS = {
     "CHAT",
     "CATEGORY_FORUMS",
@@ -116,6 +117,29 @@ class GoogleOAuthTokenResponse(BaseModel):
     access_token: SecretStr = Field(min_length=1)
     refresh_token: SecretStr | None = None
     expires_in: int = Field(gt=0)
+    scope: str = Field(min_length=1)
+    token_type: str = Field(min_length=1)
+
+
+class GoogleOAuthRefreshTokenResponse(BaseModel):
+    """Google OAuth refresh response validated before secret-store persistence."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    access_token: SecretStr = Field(min_length=1)
+    expires_in: int = Field(gt=0)
+    scope: str | None = None
+    token_type: str = Field(min_length=1)
+
+
+class StoredGoogleOAuthCredential(BaseModel):
+    """SecretStore payload for Gmail OAuth tokens."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    access_token: SecretStr = Field(min_length=1)
+    refresh_token: SecretStr | None = None
+    expires_at: datetime | None = None
     scope: str = Field(min_length=1)
     token_type: str = Field(min_length=1)
 
@@ -232,17 +256,12 @@ class GmailEmailProvider:
         try:
             await self._secret_store.set_secret(
                 credential_ref,
-                SecretStr(
-                    json.dumps(
-                        {
-                            "access_token": token_response.access_token.get_secret_value(),
-                            "refresh_token": token_response.refresh_token.get_secret_value(),
-                            "expires_at": credential_expires_at.isoformat(),
-                            "scope": token_response.scope,
-                            "token_type": token_response.token_type,
-                        },
-                        sort_keys=True,
-                    )
+                _serialize_stored_credential(
+                    access_token=token_response.access_token,
+                    refresh_token=token_response.refresh_token,
+                    expires_at=credential_expires_at,
+                    scope=token_response.scope,
+                    token_type=token_response.token_type,
                 ),
             )
         except SecretStoreUnavailableError as error:
@@ -260,8 +279,54 @@ class GmailEmailProvider:
         )
 
     async def refresh_connection(self, connection: EmailConnection) -> EmailConnection:
-        raise EmailProviderAuthError(
-            public_message="Gmail credential refresh is not implemented yet."
+        if connection.account.provider is not EmailProviderName.GMAIL:
+            raise EmailProviderAuthError(
+                public_message="Gmail credential refresh can only refresh Gmail connections."
+            )
+        if self._secret_store is None:
+            raise EmailProviderAuthError(public_message="Gmail token storage is not configured.")
+
+        stored_credential = await self._read_refreshable_credential(connection)
+        refresh_token = stored_credential.refresh_token
+        if refresh_token is None:
+            raise EmailProviderAuthError(public_message="Reconnect Gmail to continue syncing.")
+        client_config = self._load_client_config()
+        token_response = await self._exchange_refresh_token(
+            client_config=client_config,
+            refresh_token=refresh_token,
+        )
+        granted_scope = token_response.scope or stored_credential.scope
+        granted_scopes = tuple(granted_scope.split())
+        if granted_scopes != self._scopes:
+            raise EmailProviderAuthError(
+                public_message="Gmail authorization is limited to gmail.readonly in v1."
+            )
+
+        refreshed_at = datetime.now(UTC)
+        credential_expires_at = refreshed_at + timedelta(seconds=token_response.expires_in)
+
+        try:
+            await self._secret_store.set_secret(
+                connection.credential_ref,
+                _serialize_stored_credential(
+                    access_token=token_response.access_token,
+                    refresh_token=refresh_token,
+                    expires_at=credential_expires_at,
+                    scope=granted_scope,
+                    token_type=token_response.token_type,
+                ),
+            )
+        except SecretStoreUnavailableError as error:
+            raise EmailProviderAuthError(
+                public_message="Gmail token persistence failed."
+            ) from error
+
+        return connection.model_copy(
+            update={
+                "granted_scopes": granted_scopes,
+                "credential_expires_at": credential_expires_at,
+                "reauth_required": False,
+            }
         )
 
     async def list_message_metadata(
@@ -271,7 +336,8 @@ class GmailEmailProvider:
     ) -> EmailMetadataPage:
         if self._message_lister is None:
             raise EmailProviderError(public_message="Gmail metadata sync is not implemented yet.")
-        return await self._message_lister.list_message_metadata(connection, request)
+        refreshed_connection = await self._refresh_connection_if_needed(connection)
+        return await self._message_lister.list_message_metadata(refreshed_connection, request)
 
     async def fetch_message_bodies(
         self,
@@ -280,7 +346,55 @@ class GmailEmailProvider:
     ) -> EmailBodyBatch:
         if self._message_lister is None:
             raise EmailProviderError(public_message="Gmail body fetching is not implemented yet.")
-        return await self._message_lister.fetch_message_bodies(connection, request)
+        refreshed_connection = await self._refresh_connection_if_needed(connection)
+        return await self._message_lister.fetch_message_bodies(refreshed_connection, request)
+
+    async def _refresh_connection_if_needed(
+        self,
+        connection: EmailConnection,
+    ) -> EmailConnection:
+        if self._secret_store is None:
+            return connection
+
+        try:
+            stored_token = await self._secret_store.get_secret(connection.credential_ref)
+        except SecretStoreUnavailableError as error:
+            raise EmailProviderAuthError(
+                public_message="Gmail token storage is not configured."
+            ) from error
+        if stored_token is None:
+            return connection
+
+        stored_credential = _stored_credential_from_secret(stored_token)
+        if stored_credential is None:
+            return connection
+
+        expires_at = stored_credential.expires_at or connection.credential_expires_at
+        if expires_at is None or expires_at > datetime.now(UTC) + _TOKEN_REFRESH_SKEW:
+            return connection
+
+        return await self.refresh_connection(connection)
+
+    async def _read_refreshable_credential(
+        self,
+        connection: EmailConnection,
+    ) -> StoredGoogleOAuthCredential:
+        if self._secret_store is None:
+            raise EmailProviderAuthError(public_message="Gmail token storage is not configured.")
+
+        try:
+            stored_token = await self._secret_store.get_secret(connection.credential_ref)
+        except SecretStoreUnavailableError as error:
+            raise EmailProviderAuthError(
+                public_message="Gmail token storage is not configured."
+            ) from error
+        if stored_token is None:
+            raise EmailProviderAuthError(public_message="Gmail authorization is required")
+
+        stored_credential = _stored_credential_from_secret(stored_token)
+        if stored_credential is None or stored_credential.refresh_token is None:
+            raise EmailProviderAuthError(public_message="Reconnect Gmail to continue syncing.")
+        return stored_credential
 
     def _load_client_config(self) -> GoogleOAuthClientConfig:
         try:
@@ -354,6 +468,39 @@ class GmailEmailProvider:
         except ValidationError as error:
             raise EmailProviderAuthError(
                 public_message="Gmail token exchange returned invalid data."
+            ) from error
+
+    async def _exchange_refresh_token(
+        self,
+        *,
+        client_config: GoogleOAuthClientConfig,
+        refresh_token: SecretStr,
+    ) -> GoogleOAuthRefreshTokenResponse:
+        try:
+            response = await self._token_transport.post_form_json(
+                client_config.installed.token_uri,
+                form=(
+                    ("client_id", client_config.installed.client_id),
+                    (
+                        "client_secret",
+                        client_config.installed.client_secret.get_secret_value(),
+                    ),
+                    ("grant_type", "refresh_token"),
+                    ("refresh_token", refresh_token.get_secret_value()),
+                ),
+            )
+        except EmailProviderAuthError:
+            raise
+        except EmailProviderError:
+            raise
+        except Exception as error:
+            raise EmailProviderAuthError(public_message="Gmail token refresh failed.") from error
+
+        try:
+            return GoogleOAuthRefreshTokenResponse.model_validate(response)
+        except ValidationError as error:
+            raise EmailProviderAuthError(
+                public_message="Gmail token refresh returned invalid data."
             ) from error
 
 
@@ -1160,6 +1307,45 @@ def _stored_access_token(stored_token: SecretStr) -> SecretStr:
     if not isinstance(access_token, str) or not access_token:
         return stored_token
     return SecretStr(access_token)
+
+
+def _stored_credential_from_secret(
+    stored_token: SecretStr,
+) -> StoredGoogleOAuthCredential | None:
+    raw_token = stored_token.get_secret_value()
+    try:
+        decoded_token = json.loads(raw_token)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(decoded_token, dict):
+        return None
+    try:
+        return StoredGoogleOAuthCredential.model_validate(decoded_token)
+    except ValidationError:
+        return None
+
+
+def _serialize_stored_credential(
+    *,
+    access_token: SecretStr,
+    refresh_token: SecretStr,
+    expires_at: datetime,
+    scope: str,
+    token_type: str,
+) -> SecretStr:
+    return SecretStr(
+        json.dumps(
+            {
+                "access_token": access_token.get_secret_value(),
+                "refresh_token": refresh_token.get_secret_value(),
+                "expires_at": expires_at.isoformat(),
+                "scope": scope,
+                "token_type": token_type,
+            },
+            sort_keys=True,
+        )
+    )
 
 
 def _retained_body_from_payload(
