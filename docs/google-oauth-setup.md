@@ -169,10 +169,6 @@ Current Gmail retained-body fetching is separate from broad metadata listing.
 Callers must provide selected message refs, such as broad job-search candidates or explicit debugging and reconciliation refs.
 The Gmail adapter fetches those messages with `format=full` and partial fields for IDs, thread IDs, and payload content only; it does not request snippets.
 It prefers `text/plain`, converts `text/html` MIME bodies to normalized plain text through the provider DTO path, ignores attachments, reports typed empty-body failures, and keeps token material behind `SecretStore`.
-[JT-062 2026-07-05 v2] Current Gmail retained-body fetching is separate from broad metadata listing.
-[JT-062 2026-07-05 v2] Callers must provide selected message refs, such as broad job-search candidates or explicit debugging and reconciliation refs.
-[JT-062 2026-07-05 v2] The Gmail adapter fetches those messages with `format=full` and partial fields for IDs, thread IDs, and payload content only; it does not request snippets.
-[JT-062 2026-07-05 v2] It prefers `text/plain`, converts `text/html` MIME bodies to normalized plain text through the provider DTO path, ignores attachments, reports typed empty-body failures, and keeps token material behind `SecretStore`.
 
 ## Preflight Checklist
 
