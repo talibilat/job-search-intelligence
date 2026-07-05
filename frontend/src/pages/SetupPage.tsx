@@ -221,10 +221,7 @@ export function SetupPage() {
           </p>
         </aside>
 
-        <section
-          className="setup-mode-card"
-          aria-labelledby="setup-mode-title"
-        >
+        <section className="setup-mode-card" aria-labelledby="setup-mode-title">
           <p className="eyebrow">Classification mode</p>
           <h2 id="setup-mode-title">Preselected mode</h2>
           <p>{preselectionCopy}</p>

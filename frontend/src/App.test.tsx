@@ -414,7 +414,9 @@ describe("App", () => {
     await waitFor(() => {
       expect(hybridMode).toHaveProperty("checked", true);
     });
-    expect(screen.getByText("Preselected from Azure OpenAI setup")).toBeTruthy();
+    expect(
+      screen.getByText("Preselected from Azure OpenAI setup"),
+    ).toBeTruthy();
   });
 
   it("renders the empty chat shell at the chat route", () => {
