@@ -214,15 +214,28 @@ class BackfillStateService:
         account: EmailAccountRef,
         *,
         page: EmailMetadataPage,
+        expected_page_token: str | None = None,
         updated_at: datetime,
     ) -> EmailBackfillStateRecord:
         existing = self._backfill_state_repository.fetch_state(account)
         if existing is None:
             existing = self.start_or_resume_backfill(account, started_at=updated_at)
 
+        if existing.status is EmailBackfillStatus.COMPLETED:
+            msg = "completed backfill pages cannot be recorded again"
+            raise ValueError(msg)
+
+        if expected_page_token != existing.next_page_token:
+            msg = "recorded backfill page does not match current resume token"
+            raise ValueError(msg)
+
         is_final_page = page.next_page_token is None
         if is_final_page and page.next_sync_cursor is None:
             msg = "completed backfills require a replacement sync cursor"
+            raise ValueError(msg)
+
+        if page.next_sync_cursor is not None and page.next_sync_cursor.account != account:
+            msg = "replacement sync cursor must belong to the same account"
             raise ValueError(msg)
 
         sync_cursor = page.next_sync_cursor.value if page.next_sync_cursor is not None else None

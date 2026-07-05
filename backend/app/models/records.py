@@ -151,6 +151,10 @@ class EmailBackfillStateRecord(BaseModel):
             msg = "completed backfills cannot retain a next page token"
             raise ValueError(msg)
 
+        if self.status is EmailBackfillStatus.COMPLETED and self.sync_cursor is None:
+            msg = "completed backfills require a replacement sync cursor"
+            raise ValueError(msg)
+
         if self.status is not EmailBackfillStatus.FAILED and self.last_error is not None:
             msg = "last_error is only valid for failed backfills"
             raise ValueError(msg)

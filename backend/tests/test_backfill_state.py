@@ -10,7 +10,7 @@ from alembic import command
 from alembic.config import Config
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
 from app.db.repositories import BackfillStateRepository, SyncStateRepository
-from app.models.records import EmailBackfillStatus
+from app.models.records import EmailBackfillStateRecord, EmailBackfillStatus
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
@@ -52,6 +52,7 @@ def test_backfill_state_records_page_progress_and_resume_token(tmp_path: Path) -
     progress = service.record_backfill_page(
         account,
         page=metadata_page(account, ("msg-1", "msg-2"), next_page_token="page-2"),
+        expected_page_token=None,
         updated_at=NOW + timedelta(seconds=5),
     )
 
@@ -100,6 +101,7 @@ def test_backfill_state_marks_completion_and_persists_replacement_cursor(
     service.record_backfill_page(
         account,
         page=metadata_page(account, ("msg-1",), next_page_token="page-2"),
+        expected_page_token=None,
         updated_at=NOW + timedelta(seconds=5),
     )
     completed = service.record_backfill_page(
@@ -109,6 +111,7 @@ def test_backfill_state_marks_completion_and_persists_replacement_cursor(
             ("msg-2", "msg-3"),
             next_sync_cursor=sync_cursor,
         ),
+        expected_page_token="page-2",
         updated_at=NOW + timedelta(minutes=5),
     )
 
@@ -142,6 +145,7 @@ def test_backfill_completion_requires_replacement_sync_cursor(tmp_path: Path) ->
         service.record_backfill_page(
             account,
             page=metadata_page(account, ("msg-1",)),
+            expected_page_token=None,
             updated_at=NOW + timedelta(seconds=5),
         )
 
@@ -151,6 +155,132 @@ def test_backfill_completion_requires_replacement_sync_cursor(tmp_path: Path) ->
     assert state.status is EmailBackfillStatus.RUNNING
     assert state.processed_page_count == 0
     assert state.processed_message_count == 0
+
+
+def test_backfill_completion_requires_cursor_for_same_account(tmp_path: Path) -> None:
+    account = gmail_account()
+    other_account = EmailAccountRef(
+        provider=EmailProviderName.GMAIL,
+        account_id="other@example.com",
+    )
+    connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(connection)
+    service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=SyncStateRepository(connection),
+    )
+
+    service.start_or_resume_backfill(account, started_at=NOW)
+
+    with pytest.raises(ValueError, match="same account"):
+        service.record_backfill_page(
+            account,
+            page=metadata_page(
+                account,
+                ("msg-1",),
+                next_sync_cursor=EmailProviderCursor(
+                    account=other_account,
+                    value="history-other",
+                    issued_at=NOW + timedelta(seconds=5),
+                ),
+            ),
+            expected_page_token=None,
+            updated_at=NOW + timedelta(seconds=5),
+        )
+
+    assert SyncStateRepository(connection).get_cursor(other_account) is None
+
+
+def test_completed_backfill_state_requires_replacement_cursor() -> None:
+    with pytest.raises(ValueError, match="completed backfills require a replacement sync cursor"):
+        EmailBackfillStateRecord(
+            provider=EmailProviderName.GMAIL.value,
+            account_id="me@example.com",
+            status=EmailBackfillStatus.COMPLETED,
+            next_page_token=None,
+            processed_page_count=1,
+            processed_message_count=1,
+            sync_cursor=None,
+            cursor_issued_at=None,
+            started_at=NOW,
+            updated_at=NOW + timedelta(seconds=5),
+            completed_at=NOW + timedelta(seconds=5),
+            last_error=None,
+        )
+
+
+def test_recording_backfill_page_rejects_stale_resume_token(tmp_path: Path) -> None:
+    account = gmail_account()
+    connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(connection)
+    service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=SyncStateRepository(connection),
+    )
+
+    service.start_or_resume_backfill(account, started_at=NOW)
+    service.record_backfill_page(
+        account,
+        page=metadata_page(account, ("msg-1",), next_page_token="page-2"),
+        expected_page_token=None,
+        updated_at=NOW + timedelta(seconds=5),
+    )
+
+    with pytest.raises(ValueError, match="does not match current resume token"):
+        service.record_backfill_page(
+            account,
+            page=metadata_page(account, ("msg-1",), next_page_token="page-2"),
+            expected_page_token=None,
+            updated_at=NOW + timedelta(seconds=10),
+        )
+
+    state = service.get_backfill_state(account)
+
+    assert state is not None
+    assert state.processed_page_count == 1
+    assert state.processed_message_count == 1
+
+
+def test_recording_completed_backfill_page_is_rejected(tmp_path: Path) -> None:
+    account = gmail_account()
+    connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(connection)
+    service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=SyncStateRepository(connection),
+    )
+
+    service.start_or_resume_backfill(account, started_at=NOW)
+    service.record_backfill_page(
+        account,
+        page=metadata_page(
+            account,
+            ("msg-1",),
+            next_sync_cursor=EmailProviderCursor(
+                account=account,
+                value="history-complete",
+                issued_at=NOW + timedelta(seconds=5),
+            ),
+        ),
+        expected_page_token=None,
+        updated_at=NOW + timedelta(seconds=5),
+    )
+
+    with pytest.raises(ValueError, match="completed backfill"):
+        service.record_backfill_page(
+            account,
+            page=metadata_page(
+                account,
+                ("msg-1",),
+                next_sync_cursor=EmailProviderCursor(
+                    account=account,
+                    value="history-complete-again",
+                    issued_at=NOW + timedelta(seconds=10),
+                ),
+            ),
+            expected_page_token=None,
+            updated_at=NOW + timedelta(seconds=10),
+        )
 
 
 def test_failed_backfill_resumes_from_persisted_page_token(tmp_path: Path) -> None:
@@ -167,6 +297,7 @@ def test_failed_backfill_resumes_from_persisted_page_token(tmp_path: Path) -> No
     service.record_backfill_page(
         account,
         page=metadata_page(account, ("msg-1", "msg-2"), next_page_token="page-2"),
+        expected_page_token=None,
         updated_at=NOW + timedelta(seconds=5),
     )
     failed = service.mark_backfill_failed(
@@ -214,6 +345,7 @@ def test_sync_service_uses_persisted_backfill_resume_token(tmp_path: Path) -> No
     first_state = backfill_state_service.record_backfill_page(
         email_provider_connection.account,
         page=first.page,
+        expected_page_token=first.state.next_page_token,
         updated_at=NOW,
     )
     second = asyncio.run(
@@ -226,6 +358,7 @@ def test_sync_service_uses_persisted_backfill_resume_token(tmp_path: Path) -> No
     second_state = backfill_state_service.record_backfill_page(
         email_provider_connection.account,
         page=second.page,
+        expected_page_token=second.state.next_page_token,
         updated_at=NOW + timedelta(minutes=1),
     )
 
