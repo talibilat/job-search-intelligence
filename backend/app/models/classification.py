@@ -7,6 +7,7 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.config import ClassificationMode, LLMProviderName
 from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
 from app.models.event import ApplicationEventType
 
@@ -164,3 +165,31 @@ class ClassificationPromptOutput(BaseModel):
             raise ValueError(msg)
 
         return self
+
+
+class ClassificationCandidateStats(BaseModel):
+    """Deterministic candidate counts used for pre-run estimates."""
+
+    model_config = ConfigDict(frozen=True)
+
+    candidate_count: int = Field(ge=0)
+    body_text_char_count: int = Field(ge=0)
+
+
+class ClassificationPreRunEstimate(BaseModel):
+    """Public pre-run estimate for a bulk classification pass."""
+
+    model_config = ConfigDict(frozen=True)
+
+    candidate_count: int = Field(ge=0)
+    estimated_prompt_tokens: int = Field(ge=0)
+    estimated_completion_tokens: int = Field(ge=0)
+    estimated_total_tokens: int = Field(ge=0)
+    estimated_cost_usd: float | None = Field(default=None, ge=0)
+    currency: str = "USD"
+    cost_estimate_available: bool
+    classification_mode: ClassificationMode
+    llm_provider: LLMProviderName
+    model: str = Field(min_length=1)
+    prompt_version: str = Field(min_length=1)
+    token_estimate_method: str = Field(min_length=1)

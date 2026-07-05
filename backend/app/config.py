@@ -88,6 +88,11 @@ class AppSettings(BaseSettings):
 
     classification_batch_size: int = Field(default=25, ge=1)
     classification_prompt_version: str = Field(default="v1", min_length=1)
+    classification_estimate_chars_per_unit: int = Field(default=4, ge=1)
+    classification_estimate_prompt_overhead_units: int = Field(default=300, ge=0)
+    classification_estimate_completion_units_per_candidate: int = Field(default=500, ge=0)
+    classification_input_cost_per_1k_units_usd: float = Field(default=0.0, ge=0)
+    classification_output_cost_per_1k_units_usd: float = Field(default=0.0, ge=0)
     llm_timeout_seconds: int = Field(default=60, ge=1)
     llm_max_retries: int = Field(default=2, ge=0)
 

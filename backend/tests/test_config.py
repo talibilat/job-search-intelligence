@@ -52,6 +52,11 @@ def test_settings_defaults_match_phase_zero_config_shell(
     assert settings.email_provider is EmailProviderName.GMAIL
     assert settings.llm_provider is LLMProviderName.OLLAMA
     assert settings.classification_mode is ClassificationMode.LOCAL
+    assert settings.classification_estimate_chars_per_unit == 4
+    assert settings.classification_estimate_prompt_overhead_units == 300
+    assert settings.classification_estimate_completion_units_per_candidate == 500
+    assert settings.classification_input_cost_per_1k_units_usd == 0.0
+    assert settings.classification_output_cost_per_1k_units_usd == 0.0
     assert settings.gmail_scopes == ("https://www.googleapis.com/auth/gmail.readonly",)
     assert settings.gmail_client_config_file == (
         Path.home() / ".config/jobtracker/google-oauth-client.json"
@@ -76,6 +81,11 @@ def test_settings_load_env_file_overrides(
                 "JOBTRACKER_SECRET_STORE_BACKEND=fernet",
                 "JOBTRACKER_LLM_PROVIDER=azure_openai",
                 "JOBTRACKER_CLASSIFICATION_MODE=hybrid",
+                "JOBTRACKER_CLASSIFICATION_ESTIMATE_CHARS_PER_UNIT=3",
+                "JOBTRACKER_CLASSIFICATION_ESTIMATE_PROMPT_OVERHEAD_UNITS=250",
+                "JOBTRACKER_CLASSIFICATION_ESTIMATE_COMPLETION_UNITS_PER_CANDIDATE=450",
+                "JOBTRACKER_CLASSIFICATION_INPUT_COST_PER_1K_UNITS_USD=0.0025",
+                "JOBTRACKER_CLASSIFICATION_OUTPUT_COST_PER_1K_UNITS_USD=0.01",
                 "JOBTRACKER_SYNC_ON_OPEN=false",
                 "JOBTRACKER_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly",
                 "JOBTRACKER_SQLITE_VEC_EXTENSION_PATH=/usr/local/lib/sqlite_vec.dylib",
@@ -96,6 +106,11 @@ def test_settings_load_env_file_overrides(
     assert settings.secret_store_backend is SecretStoreBackend.FERNET
     assert settings.llm_provider is LLMProviderName.AZURE_OPENAI
     assert settings.classification_mode is ClassificationMode.HYBRID
+    assert settings.classification_estimate_chars_per_unit == 3
+    assert settings.classification_estimate_prompt_overhead_units == 250
+    assert settings.classification_estimate_completion_units_per_candidate == 450
+    assert settings.classification_input_cost_per_1k_units_usd == 0.0025
+    assert settings.classification_output_cost_per_1k_units_usd == 0.01
     assert settings.sync_on_open is False
     assert settings.gmail_scopes == ("https://www.googleapis.com/auth/gmail.readonly",)
     assert settings.sqlite_vec_extension_path == Path("/usr/local/lib/sqlite_vec.dylib")

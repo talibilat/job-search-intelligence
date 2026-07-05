@@ -55,6 +55,39 @@ export const ClassificationMode = {
   local: "local",
 } as const;
 
+export type LLMProviderName =
+  (typeof LLMProviderName)[keyof typeof LLMProviderName];
+
+export const LLMProviderName = {
+  azure_openai: "azure_openai",
+  ollama: "ollama",
+} as const;
+
+/**
+ * Public pre-run estimate for a bulk classification pass.
+ */
+export interface ClassificationPreRunEstimate {
+  /** @minimum 0 */
+  candidate_count: number;
+  classification_mode: ClassificationMode;
+  cost_estimate_available: boolean;
+  currency?: string;
+  /** @minimum 0 */
+  estimated_completion_tokens: number;
+  estimated_cost_usd?: number | null;
+  /** @minimum 0 */
+  estimated_prompt_tokens: number;
+  /** @minimum 0 */
+  estimated_total_tokens: number;
+  llm_provider: LLMProviderName;
+  /** @minLength 1 */
+  model: string;
+  /** @minLength 1 */
+  prompt_version: string;
+  /** @minLength 1 */
+  token_estimate_method: string;
+}
+
 export type EmailProviderName =
   (typeof EmailProviderName)[keyof typeof EmailProviderName];
 
@@ -528,6 +561,47 @@ export const gmailAuthCallbackAuthGmailCallbackGet = async (
     status: res.status,
     headers: res.headers,
   } as gmailAuthCallbackAuthGmailCallbackGetResponse;
+};
+
+export type classificationEstimateClassificationEstimateGetResponse200 = {
+  data: ClassificationPreRunEstimate;
+  status: 200;
+};
+
+export type classificationEstimateClassificationEstimateGetResponseSuccess =
+  classificationEstimateClassificationEstimateGetResponse200 & {
+    headers: Headers;
+  };
+export type classificationEstimateClassificationEstimateGetResponse =
+  classificationEstimateClassificationEstimateGetResponseSuccess;
+
+export const getClassificationEstimateClassificationEstimateGetUrl = () => {
+  return `/classification/estimate`;
+};
+
+/**
+ * @summary Classification Estimate
+ */
+export const classificationEstimateClassificationEstimateGet = async (
+  options?: RequestInit,
+): Promise<classificationEstimateClassificationEstimateGetResponse> => {
+  const res = await fetch(
+    getClassificationEstimateClassificationEstimateGetUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: classificationEstimateClassificationEstimateGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as classificationEstimateClassificationEstimateGetResponse;
 };
 
 export type getProviderConfigConfigProvidersGetResponse200 = {

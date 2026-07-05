@@ -102,6 +102,87 @@
         "title": "ClassificationMode",
         "type": "string"
       },
+      "ClassificationPreRunEstimate": {
+        "description": "Public pre-run estimate for a bulk classification pass.",
+        "properties": {
+          "candidate_count": {
+            "minimum": 0.0,
+            "title": "Candidate Count",
+            "type": "integer"
+          },
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "cost_estimate_available": {
+            "title": "Cost Estimate Available",
+            "type": "boolean"
+          },
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "estimated_completion_tokens": {
+            "minimum": 0.0,
+            "title": "Estimated Completion Tokens",
+            "type": "integer"
+          },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          },
+          "estimated_prompt_tokens": {
+            "minimum": 0.0,
+            "title": "Estimated Prompt Tokens",
+            "type": "integer"
+          },
+          "estimated_total_tokens": {
+            "minimum": 0.0,
+            "title": "Estimated Total Tokens",
+            "type": "integer"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_version": {
+            "minLength": 1,
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "token_estimate_method": {
+            "minLength": 1,
+            "title": "Token Estimate Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_count",
+          "estimated_prompt_tokens",
+          "estimated_completion_tokens",
+          "estimated_total_tokens",
+          "cost_estimate_available",
+          "classification_mode",
+          "llm_provider",
+          "model",
+          "prompt_version",
+          "token_estimate_method"
+        ],
+        "title": "ClassificationPreRunEstimate",
+        "type": "object"
+      },
       "EmailAccountRef": {
         "description": "Provider-neutral stable reference to a connected mailbox account.",
         "properties": {
@@ -1303,6 +1384,27 @@
         "summary": "Gmail Auth Callback",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/classification/estimate": {
+      "get": {
+        "operationId": "classification_estimate_classification_estimate_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassificationPreRunEstimate"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Classification Estimate",
+        "tags": [
+          "classification"
         ]
       }
     },

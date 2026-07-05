@@ -8,6 +8,7 @@ from datetime import datetime
 from app.config import EmailProviderName
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
+from app.models.classification import ClassificationCandidateStats
 from app.models.records import RawEmailBodyRetentionState, RawEmailRecord
 from app.providers.email import EmailAddress, EmailMessageBody, EmailMessageMetadata
 
@@ -176,12 +177,57 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             return 0
         return int(row[0])
 
+    def get_classification_candidate_stats(
+        self,
+        *,
+        provider: EmailProviderName,
+        model: str,
+        prompt_version: str,
+    ) -> ClassificationCandidateStats:
+        """Count retained emails needing classification for the current model and prompt."""
+
+        if not self._table_exists("raw_emails") or not self._table_exists("email_classifications"):
+            return ClassificationCandidateStats(candidate_count=0, body_text_char_count=0)
+
+        row = self.execute(
+            """
+            SELECT
+                COUNT(*) AS candidate_count,
+                COALESCE(SUM(LENGTH(raw_emails.body_text)), 0) AS body_text_char_count
+            FROM raw_emails
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = raw_emails.id
+            WHERE raw_emails.provider = ?
+                AND raw_emails.body_retention_state IN ('retained', 'debugging')
+                AND raw_emails.body_text IS NOT NULL
+                AND (
+                    email_classifications.email_id IS NULL
+                    OR email_classifications.model != ?
+                    OR email_classifications.prompt_version != ?
+                )
+            """,
+            (provider.value, model, prompt_version),
+        ).fetchone()
+        if row is None:
+            return ClassificationCandidateStats(candidate_count=0, body_text_char_count=0)
+        return ClassificationCandidateStats(
+            candidate_count=int(row["candidate_count"]),
+            body_text_char_count=int(row["body_text_char_count"]),
+        )
+
     def list_raw_email_ids(self, *, provider: EmailProviderName) -> list[str]:
         rows = self.execute(
             "SELECT id FROM raw_emails WHERE provider = ? ORDER BY id",
             (provider.value,),
         ).fetchall()
         return [str(row[0]) for row in rows]
+
+    def _table_exists(self, table_name: str) -> bool:
+        row = self.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        return row is not None
 
     def map_row(self, row: sqlite3.Row) -> RawEmailRecord:
         return RawEmailRecord.model_validate(row_to_dict(row))
