@@ -14,7 +14,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
     """Repository seam for raw email records with typed retention validation."""
 
     def upsert_raw_emails(self, records: Iterable[RawEmailRecord]) -> None:
-        """Write raw email rows idempotently by provider message ID."""
+        """Write raw email rows idempotently without downgrading retained bodies."""
 
         record_tuple = tuple(records)
         if not record_tuple:

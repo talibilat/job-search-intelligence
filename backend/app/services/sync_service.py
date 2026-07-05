@@ -64,6 +64,8 @@ class SyncService:
 
 
 class EmailSyncStateStatus(BaseModel):
+    """Persisted sync cursor snapshot for service-level status checks."""
+
     model_config = ConfigDict(frozen=True)
 
     account: EmailAccountRef
