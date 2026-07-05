@@ -9,6 +9,7 @@ _EMPLOYMENT_PHRASES = (
     re.compile(r"\bfull[-\s]?time\b"),
     re.compile(r"\bremote[-\s]?eligible\b"),
     re.compile(r"\bpart[-\s]?time\b"),
+    re.compile(r"\bwork[-\s]?from[-\s]?home\b"),
     re.compile(r"\bon[-\s]?site\b"),
     re.compile(r"\bin[-\s]?office\b"),
 )
@@ -39,6 +40,7 @@ _DROP_TOKENS = frozenset(
         "hybrid",
         "intern",
         "internship",
+        "kingdom",
         "francisco",
         "jr",
         "junior",
