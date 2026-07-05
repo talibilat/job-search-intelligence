@@ -237,6 +237,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                 unclassified_count=unclassified_count,
                 stale_model_count=0,
                 stale_prompt_version_count=0,
+                blocked_by_missing_target_model_count=0,
                 reprocess_count=unclassified_count,
             )
 
@@ -294,9 +295,71 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             unclassified_count=unclassified_count,
             stale_model_count=stale_model_count,
             stale_prompt_version_count=stale_prompt_version_count,
+            blocked_by_missing_target_model_count=0,
             reprocess_count=(
                 unclassified_count + stale_model_count + stale_prompt_version_count
             ),
+        )
+
+    def get_classification_reprocessing_stats_without_target_model(
+        self,
+        *,
+        provider: EmailProviderName,
+    ) -> ClassificationReprocessingStats:
+        """Partition retained candidates when no target model is configured."""
+
+        if not self._table_exists("raw_emails"):
+            return _empty_classification_reprocessing_stats()
+
+        if not self._table_exists("email_classifications"):
+            unclassified_count = self._count_retained_classification_candidates(
+                provider=provider,
+            )
+            return ClassificationReprocessingStats(
+                retained_candidate_count=unclassified_count,
+                up_to_date_count=0,
+                unclassified_count=unclassified_count,
+                stale_model_count=0,
+                stale_prompt_version_count=0,
+                blocked_by_missing_target_model_count=0,
+                reprocess_count=unclassified_count,
+            )
+
+        row = self.execute(
+            """
+            SELECT
+                COUNT(*) AS retained_candidate_count,
+                COALESCE(SUM(CASE
+                    WHEN email_classifications.email_id IS NULL
+                    THEN 1 ELSE 0
+                END), 0) AS unclassified_count,
+                COALESCE(SUM(CASE
+                    WHEN email_classifications.email_id IS NOT NULL
+                    THEN 1 ELSE 0
+                END), 0) AS blocked_by_missing_target_model_count
+            FROM raw_emails
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = raw_emails.id
+            WHERE raw_emails.provider = ?
+                AND raw_emails.body_retention_state = ?
+                AND raw_emails.body_text IS NOT NULL
+            """,
+            (provider.value, RawEmailBodyRetentionState.RETAINED.value),
+        ).fetchone()
+        if row is None:
+            return _empty_classification_reprocessing_stats()
+
+        unclassified_count = int(row["unclassified_count"])
+        return ClassificationReprocessingStats(
+            retained_candidate_count=int(row["retained_candidate_count"]),
+            up_to_date_count=0,
+            unclassified_count=unclassified_count,
+            stale_model_count=0,
+            stale_prompt_version_count=0,
+            blocked_by_missing_target_model_count=int(
+                row["blocked_by_missing_target_model_count"],
+            ),
+            reprocess_count=unclassified_count,
         )
 
     def _count_retained_classification_candidates(
@@ -369,5 +432,6 @@ def _empty_classification_reprocessing_stats() -> ClassificationReprocessingStat
         unclassified_count=0,
         stale_model_count=0,
         stale_prompt_version_count=0,
+        blocked_by_missing_target_model_count=0,
         reprocess_count=0,
     )

@@ -223,6 +223,7 @@ class ClassificationReprocessingStats(BaseModel):
     unclassified_count: int = Field(ge=0)
     stale_model_count: int = Field(ge=0)
     stale_prompt_version_count: int = Field(ge=0)
+    blocked_by_missing_target_model_count: int = Field(ge=0)
     reprocess_count: int = Field(ge=0)
 
     @model_validator(mode="after")
@@ -232,6 +233,7 @@ class ClassificationReprocessingStats(BaseModel):
             + self.unclassified_count
             + self.stale_model_count
             + self.stale_prompt_version_count
+            + self.blocked_by_missing_target_model_count
         )
         if bucket_total != self.retained_candidate_count:
             msg = "version buckets must sum to retained_candidate_count"
@@ -255,7 +257,7 @@ class ClassificationReprocessingPlan(ClassificationReprocessingStats):
     email_provider: EmailProviderName
     classification_mode: ClassificationMode
     llm_provider: LLMProviderName
-    target_model: str = Field(min_length=1)
+    target_model: str
     target_model_configured: bool
     target_prompt_version: str = Field(min_length=1)
     should_reprocess: bool
@@ -303,7 +305,6 @@ class ClassificationPreRunEstimate(BaseModel):
     classification_mode: ClassificationMode
     llm_provider: LLMProviderName
     model: str = Field(
-        min_length=1,
         description="Configured classification model identifier used to decide stale rows.",
     )
     prompt_version: str = Field(

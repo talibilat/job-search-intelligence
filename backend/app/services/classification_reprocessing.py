@@ -24,11 +24,16 @@ def build_classification_reprocessing_plan(
 
     classification_model = resolve_classification_model(settings)
     target_model_configured = has_configured_classification_model(settings)
-    stats = email_repository.get_classification_reprocessing_stats(
-        provider=settings.email_provider,
-        model=classification_model,
-        prompt_version=settings.classification_prompt_version,
-    )
+    if target_model_configured:
+        stats = email_repository.get_classification_reprocessing_stats(
+            provider=settings.email_provider,
+            model=classification_model,
+            prompt_version=settings.classification_prompt_version,
+        )
+    else:
+        stats = email_repository.get_classification_reprocessing_stats_without_target_model(
+            provider=settings.email_provider,
+        )
 
     return ClassificationReprocessingPlan(
         email_provider=settings.email_provider,
@@ -42,6 +47,7 @@ def build_classification_reprocessing_plan(
         unclassified_count=stats.unclassified_count,
         stale_model_count=stats.stale_model_count,
         stale_prompt_version_count=stats.stale_prompt_version_count,
+        blocked_by_missing_target_model_count=stats.blocked_by_missing_target_model_count,
         reprocess_count=stats.reprocess_count,
         should_reprocess=target_model_configured and stats.reprocess_count > 0,
         selection_policy=CLASSIFICATION_REPROCESSING_SELECTION_POLICY,

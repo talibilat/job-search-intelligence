@@ -68,6 +68,7 @@ def test_get_classification_reprocessing_plan_partitions_target_version_candidat
         "unclassified_count": 1,
         "stale_model_count": 1,
         "stale_prompt_version_count": 1,
+        "blocked_by_missing_target_model_count": 0,
         "reprocess_count": 3,
         "should_reprocess": True,
         "selection_policy": (
@@ -110,9 +111,16 @@ def test_get_classification_reprocessing_plan_marks_missing_target_model_not_run
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
-    create_raw_email_table(database_path)
+    create_classification_tables(database_path)
     with sqlite3.connect(database_path) as connection:
         insert_raw_email(connection, "unclassified", body_text="needs first classification")
+        insert_raw_email(connection, "already-classified", body_text="already classified")
+        insert_classification(
+            connection,
+            "already-classified",
+            model="gpt-4o-mini",
+            prompt_version="v2",
+        )
 
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: AppSettings(
@@ -126,8 +134,13 @@ def test_get_classification_reprocessing_plan_marks_missing_target_model_not_run
     response = client.get("/classification/reprocessing-plan")
 
     assert response.status_code == 200
-    assert response.json()["target_model"] == "unconfigured"
+    assert response.json()["target_model"] == ""
     assert response.json()["target_model_configured"] is False
+    assert response.json()["retained_candidate_count"] == 2
+    assert response.json()["unclassified_count"] == 1
+    assert response.json()["stale_model_count"] == 0
+    assert response.json()["stale_prompt_version_count"] == 0
+    assert response.json()["blocked_by_missing_target_model_count"] == 1
     assert response.json()["reprocess_count"] == 1
     assert response.json()["should_reprocess"] is False
 

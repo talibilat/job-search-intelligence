@@ -95,10 +95,7 @@ export interface ClassificationPreRunEstimate {
    */
   estimated_total_tokens: number;
   llm_provider: LLMProviderName;
-  /**
-   * Configured classification model identifier used to decide stale rows.
-   * @minLength 1
-   */
+  /** Configured classification model identifier used to decide stale rows. */
   model: string;
   /**
    * Configured classification prompt version used to decide stale rows.
@@ -123,6 +120,8 @@ export const EmailProviderName = {
  * Public read-only plan for controlled classification reprocessing.
  */
 export interface ClassificationReprocessingPlan {
+  /** @minimum 0 */
+  blocked_by_missing_target_model_count: number;
   classification_mode: ClassificationMode;
   email_provider: EmailProviderName;
   llm_provider: LLMProviderName;
@@ -137,7 +136,6 @@ export interface ClassificationReprocessingPlan {
   stale_model_count: number;
   /** @minimum 0 */
   stale_prompt_version_count: number;
-  /** @minLength 1 */
   target_model: string;
   target_model_configured: boolean;
   /** @minLength 1 */

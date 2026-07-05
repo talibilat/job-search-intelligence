@@ -161,7 +161,6 @@
           },
           "model": {
             "description": "Configured classification model identifier used to decide stale rows.",
-            "minLength": 1,
             "title": "Model",
             "type": "string"
           },
@@ -196,6 +195,11 @@
       "ClassificationReprocessingPlan": {
         "description": "Public read-only plan for controlled classification reprocessing.",
         "properties": {
+          "blocked_by_missing_target_model_count": {
+            "minimum": 0.0,
+            "title": "Blocked By Missing Target Model Count",
+            "type": "integer"
+          },
           "classification_mode": {
             "$ref": "#/components/schemas/ClassificationMode"
           },
@@ -235,7 +239,6 @@
             "type": "integer"
           },
           "target_model": {
-            "minLength": 1,
             "title": "Target Model",
             "type": "string"
           },
@@ -265,6 +268,7 @@
           "unclassified_count",
           "stale_model_count",
           "stale_prompt_version_count",
+          "blocked_by_missing_target_model_count",
           "reprocess_count",
           "email_provider",
           "classification_mode",
