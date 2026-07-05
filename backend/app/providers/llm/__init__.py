@@ -7,6 +7,7 @@ from .errors import (
     LLMProviderTimeoutError,
     LLMProviderUnavailableError,
 )
+from .ollama import OllamaLLMProvider
 from .provider import LLMProvider
 from .types import (
     LLMFinishReason,
@@ -34,4 +35,5 @@ __all__ = [
     "LLMProviderUnavailableError",
     "LLMResponseFormat",
     "LLMTokenUsage",
+    "OllamaLLMProvider",
 ]
