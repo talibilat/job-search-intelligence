@@ -23,6 +23,7 @@ class JobEmailCategory(StrEnum):
     FOLLOW_UP = "follow_up"
     OTHER = "other"
 
+
 _CATEGORY_APPLICATION_STATUS = {
     JobEmailCategory.APPLICATION_CONFIRMATION: "applied",
     JobEmailCategory.REJECTION: "rejected",
