@@ -230,8 +230,6 @@ Frontend application code imports through the stable `frontend/src/api` boundary
 
 Standard error responses use a typed Pydantic shape: `{"error": {"code": "...", "message": "...", "details": []}}`.
 Routes and services raise explicit `ApiError` values for public API-boundary failures.
-Email-provider boundary errors map to stable email-specific API error codes such as `email_authorization_required`, `email_insufficient_scope`, `email_rate_limited`, `email_temporarily_unavailable`, `email_invalid_provider_response`, `email_provider_request_failed`, and `email_sync_cursor_expired`.
-Those responses include a `details` item with `type: "user_action"`, `field: "email_provider"`, and an action value such as `reconnect_email`, `restart_full_sync`, `try_again_later`, or `check_configuration`.
 Request validation errors, Starlette HTTP errors, and unhandled exceptions are mapped by the FastAPI app factory and must not expose raw request input, tracebacks, secrets, or arbitrary exception details.
 
 ---

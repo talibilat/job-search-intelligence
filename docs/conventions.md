@@ -38,7 +38,6 @@ Baseline coding standards for every agent and contributor.
 - Service layer holds business logic; FastAPI route handlers stay thin.
 - FastAPI dependency injection supplies repositories, providers, and config.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
-- Email-provider failures that can cross the API boundary must use stable `EmailProviderErrorCode` values and `EmailProviderUserAction` hints so clients can distinguish reconnect, scope, rate-limit, temporary outage, expired-cursor, invalid-provider-response, and generic provider-failure cases without inspecting provider payloads.
 - Public API failures use the standard `{"error": {"code": "...", "message": "...", "details": []}}` response shape, and route-specific public failures should raise `ApiError` instead of exposing arbitrary `HTTPException.detail` text.
 - Validation, HTTP, and internal exception handlers must sanitize raw request input, tracebacks, secrets, and private exception details.
 - Frontend code imports API client types and helpers from `frontend/src/api`; `frontend/src/api/generated/` is reserved for OpenAPI-generated output and placeholder destination code.
