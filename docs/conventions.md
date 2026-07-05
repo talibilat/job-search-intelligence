@@ -21,7 +21,7 @@ Baseline coding standards for every agent and contributor.
 - Broad job-search candidate selection belongs in provider-neutral DTOs over normalized metadata; provider metadata listing requests must not accept body content, snippets, or provider-specific candidate filters.
 - Gmail OAuth setup and auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, provider-owned authorization URLs, and token material routed through `SecretStore` when callback/token handling lands.
 - Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
-[JT-065 2026-07-05 v4] Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
+- Downstream pipeline code should use `RawEmailRecord.has_retained_body` to test body availability instead of re-checking retention enum values directly.
 - Gmail OAuth setup and future auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, and token material routed through `SecretStore`.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Alembic migrations run in SQLite batch mode; sqlite-vec and other virtual or vector tables are excluded from autogenerate and must be managed by hand-written revisions.

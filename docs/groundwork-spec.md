@@ -120,7 +120,6 @@ job-search-intelligence/
 
 - **`raw_emails`** - `id` (provider msg id), `thread_id`, `from_addr`, `to_addr`, `subject`, `sent_at`, `body_text`, `body_retention_state`, `labels`, `provider`, `ingested_at`.
   `body_retention_state` is `metadata_only`, `retained`, or `debugging`; metadata-only rows must not carry `body_text`, while retained and debugging rows must carry it.
-[JT-065 2026-07-05 v3] Current raw email retention states are `metadata_only`, `retained`, and `debugging`; `metadata_only` rows omit `body_text`, while retained and debugging rows include `body_text`.
 - **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `updated_at`; stores opaque provider-owned incremental sync anchors scoped to one connected account.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
@@ -149,7 +148,6 @@ EmailProvider -> metadata-only raw_emails
                  ├─ incremental sync: persisted provider-owned cursor required
                  ├─ expired cursor: restart resumable full metadata reconciliation
                  ├─ candidate query applied after listing
-                 └─ [historical pre-JT-065] retained bodies fetched only for selected candidate/reconciliation refs
                  └─ retained bodies fetched only for selected candidate or debugging/reconciliation refs
                     and normalized to plain text before storage
                  │
@@ -259,9 +257,9 @@ Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite s
 **Phase 1 - Gmail ingestion**
 Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, normalized retained body text for candidate, debugging, or reconciliation messages, incremental sync via `historyId`, and `raw_emails` populated without raw HTML by default.
 Phase 1 raw email population tracks `metadata_only`, `retained`, and `debugging` body retention states; debugging and reconciliation bodies are retained only when explicitly needed.
-[Historical pre-JT-065 wording] Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, normalized retained body text for candidate messages, incremental sync via `historyId`, `raw_emails` populated without raw HTML by default.
-[JT-065 2026-07-05 docs sync] Phase 1 raw email population tracks `metadata_only`, `retained`, and `debugging` body retention states; debugging and reconciliation bodies are retained only when explicitly needed.
 **DoD:** your inbox backfilled; incremental pulls only new messages; local `raw_emails` reconcile with Gmail provider metadata pages, including duplicate provider page entries and missing or extra local message IDs.
+
+Historical retention note: before JT-065, Phase 1 wording described retained bodies for candidate messages without the explicit debugging retention state.
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
 Heuristic filter, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.

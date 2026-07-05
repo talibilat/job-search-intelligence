@@ -99,7 +99,7 @@ class RawEmailRecord(BaseModel):
 
     @property
     def has_retained_body(self) -> bool:
-        """Return whether this row carries body text for pipeline stages."""
+        """Return whether pipeline stages can read retained body text."""
 
         return self.body_retention_state in {
             RawEmailBodyRetentionState.RETAINED,
