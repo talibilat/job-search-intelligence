@@ -188,6 +188,7 @@ EmailProvider -> metadata-only raw_emails
 ```
 
 `EmailProvider` adapters own provider-specific auth, metadata normalization, pagination, opaque sync cursors, and retained-body fetching.
+Gmail metadata normalization trims opaque message IDs, thread IDs, and history cursors without changing case, lowercases and deduplicates parsed email addresses, trims display names and selected headers, canonicalizes Gmail system labels while preserving custom label casing, and converts parsed message timestamps to timezone-aware UTC before DTOs cross the provider boundary.
 The Gmail adapter lists full-backfill metadata through Gmail messages pages, anchors the eventual incremental cursor from the Gmail profile history ID, lists incremental metadata through `users.history.list` `messageAdded` records, and maps Gmail history `404` responses to expired-cursor recovery.
 `SyncStateRepository` persists only the opaque cursor value and timestamps, keyed by provider and account, so incremental sync can resume without storing token material or email content in sync state.
 `SyncService` exposes the persisted sync-state cursor snapshot for service-level status checks; public `POST /sync` and `GET /sync/status` route behavior remains part of the sync API phase work.

@@ -91,6 +91,12 @@ class EmailAuthorizationCallbackRequest(BaseModel):
 
 
 class EmailAddress(BaseModel):
+    """Provider-normalized email address plus optional display name.
+
+    Provider adapters should lower-case parsed addresses, trim display names,
+    and deduplicate repeated recipients before returning metadata DTOs.
+    """
+
     model_config = ConfigDict(frozen=True)
 
     address: str = Field(min_length=1)
@@ -121,7 +127,11 @@ class EmailConnection(BaseModel):
 
 
 class EmailProviderCursor(BaseModel):
-    """Opaque provider-owned cursor for resume and incremental sync state."""
+    """Opaque provider-owned cursor for resume and incremental sync state.
+
+    Adapters may trim surrounding whitespace but must not case-fold or parse
+    cursor values because providers own their semantics.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -261,7 +271,11 @@ class EmailMetadataListRequest(BaseModel):
 
 
 class EmailMessageRef(BaseModel):
-    """Provider-neutral stable reference to a single email message."""
+    """Provider-neutral stable reference to a single email message.
+
+    Adapters may trim surrounding whitespace from opaque message and thread IDs
+    but must preserve provider-owned casing.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -271,7 +285,12 @@ class EmailMessageRef(BaseModel):
 
 
 class EmailMessageMetadata(BaseModel):
-    """Provider-normalized metadata only; body text is fetched separately."""
+    """Provider-normalized metadata only; body text is fetched separately.
+
+    Metadata timestamps should be timezone-aware UTC when providers expose a
+    parseable sent date. Provider adapters own label canonicalization before
+    returning this DTO.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
