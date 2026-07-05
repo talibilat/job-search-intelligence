@@ -107,7 +107,12 @@ class FakeMetadataProvider:
                     subject="Application received",
                     sent_at=NOW,
                 ),
-            )
+            ),
+            next_sync_cursor=EmailProviderCursor(
+                account=connection.account,
+                value="history-next",
+                issued_at=NOW,
+            ),
         )
 
 
@@ -147,7 +152,14 @@ class BlockingMetadataProvider:
         del request
         self.started.set()
         await self.release.wait()
-        return EmailMetadataPage(messages=(metadata_message(connection, "gmail-msg-1"),))
+        return EmailMetadataPage(
+            messages=(metadata_message(connection, "gmail-msg-1"),),
+            next_sync_cursor=EmailProviderCursor(
+                account=connection.account,
+                value="history-next",
+                issued_at=NOW,
+            ),
+        )
 
 
 def test_post_sync_runs_injected_manual_sync_runtime() -> None:
@@ -295,7 +307,15 @@ def test_post_sync_uses_dependency_wired_provider_repositories_and_connection(
 
     with sqlite3.connect(database_path) as connection:
         row = connection.execute("SELECT COUNT(*) FROM raw_emails").fetchone()
+        backfill_state = connection.execute(
+            """
+            SELECT status, processed_page_count, processed_message_count, sync_cursor
+            FROM email_backfill_state
+            WHERE provider = 'gmail' AND account_id = 'me@example.com'
+            """
+        ).fetchone()
     assert row == (1,)
+    assert tuple(backfill_state) == ("completed", 1, 1, "history-next")
 
 
 def test_default_sync_email_provider_uses_configured_secret_store(tmp_path: Path) -> None:
@@ -465,6 +485,25 @@ def create_sync_tables(database_path: Path) -> None:
                 credential_expires_at TEXT,
                 reauth_required INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL,
+                PRIMARY KEY (provider, account_id)
+            )
+            """,
+        )
+        connection.execute(
+            """
+            CREATE TABLE email_backfill_state (
+                provider TEXT NOT NULL,
+                account_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                next_page_token TEXT,
+                processed_page_count INTEGER NOT NULL DEFAULT 0,
+                processed_message_count INTEGER NOT NULL DEFAULT 0,
+                sync_cursor TEXT,
+                cursor_issued_at TEXT,
+                started_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                last_error TEXT,
                 PRIMARY KEY (provider, account_id)
             )
             """,
