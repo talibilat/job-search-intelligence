@@ -692,8 +692,10 @@ def test_gmail_message_lister_maps_rate_limits_to_try_again_later(
     assert exc_info.value.user_action == "try_again_later"
 
 
-def test_gmail_message_lister_maps_nested_403_rate_limit_reason_to_try_again_later(
+@pytest.mark.parametrize("reason", ["dailyLimitExceeded", "rateLimitExceeded"])
+def test_gmail_message_lister_maps_nested_403_rate_limit_reasons_to_try_again_later(
     monkeypatch: pytest.MonkeyPatch,
+    reason: str,
 ) -> None:
     def raise_http_error(*args: object, **kwargs: object) -> object:
         del args, kwargs
@@ -703,8 +705,10 @@ def test_gmail_message_lister_maps_nested_403_rate_limit_reason_to_try_again_lat
             msg="Forbidden",
             hdrs=Message(),
             fp=BytesIO(
-                b'{"error":{"status":"PERMISSION_DENIED",'
-                b'"errors":[{"reason":"rateLimitExceeded"}]}}'
+                (
+                    '{"error":{"status":"PERMISSION_DENIED",'
+                    f'"errors":[{{"reason":"{reason}"}}]}}}}'
+                ).encode(),
             ),
         )
 
