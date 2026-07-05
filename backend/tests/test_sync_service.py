@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
 from app.providers.email import (
     EmailAccountRef,
@@ -135,6 +136,7 @@ def test_incremental_metadata_page_forwards_resume_page_token() -> None:
     result = asyncio.run(
         service.list_metadata_page(
             connection=connection,
+            mode=EmailSyncMode.INCREMENTAL,
             sync_cursor=cursor,
             page_token="incremental-page-2",
         )
@@ -146,6 +148,54 @@ def test_incremental_metadata_page_forwards_resume_page_token() -> None:
     assert provider.requests[0].mode is EmailSyncMode.INCREMENTAL
     assert provider.requests[0].sync_cursor == cursor
     assert provider.requests[0].page_token == "incremental-page-2"
+
+
+def test_reconciliation_continuation_uses_full_backfill_mode_with_cursor_present() -> None:
+    provider = RecordingHistoryProvider()
+    service = EmailSyncService(provider=provider, page_size=250)
+    connection = email_connection()
+    cursor = EmailProviderCursor(
+        account=connection.account,
+        value="history-recovered",
+        issued_at=NOW,
+    )
+
+    result = asyncio.run(
+        service.list_metadata_page(
+            connection=connection,
+            mode=EmailSyncMode.FULL_BACKFILL,
+            sync_cursor=cursor,
+            page_token="reconciliation-page-2",
+        )
+    )
+
+    assert result.mode is EmailSyncMode.FULL_BACKFILL
+    assert len(provider.requests) == 1
+    assert provider.requests[0].mode is EmailSyncMode.FULL_BACKFILL
+    assert provider.requests[0].sync_cursor is None
+    assert provider.requests[0].page_token == "reconciliation-page-2"
+
+
+def test_paginated_sync_with_cursor_requires_explicit_mode() -> None:
+    provider = RecordingHistoryProvider()
+    service = EmailSyncService(provider=provider, page_size=250)
+    connection = email_connection()
+    cursor = EmailProviderCursor(
+        account=connection.account,
+        value="history-current",
+        issued_at=NOW,
+    )
+
+    with pytest.raises(ValueError, match="mode is required"):
+        asyncio.run(
+            service.list_metadata_page(
+                connection=connection,
+                sync_cursor=cursor,
+                page_token="ambiguous-page-2",
+            )
+        )
+
+    assert provider.requests == []
 
 
 def email_connection() -> EmailConnection:

@@ -48,6 +48,7 @@ class EmailSyncService:
         self,
         *,
         connection: EmailConnection,
+        mode: EmailSyncMode | None = None,
         sync_cursor: EmailProviderCursor | None = None,
         page_token: str | None = None,
     ) -> EmailSyncPageResult:
@@ -59,9 +60,21 @@ class EmailSyncService:
         so the caller can persist progress and continue the reconciliation.
         """
 
-        if sync_cursor is None:
+        if page_token is not None and sync_cursor is not None and mode is None:
+            msg = "mode is required when continuing paginated sync with a cursor"
+            raise ValueError(msg)
+
+        sync_mode = mode or (
+            EmailSyncMode.INCREMENTAL if sync_cursor is not None else EmailSyncMode.FULL_BACKFILL
+        )
+
+        if sync_mode is EmailSyncMode.FULL_BACKFILL:
             page = await self._list_full_backfill_page(connection, page_token=page_token)
             return EmailSyncPageResult(mode=EmailSyncMode.FULL_BACKFILL, page=page)
+
+        if sync_cursor is None:
+            msg = "sync_cursor is required for incremental metadata sync"
+            raise ValueError(msg)
 
         try:
             page = await self._provider.list_message_metadata(
