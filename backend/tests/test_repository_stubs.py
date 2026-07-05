@@ -31,6 +31,7 @@ def test_repository_package_exports_phase_zero_stubs() -> None:
         "InsightRepository",
         "CorrectionRepository",
         "ChatRepository",
+        "ClassificationRunRepository",
     ]
 
     for name in expected_repository_names:
@@ -48,6 +49,7 @@ def test_model_package_exports_repository_record_dtos() -> None:
         "ApplicationCorrectionRecord",
         "ChatMessageRecord",
         "EmailConnectionRecord",
+        "ClassificationRunRecord",
         "RawEmailBodyRetentionState",
     ]
 

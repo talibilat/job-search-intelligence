@@ -4,6 +4,7 @@ from .application import ApplicationRepository
 from .backfill_state import BackfillStateRepository
 from .base import BaseRepository, SqlParameters
 from .chat import ChatRepository
+from .classification_run import ClassificationRunRepository
 from .connection import EmailConnectionRepository
 from .correction import CorrectionRepository
 from .email import EmailRepository
@@ -17,6 +18,7 @@ __all__ = [
     "BackfillStateRepository",
     "BaseRepository",
     "ChatRepository",
+    "ClassificationRunRepository",
     "CorrectionRepository",
     "EmailRepository",
     "EmailConnectionRepository",

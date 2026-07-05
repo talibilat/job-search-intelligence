@@ -7,6 +7,7 @@ from .errors import (
     LLMProviderTimeoutError,
     LLMProviderUnavailableError,
 )
+from .ollama import OllamaLLMProvider
 from .provider import LLMProvider
 from .types import (
     LLMFinishReason,
@@ -15,6 +16,11 @@ from .types import (
     LLMGenerationResponse,
     LLMMessage,
     LLMMessageRole,
+    LLMModelHealthCheck,
+    LLMModelHealthStatus,
+    LLMModelKind,
+    LLMProviderHealthCheckRequest,
+    LLMProviderHealthCheckResponse,
     LLMResponseFormat,
     LLMTokenUsage,
 )
@@ -24,14 +30,20 @@ __all__ = [
     "LLMGenerationOptions",
     "LLMGenerationRequest",
     "LLMGenerationResponse",
+    "LLMModelHealthCheck",
+    "LLMModelHealthStatus",
+    "LLMModelKind",
     "LLMMessage",
     "LLMMessageRole",
     "LLMProvider",
     "LLMProviderError",
     "LLMProviderRequestError",
     "LLMProviderResponseError",
+    "LLMProviderHealthCheckRequest",
+    "LLMProviderHealthCheckResponse",
     "LLMProviderTimeoutError",
     "LLMProviderUnavailableError",
     "LLMResponseFormat",
     "LLMTokenUsage",
+    "OllamaLLMProvider",
 ]

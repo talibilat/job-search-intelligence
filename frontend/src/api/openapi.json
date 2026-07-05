@@ -40,6 +40,10 @@
           "forbidden",
           "http_error",
           "internal_error",
+          "llm_provider_invalid_response",
+          "llm_provider_request_failed",
+          "llm_provider_timeout",
+          "llm_provider_unavailable",
           "not_found",
           "service_unavailable",
           "unauthorized",
@@ -424,6 +428,57 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "LLMModelHealthCheck": {
+        "description": "Availability result for one configured provider model.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LLMModelKind"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LLMModelHealthStatus"
+          }
+        },
+        "required": [
+          "kind",
+          "model",
+          "status"
+        ],
+        "title": "LLMModelHealthCheck",
+        "type": "object"
+      },
+      "LLMModelHealthStatus": {
+        "enum": [
+          "available",
+          "unavailable"
+        ],
+        "title": "LLMModelHealthStatus",
+        "type": "string"
+      },
+      "LLMModelKind": {
+        "enum": [
+          "chat",
+          "embedding"
+        ],
+        "title": "LLMModelKind",
+        "type": "string"
+      },
       "LLMProviderConfigResponse": {
         "description": "LLM provider metadata exposed by the provider config API shell.",
         "properties": {
@@ -461,6 +516,34 @@
           "secret_requirements"
         ],
         "title": "LLMProviderConfigResponse",
+        "type": "object"
+      },
+      "LLMProviderHealthCheckResponse": {
+        "description": "Provider-neutral health-check result for the selected LLM provider.",
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/LLMModelHealthCheck"
+            },
+            "minItems": 1,
+            "title": "Checks",
+            "type": "array"
+          },
+          "provider_name": {
+            "minLength": 1,
+            "title": "Provider Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LLMModelHealthStatus"
+          }
+        },
+        "required": [
+          "provider_name",
+          "status",
+          "checks"
+        ],
+        "title": "LLMProviderHealthCheckResponse",
         "type": "object"
       },
       "LLMProviderName": {
@@ -1280,6 +1363,28 @@
           }
         },
         "summary": "Update Provider Config",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/config/providers/llm/health": {
+      "post": {
+        "description": "Verify selected LLM provider models through the configured provider adapter.",
+        "operationId": "check_llm_provider_health_config_providers_llm_health_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LLMProviderHealthCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Check Llm Provider Health",
         "tags": [
           "config"
         ]

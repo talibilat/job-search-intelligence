@@ -162,10 +162,11 @@ class EmailProviderCursor(BaseModel):
 
 
 class EmailCandidateQuery(BaseModel):
-    """Provider-neutral metadata signals for selecting body-retention candidates.
+    """Provider-neutral signals for broad job-search candidate matching.
 
-    Candidate queries run over normalized metadata after provider listing
-    instead of becoming provider-specific search filters.
+    Candidate queries run over normalized metadata after provider listing instead
+    of becoming provider-specific search filters, and keyword terms may also be
+    applied to already-normalized retained body text when a caller has it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -195,7 +196,22 @@ class EmailCandidateQuery(BaseModel):
         normalized_labels = {label.strip().lower() for label in metadata.labels}
         if normalized_labels.intersection(self.excluded_label_terms):
             return False
-        return self._matches_sender_domain(metadata) or self._matches_subject_keyword(metadata)
+        return self._matches_sender_domain(metadata) or self.matches_keywords(
+            subject=metadata.subject,
+            normalized_body_text=None,
+        )
+
+    def matches_keywords(
+        self,
+        *,
+        subject: str | None,
+        normalized_body_text: str | None,
+    ) -> bool:
+        """Return whether subject or normalized body text contains a keyword signal."""
+
+        return self._matches_keyword_text(subject) or self._matches_keyword_text(
+            normalized_body_text,
+        )
 
     def _matches_sender_domain(self, metadata: EmailMessageMetadata) -> bool:
         if metadata.from_addr is None:
@@ -208,16 +224,16 @@ class EmailCandidateQuery(BaseModel):
             domain == term or domain.endswith(f".{term}") for term in self.sender_domain_terms
         )
 
-    def _matches_subject_keyword(self, metadata: EmailMessageMetadata) -> bool:
-        subject = (metadata.subject or "").lower()
-        return any(term in subject for term in self.keyword_terms)
+    def _matches_keyword_text(self, text: str | None) -> bool:
+        normalized_text = (text or "").lower()
+        return any(term in normalized_text for term in self.keyword_terms)
 
 
 def build_broad_candidate_query() -> EmailCandidateQuery:
     """Build the default broad job-search candidate query signals.
 
-    The query contains static sender-domain, subject keyword, and excluded-label
-    terms only; it carries no snippets, body text, or private message content.
+    The query contains static sender-domain, keyword, and excluded-label terms
+    only; it carries no snippets, body text, or private message content.
     """
 
     return EmailCandidateQuery(
