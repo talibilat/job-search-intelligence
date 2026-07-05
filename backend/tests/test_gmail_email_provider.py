@@ -464,9 +464,7 @@ def test_gmail_email_provider_refreshes_connection_without_exposing_tokens(
     assert "fresh-access-token" not in refreshed_connection.model_dump_json()
     assert "gmail-refresh-token" not in refreshed_connection.model_dump_json()
 
-    stored_payload = json.loads(
-        secret_store.secrets[connection.credential_ref].get_secret_value()
-    )
+    stored_payload = json.loads(secret_store.secrets[connection.credential_ref].get_secret_value())
     assert stored_payload["access_token"] == "fresh-access-token"
     assert stored_payload["refresh_token"] == "gmail-refresh-token"
     assert stored_payload["scope"] == GMAIL_READONLY_SCOPE
