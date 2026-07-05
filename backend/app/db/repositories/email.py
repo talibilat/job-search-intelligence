@@ -24,5 +24,12 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             return 0
         return int(row[0])
 
+    def list_raw_email_ids(self, *, provider: EmailProviderName) -> list[str]:
+        rows = self.execute(
+            "SELECT id FROM raw_emails WHERE provider = ? ORDER BY id",
+            (provider.value,),
+        ).fetchall()
+        return [str(row[0]) for row in rows]
+
     def map_row(self, row: sqlite3.Row) -> RawEmailRecord:
         return RawEmailRecord.model_validate(row_to_dict(row))

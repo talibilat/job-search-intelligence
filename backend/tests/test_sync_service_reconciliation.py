@@ -63,6 +63,23 @@ def test_backfill_reconciliation_metrics_reconcile_against_unique_provider_messa
     assert metrics.reconciled is True
 
 
+def test_backfill_reconciliation_metrics_detects_swapped_local_provider_ids() -> None:
+    account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
+    pages = (metadata_page(account, ("gmail-msg-1", "gmail-msg-2")),)
+
+    metrics = build_backfill_reconciliation_metrics(
+        provider=EmailProviderName.GMAIL,
+        email_repository=repository_with_raw_email_ids(("gmail-msg-1", "stale-msg-1")),
+        pages=pages,
+    )
+
+    assert metrics.local_raw_email_count == 2
+    assert metrics.local_minus_provider_unique_count == 0
+    assert metrics.missing_local_message_count == 1
+    assert metrics.extra_local_message_count == 1
+    assert metrics.reconciled is False
+
+
 def test_email_repository_counts_raw_email_rows_for_provider() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -95,6 +112,10 @@ def test_email_repository_counts_raw_email_rows_for_provider() -> None:
 
     assert repository.count_raw_emails() == 3
     assert repository.count_raw_emails(provider=EmailProviderName.GMAIL) == 2
+    assert repository.list_raw_email_ids(provider=EmailProviderName.GMAIL) == [
+        "gmail-msg-1",
+        "gmail-msg-2",
+    ]
 
 
 def metadata_page(

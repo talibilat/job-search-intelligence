@@ -146,9 +146,13 @@ def build_backfill_reconciliation_metrics(
             provider_message_ids.append(message.ref.message_id)
 
     provider_message_count = len(provider_message_ids)
-    provider_unique_message_count = len(set(provider_message_ids))
+    provider_unique_message_ids = set(provider_message_ids)
+    provider_unique_message_count = len(provider_unique_message_ids)
     local_raw_email_count = email_repository.count_raw_emails(provider=provider)
+    local_raw_email_ids = set(email_repository.list_raw_email_ids(provider=provider))
     local_minus_provider_unique_count = local_raw_email_count - provider_unique_message_count
+    missing_local_message_count = len(provider_unique_message_ids - local_raw_email_ids)
+    extra_local_message_count = len(local_raw_email_ids - provider_unique_message_ids)
 
     return BackfillReconciliationMetrics(
         provider=provider,
@@ -160,7 +164,9 @@ def build_backfill_reconciliation_metrics(
         ),
         local_raw_email_count=local_raw_email_count,
         local_minus_provider_unique_count=local_minus_provider_unique_count,
-        missing_local_message_count=max(-local_minus_provider_unique_count, 0),
-        extra_local_message_count=max(local_minus_provider_unique_count, 0),
-        reconciled=local_minus_provider_unique_count == 0,
+        missing_local_message_count=missing_local_message_count,
+        extra_local_message_count=extra_local_message_count,
+        reconciled=(
+            missing_local_message_count == 0 and extra_local_message_count == 0
+        ),
     )
