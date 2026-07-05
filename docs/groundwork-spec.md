@@ -169,7 +169,8 @@ EmailProvider -> metadata-only raw_emails
      - provider-neutral `EmailCandidateQuery` static signals for broad job-search selection
      - known ATS/recruiter sender domains (greenhouse, lever, workday,
        ashby, icims, workable, smartrecruiters, myworkday, ...)
-     - keyword signals ("application", "unfortunately", "interview",
+     - keyword signals across subjects and already-normalized retained body text
+       when available ("application", "unfortunately", "interview",
        "next steps", "offer", "assessment", "regret to inform")
                  │  candidates only
                  ▼
@@ -204,6 +205,7 @@ The sync service coordinates one metadata page at a time, carries provider page 
 `SyncScheduler` owns the APScheduler lifecycle inside the FastAPI lifespan: when `sync_on_open` is true, it registers an immediate interval job for the injected async sync runner, and on shutdown it stops APScheduler without waiting.
 The configured sync runtime resolves the latest non-reauth Gmail connection metadata from SQLite, runs full backfill until durable backfill state is completed and the replacement cursor is promoted, and then uses incremental sync on later manual runs.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
+The same static keyword terms may be applied to already-normalized retained body text when a caller has it, but broad provider metadata listing and body-retention selection remain metadata-only.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
 
