@@ -16,26 +16,26 @@ Concrete Gmail provider behavior, product pages, the first application schema re
 
 ## Architecture at a glance
 
-| Area | Decision |
-|---|---|
-| Backend | FastAPI, Python 3.12, async |
-| Frontend | React, TypeScript, Vite, shared accessible primitives |
-| Database | SQLite (single local file) through async SQLAlchemy + aiosqlite |
-| Migrations | Alembic with SQLite batch mode; sqlite-vec and virtual tables are hand-written revisions |
-| Vector store | sqlite-vec (embeddings in the same SQLite file) |
-| LLM providers | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later |
-| Provider registry | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
-| LLM provider seam | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs |
-| Email providers | `EmailProvider` protocol with typed auth, metadata, cursor, and retained-body DTOs; Gmail implementation deferred |
-| API style | REST with an Orval-generated TypeScript client from OpenAPI, imported through `frontend/src/api` |
-| Data contracts | Pydantic v2 DTOs at every boundary |
-| API errors | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details |
-| Secret storage seam | Backend `SecretStore` protocol with Pydantic `SecretRef` identifiers and `SecretStr` values |
-| Frontend charting | Recharts through small accessible wrapper components; currently empty-state only until deterministic metrics APIs exist |
-| Secret storage | Backend `SecretStore` protocol with a default OS keyring adapter, Pydantic `SecretRef` identifiers, and `SecretStr` values |
-| Background sync | APScheduler in-process |
-| RAG agent | LangGraph hybrid router (structured query + semantic retrieval) |
-| Python tooling | uv, ruff, mypy, pre-commit |
+| Area                | Decision                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Backend             | FastAPI, Python 3.12, async                                                                                                |
+| Frontend            | React, TypeScript, Vite, shared accessible primitives                                                                      |
+| Database            | SQLite (single local file) through async SQLAlchemy + aiosqlite                                                            |
+| Migrations          | Alembic with SQLite batch mode; sqlite-vec and virtual tables are hand-written revisions                                   |
+| Vector store        | sqlite-vec (embeddings in the same SQLite file)                                                                            |
+| LLM providers       | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later                                                       |
+| Provider registry   | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
+| LLM provider seam   | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs                                       |
+| Email providers     | `EmailProvider` protocol with typed auth, metadata, cursor, and retained-body DTOs; Gmail implementation deferred          |
+| API style           | REST with an Orval-generated TypeScript client from OpenAPI, imported through `frontend/src/api`                           |
+| Data contracts      | Pydantic v2 DTOs at every boundary                                                                                         |
+| API errors          | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details                               |
+| Secret storage seam | Backend `SecretStore` protocol with Pydantic `SecretRef` identifiers and `SecretStr` values                                |
+| Frontend charting   | Recharts through small accessible wrapper components; currently empty-state only until deterministic metrics APIs exist    |
+| Secret storage      | Backend `SecretStore` protocol with a default OS keyring adapter, Pydantic `SecretRef` identifiers, and `SecretStr` values |
+| Background sync     | APScheduler in-process                                                                                                     |
+| RAG agent           | LangGraph hybrid router (structured query + semantic retrieval)                                                            |
+| Python tooling      | uv, ruff, mypy, pre-commit                                                                                                 |
 
 See `docs/groundwork-spec.md` for the full locked architecture and repository layout.
 
@@ -172,7 +172,7 @@ curl http://127.0.0.1:8000/health
 Expected response:
 
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
 Run the backend smoke test from `backend/`:

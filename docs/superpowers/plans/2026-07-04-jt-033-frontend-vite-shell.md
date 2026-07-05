@@ -147,7 +147,10 @@ Write `frontend/index.html` with this content:
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Local-first job-search intelligence app" />
+    <meta
+      name="description"
+      content="Local-first job-search intelligence app"
+    />
     <title>JobTracker</title>
   </head>
   <body>
@@ -294,9 +297,12 @@ function App() {
     <main className="app-shell">
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Phase 0 frontend shell</p>
-        <h1 id="page-title">JobTracker turns your inbox into job-search intelligence.</h1>
+        <h1 id="page-title">
+          JobTracker turns your inbox into job-search intelligence.
+        </h1>
         <p className="hero-copy">
-          This local-first app will connect to Gmail, reconstruct applications, and keep every factual answer grounded in the application timeline.
+          This local-first app will connect to Gmail, reconstruct applications,
+          and keep every factual answer grounded in the application timeline.
         </p>
       </section>
 
@@ -327,7 +333,13 @@ Write `frontend/src/index.css` with this content:
   color: #132019;
   background: #f4f1ea;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   font-synthesis: none;
   line-height: 1.5;
   text-rendering: optimizeLegibility;

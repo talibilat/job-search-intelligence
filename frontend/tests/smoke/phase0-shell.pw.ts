@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test("renders the Phase 0 setup, sync, and dashboard shell", async ({ page }) => {
+test("renders the Phase 0 setup, sync, and dashboard shell", async ({
+  page,
+}) => {
   await page.goto("/");
 
   await expect(page).toHaveTitle("JobTracker");
@@ -36,10 +38,14 @@ test("renders the Phase 0 setup, sync, and dashboard shell", async ({ page }) =>
     page.getByRole("heading", { name: "Sync status ready for backend wiring" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Manual sync and last-run state will appear here once the sync API exists."),
+    page.getByText(
+      "Manual sync and last-run state will appear here once the sync API exists.",
+    ),
   ).toBeVisible();
 
-  await expect(page.getByRole("region", { name: "Chart foundation" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Chart foundation" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("status", { name: "Dashboard data pending" }),
   ).toContainText(
