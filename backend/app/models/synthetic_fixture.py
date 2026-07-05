@@ -92,10 +92,14 @@ class SyntheticRawEmail(BaseModel):
             msg = "metadata-only raw emails cannot retain body_text"
             raise ValueError(msg)
 
-        if self.body_retention_state in {
-            SyntheticBodyRetentionState.RETAINED,
-            SyntheticBodyRetentionState.DEBUGGING,
-        } and self.body_text is None:
+        if (
+            self.body_retention_state
+            in {
+                SyntheticBodyRetentionState.RETAINED,
+                SyntheticBodyRetentionState.DEBUGGING,
+            }
+            and self.body_text is None
+        ):
             msg = "retained raw emails must include body_text"
             raise ValueError(msg)
 
