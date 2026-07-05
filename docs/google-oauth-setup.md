@@ -131,6 +131,7 @@ They deliberately exclude snippets, payload bodies, raw MIME content, and attach
 [JT-066 2026-07-05 v2] On the final full-backfill page, Gmail message listing also reads the Gmail profile `historyId` and returns it as an opaque replacement sync cursor for later incremental sync.
 
 Incremental sync API calls, retained body fetching, richer normalization, and raw-email repository writes remain separate Phase 1 work.
+[JT-066 2026-07-05 v2] Incremental sync cursors, retained body fetching, richer normalization, and repository writes remain separate Phase 1 work.
 [JT-066 2026-07-05 v2] Incremental sync API calls, retained body fetching, richer normalization, and raw-email repository writes remain separate Phase 1 work.
 Backfill state and final replacement cursor promotion are already repository-backed so full metadata backfills can resume safely.
 [JT-066 2026-07-05 v2] Backfill state and final replacement cursor promotion are already repository-backed so full metadata backfills can resume safely.
