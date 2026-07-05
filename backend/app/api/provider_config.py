@@ -27,7 +27,15 @@ def get_provider_registry() -> ProviderRegistry:
     return provider_registry
 
 
-def get_configured_llm_provider() -> LLMProvider:
+def get_configured_llm_provider(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
+) -> LLMProvider:
+    try:
+        registry.validate_settings(settings)
+    except ProviderConfigurationError as error:
+        raise _provider_configuration_error(error) from error
+
     raise LLMProviderUnavailableError(
         public_message="LLM provider adapter is not configured."
     )

@@ -221,6 +221,47 @@ def test_llm_provider_health_endpoint_rejects_missing_selected_provider_settings
     assert provider.requests == []
 
 
+def test_llm_health_endpoint_validates_settings_before_adapter_resolution() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        classification_mode=ClassificationMode.HYBRID,
+        azure_openai_endpoint="",
+        azure_openai_chat_deployment="",
+        azure_openai_embedding_deployment="",
+    )
+    fastapi_app = create_app()
+    fastapi_app.dependency_overrides[get_settings] = lambda: settings
+    client = TestClient(fastapi_app)
+
+    response = client.post("/config/providers/llm/health")
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": {
+            "code": "bad_request",
+            "message": "Selected LLM provider is missing required non-secret settings.",
+            "details": [
+                {
+                    "field": "azure_openai_endpoint",
+                    "message": "Required provider setting is missing.",
+                    "type": "missing",
+                },
+                {
+                    "field": "azure_openai_chat_deployment",
+                    "message": "Required provider setting is missing.",
+                    "type": "missing",
+                },
+                {
+                    "field": "azure_openai_embedding_deployment",
+                    "message": "Required provider setting is missing.",
+                    "type": "missing",
+                },
+            ],
+        }
+    }
+
+
 def test_llm_provider_health_endpoint_maps_provider_errors_to_public_response() -> None:
     settings = AppSettings(_env_file=None)
     client = TestClient(
