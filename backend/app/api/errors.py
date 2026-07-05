@@ -97,6 +97,16 @@ _HTTP_STATUS_MESSAGES: Final[dict[int, str]] = {
     503: "Service unavailable.",
 }
 
+_EMAIL_PROVIDER_ERROR_CODES: Final[dict[EmailProviderErrorCode, ApiErrorCode]] = {
+    EmailProviderErrorCode.AUTHORIZATION_REQUIRED: ApiErrorCode.EMAIL_AUTHORIZATION_REQUIRED,
+    EmailProviderErrorCode.INSUFFICIENT_SCOPE: ApiErrorCode.EMAIL_INSUFFICIENT_SCOPE,
+    EmailProviderErrorCode.INVALID_PROVIDER_RESPONSE: ApiErrorCode.EMAIL_INVALID_PROVIDER_RESPONSE,
+    EmailProviderErrorCode.PROVIDER_REQUEST_FAILED: ApiErrorCode.EMAIL_PROVIDER_REQUEST_FAILED,
+    EmailProviderErrorCode.RATE_LIMITED: ApiErrorCode.EMAIL_RATE_LIMITED,
+    EmailProviderErrorCode.SYNC_CURSOR_EXPIRED: ApiErrorCode.EMAIL_SYNC_CURSOR_EXPIRED,
+    EmailProviderErrorCode.TEMPORARILY_UNAVAILABLE: ApiErrorCode.EMAIL_TEMPORARILY_UNAVAILABLE,
+}
+
 
 def _error_response(
     *,
@@ -168,7 +178,10 @@ def _email_provider_status_code(exception: EmailProviderError) -> int:
 
 
 def _email_provider_error_code(exception: EmailProviderError) -> ApiErrorCode:
-    return ApiErrorCode(exception.error_code.value)
+    return _EMAIL_PROVIDER_ERROR_CODES.get(
+        exception.error_code,
+        ApiErrorCode.EMAIL_PROVIDER_REQUEST_FAILED,
+    )
 
 
 def register_exception_handlers(app: FastAPI) -> None:
