@@ -485,7 +485,7 @@ Add these bullets to the Development section:
 - Current frontend TypeScript check: `npx tsc -b` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Frontend lint and test scripts are not scaffolded yet; later frontend tooling and Playwright tickets own those checks.
+- At the time of the JT-033 plan, frontend lint and test scripts were pending; JT-034 and JT-054 owned those later checks.
 ```
 
 ---
