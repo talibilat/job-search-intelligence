@@ -203,6 +203,16 @@ def test_ollama_provider_rejects_non_local_base_url(base_url: str) -> None:
     assert transport.calls == []
 
 
+def test_llm_provider_dependency_resolves_selected_ollama_provider() -> None:
+    from app.api.dependencies import get_llm_provider
+
+    provider = get_llm_provider(AppSettings(_env_file=None))
+
+    assert isinstance(provider, LLMProvider)
+    assert isinstance(provider, OllamaLLMProvider)
+    assert provider.provider_name == "ollama"
+
+
 @pytest.mark.parametrize(
     ("transport_error", "expected_error", "public_message"),
     [

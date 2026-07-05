@@ -274,15 +274,19 @@ def _join_ollama_url(base_url: str, path: str) -> str:
 
 
 def _validate_local_base_url(base_url: str) -> None:
+    if not is_local_ollama_base_url(base_url):
+        raise LLMProviderUnavailableError(
+            public_message="Ollama base URL must point to a local host."
+        )
+
+
+def is_local_ollama_base_url(base_url: str) -> bool:
     parsed = urlsplit(base_url)
-    if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
-        raise LLMProviderUnavailableError(
-            public_message="Ollama base URL must point to a local host."
-        )
-    if not _is_local_hostname(parsed.hostname):
-        raise LLMProviderUnavailableError(
-            public_message="Ollama base URL must point to a local host."
-        )
+    return (
+        parsed.scheme in {"http", "https"}
+        and parsed.hostname is not None
+        and _is_local_hostname(parsed.hostname)
+    )
 
 
 def _is_local_hostname(hostname: str) -> bool:

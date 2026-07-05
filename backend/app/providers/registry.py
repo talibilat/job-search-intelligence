@@ -6,6 +6,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import AppSettings, ClassificationMode, EmailProviderName, LLMProviderName
+from app.providers.llm.ollama import is_local_ollama_base_url
 from app.security import SecretKind, SecretRef
 
 
@@ -229,6 +230,16 @@ class ProviderRegistry:
             raise ProviderConfigurationError(
                 provider_name=settings.llm_provider.value,
                 message="Azure OpenAI cannot be used with local classification mode.",
+            )
+
+        if (
+            settings.llm_provider is LLMProviderName.OLLAMA
+            and not is_local_ollama_base_url(settings.ollama_base_url)
+        ):
+            raise ProviderConfigurationError(
+                provider_name=settings.llm_provider.value,
+                message="Ollama base URL must point to a local host.",
+                missing_settings=("ollama_base_url",),
             )
 
 
