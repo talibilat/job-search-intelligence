@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -27,6 +28,13 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 class EmailSyncStatusStore:
     def __init__(self) -> None:
         self._status = EmailSyncStatus(state=EmailSyncRunState.IDLE)
+        self._run_lock = threading.Lock()
+
+    def try_acquire_run(self) -> bool:
+        return self._run_lock.acquire(blocking=False)
+
+    def release_run(self) -> None:
+        self._run_lock.release()
 
     def set_status(self, status: EmailSyncStatus) -> None:
         self._status = status
@@ -52,20 +60,25 @@ class ConfiguredEmailSyncRuntime:
     async def run_manual_sync(self) -> EmailSyncStatus:
         if self._connection is None:
             raise SyncConnectionNotConfiguredError("Gmail connection is not configured yet.")
+        if not self._status_store.try_acquire_run():
+            raise SyncAlreadyRunningError("Email sync is already running.")
 
-        database_path = sqlite_database_path(self._settings.database_url)
-        database_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(database_path) as sqlite_connection:
-            sync_service = EmailSyncService(
-                provider=self._email_provider,
-                page_size=self._settings.gmail_page_size,
-                email_repository=EmailRepository(sqlite_connection),
-                sync_service=SyncService(
-                    sync_state_repository=SyncStateRepository(sqlite_connection),
-                ),
-                status_callback=self._status_store.set_status,
-            )
-            return await sync_service.run_manual_sync(connection=self._connection)
+        try:
+            database_path = sqlite_database_path(self._settings.database_url)
+            database_path.parent.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(database_path) as sqlite_connection:
+                sync_service = EmailSyncService(
+                    provider=self._email_provider,
+                    page_size=self._settings.gmail_page_size,
+                    email_repository=EmailRepository(sqlite_connection),
+                    sync_service=SyncService(
+                        sync_state_repository=SyncStateRepository(sqlite_connection),
+                    ),
+                    status_callback=self._status_store.set_status,
+                )
+                return await sync_service.run_manual_sync(connection=self._connection)
+        finally:
+            self._status_store.release_run()
 
     def current_status(self) -> EmailSyncStatus:
         return self._status_store.current_status()

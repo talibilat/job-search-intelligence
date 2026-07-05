@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
+import pytest
 from app.api.sync import (
+    ConfiguredEmailSyncRuntime,
     EmailSyncStatusStore,
     get_email_sync_connection,
     get_email_sync_runtime,
@@ -21,10 +25,15 @@ from app.providers.email import (
     EmailMessageRef,
     EmailMetadataListRequest,
     EmailMetadataPage,
+    EmailProvider,
     EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef
-from app.services.sync_service import EmailSyncRunState, EmailSyncStatus
+from app.services.sync_service import (
+    EmailSyncRunState,
+    EmailSyncStatus,
+    SyncAlreadyRunningError,
+)
 from fastapi.testclient import TestClient
 
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
@@ -79,6 +88,22 @@ class FakeMetadataProvider:
                 ),
             )
         )
+
+
+class BlockingMetadataProvider:
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        del request
+        self.started.set()
+        await self.release.wait()
+        return EmailMetadataPage(messages=(metadata_message(connection, "gmail-msg-1"),))
 
 
 def test_post_sync_runs_injected_manual_sync_runtime() -> None:
@@ -169,6 +194,33 @@ def test_post_sync_uses_dependency_wired_provider_repositories_and_connection(
     assert row == (1,)
 
 
+def test_configured_runtime_rejects_concurrent_manual_syncs(tmp_path: Path) -> None:
+    async def run_test() -> None:
+        database_path = tmp_path / "jobtracker.sqlite3"
+        create_sync_tables(database_path)
+        provider = BlockingMetadataProvider()
+        runtime = ConfiguredEmailSyncRuntime(
+            settings=AppSettings(
+                _env_file=None,
+                database_url=f"sqlite+aiosqlite:///{database_path}",
+            ),
+            email_provider=cast(EmailProvider, provider),
+            connection=email_connection(),
+            status_store=EmailSyncStatusStore(),
+        )
+
+        first_run = asyncio.create_task(runtime.run_manual_sync())
+        await provider.started.wait()
+
+        with pytest.raises(SyncAlreadyRunningError):
+            await asyncio.wait_for(runtime.run_manual_sync(), timeout=0.1)
+
+        provider.release.set()
+        await first_run
+
+    asyncio.run(run_test())
+
+
 def email_connection() -> EmailConnection:
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
     return EmailConnection(
@@ -180,6 +232,19 @@ def email_connection() -> EmailConnection:
         ),
         granted_scopes=(GMAIL_READONLY_SCOPE,),
         connected_at=NOW,
+    )
+
+
+def metadata_message(connection: EmailConnection, message_id: str) -> EmailMessageMetadata:
+    return EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id=message_id,
+            thread_id=f"thread-{message_id}",
+        ),
+        from_addr=EmailAddress(address="jobs@example.com"),
+        subject="Application received",
+        sent_at=NOW,
     )
 
 
@@ -207,8 +272,10 @@ def create_sync_tables(database_path: Path) -> None:
             CREATE TABLE email_sync_state (
                 provider TEXT NOT NULL,
                 account_id TEXT NOT NULL,
-                sync_cursor TEXT NOT NULL,
-                cursor_issued_at TEXT NOT NULL,
+                sync_cursor TEXT,
+                cursor_issued_at TEXT,
+                in_progress_mode TEXT,
+                next_page_token TEXT,
                 updated_at TEXT NOT NULL,
                 PRIMARY KEY (provider, account_id)
             )

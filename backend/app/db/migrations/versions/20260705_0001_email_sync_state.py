@@ -23,8 +23,10 @@ def upgrade() -> None:
         "email_sync_state",
         sa.Column("provider", sa.Text(), nullable=False),
         sa.Column("account_id", sa.Text(), nullable=False),
-        sa.Column("sync_cursor", sa.Text(), nullable=False),
-        sa.Column("cursor_issued_at", sa.Text(), nullable=False),
+        sa.Column("sync_cursor", sa.Text(), nullable=True),
+        sa.Column("cursor_issued_at", sa.Text(), nullable=True),
+        sa.Column("in_progress_mode", sa.Text(), nullable=True),
+        sa.Column("next_page_token", sa.Text(), nullable=True),
         sa.Column("updated_at", sa.Text(), nullable=False),
         sa.PrimaryKeyConstraint("provider", "account_id"),
     )

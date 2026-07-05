@@ -166,6 +166,19 @@ class FailingHistoryProvider:
         raise RuntimeError(msg)
 
 
+class FailingAfterFirstPageProvider(PagingHistoryProvider):
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        if self.requests:
+            self.requests.append(request)
+            msg = "provider unavailable after page one"
+            raise RuntimeError(msg)
+        return await super().list_message_metadata(connection, request)
+
+
 class ProgressInspectingProvider(PagingHistoryProvider):
     def __init__(self, pages: tuple[EmailMetadataPage, ...]) -> None:
         super().__init__(pages)
@@ -464,6 +477,71 @@ def test_manual_sync_uses_incremental_mode_when_cursor_exists() -> None:
     assert stored_cursor.value == "history-next"
 
 
+def test_manual_sync_resumes_failed_full_backfill_from_persisted_page_token() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    mailbox = email_connection()
+    sync_state_repository = SyncStateRepository(connection)
+    first_provider = FailingAfterFirstPageProvider(
+        (
+            EmailMetadataPage(
+                messages=(metadata_message(mailbox, "gmail-msg-1"),),
+                next_page_token="page-2",
+            ),
+        )
+    )
+    service = EmailSyncService(
+        provider=first_provider,
+        page_size=100,
+        email_repository=EmailRepository(connection),
+        sync_service=SyncService(sync_state_repository=sync_state_repository),
+        clock=lambda: NOW,
+    )
+
+    with pytest.raises(RuntimeError, match="provider unavailable after page one"):
+        asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    failed_state = sync_state_repository.fetch_state(mailbox.account)
+    assert failed_state is not None
+    assert failed_state.in_progress_mode == "full_backfill"
+    assert failed_state.next_page_token == "page-2"
+
+    second_provider = PagingHistoryProvider(
+        (
+            EmailMetadataPage(
+                messages=(metadata_message(mailbox, "gmail-msg-2"),),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-after-resume",
+                    issued_at=NOW,
+                ),
+            ),
+        )
+    )
+    resumed_service = EmailSyncService(
+        provider=second_provider,
+        page_size=100,
+        email_repository=EmailRepository(connection),
+        sync_service=SyncService(sync_state_repository=sync_state_repository),
+        clock=lambda: NOW,
+    )
+
+    status = asyncio.run(resumed_service.run_manual_sync(connection=mailbox))
+
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert status.mode is EmailSyncMode.FULL_BACKFILL
+    assert status.raw_email_count == 2
+    assert len(second_provider.requests) == 1
+    assert second_provider.requests[0].mode is EmailSyncMode.FULL_BACKFILL
+    assert second_provider.requests[0].page_token == "page-2"
+    stored_state = sync_state_repository.fetch_state(mailbox.account)
+    assert stored_state is not None
+    assert stored_state.sync_cursor == "history-after-resume"
+    assert stored_state.in_progress_mode is None
+    assert stored_state.next_page_token is None
+
+
 def test_manual_sync_metadata_upsert_preserves_existing_retained_body() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -626,8 +704,10 @@ def create_email_sync_state_table(connection: sqlite3.Connection) -> None:
         CREATE TABLE email_sync_state (
             provider TEXT NOT NULL,
             account_id TEXT NOT NULL,
-            sync_cursor TEXT NOT NULL,
-            cursor_issued_at TEXT NOT NULL,
+            sync_cursor TEXT,
+            cursor_issued_at TEXT,
+            in_progress_mode TEXT,
+            next_page_token TEXT,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (provider, account_id)
         )
