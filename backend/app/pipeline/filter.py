@@ -58,10 +58,19 @@ def sender_matches_domain_terms(
     sender_address: str | None,
     domain_terms: Iterable[str],
 ) -> bool:
+    """Match exact sender domains or subdomains, not arbitrary suffixes."""
+
     return _sender_matches_domain_terms(sender_address, domain_terms)
 
 
 def build_broad_candidate_query() -> EmailCandidateQuery:
+    """Build safe static metadata signals for broad job-search selection.
+
+    The query carries known ATS/recruiter sender domains, subject keywords,
+    and excluded-label terms only; it carries no snippets, body text, or
+    private message content.
+    """
+
     return EmailCandidateQuery(
         strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
         sender_domain_terms=HEURISTIC_SENDER_DOMAIN_TERMS,

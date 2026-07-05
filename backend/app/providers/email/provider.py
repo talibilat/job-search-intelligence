@@ -493,6 +493,8 @@ class EmailProvider(Protocol):
 
 
 def sender_matches_domain_terms(sender_address: str | None, domain_terms: Iterable[str]) -> bool:
+    """Return whether a sender's domain equals or is below a configured domain."""
+
     domain = _extract_sender_domain(sender_address)
     if domain is None:
         return False
