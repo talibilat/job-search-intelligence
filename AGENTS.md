@@ -138,6 +138,7 @@ If a task crosses phases, split it or ask for explicit approval.
 Preserve these core tables unless a documented migration changes them:
 
 - `raw_emails`
+- `email_sync_state` for opaque provider-owned incremental sync cursors
 - `email_classifications`
 - `applications`
 - `application_events`
