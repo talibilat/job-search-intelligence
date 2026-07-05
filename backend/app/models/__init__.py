@@ -16,6 +16,7 @@ from .records import (
     ApplicationEventRecord,
     ApplicationRecord,
     ChatMessageRecord,
+    EmailSyncStateRecord,
     InsightRecord,
     RawEmailRecord,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "ApplicationEventRecord",
     "ApplicationRecord",
     "ChatMessageRecord",
+    "EmailSyncStateRecord",
     "InsightRecord",
     "RawEmailRecord",
     "SetupStatusResponse",

@@ -72,6 +72,14 @@ class RawEmailRecord(BaseModel):
         return parse_json_column(value)
 
 
+class EmailSyncStateRecord(BaseModel):
+    provider: str
+    account_id: str
+    sync_cursor: str
+    cursor_issued_at: datetime
+    updated_at: datetime
+
+
 class ApplicationRecord(BaseModel):
     id: str
     company: str
