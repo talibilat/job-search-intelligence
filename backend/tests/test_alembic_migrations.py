@@ -346,6 +346,48 @@ def test_application_corrections_reject_unknown_correction_type(
             )
 
 
+@pytest.mark.parametrize(
+    ("before_json", "after_json"),
+    [
+        ("not json", '{"current_status": "rejected"}'),
+        ('{"current_status": "applied"}', "not json"),
+    ],
+)
+def test_application_corrections_reject_malformed_json_snapshots(
+    tmp_path: Path,
+    before_json: str,
+    after_json: str,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        insert_application(connection)
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO application_corrections (
+                    application_id,
+                    correction_type,
+                    before_json,
+                    after_json,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "app_1",
+                    "status_edit",
+                    before_json,
+                    after_json,
+                    "2026-07-31T00:00:00Z",
+                ),
+            )
+
+
 def test_application_corrections_cascade_with_application_deletes(
     tmp_path: Path,
 ) -> None:

@@ -34,6 +34,14 @@ def upgrade() -> None:
             _in_values("correction_type", CORRECTION_TYPES),
             name="ck_application_corrections_correction_type",
         ),
+        sa.CheckConstraint(
+            "json_valid(before_json)",
+            name="ck_application_corrections_before_json_valid",
+        ),
+        sa.CheckConstraint(
+            "json_valid(after_json)",
+            name="ck_application_corrections_after_json_valid",
+        ),
         sa.ForeignKeyConstraint(["application_id"], ["applications.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
