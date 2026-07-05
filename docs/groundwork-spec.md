@@ -63,7 +63,7 @@ job-search-intelligence/
 │   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
-│   │   │   ├── email/              # EmailProvider protocol + gmail.py skeleton + future outlook.py/imap.py
+│   │   │   ├── email/              # EmailProvider protocol + gmail.py skeleton + retained-body text normalization + future outlook.py/imap.py
 │   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
@@ -144,9 +144,9 @@ EmailProvider -> metadata-only raw_emails
                  ├─ full backfill: paginated metadata pages, no body snippets
                  ├─ incremental sync: provider-owned cursor required
                  ├─ expired cursor: restart resumable full metadata reconciliation
-                 └─ retained bodies fetched only for selected candidate/reconciliation refs
-                 └─ candidate query applied after listing; retained bodies fetched only for selected candidate/reconciliation refs
+                 ├─ candidate query applied after listing
                  └─ retained bodies fetched only for selected candidate or debugging/reconciliation refs
+                    and normalized to plain text before storage
                  │
                  ▼
    1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
@@ -177,7 +177,7 @@ EmailProvider -> metadata-only raw_emails
 `EmailProvider` adapters own provider-specific auth, metadata normalization, pagination, opaque sync cursors, and retained-body fetching.
 The sync service coordinates one metadata page at a time, carries provider page tokens forward, and turns expired incremental cursors into resumable full metadata reconciliation so callers can persist the next page token and replacement sync cursor.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
-The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, and ignores attachment content in v1.
+The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 
@@ -246,11 +246,11 @@ Full list in `docs/questions.md`. Mapping:
 ## 8. Phase roadmap (with Definition of Done)
 
 **Phase 0 - Groundwork / scaffold**
-Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, frontend generated-client destination and import boundary, Recharts chart wrapper foundation with empty states, shared accessible frontend primitives, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, backend and frontend CI, `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
+Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite skeleton, frontend generated-client destination and import boundary, Recharts chart wrapper foundation with empty states, empty dashboard route shell without metrics, shared accessible frontend primitives, SQLite engine + sqlite-vec + migrations, config + setup-wizard shell, `EmailProvider`/`LLMProvider` protocol seams, `SecretStore` protocol plus default keyring adapter, OpenAPI generation via `backend/scripts/generate_openapi.py`, backend and frontend CI, `.env.example`, synthetic fixtures, and tiny Playwright smoke harness.
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
 **Phase 1 - Gmail ingestion**
-Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, retained body text for candidate messages, incremental sync via `historyId`, `raw_emails` populated.
+Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, normalized retained body text for candidate messages, incremental sync via `historyId`, `raw_emails` populated without raw HTML by default.
 **DoD:** your inbox backfilled; incremental pulls only new messages; local count reconciles with Gmail.
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
