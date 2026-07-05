@@ -132,6 +132,37 @@ def test_fixture_rejects_unknown_email_payload_fields() -> None:
         SyntheticRawEmail.model_validate(email_data)
 
 
+def test_fixture_rejects_inconsistent_email_body_retention_state() -> None:
+    email_data = make_valid_fixture().emails[0].model_dump(mode="json")
+
+    with pytest.raises(ValidationError, match="metadata-only raw emails cannot retain body_text"):
+        SyntheticRawEmail.model_validate(
+            email_data
+            | {
+                "body_text": "Retained text without a retained state.",
+                "body_retention_state": SyntheticBodyRetentionState.METADATA_ONLY,
+            }
+        )
+
+    with pytest.raises(ValidationError, match="retained raw emails must include body_text"):
+        SyntheticRawEmail.model_validate(
+            email_data
+            | {
+                "body_text": None,
+                "body_retention_state": SyntheticBodyRetentionState.RETAINED,
+            }
+        )
+
+    with pytest.raises(ValidationError, match="retained raw emails must include body_text"):
+        SyntheticRawEmail.model_validate(
+            email_data
+            | {
+                "body_text": None,
+                "body_retention_state": SyntheticBodyRetentionState.DEBUGGING,
+            }
+        )
+
+
 def test_fixture_validates_unique_ids_and_cross_references() -> None:
     fixture = make_valid_fixture()
 
