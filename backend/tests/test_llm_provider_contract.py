@@ -65,8 +65,24 @@ class FakeLLMProvider:
         )
 
 
+class MissingHealthCheckLLMProvider:
+    provider_name = "missing-health-check"
+
+    async def generate(self, request: LLMGenerationRequest) -> LLMGenerationResponse:
+        return LLMGenerationResponse(
+            content=request.messages[-1].content,
+            model=request.model or "fake-model",
+        )
+
+
 def test_fake_provider_satisfies_llm_provider_protocol() -> None:
-    assert isinstance(FakeLLMProvider(), LLMProvider)
+    provider: LLMProvider = FakeLLMProvider()
+
+    assert isinstance(provider, LLMProvider)
+
+
+def test_llm_provider_protocol_requires_health_check() -> None:
+    assert not isinstance(MissingHealthCheckLLMProvider(), LLMProvider)
 
 
 def test_llm_provider_generation_round_trip() -> None:
