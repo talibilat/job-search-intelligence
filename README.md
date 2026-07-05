@@ -41,6 +41,8 @@ The frontend shell keeps the root overview page intact, adds a backend-backed ov
 [JT-084 2026-07-05] The sync runtime now persists broad job-search filter decisions in `email_filter_decisions` with public-safe reasons for auditability.
 [JT-089 2026-07-05] Phase 2 classification now has a provider-neutral prompt contract in `backend/app/pipeline/classify.py`, strict `ClassificationPromptOutput` validation, and a synthetic golden-set eval scaffold under `backend/evals/`.
 [JT-090 2026-07-05] Classification-specific DTOs now cover retained candidates, provider-neutral classification results, and stored classification records with category, confidence, model, prompt-version, unknown-field, repr-redaction, and timezone-aware timestamp validation.
+[JT-095 2026-07-05] The backend now has a focused Phase 2 classification parser that turns clean structured LLM JSON into an `EmailClassificationRecord` plus typed extraction fields, and returns a public-safe `MalformedLLMExtraction` quarantine result for invalid JSON, invalid schema, duplicate keys, or incomplete generations.
+[JT-095 2026-07-05] The synthetic golden-set eval runner lives at `backend/evals/run_eval.py`; production classification storage and aggregation wiring remain later Phase 2 work.
 
 ## Architecture at a glance
 
@@ -346,6 +348,8 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Current Gmail auth endpoints: `GET /auth/gmail` returns a Google authorization URL, generated OAuth state, provider name, and the single `gmail.readonly` scope; `GET /auth/gmail/callback` exchanges the code, persists token material through `SecretStore`, stores non-secret `email_connections` metadata, and returns `EmailConnection`; provider-level token refresh keeps expired Gmail reads working while product pages remain later Phase 1 work.
 - Current sync API: `POST /sync` resolves the latest non-reauth Gmail connection from `email_connections`, runs resumable full backfill until a completed `email_backfill_state` has promoted an incremental cursor, persists metadata-only `raw_emails`, upserts broad job-search filter decisions with public-safe reasons, stores retained bodies for broad job-search candidates when the provider supports body fetching, preserves retained bodies on metadata refresh, stores cursors and resumable page progress in SQLite, returns typed `400` when no Gmail connection is configured, returns typed `409` for concurrent manual runs, and maps email-provider failures to email-specific typed responses with `user_action` details.
 - Current sync status API: `GET /sync/status` returns the current or last manual run status without exposing tokens, secrets, raw cursors, page tokens, or email body content.
+- Current classification parser: `parse_llm_extraction_response` in `backend/app/pipeline/classify.py` accepts provider-neutral `LLMGenerationResponse` JSON only when the finish reason is clean, keys are unique, scalar types are strict, extracted text is non-blank, salary ranges are valid, and `event_at` is an ISO datetime string rather than a numeric timestamp.
+- Malformed classification output returns `MalformedLLMExtraction` with only email ID, model, prompt version, reason, and a public-safe message; callers must quarantine or reject it without writing `email_classifications`, `applications`, or `application_events` rows.
 - Current Gmail auth-start endpoint: `GET /auth/gmail` returns a Google authorization URL, generated OAuth state, provider name, and the single `gmail.readonly` scope; `GET /auth/gmail/callback` exchanges the code, persists token material through `SecretStore`, and stores non-secret connection metadata. Token refresh remains later Phase 1 work.
 - Current retained body fetching: Gmail can fetch normalized retained bodies for selected refs behind the provider seam, manual sync stores retained bodies for broad job-search candidate messages after metadata persistence, and the raw-email repository can persist retained or debugging bodies before metadata exists. Endpoint-driven access to arbitrary retained-body refs remains later Phase 1 work.
 - LLM provider setup guide: [`docs/llm-provider-setup.md`](docs/llm-provider-setup.md) documents the Azure OpenAI and Ollama values the first-run setup flow needs, including `classification_mode` choices, local-only Ollama base URL rules, and `SecretStore` boundaries.
@@ -367,6 +371,8 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Backend linting and formatting: `backend/ruff.toml` defines ruff lint and format defaults.
 - Current backend lint check: run `uv run ruff check .` from `backend/`.
 - Current backend format check: run `uv run ruff format --check .` from `backend/`.
+- Classification parser test: `uv run pytest tests/test_classification_pipeline.py -q` from `backend/` verifies valid structured extraction plus public-safe rejection of malformed JSON, schema errors, duplicate JSON keys, unclean finish reasons, stringly typed scalars, blank extracted text, and numeric `event_at` values.
+- Golden-set eval runner test: `uv run pytest tests/test_eval_runner.py -q` from `backend/` verifies `evaluate_golden_set` reports precision, recall, and pass/fail against the configured thresholds.
 - Pre-commit setup: run `uv run --project backend pre-commit install` from the repository root after backend and frontend dependencies are installed.
 - Current pre-commit gate: run `uv run --project backend pre-commit run --all-files` from the repository root to execute backend Ruff lint, backend Ruff format check, backend mypy, and the frontend `npm run check` gate.
 - Backend: `uv run` from `backend/`, with `ruff`, `mypy`, and `pytest` as the verification gate.
@@ -391,7 +397,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Frontend CI: `.github/workflows/frontend-ci.yml` runs on pushes and pull requests to `main`, installs `uv`, sets up Python 3.12, syncs locked backend dependencies, sets up Node.js with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` from `frontend/`, and runs `npm run check` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Classification changes: run the golden-set eval with `uv run python -m evals.run_eval` from `backend/`; it reads `backend/evals/golden_set.jsonl`, validates records through the classification contract, reports precision and recall, and fails below 90 percent precision or 85 percent recall.
+- Classification changes to prompts, models, categories, extraction schemas, or parser behavior: run `uv run python -m evals.run_eval` from `backend/`; it reads `backend/evals/golden_set.jsonl`, validates records through the classification contract, reports precision and recall, and fails below 90 percent precision or 85 percent recall unless explicitly accepted.
 - Golden-set fixture-only changes must pass `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 
 Never claim work is complete without fresh verification evidence.

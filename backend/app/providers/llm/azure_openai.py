@@ -279,6 +279,30 @@ class AzureOpenAIProvider:
             )
         return SecretStr(api_key.get_secret_value().strip())
 
+    async def health_check(
+        self,
+        request: LLMProviderHealthCheckRequest,
+    ) -> LLMProviderHealthCheckResponse:
+        detail = "Concrete Azure OpenAI model health checks are not implemented."
+        return LLMProviderHealthCheckResponse(
+            provider_name=self.provider_name,
+            status=LLMModelHealthStatus.UNAVAILABLE,
+            checks=(
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.CHAT,
+                    model=request.chat_model,
+                    status=LLMModelHealthStatus.UNAVAILABLE,
+                    detail=detail,
+                ),
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.EMBEDDING,
+                    model=request.embedding_model,
+                    status=LLMModelHealthStatus.UNAVAILABLE,
+                    detail=detail,
+                ),
+            ),
+        )
+
 
 def _chat_completion_payload(request: LLMGenerationRequest) -> dict[str, object]:
     payload: dict[str, object] = {
