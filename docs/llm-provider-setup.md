@@ -17,6 +17,7 @@ The current backend has the `SecretStore` protocol, backend selector settings, t
 - Use `backend/.env` only for non-secret local overrides such as endpoints, model names, deployment names, and `classification_mode`.
 - Keep the app local-first: Ollama keeps LLM calls on the machine, while Azure OpenAI sends only configured LLM requests to the user's Azure resource.
 - Keep LLM providers behind the configured app provider path; providers must never execute raw SQL or produce authoritative dashboard counts.
+- Classification calls use the app's provider-neutral JSON-object prompt contract and validate responses with Pydantic before any classification or extraction result is stored.
 - Never paste API keys, OAuth tokens, Google client secrets, or raw email content into docs, tickets, commits, logs, or screenshots.
 
 ## Choosing A Provider
@@ -121,4 +122,5 @@ The shared API route exists before concrete Azure OpenAI and Ollama adapter HTTP
 - `POST /config/providers/llm/health` returns an `available` response for the configured chat and embedding models once the selected provider adapter is wired.
 - Gmail setup still uses `gmail.readonly` and a user-owned Google OAuth client.
 - LLM output is routed through application code that uses deterministic queries or constrained query builders for facts, never raw SQL emitted by the model.
+- Classification provider responses are JSON objects that match `ClassificationPromptOutput`; malformed or contradictory output is rejected before storage.
 - No API keys, OAuth tokens, client secrets, or provider credentials are committed to the repository.
