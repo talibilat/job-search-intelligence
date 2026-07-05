@@ -178,6 +178,7 @@ EmailProvider -> metadata-only raw_emails
 The sync service coordinates one metadata page at a time, carries provider page tokens forward, and turns expired incremental cursors into resumable full metadata reconciliation so callers can persist the next page token and replacement sync cursor.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
+Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 
@@ -251,7 +252,7 @@ Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite s
 
 **Phase 1 - Gmail ingestion**
 Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, normalized retained body text for candidate messages, incremental sync via `historyId`, `raw_emails` populated without raw HTML by default.
-**DoD:** your inbox backfilled; incremental pulls only new messages; local count reconciles with Gmail.
+**DoD:** your inbox backfilled; incremental pulls only new messages; local `raw_emails` reconcile with Gmail provider metadata pages, including duplicate provider page entries and missing or extra local message IDs.
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
 Heuristic filter, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
