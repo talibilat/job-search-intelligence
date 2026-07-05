@@ -129,8 +129,7 @@ It calls Gmail list pages with `maxResults` and `pageToken`, then fetches each l
 Those partial fields include message IDs, thread IDs, labels, size estimates, and selected headers (`From`, `To`, `Cc`, `Subject`, `Date`, and `Message-ID`).
 They deliberately exclude snippets, payload bodies, raw MIME content, and attachments.
 
-Sync cursor and full-backfill page-state persistence now live in local SQLite.
-Retained body fetching, richer normalization, and raw-email repository writes remain separate Phase 1 work.
+Incremental sync cursors, retained body fetching, richer normalization, and repository writes remain separate Phase 1 work.
 
 ## Preflight Checklist
 
