@@ -70,7 +70,7 @@ job-search-intelligence/
 │   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords)
 │   │   │   ├── classify.py         # LLM classify + structured extract
 │   │   │   └── aggregate.py        # emails → applications + event timeline (dedup)
-│   │   ├── services/               # sync_service, normalization, metrics_service, insights_service, chat_service
+│   │   ├── services/               # sync_service, metrics_service, insights_service, chat_service
 │   │   ├── scripts/                # generate_openapi.py
 │   │   ├── agent/                  # LangGraph graph, tools (structured_query, semantic_search)
 │   │   ├── api/                    # routers, typed API errors, setup, auth, sync, applications, metrics, insights, chat
@@ -146,7 +146,6 @@ job-search-intelligence/
 
 An **application** is reconstructed from _many_ emails: a confirmation + later a rejection = **one** application whose `current_status` = `rejected`, with two `application_events`.
 Grouping key is approximately `(normalized_company, normalized_role, thread/time-window)`.
-`normalized_role` is produced by the deterministic `normalize_role_title()` service helper: it returns `None` for missing titles, lowercases and ASCII-folds text, removes punctuation noise, seniority labels, title levels, common work-location tokens, and work-arrangement phrases, expands common title abbreviations, and canonicalizes known software, data, machine-learning, product, and project role families while preserving meaningful descriptors.
 `ghosted` is **inferred** when an application has an `applied` event but no response after your personal ghost-threshold (default 30 days, tunable).
 Aggregation must be **idempotent** - re-runs never duplicate.
 Manual corrections are audited, lock affected grouping/status from automatic overwrite by default, and surface conflicts when new evidence disagrees.
