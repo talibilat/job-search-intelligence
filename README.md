@@ -64,7 +64,8 @@ scripts/          repository-level developer and operational scripts
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
 - Fernet fallback storage is documented in `docs/secret-storage.md`; set `JOBTRACKER_SECRET_STORE_BACKEND=fernet` until the OS keyring adapter lands or when OS keyring is unavailable.
 - Secrets are stored encrypted at rest through OS keyring by default and never logged; backend redaction helpers are exported from `app.security` for logging boundaries.
-- Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate, debugging, or reconciliation messages, and raw email DTOs track `metadata_only`, `retained`, or `debugging` retention state.
+- Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate or reconciliation messages.
+[JT-065 2026-07-05 docs sync] The previous retention bullet is historical; current raw-email retention also includes debugging retained bodies.
 - If a provider reports an expired incremental cursor, the sync service restarts as full metadata reconciliation and returns the provider page token plus replacement sync cursor for resumable progress.
 - Candidate selection uses provider-neutral static sender-domain, subject keyword, and excluded-label signals after metadata listing, so broad Gmail metadata queries do not expose snippets or body content.
 - Retained email bodies are stored as normalized plain text: HTML MIME bodies are converted to text, raw HTML fields are rejected, and mislabelled plain-text bodies that still look like HTML fail validation.
