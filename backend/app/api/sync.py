@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -11,7 +10,6 @@ from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.db.repositories import EmailRepository, SyncStateRepository
 from app.db.sqlite_url import sqlite_database_path
-from app.models import SyncJobCounts, SyncJobError, SyncJobPhase, SyncJobStatus
 from app.providers.email import EmailConnection, EmailProvider, EmailProviderError
 from app.providers.email.gmail import GmailEmailProvider
 from app.services.sync_service import (
@@ -22,7 +20,6 @@ from app.services.sync_service import (
     SyncAlreadyRunningError,
     SyncConnectionNotConfiguredError,
     SyncService,
-    build_idle_sync_status,
 )
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -118,48 +115,6 @@ def get_email_sync_runtime(
     )
 
 
-def _sync_job_status_from_runtime_status(
-    status: EmailSyncStatus,
-    *,
-    now: datetime | None = None,
-) -> SyncJobStatus:
-    timestamp = now or datetime.now(UTC)
-    if status.state is EmailSyncRunState.IDLE:
-        return build_idle_sync_status(now=timestamp)
-
-    finished_at = status.finished_at
-    updated_at = finished_at or timestamp
-    last_error = status.last_error
-    errors = (
-        (SyncJobError(message=last_error, occurred_at=updated_at),)
-        if last_error is not None
-        else ()
-    )
-    phase_by_state = {
-        EmailSyncRunState.RUNNING: SyncJobPhase.METADATA_SYNC,
-        EmailSyncRunState.SUCCEEDED: SyncJobPhase.COMPLETED,
-        EmailSyncRunState.FAILED: SyncJobPhase.FAILED,
-    }
-
-    return SyncJobStatus(
-        phase=phase_by_state[status.state],
-        provider=status.provider,
-        account_id=status.account_id,
-        counts=SyncJobCounts(
-            metadata_pages=status.page_count,
-            metadata_messages=status.message_count,
-            raw_emails_written=status.raw_email_count,
-            errors=len(errors),
-        ),
-        errors=errors,
-        started_at=status.started_at,
-        updated_at=updated_at,
-        completed_at=finished_at,
-        last_run_at=finished_at,
-        progress=1 if status.state is EmailSyncRunState.SUCCEEDED else 0,
-    )
-
-
 @router.post(
     "",
     response_model=EmailSyncStatus,
@@ -190,10 +145,10 @@ async def sync_now(
         ) from error
 
 
-@router.get("/status", response_model=SyncJobStatus)
+@router.get("/status", response_model=EmailSyncStatus)
 def sync_status(
     sync_runtime: Annotated[EmailSyncRuntime, Depends(get_email_sync_runtime)],
-) -> SyncJobStatus:
+) -> EmailSyncStatus:
     """Report the current email sync job status without exposing provider payloads."""
 
-    return _sync_job_status_from_runtime_status(sync_runtime.current_status())
+    return sync_runtime.current_status()
