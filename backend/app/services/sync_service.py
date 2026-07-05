@@ -161,14 +161,10 @@ def build_backfill_reconciliation_metrics(
         provider_page_count=len(page_tuple),
         provider_message_count=provider_message_count,
         provider_unique_message_count=provider_unique_message_count,
-        provider_duplicate_message_count=(
-            provider_message_count - provider_unique_message_count
-        ),
+        provider_duplicate_message_count=(provider_message_count - provider_unique_message_count),
         local_raw_email_count=local_raw_email_count,
         local_minus_provider_unique_count=local_minus_provider_unique_count,
         missing_local_message_count=missing_local_message_count,
         extra_local_message_count=extra_local_message_count,
-        reconciled=(
-            missing_local_message_count == 0 and extra_local_message_count == 0
-        ),
+        reconciled=(missing_local_message_count == 0 and extra_local_message_count == 0),
     )
