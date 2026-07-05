@@ -5,10 +5,11 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
-from app.db.repositories import BackfillStateRepository
+from app.db.repositories import BackfillStateRepository, SyncStateRepository
 from app.models.records import EmailBackfillStatus
 from app.providers.email import (
     EmailAccountRef,
@@ -23,7 +24,7 @@ from app.providers.email import (
     EmailProviderCursor,
 )
 from app.security import SecretKind, SecretRef
-from app.services.sync_service import BackfillStateService, EmailSyncService
+from app.services.sync_service import BackfillStateService, EmailSyncService, SyncService
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 7, 5, 14, 0, tzinfo=UTC)
@@ -39,8 +40,13 @@ def migrated_connection(tmp_path: Path) -> sqlite3.Connection:
 
 def test_backfill_state_records_page_progress_and_resume_token(tmp_path: Path) -> None:
     account = gmail_account()
-    repository = BackfillStateRepository(migrated_connection(tmp_path))
-    service = BackfillStateService(backfill_state_repository=repository)
+    connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(connection)
+    sync_state_repository = SyncStateRepository(connection)
+    service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=sync_state_repository,
+    )
 
     service.start_or_resume_backfill(account, started_at=NOW)
     progress = service.record_backfill_page(
@@ -56,7 +62,10 @@ def test_backfill_state_records_page_progress_and_resume_token(tmp_path: Path) -
     assert progress.sync_cursor is None
     assert progress.started_at == NOW
 
-    resumed_service = BackfillStateService(backfill_state_repository=repository)
+    resumed_service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=sync_state_repository,
+    )
     resumed = resumed_service.start_or_resume_backfill(
         account,
         started_at=NOW + timedelta(minutes=30),
@@ -73,8 +82,14 @@ def test_backfill_state_marks_completion_and_persists_replacement_cursor(
     tmp_path: Path,
 ) -> None:
     account = gmail_account()
-    repository = BackfillStateRepository(migrated_connection(tmp_path))
-    service = BackfillStateService(backfill_state_repository=repository)
+    connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(connection)
+    sync_state_repository = SyncStateRepository(connection)
+    service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=sync_state_repository,
+    )
+    sync_service = SyncService(sync_state_repository=sync_state_repository)
     sync_cursor = EmailProviderCursor(
         account=account,
         value="history-complete",
@@ -105,11 +120,48 @@ def test_backfill_state_marks_completion_and_persists_replacement_cursor(
     assert completed.cursor_issued_at == NOW + timedelta(minutes=5)
     assert completed.completed_at == NOW + timedelta(minutes=5)
 
+    promoted_cursor = sync_service.get_sync_cursor(account)
+
+    assert promoted_cursor is not None
+    assert promoted_cursor.value == "history-complete"
+    assert promoted_cursor.issued_at == NOW + timedelta(minutes=5)
+
+
+def test_backfill_completion_requires_replacement_sync_cursor(tmp_path: Path) -> None:
+    account = gmail_account()
+    connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(connection)
+    service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=SyncStateRepository(connection),
+    )
+
+    service.start_or_resume_backfill(account, started_at=NOW)
+
+    with pytest.raises(ValueError, match="replacement sync cursor"):
+        service.record_backfill_page(
+            account,
+            page=metadata_page(account, ("msg-1",)),
+            updated_at=NOW + timedelta(seconds=5),
+        )
+
+    state = service.get_backfill_state(account)
+
+    assert state is not None
+    assert state.status is EmailBackfillStatus.RUNNING
+    assert state.processed_page_count == 0
+    assert state.processed_message_count == 0
+
 
 def test_failed_backfill_resumes_from_persisted_page_token(tmp_path: Path) -> None:
     account = gmail_account()
-    repository = BackfillStateRepository(migrated_connection(tmp_path))
-    service = BackfillStateService(backfill_state_repository=repository)
+    connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(connection)
+    sync_state_repository = SyncStateRepository(connection)
+    service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=sync_state_repository,
+    )
 
     service.start_or_resume_backfill(account, started_at=NOW)
     service.record_backfill_page(
@@ -142,35 +194,80 @@ def test_failed_backfill_resumes_from_persisted_page_token(tmp_path: Path) -> No
 
 
 def test_sync_service_uses_persisted_backfill_resume_token(tmp_path: Path) -> None:
-    repository = BackfillStateRepository(migrated_connection(tmp_path))
-    backfill_state_service = BackfillStateService(backfill_state_repository=repository)
+    database_connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(database_connection)
+    backfill_state_service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=SyncStateRepository(database_connection),
+    )
     provider = PaginatedBackfillProvider()
     sync_service = EmailSyncService(provider=provider, page_size=250)
-    connection = email_connection()
+    email_provider_connection = email_connection()
 
     first = asyncio.run(
         sync_service.run_backfill_page(
-            connection=connection,
+            connection=email_provider_connection,
             backfill_state_service=backfill_state_service,
             updated_at=NOW,
         )
     )
+    first_state = backfill_state_service.record_backfill_page(
+        email_provider_connection.account,
+        page=first.page,
+        updated_at=NOW,
+    )
     second = asyncio.run(
         sync_service.run_backfill_page(
-            connection=connection,
+            connection=email_provider_connection,
             backfill_state_service=backfill_state_service,
             updated_at=NOW + timedelta(minutes=1),
         )
     )
+    second_state = backfill_state_service.record_backfill_page(
+        email_provider_connection.account,
+        page=second.page,
+        updated_at=NOW + timedelta(minutes=1),
+    )
 
     assert [request.page_token for request in provider.requests] == [None, "page-2"]
-    assert first.state.status is EmailBackfillStatus.RUNNING
-    assert first.state.next_page_token == "page-2"
-    assert second.state.status is EmailBackfillStatus.COMPLETED
-    assert second.state.next_page_token is None
-    assert second.state.processed_page_count == 2
-    assert second.state.processed_message_count == 2
-    assert second.state.sync_cursor == "history-complete"
+    assert first_state.status is EmailBackfillStatus.RUNNING
+    assert first_state.next_page_token == "page-2"
+    assert second_state.status is EmailBackfillStatus.COMPLETED
+    assert second_state.next_page_token is None
+    assert second_state.processed_page_count == 2
+    assert second_state.processed_message_count == 2
+    assert second_state.sync_cursor == "history-complete"
+
+
+def test_run_backfill_page_does_not_advance_state_before_page_is_recorded(
+    tmp_path: Path,
+) -> None:
+    database_connection = migrated_connection(tmp_path)
+    repository = BackfillStateRepository(database_connection)
+    backfill_state_service = BackfillStateService(
+        backfill_state_repository=repository,
+        sync_state_repository=SyncStateRepository(database_connection),
+    )
+    provider = PaginatedBackfillProvider()
+    sync_service = EmailSyncService(provider=provider, page_size=250)
+    email_provider_connection = email_connection()
+
+    result = asyncio.run(
+        sync_service.run_backfill_page(
+            connection=email_provider_connection,
+            backfill_state_service=backfill_state_service,
+            updated_at=NOW,
+        )
+    )
+
+    state = backfill_state_service.get_backfill_state(email_provider_connection.account)
+
+    assert result.page.next_page_token == "page-2"
+    assert state is not None
+    assert state.status is EmailBackfillStatus.RUNNING
+    assert state.next_page_token is None
+    assert state.processed_page_count == 0
+    assert state.processed_message_count == 0
 
 
 class PaginatedBackfillProvider:

@@ -158,8 +158,17 @@ class EmailSyncStateStatus(BaseModel):
 class BackfillStateService:
     """Business seam for durable full-backfill progress and resumability."""
 
-    def __init__(self, *, backfill_state_repository: BackfillStateRepository) -> None:
+    def __init__(
+        self,
+        *,
+        backfill_state_repository: BackfillStateRepository,
+        sync_state_repository: SyncStateRepository,
+    ) -> None:
+        if backfill_state_repository.connection is not sync_state_repository.connection:
+            msg = "backfill and sync state repositories must share one connection"
+            raise ValueError(msg)
         self._backfill_state_repository = backfill_state_repository
+        self._sync_state_repository = sync_state_repository
 
     def get_backfill_state(self, account: EmailAccountRef) -> EmailBackfillStateRecord | None:
         return self._backfill_state_repository.fetch_state(account)
@@ -211,33 +220,51 @@ class BackfillStateService:
         if existing is None:
             existing = self.start_or_resume_backfill(account, started_at=updated_at)
 
-        sync_cursor = existing.sync_cursor
-        cursor_issued_at = existing.cursor_issued_at
-        if page.next_sync_cursor is not None:
-            sync_cursor = page.next_sync_cursor.value
-            cursor_issued_at = page.next_sync_cursor.issued_at
+        is_final_page = page.next_page_token is None
+        if is_final_page and page.next_sync_cursor is None:
+            msg = "completed backfills require a replacement sync cursor"
+            raise ValueError(msg)
+
+        sync_cursor = page.next_sync_cursor.value if page.next_sync_cursor is not None else None
+        cursor_issued_at = (
+            page.next_sync_cursor.issued_at if page.next_sync_cursor is not None else None
+        )
 
         status = (
             EmailBackfillStatus.RUNNING
             if page.next_page_token is not None
             else EmailBackfillStatus.COMPLETED
         )
-        return self._backfill_state_repository.save_state(
-            EmailBackfillStateRecord(
-                provider=account.provider.value,
-                account_id=account.account_id,
-                status=status,
-                next_page_token=page.next_page_token,
-                processed_page_count=existing.processed_page_count + 1,
-                processed_message_count=existing.processed_message_count + len(page.messages),
-                sync_cursor=sync_cursor,
-                cursor_issued_at=cursor_issued_at,
-                started_at=existing.started_at,
-                updated_at=updated_at,
-                completed_at=updated_at if status is EmailBackfillStatus.COMPLETED else None,
-                last_error=None,
+
+        connection = self._backfill_state_repository.connection
+        should_commit = not connection.in_transaction
+        with self._backfill_state_repository.transaction():
+            record = self._backfill_state_repository.save_state(
+                EmailBackfillStateRecord(
+                    provider=account.provider.value,
+                    account_id=account.account_id,
+                    status=status,
+                    next_page_token=page.next_page_token,
+                    processed_page_count=existing.processed_page_count + 1,
+                    processed_message_count=existing.processed_message_count + len(page.messages),
+                    sync_cursor=sync_cursor,
+                    cursor_issued_at=cursor_issued_at,
+                    started_at=existing.started_at,
+                    updated_at=updated_at,
+                    completed_at=updated_at if status is EmailBackfillStatus.COMPLETED else None,
+                    last_error=None,
+                )
             )
-        )
+            if page.next_sync_cursor is not None and status is EmailBackfillStatus.COMPLETED:
+                self._sync_state_repository.save_cursor(
+                    page.next_sync_cursor,
+                    updated_at=updated_at,
+                )
+
+        if should_commit:
+            connection.commit()
+
+        return record
 
     def mark_backfill_failed(
         self,
@@ -382,11 +409,7 @@ class EmailSyncService:
 
         return EmailBackfillPageResult(
             page=page,
-            state=backfill_state_service.record_backfill_page(
-                connection.account,
-                page=page,
-                updated_at=timestamp,
-            ),
+            state=state,
         )
 
     async def _list_full_backfill_page(
