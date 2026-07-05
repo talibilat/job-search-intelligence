@@ -13,6 +13,8 @@ from .provider import (
     EmailBodyFetchFailureReason,
     EmailBodyFetchRequest,
     EmailBodySource,
+    EmailCandidateQuery,
+    EmailCandidateQueryStrategy,
     EmailConnection,
     EmailMessageBody,
     EmailMessageMetadata,
@@ -27,6 +29,7 @@ from .provider import (
     EmailProviderTransientError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
+    build_broad_candidate_query,
 )
 
 __all__ = [
@@ -41,6 +44,8 @@ __all__ = [
     "EmailBodyFetchFailureReason",
     "EmailBodyFetchRequest",
     "EmailBodySource",
+    "EmailCandidateQuery",
+    "EmailCandidateQueryStrategy",
     "EmailConnection",
     "EmailMessageBody",
     "EmailMessageMetadata",
@@ -55,5 +60,6 @@ __all__ = [
     "EmailProviderTransientError",
     "EmailSyncCursorExpiredError",
     "EmailSyncMode",
+    "build_broad_candidate_query",
     "GmailEmailProvider",
 ]
