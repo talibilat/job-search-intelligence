@@ -105,8 +105,8 @@ Developer instructions:
 ## Local Developer Quickstart
 
 Use this path for a fresh local checkout in the current Phase 1 scaffold.
-The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment exists, but the first schema revision is later Phase 0 work.
-Schema-specific upgrade behavior will apply once that revision lands.
+The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration chain includes sync-state and core schema revisions.
+Schema-specific upgrade behavior applies through `uv run alembic upgrade head`.
 Use this path for a fresh local checkout in Phase 0.
 The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment and first sync-state schema revision exist.
 [JT-020 2026-07-05 v2] The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment can load sqlite-vec for hand-written vector-table revisions.
@@ -250,7 +250,9 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Alembic migration test: `uv run pytest tests/test_alembic_migrations.py -v` from `backend/` verifies the Alembic config, SQLite batch mode, sync migration URL normalization, virtual-table autogenerate exclusion, and SQLite version-table creation.
 - [JT-020 2026-07-05 v2] Alembic migration test: `uv run pytest tests/test_alembic_migrations.py -v` from `backend/` verifies the Alembic config, SQLite batch mode, sync migration URL normalization, virtual-table autogenerate exclusion, SQLite version-table creation, core schema creation, sqlite-vec migration loading, nullable ghost-inferred event email references, and core schema downgrade behavior.
 - Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, shared raw-email retention enum validation, retained-body repr redaction, and the checked-in sample fixture.
+- [JT-020 2026-07-05 v3] Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` also verifies that only `ghost_inferred` events may use `email_id: null`; evidence-backed events require source email references.
 - Synthetic fixture loader test: `uv run pytest tests/test_synthetic_fixture_loader.py -v` from `backend/` verifies JSON fixture loading into the four core SQLite tables, typed per-table load counts, repository reads, and idempotent reloads.
+- [JT-020 2026-07-05 v3] Synthetic fixture loader test: `uv run pytest tests/test_synthetic_fixture_loader.py -v` from `backend/` also verifies loading a `ghost_inferred` application event without an email reference.
 - Backfill reconciliation service: `build_backfill_reconciliation_metrics` compares provider metadata pages with local `raw_emails` rows for one provider, reports provider page count, total and unique provider message counts, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a deterministic `reconciled` flag; `uv run pytest tests/test_sync_service_reconciliation.py -v` verifies duplicate provider paging and missing or extra local rows.
 - Repository stubs: import `EmailRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports, raw-email retention-state invariants, retained-body repr redaction, and row-to-record mapping for Phase 0 table-shaped DTOs.
 - Sync-state persistence test: `uv run pytest tests/test_sync_state.py -v` from `backend/` verifies Alembic creates `email_sync_state`, cursors upsert per provider account, and repository reads require migrated schema.

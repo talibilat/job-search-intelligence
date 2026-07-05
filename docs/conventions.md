@@ -25,6 +25,7 @@ Baseline coding standards for every agent and contributor.
 - Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
 - Raw email repository writes must be idempotent by provider message ID and must preserve existing `retained` or `debugging` body text when later metadata-only reconciliation pages replay the same message.
 - Downstream pipeline code should use `RawEmailRecord.has_retained_body` to test body availability instead of re-checking retention enum values directly.
+- Application event DTOs and schema constraints allow a null `email_id` only for `ghost_inferred` events; evidence-backed events must keep a source email reference.
 - Gmail OAuth setup and future auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, and token material routed through `SecretStore`.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Alembic migrations run in SQLite batch mode; sqlite-vec and other virtual or vector tables are excluded from autogenerate and must be managed by hand-written revisions.
