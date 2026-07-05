@@ -3,8 +3,9 @@
 This guide documents the user-created Google OAuth client needed for Gmail ingestion.
 It maps to FR-0, FR-0.2, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 0.
 
-Concrete Gmail OAuth runtime behavior is deferred to later Gmail ingestion tickets.
-This guide only documents the setup contract the app must follow.
+Gmail message listing currently reads existing OAuth token material only through `SecretStore`.
+Gmail OAuth URL, callback, and token-refresh runtime behavior is deferred to later Gmail ingestion tickets.
+This guide documents the setup and runtime security contract the app must follow.
 
 ## Security Boundaries
 
@@ -88,12 +89,22 @@ The backend config validates that v1 uses only `gmail.readonly`, preserving read
 
 ## Token Storage Contract
 
-When concrete Gmail OAuth behavior lands, OAuth callback codes must be treated as secret values.
-Access tokens and refresh tokens must flow through the existing `SecretStore` seam.
+Current Gmail metadata listing reads access tokens through the existing `SecretStore` seam.
+When Gmail OAuth callback behavior lands, OAuth callback codes must be treated as secret values.
+Access tokens and refresh tokens must continue to flow through `SecretStore`.
 The configured `SecretStore` adapter must store token material encrypted at rest, using OS keyring by default or the documented Fernet fallback.
 
 Provider connection records should persist only non-secret metadata and a `SecretRef` to the stored token.
 Logs, API responses, provider DTO dumps, and test fixtures must not expose raw token values.
+
+## Metadata Listing Boundary
+
+Current Gmail message listing is a safe metadata-only step for broad full backfill.
+It calls Gmail list pages with `maxResults` and `pageToken`, then fetches each listed message with `format=metadata` and Gmail partial fields.
+Those partial fields include message IDs, thread IDs, labels, size estimates, and selected headers (`From`, `To`, `Cc`, `Subject`, `Date`, and `Message-ID`).
+They deliberately exclude snippets, payload bodies, raw MIME content, and attachments.
+
+Incremental sync cursors, retained body fetching, richer normalization, and repository writes remain separate Phase 1 work.
 
 ## Preflight Checklist
 

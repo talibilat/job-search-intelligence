@@ -63,7 +63,7 @@ job-search-intelligence/
 │   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
-│   │   │   ├── email/              # EmailProvider protocol + gmail.py skeleton + retained-body text normalization + future outlook.py/imap.py
+│   │   │   ├── email/              # EmailProvider protocol + gmail.py skeleton/metadata lister + retained-body text normalization + future outlook.py/imap.py
 │   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
