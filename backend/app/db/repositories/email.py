@@ -8,7 +8,7 @@ from app.models.records import RawEmailRecord
 
 
 class EmailRepository(BaseRepository[RawEmailRecord]):
-    """Repository seam for retained raw email records."""
+    """Repository seam for raw email records with typed retention validation."""
 
     def map_row(self, row: sqlite3.Row) -> RawEmailRecord:
         return RawEmailRecord.model_validate(row_to_dict(row))

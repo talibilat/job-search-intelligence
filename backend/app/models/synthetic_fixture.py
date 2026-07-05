@@ -67,7 +67,7 @@ class SyntheticEventType(StrEnum):
 
 
 class SyntheticRawEmail(BaseModel):
-    """Private-data-free raw email row for synthetic fixtures."""
+    """Private-data-free raw email row using the real raw-email retention enum."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 

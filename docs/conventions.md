@@ -19,6 +19,8 @@ Baseline coding standards for every agent and contributor.
 - Sync services persist provider-owned cursors through `SyncStateRepository`, keyed by provider and account, without treating cursor values as OAuth token material or email content.
 - Sync services coordinate provider metadata pagination and must recover from expired incremental cursors by restarting resumable full metadata reconciliation without passing stale cursors into full-backfill requests.
 - Broad job-search candidate selection belongs in provider-neutral DTOs over normalized metadata; provider metadata listing requests must not accept body content, snippets, or provider-specific candidate filters.
+- Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
+[JT-065 2026-07-05 v4] Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
 - Gmail OAuth setup and future auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, and token material routed through `SecretStore`.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Alembic migrations run in SQLite batch mode; sqlite-vec and other virtual or vector tables are excluded from autogenerate and must be managed by hand-written revisions.
