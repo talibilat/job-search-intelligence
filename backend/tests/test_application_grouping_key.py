@@ -24,19 +24,18 @@ def test_application_grouping_key_combines_normalized_company_role_thread_and_wi
     assert first_key.normalized_company == "openai"
     assert first_key.normalized_role == "back end software engineer"
     assert first_key.thread_id == "thread-123"
-    assert first_key.time_window_start is not None
-    assert first_key.time_window_start.isoformat() == "2026-07-03"
+    assert first_key.time_window_start is None
     assert first_key.time_window_days == 30
     assert first_key.as_tuple() == (
         "openai",
         "back end software engineer",
         "thread-123",
-        "2026-07-03",
+        None,
         30,
     )
 
 
-def test_application_grouping_key_preserves_distinct_thread_and_time_signals() -> None:
+def test_application_grouping_key_preserves_distinct_thread_signals() -> None:
     base_key = build_application_grouping_key(
         company="Example Corp",
         role_title="Data Scientist III",
@@ -50,7 +49,7 @@ def test_application_grouping_key_preserves_distinct_thread_and_time_signals() -
         thread_id="thread-b",
         occurred_at=datetime(2026, 7, 5, 10, 0, tzinfo=UTC),
     )
-    different_window_key = build_application_grouping_key(
+    same_thread_later_key = build_application_grouping_key(
         company="Example Corporation",
         role_title="Data Scientist",
         thread_id="thread-a",
@@ -58,7 +57,27 @@ def test_application_grouping_key_preserves_distinct_thread_and_time_signals() -
     )
 
     assert different_thread_key != base_key
+    assert same_thread_later_key == base_key
+
+
+def test_application_grouping_key_uses_time_window_when_thread_is_missing() -> None:
+    base_key = build_application_grouping_key(
+        company="Example Corp",
+        role_title="Data Scientist III",
+        thread_id=None,
+        occurred_at=datetime(2026, 7, 5, 10, 0, tzinfo=UTC),
+    )
+
+    different_window_key = build_application_grouping_key(
+        company="Example Corporation",
+        role_title="Data Scientist",
+        thread_id=None,
+        occurred_at=datetime(2026, 8, 20, 10, 0, tzinfo=UTC),
+    )
+
     assert different_window_key != base_key
+    assert base_key.time_window_start is not None
+    assert base_key.time_window_start.isoformat() == "2026-07-03"
     assert different_window_key.time_window_start is not None
     assert different_window_key.time_window_start.isoformat() == "2026-08-02"
 

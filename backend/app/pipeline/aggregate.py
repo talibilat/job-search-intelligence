@@ -49,11 +49,15 @@ def build_application_grouping_key(
     normalized_company = normalize_company_name(company) if company is not None else ""
     normalized_role = normalize_role_title(role_title)
 
+    normalized_thread_id = _normalize_thread_id(thread_id)
+
     return ApplicationGroupingKey(
         normalized_company=normalized_company or None,
         normalized_role=normalized_role,
-        thread_id=_normalize_thread_id(thread_id),
-        time_window_start=_time_window_start(occurred_at, window_days),
+        thread_id=normalized_thread_id,
+        time_window_start=None
+        if normalized_thread_id is not None
+        else _time_window_start(occurred_at, window_days),
         time_window_days=window_days,
     )
 
