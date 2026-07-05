@@ -125,7 +125,11 @@ class EmailProviderCursor(BaseModel):
 
 
 class EmailCandidateQuery(BaseModel):
-    """Provider-neutral metadata signals for selecting body-retention candidates."""
+    """Provider-neutral metadata signals for selecting body-retention candidates.
+
+    Candidate queries run over normalized metadata after provider listing
+    instead of becoming provider-specific search filters.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -176,7 +180,11 @@ class EmailCandidateQuery(BaseModel):
 
 
 def build_broad_candidate_query() -> EmailCandidateQuery:
-    """Build the default broad job-search candidate query signals."""
+    """Build the default broad job-search candidate query signals.
+
+    The query contains static sender-domain, subject keyword, and excluded-label
+    terms only; it carries no snippets, body text, or private message content.
+    """
 
     return EmailCandidateQuery(
         strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
@@ -228,6 +236,7 @@ class EmailMetadataListRequest(BaseModel):
     `page_token` continues pagination within the current listing run.
     `sync_cursor` is provider-owned incremental state and is required only for
     incremental sync.
+    Candidate filters are intentionally excluded from provider listing requests.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")

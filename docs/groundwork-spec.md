@@ -142,10 +142,11 @@ EmailProvider -> metadata-only raw_emails
                  │
                  ├─ full backfill: paginated metadata pages, no body snippets
                  ├─ incremental sync: provider-owned cursor required
-                 └─ retained bodies fetched only for selected candidate/reconciliation refs
+                 └─ candidate query applied after listing; retained bodies fetched only for selected candidate/reconciliation refs
                  │
                  ▼
    1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
+     - provider-neutral `EmailCandidateQuery` static signals for broad job-search selection
      - known ATS/recruiter sender domains (greenhouse, lever, workday,
        ashby, icims, workable, smartrecruiters, myworkday, ...)
      - keyword signals ("application", "unfortunately", "interview",
@@ -170,6 +171,7 @@ EmailProvider -> metadata-only raw_emails
 ```
 
 `EmailProvider` adapters own provider-specific auth, metadata normalization, pagination, opaque sync cursors, and retained-body fetching.
+Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, and ignores attachment content in v1.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
