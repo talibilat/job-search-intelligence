@@ -178,6 +178,7 @@ class OllamaLLMProvider:
         _validate_local_base_url(settings.ollama_base_url)
         self._chat_model = settings.ollama_chat_model
         self._timeout_seconds = settings.llm_timeout_seconds
+        self._max_retries = settings.llm_max_retries
         self._transport = transport or UrllibOllamaTransport(base_url=settings.ollama_base_url)
 
     async def generate(self, request: LLMGenerationRequest) -> LLMGenerationResponse:
@@ -186,18 +187,26 @@ class OllamaLLMProvider:
             payload=_chat_request_payload(request, default_model=self._chat_model),
             timeout_seconds=self._timeout_seconds,
         )
-        try:
-            response = await self._transport.post_json(transport_request)
-        except OllamaTransportTimeoutError as error:
-            raise LLMProviderTimeoutError(public_message="Ollama request timed out.") from error
-        except OllamaTransportInvalidResponseError as error:
-            raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from error
-        except OllamaTransportError as error:
-            if _is_unavailable_status(error.status_code):
-                raise LLMProviderUnavailableError(
-                    public_message="Ollama is unavailable."
+        for attempt_index in range(self._max_retries + 1):
+            try:
+                response = await self._transport.post_json(transport_request)
+                break
+            except OllamaTransportTimeoutError as error:
+                if attempt_index < self._max_retries:
+                    continue
+                raise LLMProviderTimeoutError(
+                    public_message="Ollama request timed out."
                 ) from error
-            raise LLMProviderRequestError(public_message="Ollama request failed.") from error
+            except OllamaTransportInvalidResponseError as error:
+                raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from error
+            except OllamaTransportError as error:
+                if _is_unavailable_status(error.status_code):
+                    if attempt_index < self._max_retries:
+                        continue
+                    raise LLMProviderUnavailableError(
+                        public_message="Ollama is unavailable."
+                    ) from error
+                raise LLMProviderRequestError(public_message="Ollama request failed.") from error
 
         return _generation_response(response)
 

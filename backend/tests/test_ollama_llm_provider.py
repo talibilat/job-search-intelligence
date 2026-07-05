@@ -51,6 +51,22 @@ class FakeOllamaTransport:
         return self._response
 
 
+class SequencedOllamaTransport:
+    def __init__(self, outcomes: list[OllamaChatResponse | Exception]) -> None:
+        self._outcomes = outcomes
+        self.calls: list[OllamaChatTransportRequest] = []
+
+    async def post_json(
+        self,
+        request: OllamaChatTransportRequest,
+    ) -> OllamaChatResponse:
+        self.calls.append(request)
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
 def _settings() -> AppSettings:
     return AppSettings(
         _env_file=None,
@@ -171,6 +187,28 @@ def test_ollama_provider_maps_length_finish_reason() -> None:
     response = asyncio.run(provider.generate(_generation_request()))
 
     assert response.finish_reason is LLMFinishReason.LENGTH
+
+
+def test_ollama_provider_retries_transient_transport_failures() -> None:
+    transport = SequencedOllamaTransport(
+        [
+            OllamaTransportTimeoutError(),
+            OllamaTransportError(status_code=503),
+            _ollama_response(),
+        ]
+    )
+    provider = OllamaLLMProvider(
+        settings=AppSettings(
+            _env_file=None,
+            llm_max_retries=2,
+        ),
+        transport=transport,
+    )
+
+    response = asyncio.run(provider.generate(_generation_request()))
+
+    assert response.content == "application_confirmation"
+    assert len(transport.calls) == 3
 
 
 def test_ollama_provider_rejects_invalid_response_without_private_payload() -> None:
