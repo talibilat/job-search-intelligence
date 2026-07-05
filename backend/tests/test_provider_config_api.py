@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 from app.api.provider_config import get_provider_registry
-from app.config import AppSettings, EmailProviderName, LLMProviderName, get_settings
+from app.config import (
+    AppSettings,
+    ClassificationMode,
+    EmailProviderName,
+    LLMProviderName,
+    get_settings,
+)
 from app.main import create_app
 from app.providers import (
     EmailProviderRegistration,
@@ -219,6 +225,38 @@ def test_provider_config_update_preselects_hybrid_when_switching_to_azure_openai
     assert response.status_code == 200
     assert response.json()["selection"]["classification_mode"] == "hybrid"
     assert response.json()["recommended_classification_mode"] == "hybrid"
+
+
+def test_provider_config_update_preserves_classification_mode_for_same_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        classification_mode=ClassificationMode.LLM,
+        azure_openai_endpoint="https://example.openai.azure.com",
+        azure_openai_chat_deployment="chat",
+        azure_openai_embedding_deployment="embeddings",
+    )
+    client = TestClient(create_test_app(settings))
+
+    response = client.put(
+        "/config/providers",
+        json={
+            "llm_provider": "azure_openai",
+            "azure_openai_chat_deployment": "updated-chat",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["selection"] == {
+        "email_provider": "gmail",
+        "llm_provider": "azure_openai",
+        "classification_mode": "llm",
+    }
+    assert settings.classification_mode is ClassificationMode.LLM
+    assert settings.azure_openai_chat_deployment == "updated-chat"
 
 
 def test_provider_config_update_reports_missing_provider_settings(

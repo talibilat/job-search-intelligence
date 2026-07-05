@@ -68,7 +68,7 @@ def apply_provider_config_update(
     registry.validate_settings(updated_settings)
 
     fields_to_apply = set(updates)
-    if "llm_provider" in updates and "classification_mode" not in updates:
+    if _llm_provider_changed(settings, updates) and "classification_mode" not in updates:
         fields_to_apply.add("classification_mode")
 
     for field_name in fields_to_apply:
@@ -80,10 +80,14 @@ def apply_provider_config_update(
 def _updated_settings(settings: AppSettings, updates: dict[str, Any]) -> AppSettings:
     values = settings.model_dump()
     values.update(updates)
-    if "llm_provider" in updates and "classification_mode" not in updates:
+    if _llm_provider_changed(settings, updates) and "classification_mode" not in updates:
         candidate_settings = AppSettings(_env_file=None, **values)
         values["classification_mode"] = recommend_classification_mode(candidate_settings)
     return AppSettings(_env_file=None, **values)
+
+
+def _llm_provider_changed(settings: AppSettings, updates: dict[str, Any]) -> bool:
+    return "llm_provider" in updates and updates["llm_provider"] != settings.llm_provider
 
 
 def _config_requirement_response(
