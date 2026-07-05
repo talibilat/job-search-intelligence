@@ -24,6 +24,13 @@ from .types import (
     LLMGenerationOptions,
     LLMGenerationRequest,
     LLMGenerationResponse,
+    LLMMessage,
+    LLMMessageRole,
+    LLMModelHealthCheck,
+    LLMModelHealthStatus,
+    LLMModelKind,
+    LLMProviderHealthCheckRequest,
+    LLMProviderHealthCheckResponse,
     LLMResponseFormat,
     LLMTokenUsage,
 )
@@ -207,6 +214,37 @@ class OllamaLLMProvider:
                 raise LLMProviderRequestError(public_message="Ollama request failed.") from error
 
         return _generation_response(response)
+
+    async def health_check(
+        self,
+        request: LLMProviderHealthCheckRequest,
+    ) -> LLMProviderHealthCheckResponse:
+        await self.generate(
+            LLMGenerationRequest(
+                messages=(
+                    LLMMessage(role=LLMMessageRole.SYSTEM, content="Health check."),
+                    LLMMessage(role=LLMMessageRole.USER, content="Reply with ok."),
+                ),
+                model=request.chat_model,
+                options=LLMGenerationOptions(temperature=0, max_output_tokens=4),
+            )
+        )
+        return LLMProviderHealthCheckResponse(
+            provider_name=self.provider_name,
+            status=LLMModelHealthStatus.AVAILABLE,
+            checks=(
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.CHAT,
+                    model=request.chat_model,
+                    status=LLMModelHealthStatus.AVAILABLE,
+                ),
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.EMBEDDING,
+                    model=request.embedding_model,
+                    status=LLMModelHealthStatus.AVAILABLE,
+                ),
+            ),
+        )
 
 
 def _chat_request_payload(

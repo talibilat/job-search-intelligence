@@ -179,10 +179,13 @@ EmailProvider -> metadata-only raw_emails
                  │  candidates only
                  ▼
    2. classify.py  LLM classify + structured extract  (LLMProvider)
-     - one structured call per candidate -> Pydantic model
-     - fields: company, role, status, dates, salary, location,
-       work_mode, seniority, sponsorship, tech_stack, rejection_reason
-     - store model + prompt_version per row (reproducible re-runs)
+      - one provider-neutral JSON-object request per retained candidate -> Pydantic model
+      - prompt version embedded in the system prompt for reproducible re-runs
+      - fields: company, role, status, dates, salary, location,
+        work_mode, seniority, sponsorship, tech_stack, rejection_reason
+      - malformed JSON, extra fields, invalid enums, contradictory category/status
+        pairs, inverted salary ranges, and extracted non-job data are rejected
+      - store model + prompt_version per row (reproducible re-runs)
                  │
                  ▼
    3. aggregate.py  emails -> applications + application_events (dedup)
@@ -212,6 +215,8 @@ Candidate selection is represented by provider-neutral DTOs and applied to norma
 The same static keyword terms may be applied to already-normalized retained body text when a caller has it, but broad provider metadata listing and body-retention selection remain metadata-only.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
+Classification prompt requests are built by `app.pipeline.classify.build_classification_prompt_request`, require retained email body text, request `LLMResponseFormat.JSON_OBJECT`, use temperature `0`, and embed `CLASSIFICATION_PROMPT_VERSION` in the system prompt.
+Provider responses must pass `app.pipeline.classify.parse_classification_prompt_output` before any downstream classification storage or aggregation.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 
@@ -295,7 +300,7 @@ Phase 1 raw email population tracks `metadata_only`, `retained`, and `debugging`
 Historical retention note: before JT-065, Phase 1 wording described retained bodies for candidate messages without the explicit debugging retention state.
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
-Heuristic filter, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
+Heuristic filter, provider-neutral classification prompt contract, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
 **DoD:** `applications` populated; golden-set classification ≥90% precision AND ≥85% recall on job-vs-not; re-runs idempotent.
 
 **Phase 3 - Dashboard (deterministic)** -> Tiers 1-3 (+ 3.5 diagnostics -> Tier 4)
@@ -318,7 +323,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, ch
 
 - **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** starts with the Phase 0 shell for setup copy, overview sync affordance, and dashboard empty-state coverage; later critical paths add dashboard fixture load and chat citation smoke checks as those pages exist.
-- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `backend/evals/run_eval.py` reports classification precision/recall once the runner lands. Run it whenever the classify prompt/model changes. _This is the one thing that keeps the dashboard honest._
+- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `uv run python -m evals.run_eval` from `backend/` validates records through the classification contract and reports classification precision/recall. Run it whenever the classify prompt, model, categories, or extraction schema changes. _This is the one thing that keeps the dashboard honest._
 
 ---
 

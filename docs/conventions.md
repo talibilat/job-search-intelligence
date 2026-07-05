@@ -9,6 +9,7 @@ Baseline coding standards for every agent and contributor.
 - Cross every boundary with a Pydantic v2 DTO, never a raw dict.
 - Keep core storage DTOs in focused `app.models` domain modules, and preserve stable aggregate imports through `app.models` and `app.models.records` for shared repository and pipeline code.
 - Validate structured LLM output with Pydantic and reject malformed output instead of storing it.
+- Classification provider responses must be parsed through `ClassificationPromptOutput` before any storage or aggregation code can consume extracted fields.
 
 ## Architecture patterns
 
@@ -17,6 +18,7 @@ Baseline coding standards for every agent and contributor.
 - Provider selection metadata belongs in `app.providers.provider_registry`; it declares supported providers, non-secret setting requirements, and `SecretRef` metadata without instantiating adapters or reading secrets.
 - LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
 - Ollama provider adapters must keep local mode local: reject non-local base URLs, do not use HTTP proxy routing for local calls, and map transport failures to public-safe LLM provider errors without prompt or completion content.
+- Classification prompt requests go through `app.pipeline.classify.build_classification_prompt_request`, request `LLMResponseFormat.JSON_OBJECT`, embed `CLASSIFICATION_PROMPT_VERSION`, and send only retained email candidate fields needed for classification.
 - `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, normalize retained HTML bodies to plain text, reject raw HTML retention fields, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
 - Gmail metadata listing must keep full backfill and incremental sync metadata-only: use message list pages for full backfill, `users.history.list` `messageAdded` records for incremental sync, withhold replacement history cursors until paginated listing is fully drained, and map Gmail history `404` responses to expired-cursor recovery.
 - Sync services persist provider-owned cursors through `SyncStateRepository`, keyed by provider and account, without treating cursor values as OAuth token material or email content.
@@ -72,7 +74,7 @@ Baseline coding standards for every agent and contributor.
 - Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Frontend browser smoke changes: run `npm run test:smoke` from `frontend/` after installing Chromium with `npx playwright install chromium` once per machine.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
-- Classification changes: run the golden-set eval when the runner exists; regressions block merges unless explicitly accepted.
+- Classification changes: run `uv run python -m evals.run_eval` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
 - Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.
