@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import Protocol, cast, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
+from app.providers.email.html_normalization import (
+    email_body_contains_html,
+    normalize_email_html_to_text,
+)
 from app.security import SecretRef
 
 
@@ -24,6 +28,8 @@ class EmailAttachmentPolicy(StrEnum):
 
 
 class EmailBodySource(StrEnum):
+    """Source format used to produce retained plain-text body content."""
+
     TEXT_PLAIN = "text_plain"
     HTML_CONVERTED = "html_converted"
     EMPTY = "empty"
@@ -310,14 +316,42 @@ class EmailBodyFetchRequest(BaseModel):
 
 
 class EmailMessageBody(BaseModel):
-    """Provider-normalized retained plain-text body content."""
+    """Provider-normalized retained plain-text body content.
 
-    model_config = ConfigDict(frozen=True)
+    HTML source bodies are converted to normalized text before this DTO is
+    retained, and raw HTML fields or mislabelled HTML text are rejected.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
     ref: EmailMessageRef
     body_text: str = Field(repr=False)
     body_source: EmailBodySource
     truncated: bool
     fetched_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_html_body_source(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+
+        body_data = cast(dict[str, object], data)
+        body_source = body_data.get("body_source")
+        body_text = body_data.get("body_text")
+        is_html_source = body_source in {
+            EmailBodySource.HTML_CONVERTED,
+            EmailBodySource.HTML_CONVERTED.value,
+        }
+        if not isinstance(body_text, str):
+            return data
+        if is_html_source:
+            normalized_data = body_data.copy()
+            normalized_data["body_text"] = normalize_email_html_to_text(body_text)
+            return normalized_data
+        if email_body_contains_html(body_text):
+            msg = "plain-text email bodies must not contain raw HTML"
+            raise ValueError(msg)
+        return data
 
 
 class EmailBodyFetchFailure(BaseModel):
@@ -399,5 +433,5 @@ class EmailProvider(Protocol):
         connection: EmailConnection,
         request: EmailBodyFetchRequest,
     ) -> EmailBodyBatch:
-        """Return normalized body text for selected messages, ignoring attachments."""
+        """Return normalized plain text for selected messages, ignoring attachments."""
         ...

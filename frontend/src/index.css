@@ -251,6 +251,104 @@ h3 {
   margin-top: 18px;
 }
 
+.dashboard-shell {
+  display: grid;
+  gap: 24px;
+}
+
+.dashboard-hero {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: 36px;
+  border: 1px solid #d8d0bf;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top right, rgb(63 107 82 / 18%), transparent 34%),
+    #fffaf0;
+  box-shadow: 0 24px 70px rgb(36 50 38 / 10%);
+}
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+  gap: 24px;
+  min-width: 0;
+}
+
+.dashboard-filter-panel,
+.dashboard-card {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid #d8d0bf;
+  border-radius: 28px;
+  background: #fffdf7;
+}
+
+.dashboard-filter-panel p:not(.eyebrow),
+.dashboard-card__meta {
+  margin-bottom: 0;
+  color: #4e5e53;
+}
+
+.filter-placeholder-list,
+.dashboard-metric-grid {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.filter-placeholder-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.filter-placeholder-list li,
+.metric-placeholder {
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #edf6eb;
+  color: #203f2c;
+  overflow-wrap: anywhere;
+}
+
+.filter-placeholder-list li {
+  font-weight: 800;
+}
+
+.dashboard-metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-placeholder {
+  display: grid;
+  gap: 8px;
+}
+
+.metric-placeholder__label,
+.metric-placeholder__value {
+  margin-bottom: 0;
+}
+
+.metric-placeholder__label {
+  color: #3f6b52;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric-placeholder__value {
+  color: #102417;
+  font-size: clamp(1.7rem, 4vw, 2.5rem);
+  font-weight: 900;
+  letter-spacing: -0.06em;
+}
+
 @media (max-width: 720px) {
   .app-nav {
     align-items: flex-start;
@@ -279,5 +377,17 @@ h3 {
 
   .chart-empty-state {
     padding: 24px;
+  }
+
+  .dashboard-hero,
+  .dashboard-filter-panel,
+  .dashboard-card {
+    padding: 24px;
+  }
+
+  .dashboard-layout,
+  .filter-placeholder-list,
+  .dashboard-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
