@@ -75,6 +75,9 @@ describe("App", () => {
         name: /ask your job search history/i,
       }),
     ).toBeTruthy();
+    expect(
+      screen.getByRole("main", { name: /ask your job search history/i }),
+    ).toBeTruthy();
     expect(screen.getByRole("textbox", { name: /message/i })).toHaveProperty(
       "disabled",
       true,

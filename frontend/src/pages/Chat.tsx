@@ -1,6 +1,6 @@
 function Chat() {
   return (
-    <main className="app-shell chat-shell">
+    <main className="app-shell chat-shell" aria-labelledby="page-title">
       <section className="hero chat-hero" aria-labelledby="page-title">
         <p className="eyebrow">Phase 0 chat route shell</p>
         <h1 id="page-title">Ask your job search history.</h1>
