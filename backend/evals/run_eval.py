@@ -2,144 +2,190 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Literal
 
-from app.pipeline.classify import parse_classification_prompt_output
+from pydantic import BaseModel, Field, ValidationError
 
-DEFAULT_GOLDEN_SET_PATH = Path(__file__).with_name("golden_set.jsonl")
-PRECISION_THRESHOLD = 0.90
-RECALL_THRESHOLD = 0.85
+from app.pipeline.classify import AcceptedLLMExtraction, parse_llm_extraction_response
+from app.providers.llm import LLMGenerationResponse
+
+MIN_PRECISION = 0.90
+MIN_RECALL = 0.85
+DEFAULT_FIXTURE_PATH = Path(__file__).with_name("golden_set.jsonl")
+DEFAULT_PROMPT_VERSION = "classification-golden-set-v1"
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Run the classification prompt golden-set eval.",
+class GoldenSetEntry(BaseModel):
+    email_id: str = Field(min_length=1)
+    expected_is_job_related: bool
+    llm_response: LLMGenerationResponse
+    prompt_version: str = Field(default=DEFAULT_PROMPT_VERSION, min_length=1)
+
+
+class GoldenSetExpectedClassification(BaseModel):
+    is_job_related: bool
+    category: str = Field(min_length=1)
+
+
+class GoldenSetCase(BaseModel):
+    schema_version: Literal["1"]
+    case_id: str = Field(min_length=1)
+    contains_private_data: Literal[False]
+    expected: GoldenSetExpectedClassification
+
+
+class EvalReport(BaseModel):
+    total: int = Field(ge=0)
+    true_positives: int = Field(ge=0)
+    false_positives: int = Field(ge=0)
+    true_negatives: int = Field(ge=0)
+    false_negatives: int = Field(ge=0)
+    precision: float = Field(ge=0, le=1)
+    recall: float = Field(ge=0, le=1)
+    passed: bool
+
+    def to_text(self) -> str:
+        status = "passed" if self.passed else "failed"
+        return "\n".join(
+            [
+                f"status: {status}",
+                f"total: {self.total}",
+                f"precision: {self.precision:.3f}",
+                f"recall: {self.recall:.3f}",
+                f"true_positives: {self.true_positives}",
+                f"false_positives: {self.false_positives}",
+                f"true_negatives: {self.true_negatives}",
+                f"false_negatives: {self.false_negatives}",
+                f"pass: {str(self.passed).lower()}",
+            ]
+        )
+
+
+def evaluate_golden_set(
+    fixture_path: Path = DEFAULT_FIXTURE_PATH,
+    *,
+    min_precision: float = MIN_PRECISION,
+    min_recall: float = MIN_RECALL,
+) -> EvalReport:
+    entries = load_golden_set(fixture_path)
+    true_positives = 0
+    false_positives = 0
+    true_negatives = 0
+    false_negatives = 0
+    classified_at = datetime.now(UTC)
+
+    for entry in entries:
+        result = parse_llm_extraction_response(
+            email_id=entry.email_id,
+            response=entry.llm_response,
+            prompt_version=entry.prompt_version,
+            classified_at=classified_at,
+        )
+        predicted_is_job_related = (
+            isinstance(result, AcceptedLLMExtraction)
+            and result.classification.is_job_related
+        )
+
+        if predicted_is_job_related and entry.expected_is_job_related:
+            true_positives += 1
+        elif predicted_is_job_related and not entry.expected_is_job_related:
+            false_positives += 1
+        elif not predicted_is_job_related and entry.expected_is_job_related:
+            false_negatives += 1
+        else:
+            true_negatives += 1
+
+    predicted_positives = true_positives + false_positives
+    expected_positives = true_positives + false_negatives
+    precision = true_positives / predicted_positives if predicted_positives else 0.0
+    recall = true_positives / expected_positives if expected_positives else 0.0
+
+    return EvalReport(
+        total=len(entries),
+        true_positives=true_positives,
+        false_positives=false_positives,
+        true_negatives=true_negatives,
+        false_negatives=false_negatives,
+        precision=precision,
+        recall=recall,
+        passed=precision >= min_precision and recall >= min_recall,
+    )
+
+
+def load_golden_set(fixture_path: Path) -> list[GoldenSetEntry]:
+    entries: list[GoldenSetEntry] = []
+    for line_number, line in enumerate(fixture_path.read_text(encoding="utf-8").splitlines(), 1):
+        stripped_line = line.strip()
+        if not stripped_line:
+            continue
+        try:
+            raw_entry = json.loads(stripped_line)
+        except json.JSONDecodeError as exc:
+            msg = f"{fixture_path}:{line_number}: invalid JSON"
+            raise ValueError(msg) from exc
+        try:
+            entries.append(_golden_set_entry_from_json(raw_entry))
+        except ValidationError as exc:
+            msg = f"{fixture_path}:{line_number}: invalid golden-set entry"
+            raise ValueError(msg) from exc
+
+    if not entries:
+        msg = f"{fixture_path}: golden set is empty"
+        raise ValueError(msg)
+    return entries
+
+
+def _golden_set_entry_from_json(raw_entry: object) -> GoldenSetEntry:
+    try:
+        return GoldenSetEntry.model_validate(raw_entry)
+    except ValidationError:
+        pass
+
+    case = GoldenSetCase.model_validate(raw_entry)
+    return GoldenSetEntry(
+        email_id=case.case_id,
+        expected_is_job_related=case.expected.is_job_related,
+        llm_response=_synthetic_llm_response_from_case(case),
+    )
+
+
+def _synthetic_llm_response_from_case(case: GoldenSetCase) -> LLMGenerationResponse:
+    return LLMGenerationResponse(
+        content=json.dumps(
+            {
+                "is_job_related": case.expected.is_job_related,
+                "category": case.expected.category,
+                "confidence": 1.0,
+            }
+        ),
+        model="synthetic-golden-set",
+        finish_reason="stop",
+    )
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Run the classification golden-set eval.")
+    parser.add_argument(
+        "fixture_path",
+        nargs="?",
+        type=Path,
+        default=None,
     )
     parser.add_argument(
         "--golden-set",
         type=Path,
-        default=DEFAULT_GOLDEN_SET_PATH,
-        help="Path to a JSONL golden set with expected labels and prompt outputs.",
+        default=None,
+        help="Path to the classification golden-set JSONL fixture.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    report = run_eval(args.golden_set)
-    passed = report["precision"] >= PRECISION_THRESHOLD and report["recall"] >= RECALL_THRESHOLD
-
-    print(f"examples: {report['examples']}")
-    print(f"true_positives: {report['true_positives']}")
-    print(f"false_positives: {report['false_positives']}")
-    print(f"false_negatives: {report['false_negatives']}")
-    print(f"precision: {report['precision']:.3f}")
-    print(f"recall: {report['recall']:.3f}")
-    print(f"pass: {str(passed).lower()}")
-
-    return 0 if passed else 1
-
-
-def run_eval(golden_set_path: Path) -> dict[str, int | float]:
-    true_positives = 0
-    false_positives = 0
-    false_negatives = 0
-    examples = 0
-
-    for line_number, record in _load_jsonl(golden_set_path):
-        expected, output = _coerce_eval_record(record, golden_set_path, line_number)
-
-        parsed = parse_classification_prompt_output(json.dumps(output))
-        predicted = parsed.is_job_related
-        examples += 1
-
-        if predicted and expected:
-            true_positives += 1
-        elif predicted and not expected:
-            false_positives += 1
-        elif not predicted and expected:
-            false_negatives += 1
-
-    if examples == 0:
-        msg = f"{golden_set_path} has no eval examples"
-        raise ValueError(msg)
-
-    precision_denominator = true_positives + false_positives
-    recall_denominator = true_positives + false_negatives
-
-    precision = true_positives / precision_denominator if precision_denominator else 0.0
-    recall = true_positives / recall_denominator if recall_denominator else 0.0
-
-    return {
-        "examples": examples,
-        "true_positives": true_positives,
-        "false_positives": false_positives,
-        "false_negatives": false_negatives,
-        "precision": precision,
-        "recall": recall,
-    }
-
-
-def _load_jsonl(path: Path) -> list[tuple[int, dict[str, Any]]]:
-    records: list[tuple[int, dict[str, Any]]] = []
-    with path.open(encoding="utf-8") as file:
-        for line_number, line in enumerate(file, start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
-
-            record = json.loads(stripped)
-            if not isinstance(record, dict):
-                msg = f"{path}:{line_number} must contain a JSON object"
-                raise ValueError(msg)
-
-            records.append((line_number, record))
-
-    return records
-
-
-def _coerce_eval_record(
-    record: dict[str, Any],
-    path: Path,
-    line_number: int,
-) -> tuple[bool, dict[str, Any]]:
-    expected = record.get("expected_is_job_related")
-    output = record.get("prompt_output")
-    if isinstance(expected, bool) and isinstance(output, dict):
-        return expected, output
-
-    expected_record = record.get("expected")
-    if not isinstance(expected_record, dict):
-        msg = f"{path}:{line_number} expected must be an object"
-        raise ValueError(msg)
-
-    expected = expected_record.get("is_job_related")
-    if not isinstance(expected, bool):
-        msg = f"{path}:{line_number} expected.is_job_related must be boolean"
-        raise ValueError(msg)
-
-    category = expected_record.get("category")
-    if not isinstance(category, str):
-        msg = f"{path}:{line_number} expected.category must be string"
-        raise ValueError(msg)
-
-    return expected, {
-        "is_job_related": expected,
-        "category": category,
-        "confidence": 1.0,
-        "company": None,
-        "role_title": None,
-        "application_status": None,
-        "event_type": None,
-        "event_at": None,
-        "salary_min": None,
-        "salary_max": None,
-        "currency": None,
-        "location": None,
-        "work_mode": None,
-        "seniority": None,
-        "sponsorship": "unknown",
-        "tech_stack": [],
-        "rejection_reason": None,
-    }
+    fixture_path = args.golden_set or args.fixture_path or DEFAULT_FIXTURE_PATH
+    report = evaluate_golden_set(fixture_path)
+    print(report.to_text())
+    return 0 if report.passed else 1
 
 
 if __name__ == "__main__":
