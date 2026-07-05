@@ -3,7 +3,7 @@
 This guide explains the values a user needs before the first-run setup wizard can configure an LLM provider.
 It maps to FR-0, FR-6, NFR-5, NFR-8, and Phase 0.
 
-The current Phase 0 app has a typed provider registry and setup status shell.
+The current Phase 0 app has a typed provider registry, setup status shell, and Gmail OAuth setup action.
 Concrete Azure OpenAI and Ollama adapters are implemented in later provider tickets, so this document is the setup contract for those screens and adapters.
 The current backend has the `SecretStore` protocol, backend selector settings, the default keyring adapter, and the encrypted Fernet fallback.
 

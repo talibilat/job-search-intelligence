@@ -4,7 +4,8 @@ This guide documents the user-created Google OAuth client needed for Gmail inges
 It maps to FR-0, FR-0.2, FR-1.1, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 1.
 
 Gmail message listing and retained-body fetching read OAuth token material only through `SecretStore`.
-The backend can start Gmail OAuth with `GET /auth/gmail` and complete the local callback with `GET /auth/gmail/callback`.
+The setup page can start Gmail OAuth through `GET /auth/gmail`, show the backend-built Google authorization URL, and report callback completion from `GET /setup/status`.
+The backend completes the local callback with `GET /auth/gmail/callback`.
 The callback exchanges the authorization code, validates the returned `gmail.readonly` scope, stores token material through the configured `SecretStore`, and persists only non-secret connection metadata in SQLite.
 Default sync resolves the latest non-reauth Gmail connection metadata from SQLite, runs full backfill until the replacement history cursor is promoted, and then uses the persisted incremental cursor on later syncs.
 Token refresh remains later Gmail ingestion work.
@@ -92,7 +93,10 @@ The backend config validates that v1 uses only `gmail.readonly`, preserving read
 
 ## Start Gmail Authorization
 
-After the backend is running and `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` points to your downloaded Desktop client JSON, request an authorization URL from the backend:
+After the backend is running and `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` points to your downloaded Desktop client JSON, open `http://127.0.0.1:5173/setup` and use `Start Gmail OAuth` to request an authorization URL from the backend.
+The setup page shows a `Continue to Google` link and the requested `gmail.readonly` scope.
+
+You can also request the same authorization URL directly from the backend:
 
 ```sh
 curl http://127.0.0.1:8000/auth/gmail
@@ -109,7 +113,7 @@ The response contains the provider, requested scopes, OAuth state, and Google au
 }
 ```
 
-Open the `authorization_url` in your browser to authorize Gmail read-only access.
+Open the `authorization_url`, or use the setup page's `Continue to Google` link, to authorize Gmail read-only access.
 The backend does not return the Google client secret, access tokens, refresh tokens, or authorization codes from this endpoint.
 If the client JSON is missing, unreadable, or invalid, the endpoint returns the standard typed `400` API error with a public-safe message.
 
@@ -139,6 +143,8 @@ Example response shape:
 The response never includes the raw authorization code, Google client secret, access token, or refresh token.
 OAuth callback provider auth failures return typed `400` errors, transient Google failures return `503`, and other provider failures return `502` with public-safe messages.
 Metadata-listing provider failures return typed `401`, `403`, `409`, `429`, `502`, or `503` errors with stable email-specific error codes and a `user_action` detail.
+After callback metadata is persisted, `GET /setup/status` reports `gmail_connected: true` and the setup page shows `Gmail callback complete`.
+Before migrations or OAuth have created `email_connections`, setup status safely reports `gmail_connected: false`.
 
 ## Token Storage Contract
 
@@ -185,7 +191,9 @@ Manual sync stores retained bodies for broad job-search candidate messages after
 - The downloaded client JSON is outside the repository.
 - `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` points to that file if you did not use the default path.
 - The only Gmail scope is `https://www.googleapis.com/auth/gmail.readonly`.
+- The `/setup` page can start Gmail OAuth and must show only the backend-built authorization URL, requested scope, and non-secret setup status.
 - `GET /auth/gmail` returns a Google authorization URL and never returns client secrets or tokens.
 - `GET /auth/gmail/callback` returns only non-secret connection metadata and stores token material through `SecretStore`.
+- `GET /setup/status` reports Gmail connected only from persisted non-secret connection metadata.
 - `POST /sync` uses the persisted non-secret Gmail connection metadata and keeps OAuth token material behind `SecretStore`.
 - No credentials, tokens, client JSON, or secret-store files are committed or logged.
