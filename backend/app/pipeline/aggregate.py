@@ -10,7 +10,12 @@ DEFAULT_APPLICATION_GROUPING_WINDOW_DAYS = 30
 
 
 class ApplicationGroupingKey(BaseModel):
-    """Deterministic application identity signals used by aggregation."""
+    """Deterministic application identity signals used by aggregation.
+
+    Thread IDs are opaque provider-owned values. When a thread signal is present,
+    aggregation uses it instead of a date window; otherwise the key falls back to
+    a UTC date-window bucket.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -40,7 +45,7 @@ def build_application_grouping_key(
     occurred_at: datetime | None,
     window_days: int = DEFAULT_APPLICATION_GROUPING_WINDOW_DAYS,
 ) -> ApplicationGroupingKey:
-    """Combine extracted application fields into a deterministic grouping key."""
+    """Build a deterministic key from normalized application identity signals."""
 
     if window_days <= 0:
         msg = "window_days must be positive"
