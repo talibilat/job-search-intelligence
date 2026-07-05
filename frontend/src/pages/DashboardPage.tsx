@@ -4,6 +4,7 @@ const filterPlaceholders = [
   "Status",
   "Date range",
   "Role",
+  "Salary band",
   "Source",
   "Sponsorship",
   "Work mode",
