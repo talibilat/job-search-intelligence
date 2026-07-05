@@ -8,20 +8,30 @@ function renderAtPath(pathname: string) {
   return render(<App />);
 }
 
-type MockResponseConfig =
-  | object
+type MockResponseBody = Record<string, unknown>;
+
+type MockResponse =
+  | MockResponseBody
   | {
-      body: object;
+      body: MockResponseBody;
       status: number;
     };
 
+type MockResponseConfig = MockResponse | MockResponse[];
+
 function isMockResponseConfig(
-  value: MockResponseConfig,
+  value: MockResponse,
 ): value is { body: object; status: number } {
   return "body" in value && "status" in value;
 }
 
 function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
+  const responseQueues = new Map<string, MockResponse[]>();
+
+  for (const [path, response] of Object.entries(responses)) {
+    responseQueues.set(path, Array.isArray(response) ? [...response] : [response]);
+  }
+
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url =
       typeof input === "string"
@@ -30,14 +40,20 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
           ? input.href
           : input.url;
     const path = url.startsWith("http") ? new URL(url).pathname : url;
-    const config = responses[path];
+    const config = responseQueues.get(path);
 
     if (!config) {
       throw new Error(`Unhandled fetch request: ${path}`);
     }
 
-    const body = isMockResponseConfig(config) ? config.body : config;
-    const status = isMockResponseConfig(config) ? config.status : 200;
+    const nextConfig = config.length > 1 ? config.shift() : config[0];
+
+    if (!nextConfig) {
+      throw new Error(`No mock fetch responses left for: ${path}`);
+    }
+
+    const body = isMockResponseConfig(nextConfig) ? nextConfig.body : nextConfig;
+    const status = isMockResponseConfig(nextConfig) ? nextConfig.status : 200;
 
     return Promise.resolve(
       new Response(JSON.stringify(body), {
@@ -53,6 +69,7 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   window.history.pushState({}, "", "/");
 });
@@ -145,6 +162,41 @@ describe("App", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Gmail connection is not configured yet.",
+    );
+  });
+
+  it("refreshes running sync status until the sync action is available again", async () => {
+    mockFetchResponses({
+      "/sync/status": [
+        {
+          message_count: 1,
+          raw_email_count: 1,
+          state: "running",
+        },
+        {
+          finished_at: "2026-07-05T12:00:00Z",
+          message_count: 3,
+          raw_email_count: 3,
+          state: "succeeded",
+        },
+      ],
+    });
+
+    renderAtPath("/");
+
+    expect(await screen.findByText("Sync is running")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Syncing" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    expect(
+      await screen.findByText("Last sync succeeded", {}, { timeout: 4000 }),
+    ).toBeTruthy();
+    expect(screen.getByText("3 messages")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sync now" })).toHaveProperty(
+      "disabled",
+      false,
     );
   });
 

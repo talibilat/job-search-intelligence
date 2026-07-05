@@ -26,6 +26,8 @@ const navigationItems = [
   { href: "/chat", label: "Chat" },
 ] as const;
 
+const syncStatusPollIntervalMs = 3000;
+
 function apiErrorMessage(data: unknown, fallback: string) {
   if (
     typeof data === "object" &&
@@ -113,6 +115,37 @@ function SyncActionPanel() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (syncStatus?.state !== "running") {
+      return undefined;
+    }
+
+    let ignore = false;
+    const intervalId = window.setInterval(() => {
+      async function loadSyncStatus() {
+        try {
+          const response = await syncStatusSyncStatusGet();
+          if (!ignore) {
+            setSyncStatus(response.data);
+          }
+        } catch {
+          if (!ignore) {
+            setSyncError(
+              "Sync status is unavailable. Start the local backend before syncing.",
+            );
+          }
+        }
+      }
+
+      void loadSyncStatus();
+    }, syncStatusPollIntervalMs);
+
+    return () => {
+      ignore = true;
+      window.clearInterval(intervalId);
+    };
+  }, [syncStatus?.state]);
 
   async function handleSyncNow() {
     setIsSyncing(true);
