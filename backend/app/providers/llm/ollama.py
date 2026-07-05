@@ -7,7 +7,7 @@ from ipaddress import ip_address
 from typing import Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import OpenerDirector, ProxyHandler, Request, build_opener
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -56,8 +56,9 @@ class OllamaTransportInvalidResponseError(RuntimeError):
 
 
 class UrllibOllamaTransport:
-    def __init__(self, *, base_url: str) -> None:
+    def __init__(self, *, base_url: str, opener: OpenerDirector | None = None) -> None:
         self._base_url = base_url.rstrip("/")
+        self._opener = opener or build_opener(ProxyHandler({}))
 
     async def post_json(
         self,
@@ -86,7 +87,10 @@ class UrllibOllamaTransport:
         )
 
         try:
-            with urlopen(http_request, timeout=transport_request.timeout_seconds) as response:
+            with self._opener.open(
+                http_request,
+                timeout=transport_request.timeout_seconds,
+            ) as response:
                 response_body = response.read()
         except TimeoutError as error:
             raise OllamaTransportTimeoutError from error

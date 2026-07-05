@@ -26,6 +26,7 @@ from app.providers.llm.ollama import (
     OllamaTransportError,
     OllamaTransportInvalidResponseError,
     OllamaTransportTimeoutError,
+    UrllibOllamaTransport,
 )
 
 
@@ -213,6 +214,43 @@ def test_llm_provider_dependency_resolves_selected_ollama_provider() -> None:
     assert provider.provider_name == "ollama"
 
 
+def test_llm_provider_dependency_maps_invalid_ollama_config_to_api_error() -> None:
+    from app.api.dependencies import get_llm_provider
+    from app.api.errors import ApiError, ApiErrorCode
+
+    with pytest.raises(ApiError) as error_info:
+        get_llm_provider(
+            AppSettings(
+                _env_file=None,
+                ollama_base_url="https://ollama.example.com",
+            )
+        )
+
+    assert error_info.value.status_code == 400
+    assert error_info.value.code is ApiErrorCode.BAD_REQUEST
+    assert error_info.value.message == "Ollama base URL must point to a local host."
+
+
+def test_urllib_transport_builds_proxy_disabled_opener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proxy_handlers: list[FakeProxyHandler] = []
+
+    class FakeOpener:
+        pass
+
+    def fake_build_opener(handler: FakeProxyHandler) -> FakeOpener:
+        proxy_handlers.append(handler)
+        return FakeOpener()
+
+    monkeypatch.setattr("app.providers.llm.ollama.ProxyHandler", FakeProxyHandler)
+    monkeypatch.setattr("app.providers.llm.ollama.build_opener", fake_build_opener)
+
+    UrllibOllamaTransport(base_url="http://127.0.0.1:11434")
+
+    assert [handler.proxies for handler in proxy_handlers] == [{}]
+
+
 @pytest.mark.parametrize(
     ("transport_error", "expected_error", "public_message"),
     [
@@ -248,3 +286,8 @@ def test_ollama_provider_maps_transport_errors(
 
     assert str(error_info.value) == public_message
     assert "synthetic job email" not in str(error_info.value)
+
+
+class FakeProxyHandler:
+    def __init__(self, proxies: dict[str, str]) -> None:
+        self.proxies = proxies
