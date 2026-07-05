@@ -174,28 +174,6 @@ class MalformedLLMExtraction(BaseModel):
 type LLMExtractionResult = AcceptedLLMExtraction | MalformedLLMExtraction
 
 
-class _LLMExtractionPayload(JobApplicationExtraction):
-    is_job_related: bool
-    category: JobEmailCategory
-    confidence: float = Field(ge=0, le=1)
-
-    @field_validator("is_job_related", mode="before")
-    @classmethod
-    def require_boolean_classification(cls, value: object) -> object:
-        if not isinstance(value, bool):
-            msg = "is_job_related must be a JSON boolean"
-            raise ValueError(msg)
-        return value
-
-    @field_validator("confidence", mode="before")
-    @classmethod
-    def require_numeric_confidence(cls, value: object) -> object:
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            msg = "confidence must be a JSON number"
-            raise ValueError(msg)
-        return float(value)
-
-
 def build_classification_prompt_request(
     email: ClassificationPromptEmail,
     *,
@@ -312,7 +290,7 @@ def parse_llm_extraction_response(
         return raw_payload
 
     try:
-        payload = _LLMExtractionPayload.model_validate(raw_payload)
+        payload = ClassificationPromptOutput.model_validate(raw_payload)
         classification = EmailClassificationRecord(
             email_id=email_id,
             is_job_related=payload.is_job_related,
@@ -321,6 +299,22 @@ def parse_llm_extraction_response(
             model=response.model,
             prompt_version=prompt_version,
             classified_at=classified_at,
+        )
+        extraction = JobApplicationExtraction(
+            company=payload.company,
+            role_title=payload.role_title,
+            status=payload.application_status,
+            event_type=payload.event_type,
+            event_at=payload.event_at,
+            salary_min=payload.salary_min,
+            salary_max=payload.salary_max,
+            currency=payload.currency,
+            location=payload.location,
+            work_mode=payload.work_mode,
+            seniority=payload.seniority,
+            sponsorship=payload.sponsorship,
+            tech_stack=list(payload.tech_stack),
+            rejection_reason=payload.rejection_reason,
         )
     except ValidationError:
         return _malformed_result(
@@ -331,11 +325,6 @@ def parse_llm_extraction_response(
             message="LLM response failed structured extraction validation.",
         )
 
-    extraction = JobApplicationExtraction.model_validate(
-        payload.model_dump(
-            exclude={"is_job_related", "category", "confidence"},
-        ),
-    )
     return AcceptedLLMExtraction(classification=classification, extraction=extraction)
 
 

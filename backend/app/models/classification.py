@@ -5,13 +5,14 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator, model_validator
 
 from app.config import ClassificationMode, EmailProviderName, LLMProviderName
 from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
 from app.models.event import ApplicationEventType
 
-NonEmptyString = Annotated[str, Field(min_length=1)]
+NonEmptyString = Annotated[StrictStr, Field(min_length=1)]
+CurrencyCode = Annotated[StrictStr, Field(min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")]
 
 
 class JobEmailCategory(StrEnum):
@@ -116,25 +117,25 @@ class ClassificationRunRecord(BaseModel):
 class ClassificationPromptOutput(BaseModel):
     """Structured LLM output expected from the classification prompt."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
 
     is_job_related: bool
     category: JobEmailCategory
     confidence: float = Field(ge=0, le=1)
-    company: str | None = Field(min_length=1)
-    role_title: str | None = Field(min_length=1)
+    company: NonEmptyString | None
+    role_title: NonEmptyString | None
     application_status: ApplicationStatus | None
     event_type: ApplicationEventType | None
     event_at: datetime | None
     salary_min: int | None = Field(ge=0)
     salary_max: int | None = Field(ge=0)
-    currency: str | None = Field(min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
-    location: str | None = Field(min_length=1)
+    currency: CurrencyCode | None
+    location: NonEmptyString | None
     work_mode: WorkMode | None
-    seniority: str | None = Field(min_length=1)
+    seniority: NonEmptyString | None
     sponsorship: SponsorshipStatus
     tech_stack: tuple[NonEmptyString, ...]
-    rejection_reason: str | None = Field(min_length=1)
+    rejection_reason: NonEmptyString | None
 
     @field_validator("is_job_related", mode="before")
     @classmethod
@@ -178,6 +179,13 @@ class ClassificationPromptOutput(BaseModel):
             return stripped_value
         return value
 
+    @field_validator("tech_stack", mode="before")
+    @classmethod
+    def strip_tech_stack_items(cls, value: object) -> object:
+        if isinstance(value, list | tuple):
+            return [item.strip() if isinstance(item, str) else item for item in value]
+        return value
+
     @model_validator(mode="after")
     def validate_extraction_shape(self) -> Self:
         if (
@@ -190,20 +198,12 @@ class ClassificationPromptOutput(BaseModel):
 
         if self.is_job_related:
             expected_status = _CATEGORY_APPLICATION_STATUS.get(self.category)
-            if (
-                expected_status is not None
-                and self.application_status is not None
-                and self.application_status != expected_status
-            ):
+            if self.application_status is not None and self.application_status != expected_status:
                 msg = "application_status contradicts category"
                 raise ValueError(msg)
 
             expected_event_type = _CATEGORY_EVENT_TYPE.get(self.category)
-            if (
-                expected_event_type is not None
-                and self.event_type is not None
-                and self.event_type != expected_event_type
-            ):
+            if self.event_type is not None and self.event_type != expected_event_type:
                 msg = "event_type contradicts category"
                 raise ValueError(msg)
 
