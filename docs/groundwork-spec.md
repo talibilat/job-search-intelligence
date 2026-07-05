@@ -67,7 +67,7 @@ job-search-intelligence/
 │   │   │   └── llm/                # LLMProvider protocol + generation/health DTOs + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
-│   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords)
+│   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords, labels, thread context)
 │   │   │   ├── classify.py         # LLM classify + structured extract validation
 │   │   │   └── aggregate.py        # emails → applications + event timeline (dedup)
 │   │   ├── services/               # sync_service, metrics_service, insights_service, chat_service
@@ -130,7 +130,7 @@ job-search-intelligence/
 - **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `in_progress_mode`, `next_page_token`, `updated_at`; stores opaque provider-owned incremental sync anchors plus resumable page progress scoped to one connected account.
 - **`email_connections`** - `provider`, `account_id`, `display_email`, credential `SecretRef` fields, granted scopes, `connected_at`, optional `credential_expires_at`, `reauth_required`, `updated_at`; stores only non-secret connection metadata for one Gmail account while token payloads live in the configured `SecretStore`.
 - **`email_filter_decisions`** - `email_id` (FK), `strategy` (`broad_job_search`), `outcome` (`candidate | rejected`), `reason`, `decided_at`; stores one idempotent heuristic filter audit decision per raw email and strategy.
-  Reasons are public-safe static signal tokens such as `sender_domain:greenhouse.io`, `subject_keyword:interview`, `excluded_label:spam`, or `no_filter_signal`, not raw subjects or body text.
+  Reasons are public-safe static signal tokens such as `sender_domain:greenhouse.io`, `subject_keyword:interview`, `excluded_label:spam`, `thread_signal:candidate_thread`, or `no_filter_signal`, not raw subjects, thread IDs, or body text.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, timezone-aware `classified_at`.
 - **`classification_runs`** - `id`, `provider`, `model`, `prompt_version`, `started_at`, `completed_at`, `candidate_count`, `classified_count`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `estimated_cost_usd`; stores one local accounting row per completed classification run.
@@ -175,12 +175,15 @@ EmailProvider -> metadata-only raw_emails
                  │
                  ▼
    1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
-     - provider-neutral `EmailCandidateQuery` static signals for broad job-search selection
+     - provider-neutral `EmailCandidateQuery` static signals and score threshold for broad job-search selection
      - known ATS/recruiter sender domains (greenhouse, lever, workday,
        ashby, icims, workable, smartrecruiters, myworkday, ...)
      - keyword signals across subjects and already-normalized retained body text
        when available ("application", "unfortunately", "interview",
        "next steps", "offer", "assessment", "regret to inform")
+     - excluded labels are hard rejections, and same-page thread siblings can
+       be promoted through the public-safe `thread_signal:candidate_thread`
+       token without exposing raw provider thread IDs
                  │  candidates only
                  ▼
    2. classify.py  LLM classify + structured extract  (LLMProvider)
@@ -221,8 +224,10 @@ The sync service coordinates one metadata page at a time, carries provider page 
 `SyncScheduler` owns the APScheduler lifecycle inside the FastAPI lifespan: when `sync_on_open` is true, it registers an immediate interval job for the injected async sync runner, and on shutdown it stops APScheduler without waiting.
 The configured sync runtime resolves the latest non-reauth Gmail connection metadata from SQLite, runs full backfill until durable backfill state is completed and the replacement cursor is promoted, and then uses incremental sync on later manual runs.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
+Candidate decisions carry a deterministic score plus public-safe signal tokens; sender-domain, subject-keyword, and same-thread signals contribute to the threshold, while excluded labels reject regardless of positive signals.
 The same static keyword terms may be applied to already-normalized retained body text when a caller has it, but broad provider metadata listing and body-retention selection remain metadata-only.
-The sync runtime persists the broad job-search filter outcome and public-safe reason for every evaluated normalized metadata record in `email_filter_decisions`, keyed by raw email ID and strategy so re-runs update the same audit row.
+The sync runtime evaluates metadata pages as batches so same-page thread siblings use the same decision path for retained-body selection and persisted audit rows.
+It persists the broad job-search filter outcome and public-safe reason for every evaluated normalized metadata record in `email_filter_decisions`, keyed by raw email ID and strategy so re-runs update the same audit row.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
 The classification parser validates provider-neutral `LLMGenerationResponse` content before storage: accepted results produce an `EmailClassificationRecord` and typed extraction fields, while malformed results include only public-safe quarantine metadata and must not write `email_classifications`, `applications`, or `application_events` rows.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
@@ -241,9 +246,9 @@ Show a **pre-run cost estimate** and track tokens per run.
 
 - **Health:** `GET /health` returns a liveness-only `{ "status": "ok" }` response for Phase 0 smoke checks.
 - **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell plus current and recommended classification modes without exposing secrets; `POST /setup` accepts non-secret first-run choices, applies the provider-based classification recommendation when `classification_mode` is omitted, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, recommended classification mode, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only, applying the provider-based classification recommendation only when `llm_provider` changes and `classification_mode` is omitted; `GET /auth/gmail` starts Gmail OAuth by returning a provider-built Google authorization URL, generated state value, and the read-only Gmail scope without returning client secrets or tokens; `GET /auth/gmail/callback` consumes the issued state, passes the authorization code as `SecretStr`, exchanges it through the Gmail provider, validates the returned read-only scope, stores token material through the configured `SecretStore`, persists only non-secret `email_connections` metadata, and returns an `EmailConnection` DTO without raw tokens.
-  Gmail full and incremental metadata listing exists behind `SecretStore`; retained-body fetching exists behind the provider seam for caller-selected refs, expired stored Gmail credentials are refreshed before metadata or retained-body reads, default sync resolves the latest non-reauth Gmail connection metadata from SQLite, and manual sync stores retained bodies for broad candidate messages after metadata persistence; the overview page can trigger and display manual sync state through backend APIs while deeper product pages remain later Phase 1 work.
+  Gmail full and incremental metadata listing exists behind `SecretStore`; retained-body fetching exists behind the provider seam for caller-selected refs, expired stored Gmail credentials are refreshed before metadata or retained-body reads, default sync resolves the latest non-reauth Gmail connection metadata from SQLite, and manual sync stores retained bodies for broad candidate messages, including same-page thread-promoted candidates, after metadata persistence; the overview page can trigger and display manual sync state through backend APIs while deeper product pages remain later Phase 1 work.
 - **Local data:** `POST /local-data/wipe` removes configured local app data and derived artifacts after the exact confirmation phrase `wipe-local-data`; unsafe configured filesystem targets return the standard typed `400` API error.
-- **Sync:** `POST /sync` resolves the latest non-reauth Gmail connection metadata, runs full backfill until durable backfill state is completed and the replacement cursor is promoted, stores metadata-only `raw_emails` without overwriting retained bodies, persists `email_filter_decisions` audit rows for broad job-search filter outcomes, stores retained bodies for broad job-search candidates when the provider supports body fetching, persists provider cursors and resumable page progress, returns a typed not-configured `400` when no Gmail connection is configured, returns typed `409` for concurrent manual runs, and maps email-provider failures to typed `401`, `403`, `409`, `429`, `502`, or `503` responses with email-specific error codes and a `user_action` detail; `GET /sync/status` reports current or last-run state, provider, account, mode, timestamps, page count, message count, raw-email count, expired-cursor recovery, and public error text.
+- **Sync:** `POST /sync` resolves the latest non-reauth Gmail connection metadata, runs full backfill until durable backfill state is completed and the replacement cursor is promoted, stores metadata-only `raw_emails` without overwriting retained bodies, persists `email_filter_decisions` audit rows for broad job-search filter outcomes using the same batch decision path as retained-body selection, stores retained bodies for broad job-search candidates when the provider supports body fetching, persists provider cursors and resumable page progress, returns a typed not-configured `400` when no Gmail connection is configured, returns typed `409` for concurrent manual runs, and maps email-provider failures to typed `401`, `403`, `409`, `429`, `502`, or `503` responses with email-specific error codes and a `user_action` detail; `GET /sync/status` reports current or last-run state, provider, account, mode, timestamps, page count, message count, raw-email count, expired-cursor recovery, and public error text.
   Raw-email retained and debugging body persistence is insert-or-update, so explicit body fetches are not dropped if they arrive before metadata.
 - **Classification:** `GET /classification/estimate` returns retained candidate counts, estimated prompt and completion tokens, total estimated tokens, model and prompt version, token-estimate method, and cost availability before a bulk classification pass without calling an LLM or returning email content.
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit
@@ -312,7 +317,7 @@ Phase 1 raw email population tracks `metadata_only`, `retained`, and `debugging`
 Historical retention note: before JT-065, Phase 1 wording described retained bodies for candidate messages without the explicit debugging retention state.
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
-Heuristic filter, provider-neutral classification prompt contract, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
+Heuristic scored filter, provider-neutral classification prompt contract, Azure OpenAI and Ollama adapters, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
 **DoD:** `applications` populated; golden-set classification ≥90% precision AND ≥85% recall on job-vs-not; re-runs idempotent.
 
 **Phase 3 - Dashboard (deterministic)** -> Tiers 1-3 (+ 3.5 diagnostics -> Tier 4)
