@@ -4,6 +4,7 @@ import sqlite3
 from importlib import import_module
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -281,6 +282,64 @@ def test_application_events_allow_ghost_inferred_without_email(tmp_path: Path) -
         assert connection.execute(
             "SELECT email_id FROM application_events WHERE id = 'event_1'",
         ).fetchone() == (None,)
+
+
+def test_application_events_require_email_for_evidence_backed_events(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(
+            """
+            INSERT INTO applications (
+                id,
+                company,
+                role_title,
+                source,
+                first_seen_at,
+                current_status,
+                last_activity_at,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "Example Co",
+                "Software Engineer",
+                "company_site",
+                "2026-07-01T00:00:00Z",
+                "rejected",
+                "2026-07-31T00:00:00Z",
+                "2026-07-01T00:00:00Z",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO application_events (
+                    id,
+                    application_id,
+                    email_id,
+                    event_type,
+                    event_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "event_1",
+                    "app_1",
+                    None,
+                    "rejection",
+                    "2026-07-31T00:00:00Z",
+                ),
+            )
 
 
 def test_alembic_downgrade_removes_jt020_core_schema(tmp_path: Path) -> None:

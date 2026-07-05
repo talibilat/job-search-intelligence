@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from app.db.repositories import (
     EventRepository,
     SyntheticFixtureRepository,
 )
+from app.models.synthetic_fixture import SyntheticEventType, SyntheticFixtureFile
 
 
 def test_synthetic_fixture_loader_loads_json_file_into_core_tables() -> None:
@@ -86,6 +88,30 @@ def test_synthetic_fixture_loader_is_idempotent_for_same_fixture() -> None:
     assert count_rows(connection, "email_classifications") == 2
     assert count_rows(connection, "applications") == 1
     assert count_rows(connection, "application_events") == 2
+
+
+def test_synthetic_fixture_loader_loads_ghost_inferred_event_without_email() -> None:
+    connection = sqlite3.connect(":memory:")
+    fixture_data = json.loads(sample_fixture_path().read_text())
+    fixture_data["fixture_id"] = "ghost-inferred-event"
+    fixture_data["applications"][0]["current_status"] = "ghosted"
+    fixture_data["events"] = [
+        fixture_data["events"][0]
+        | {
+            "id": "event-application-ghosted",
+            "email_id": None,
+            "event_type": SyntheticEventType.GHOST_INFERRED,
+        }
+    ]
+    fixture = SyntheticFixtureFile.model_validate(fixture_data)
+
+    SyntheticFixtureRepository(connection).load_fixture(fixture)
+
+    event = connection.execute(
+        "SELECT email_id, event_type FROM application_events WHERE id = ?",
+        ("event-application-ghosted",),
+    ).fetchone()
+    assert tuple(event) == (None, "ghost_inferred")
 
 
 def sample_fixture_path() -> Path:

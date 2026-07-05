@@ -209,6 +209,33 @@ def test_fixture_validates_unique_ids_and_cross_references() -> None:
         )
 
 
+def test_fixture_allows_only_inferred_events_without_email() -> None:
+    fixture = make_valid_fixture()
+    inferred_event_data = fixture.events[0].model_dump(mode="json") | {
+        "email_id": None,
+        "event_type": SyntheticEventType.GHOST_INFERRED,
+    }
+
+    inferred_event = SyntheticApplicationEvent.model_validate(inferred_event_data)
+    inferred_fixture = SyntheticFixtureFile(
+        schema_version="1",
+        fixture_id="ghost-inferred-event",
+        description="Ghost inference can be represented without source email evidence.",
+        contains_private_data=False,
+        emails=fixture.emails,
+        classifications=fixture.classifications,
+        applications=fixture.applications,
+        events=(inferred_event,),
+    )
+
+    assert inferred_fixture.events[0].email_id is None
+
+    with pytest.raises(ValidationError, match="evidence-backed events require email_id"):
+        SyntheticApplicationEvent.model_validate(
+            inferred_event_data | {"event_type": SyntheticEventType.REJECTION},
+        )
+
+
 def test_sample_synthetic_fixture_file_matches_format() -> None:
     backend_root = Path(__file__).resolve().parents[1]
     fixture_path = backend_root / "tests" / "fixtures" / "synthetic" / "basic_job_search.json"

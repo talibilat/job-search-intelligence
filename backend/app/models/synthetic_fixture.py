@@ -162,10 +162,17 @@ class SyntheticApplicationEvent(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     id: str = Field(min_length=1)
     application_id: str = Field(min_length=1)
-    email_id: str = Field(min_length=1)
+    email_id: str | None = Field(min_length=1)
     event_type: SyntheticEventType
     event_at: datetime
     extract_note: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def validate_email_id_for_event_type(self) -> Self:
+        if self.event_type is not SyntheticEventType.GHOST_INFERRED and self.email_id is None:
+            msg = "evidence-backed events require email_id"
+            raise ValueError(msg)
+        return self
 
 
 class SyntheticFixtureFile(BaseModel):
@@ -198,7 +205,9 @@ class SyntheticFixtureFile(BaseModel):
 
         known_email_ids = set(email_ids)
         unknown_classification_email_ids = set(classification_email_ids) - known_email_ids
-        unknown_event_email_ids = {event.email_id for event in self.events} - known_email_ids
+        unknown_event_email_ids = {
+            event.email_id for event in self.events if event.email_id is not None
+        } - known_email_ids
         if unknown_classification_email_ids or unknown_event_email_ids:
             unknown_email_ids = unknown_classification_email_ids | unknown_event_email_ids
             msg = f"unknown email ids: {_format_ids(unknown_email_ids)}"

@@ -175,6 +175,10 @@ def upgrade() -> None:
             _in_values("event_type", EVENT_TYPES),
             name="ck_application_events_event_type",
         ),
+        sa.CheckConstraint(
+            "event_type = 'ghost_inferred' OR email_id IS NOT NULL",
+            name="ck_application_events_email_required_for_evidence_events",
+        ),
         sa.ForeignKeyConstraint(["application_id"], ["applications.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["email_id"], ["raw_emails.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),

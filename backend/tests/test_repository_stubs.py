@@ -221,6 +221,25 @@ def test_event_repository_maps_application_event_rows() -> None:
     assert isinstance(record.event_at, datetime)
 
 
+def test_application_event_record_allows_only_inferred_events_without_email() -> None:
+    base_data = {
+        "id": "event-7",
+        "application_id": "application-42",
+        "event_at": "2026-07-01T09:00:00+00:00",
+        "extract_note": None,
+    }
+
+    inferred_event = ApplicationEventRecord.model_validate(
+        base_data | {"email_id": None, "event_type": "ghost_inferred"},
+    )
+    assert inferred_event.email_id is None
+
+    with pytest.raises(ValidationError, match="evidence-backed events require email_id"):
+        ApplicationEventRecord.model_validate(
+            base_data | {"email_id": None, "event_type": "rejection"},
+        )
+
+
 def test_insight_repository_maps_insight_rows() -> None:
     repository = repositories.InsightRepository(sqlite3.connect(":memory:"))
 
