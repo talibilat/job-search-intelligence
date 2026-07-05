@@ -60,11 +60,11 @@ job-search-intelligence/
 │   │   ├── db/
 │   │   │   ├── engine.py           # SQLite engine, sqlite-vec loading, and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
-│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
+│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ClassificationRunRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Focused Pydantic DTO modules plus stable aggregate exports
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider protocol + Gmail OAuth start/callback/metadata lister + retained-body text normalization + future outlook.py/imap.py
-│   │   │   └── llm/                # LLMProvider protocol + azure_openai.py (+ future ollama/openai/anthropic)
+│   │   │   └── llm/                # LLMProvider protocol + generation/health DTOs + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
 │   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords)
@@ -76,7 +76,7 @@ job-search-intelligence/
 │   │   ├── api/                    # routers, typed API errors, setup, auth, sync, applications, metrics, insights, chat
 │   │   └── setup/                  # first-run wizard logic
 │   ├── evals/
-│   │   ├── golden_set.jsonl        # ~30 hand-labeled emails
+│   │   ├── golden_set.jsonl        # ~30 private-data-free labeled email cases
 │   │   └── run_eval.py             # classification accuracy report
 │   ├── tests/                      # minimal pytest (pipeline + metrics smoke)
 │   │   └── fixtures/synthetic/      # private-data-free synthetic fixture JSON
@@ -112,6 +112,7 @@ job-search-intelligence/
 
 [JT-069 2026-07-05 v2] `backend/app/db/repositories/` now includes `SyncStateRepository` for provider-owned sync anchors.
 [JT-066 2026-07-05 v2] `backend/app/db/repositories/` now includes `BackfillStateRepository` for durable full-backfill page progress.
+[JT-096 2026-07-05] `backend/app/db/repositories/` now includes `ClassificationRunRepository` for completed-run token and estimated-cost accounting.
 
 ---
 
@@ -129,6 +130,8 @@ job-search-intelligence/
 - **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `in_progress_mode`, `next_page_token`, `updated_at`; stores opaque provider-owned incremental sync anchors plus resumable page progress scoped to one connected account.
 - **`email_connections`** - `provider`, `account_id`, `display_email`, credential `SecretRef` fields, granted scopes, `connected_at`, optional `credential_expires_at`, `reauth_required`, `updated_at`; stores only non-secret connection metadata for one Gmail account while token payloads live in the configured `SecretStore`.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
+- **`classification_runs`** - `id`, `provider`, `model`, `prompt_version`, `started_at`, `completed_at`, `candidate_count`, `classified_count`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `estimated_cost_usd`; stores one local accounting row per completed classification run.
+  Counts, token totals, and estimated cost are non-negative; `classified_count` cannot exceed `candidate_count`, and `total_tokens` must cover prompt plus completion tokens.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
   [JT-020 2026-07-05 v2] - **`application_events`** - `id`, `application_id` (FK), nullable `email_id` (FK; null for inferred events such as `ghost_inferred`), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
@@ -141,6 +144,7 @@ job-search-intelligence/
 [JT-020 2026-07-05 v1] The initial core schema migration enforces enum, confidence, salary-range, and raw-email retention invariants with SQLite `CHECK` constraints, uses foreign keys for email/application relationships, and adds practical lookup indexes for the regular tables.
 [JT-021 2026-07-05] The manual override schema migration creates `application_corrections` with constrained correction types, valid JSON before/after snapshots, application delete cascade, and an `(application_id, created_at)` lookup index for per-application audit history.
 [JT-022 2026-07-05] The chat history schema migration creates `chat_messages`; `role` is constrained to `user | assistant | tool | system`, `citations_json` and `tool_outputs_json` must be valid JSON arrays, and `(conversation_id, created_at)` is indexed for history reads.
+[JT-096 2026-07-05] The classification run accounting migration creates `classification_runs` with lookup indexes on `started_at` and `(provider, model)` so later classifier services can persist per-run token usage and estimated cost through `ClassificationRunRepository`.
 
 ### Aggregation rule (the hard part)
 
@@ -169,7 +173,8 @@ EmailProvider -> metadata-only raw_emails
      - provider-neutral `EmailCandidateQuery` static signals for broad job-search selection
      - known ATS/recruiter sender domains (greenhouse, lever, workday,
        ashby, icims, workable, smartrecruiters, myworkday, ...)
-     - keyword signals ("application", "unfortunately", "interview",
+     - keyword signals across subjects and already-normalized retained body text
+       when available ("application", "unfortunately", "interview",
        "next steps", "offer", "assessment", "regret to inform")
                  │  candidates only
                  ▼
@@ -204,6 +209,7 @@ The sync service coordinates one metadata page at a time, carries provider page 
 `SyncScheduler` owns the APScheduler lifecycle inside the FastAPI lifespan: when `sync_on_open` is true, it registers an immediate interval job for the injected async sync runner, and on shutdown it stops APScheduler without waiting.
 The configured sync runtime resolves the latest non-reauth Gmail connection metadata from SQLite, runs full backfill until durable backfill state is completed and the replacement cursor is promoted, and then uses incremental sync on later manual runs.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
+The same static keyword terms may be applied to already-normalized retained body text when a caller has it, but broad provider metadata listing and body-retention selection remain metadata-only.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
 
@@ -211,14 +217,14 @@ Phase 1 reconciliation compares provider metadata pages against local `raw_email
 
 **Cost control:** `classification_mode` config - `hybrid` (filter -> LLM), `llm` (LLM on everything), `local` (Ollama, offline/free).
 Setup asks explicitly and preselects `hybrid` when Azure OpenAI credentials are configured, or `local` when only Ollama is configured.
-Show a **pre-run cost estimate** and track tokens per run.
+Show a **pre-run cost estimate** and track tokens per run; completed-run accounting is stored locally in `classification_runs` through `ClassificationRunRepository`.
 
 ---
 
 ## 5. API surface (REST)
 
 - **Health:** `GET /health` returns a liveness-only `{ "status": "ok" }` response for Phase 0 smoke checks.
-- **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only; `GET /auth/gmail` starts Gmail OAuth by returning a provider-built Google authorization URL, generated state value, and the read-only Gmail scope without returning client secrets or tokens; `GET /auth/gmail/callback` consumes the issued state, passes the authorization code as `SecretStr`, exchanges it through the Gmail provider, validates the returned read-only scope, stores token material through the configured `SecretStore`, persists only non-secret `email_connections` metadata, and returns an `EmailConnection` DTO without raw tokens.
+- **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only; `POST /config/providers/llm/health` validates selected non-secret LLM provider settings, calls the configured provider adapter to check the selected chat and embedding models, validates that the response covers those configured models, and returns a typed provider-neutral availability response; `GET /auth/gmail` starts Gmail OAuth by returning a provider-built Google authorization URL, generated state value, and the read-only Gmail scope without returning client secrets or tokens; `GET /auth/gmail/callback` consumes the issued state, passes the authorization code as `SecretStr`, exchanges it through the Gmail provider, validates the returned read-only scope, stores token material through the configured `SecretStore`, persists only non-secret `email_connections` metadata, and returns an `EmailConnection` DTO without raw tokens.
   Gmail full and incremental metadata listing exists behind `SecretStore`; retained-body fetching exists behind the provider seam for caller-selected refs, expired stored Gmail credentials are refreshed before metadata or retained-body reads, default sync resolves the latest non-reauth Gmail connection metadata from SQLite, and manual sync stores retained bodies for broad candidate messages after metadata persistence; the overview page can trigger and display manual sync state through backend APIs while deeper product pages remain later Phase 1 work.
 - **Local data:** `POST /local-data/wipe` removes configured local app data and derived artifacts after the exact confirmation phrase `wipe-local-data`; unsafe configured filesystem targets return the standard typed `400` API error.
 - **Sync:** `POST /sync` resolves the latest non-reauth Gmail connection metadata, runs full backfill until durable backfill state is completed and the replacement cursor is promoted, stores metadata-only `raw_emails` without overwriting retained bodies, stores retained bodies for broad job-search candidates when the provider supports body fetching, persists provider cursors and resumable page progress, returns a typed not-configured `400` when no Gmail connection is configured, returns typed `409` for concurrent manual runs, and maps email-provider failures to typed `401`, `403`, `409`, `429`, `502`, or `503` responses with email-specific error codes and a `user_action` detail; `GET /sync/status` reports current or last-run state, provider, account, mode, timestamps, page count, message count, raw-email count, expired-cursor recovery, and public error text.
@@ -236,6 +242,7 @@ Standard error responses use a typed Pydantic shape: `{"error": {"code": "...", 
 Routes and services raise explicit `ApiError` values for public API-boundary failures.
 Email-provider boundary errors map to stable email-specific API error codes such as `email_authorization_required`, `email_insufficient_scope`, `email_rate_limited`, `email_temporarily_unavailable`, `email_invalid_provider_response`, `email_provider_request_failed`, and `email_sync_cursor_expired`.
 Those responses include a `details` item with `type: "user_action"`, `field: "email_provider"`, and an action value such as `reconnect_email`, `restart_full_sync`, `try_again_later`, or `check_configuration`.
+LLM-provider boundary errors map to stable public API error codes such as `llm_provider_unavailable`, `llm_provider_request_failed`, `llm_provider_invalid_response`, and `llm_provider_timeout`, with public-safe messages only.
 Request validation errors, Starlette HTTP errors, and unhandled exceptions are mapped by the FastAPI app factory and must not expose raw request input, tracebacks, secrets, or arbitrary exception details.
 
 ---
@@ -311,7 +318,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, ch
 
 - **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** starts with the Phase 0 shell for setup copy, overview sync affordance, and dashboard empty-state coverage; later critical paths add dashboard fixture load and chat citation smoke checks as those pages exist.
-- **Carve-out - the golden set:** ~30 hand-labeled emails in `evals/golden_set.jsonl`; `evals/run_eval.py` reports classification precision/recall. Run it whenever the classify prompt/model changes. _This is the one thing that keeps the dashboard honest._
+- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `backend/evals/run_eval.py` reports classification precision/recall once the runner lands. Run it whenever the classify prompt/model changes. _This is the one thing that keeps the dashboard honest._
 
 ---
 
@@ -347,3 +354,6 @@ sqlite-vec and other virtual/vector tables are managed by hand-written revisions
 
 **Resolved:** approved backlog decisions are recorded in `docs/backlog-decisions.md`.
 The approved ticket plan is recorded in `docs/github-backlog-plan.md`.
+
+[JT-103 2026-07-05 v1] Services layout now includes `backend/app/services/normalization.py` for deterministic role-title grouping logic.
+[JT-103 2026-07-05 v1] Aggregation `normalized_role` uses `normalize_role_title()` to fold casing, punctuation, seniority labels, title levels, role abbreviations, common location tokens, and work-arrangement notes while preserving meaningful descriptors such as `back end`, `front end`, `growth`, and `machine learning`.

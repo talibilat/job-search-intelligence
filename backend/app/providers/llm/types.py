@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LLMMessageRole(StrEnum):
@@ -23,6 +23,16 @@ class LLMFinishReason(StrEnum):
     CONTENT_FILTER = "content_filter"
     ERROR = "error"
     UNKNOWN = "unknown"
+
+
+class LLMModelKind(StrEnum):
+    CHAT = "chat"
+    EMBEDDING = "embedding"
+
+
+class LLMModelHealthStatus(StrEnum):
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
 
 
 class LLMMessage(BaseModel):
@@ -52,6 +62,47 @@ class LLMGenerationRequest(BaseModel):
     model: str | None = Field(default=None, min_length=1)
     response_format: LLMResponseFormat = LLMResponseFormat.TEXT
     options: LLMGenerationOptions = Field(default_factory=LLMGenerationOptions)
+
+
+class LLMProviderHealthCheckRequest(BaseModel):
+    """Provider-neutral request to verify configured model availability."""
+
+    model_config = ConfigDict(frozen=True)
+
+    chat_model: str = Field(min_length=1)
+    embedding_model: str = Field(min_length=1)
+
+
+class LLMModelHealthCheck(BaseModel):
+    """Availability result for one configured provider model."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: LLMModelKind
+    model: str = Field(min_length=1)
+    status: LLMModelHealthStatus
+    detail: str | None = Field(default=None, min_length=1)
+
+
+class LLMProviderHealthCheckResponse(BaseModel):
+    """Provider-neutral health-check result for the selected LLM provider."""
+
+    model_config = ConfigDict(frozen=True)
+
+    provider_name: str = Field(min_length=1)
+    status: LLMModelHealthStatus
+    checks: tuple[LLMModelHealthCheck, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_status_matches_checks(self) -> LLMProviderHealthCheckResponse:
+        has_unavailable_model = any(
+            check.status is LLMModelHealthStatus.UNAVAILABLE for check in self.checks
+        )
+        if self.status is LLMModelHealthStatus.AVAILABLE and has_unavailable_model:
+            raise ValueError("available provider health requires every model to be available")
+        if self.status is LLMModelHealthStatus.UNAVAILABLE and not has_unavailable_model:
+            raise ValueError("unavailable provider health requires an unavailable model")
+        return self
 
 
 class LLMTokenUsage(BaseModel):

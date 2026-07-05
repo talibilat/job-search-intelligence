@@ -11,8 +11,13 @@ from app.providers.llm import (
     LLMGenerationResponse,
     LLMMessage,
     LLMMessageRole,
+    LLMModelHealthCheck,
+    LLMModelHealthStatus,
+    LLMModelKind,
     LLMProvider,
     LLMProviderError,
+    LLMProviderHealthCheckRequest,
+    LLMProviderHealthCheckResponse,
     LLMProviderRequestError,
     LLMProviderResponseError,
     LLMProviderTimeoutError,
@@ -35,6 +40,27 @@ class FakeLLMProvider:
                 prompt_tokens=3,
                 completion_tokens=5,
                 total_tokens=8,
+            ),
+        )
+
+    async def health_check(
+        self,
+        request: LLMProviderHealthCheckRequest,
+    ) -> LLMProviderHealthCheckResponse:
+        return LLMProviderHealthCheckResponse(
+            provider_name=self.provider_name,
+            status=LLMModelHealthStatus.AVAILABLE,
+            checks=(
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.CHAT,
+                    model=request.chat_model,
+                    status=LLMModelHealthStatus.AVAILABLE,
+                ),
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.EMBEDDING,
+                    model=request.embedding_model,
+                    status=LLMModelHealthStatus.AVAILABLE,
+                ),
             ),
         )
 
@@ -73,6 +99,31 @@ def test_llm_provider_generation_round_trip() -> None:
         prompt_tokens=3,
         completion_tokens=5,
         total_tokens=8,
+    )
+
+
+def test_llm_provider_health_check_round_trip() -> None:
+    provider = FakeLLMProvider()
+    request = LLMProviderHealthCheckRequest(
+        chat_model="fake-chat-model",
+        embedding_model="fake-embedding-model",
+    )
+
+    response = asyncio.run(provider.health_check(request))
+
+    assert response.provider_name == "fake"
+    assert response.status is LLMModelHealthStatus.AVAILABLE
+    assert response.checks == (
+        LLMModelHealthCheck(
+            kind=LLMModelKind.CHAT,
+            model="fake-chat-model",
+            status=LLMModelHealthStatus.AVAILABLE,
+        ),
+        LLMModelHealthCheck(
+            kind=LLMModelKind.EMBEDDING,
+            model="fake-embedding-model",
+            status=LLMModelHealthStatus.AVAILABLE,
+        ),
     )
 
 
@@ -146,6 +197,9 @@ def test_llm_boundary_models_do_not_define_credential_fields() -> None:
         LLMGenerationOptions,
         LLMGenerationRequest,
         LLMGenerationResponse,
+        LLMModelHealthCheck,
+        LLMProviderHealthCheckRequest,
+        LLMProviderHealthCheckResponse,
     )
 
     for model in boundary_models:

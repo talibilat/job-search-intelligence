@@ -16,6 +16,7 @@ Baseline coding standards for every agent and contributor.
 - Strategy pattern for `EmailProvider` and `LLMProvider`; provider-specific code stays behind the interface.
 - Provider selection metadata belongs in `app.providers.provider_registry`; it declares supported providers, non-secret setting requirements, and `SecretRef` metadata without instantiating adapters or reading secrets.
 - LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
+- Ollama provider adapters must keep local mode local: reject non-local base URLs, do not use HTTP proxy routing for local calls, and map transport failures to public-safe LLM provider errors without prompt or completion content.
 - `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, normalize retained HTML bodies to plain text, reject raw HTML retention fields, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
 - Gmail metadata listing must keep full backfill and incremental sync metadata-only: use message list pages for full backfill, `users.history.list` `messageAdded` records for incremental sync, withhold replacement history cursors until paginated listing is fully drained, and map Gmail history `404` responses to expired-cursor recovery.
 - Sync services persist provider-owned cursors through `SyncStateRepository`, keyed by provider and account, without treating cursor values as OAuth token material or email content.
@@ -27,6 +28,7 @@ Baseline coding standards for every agent and contributor.
 - Public sync status crosses the API boundary through the `EmailSyncStatus` DTO and must expose only run state, mode, deterministic counts, sanitized errors, and timestamps, never provider payloads, OAuth tokens, raw cursors, page tokens, or email content.
 - Sync scheduling stays backend-process local: `SyncScheduler` owns APScheduler start and shutdown through the FastAPI lifespan, registers only injected async sync jobs, and remains stopped when `sync_on_open` is false.
 - Broad job-search candidate selection belongs in provider-neutral DTOs over normalized metadata; provider metadata listing requests must not accept body content, snippets, or provider-specific candidate filters.
+- Candidate-query keyword checks may also run over already-normalized retained body text when a caller already has it, but the query must store only static terms and never serialize private email content.
 - Gmail OAuth setup and auth work must follow `docs/google-oauth-setup.md`: user-created Desktop client, `gmail.readonly` only, provider-owned authorization URLs, callback codes as `SecretStr`, refresh-token reuse behind the provider seam, and token material routed through `SecretStore`.
 - Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
 - Raw email repository writes must be idempotent by provider message ID and must preserve existing `retained` or `debugging` body text when later metadata-only reconciliation pages replay the same message.
@@ -41,6 +43,7 @@ Baseline coding standards for every agent and contributor.
 - FastAPI dependency injection supplies repositories, providers, and config.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
 - Email-provider failures that can cross the API boundary must use stable `EmailProviderErrorCode` values and `EmailProviderUserAction` hints so clients can distinguish reconnect, scope, rate-limit, temporary outage, expired-cursor, invalid-provider-response, and generic provider-failure cases without inspecting provider payloads.
+- LLM-provider failures that can cross the API boundary must use typed `LLMProviderError` subclasses so clients can distinguish unavailable providers, failed requests, invalid responses, and timeouts without inspecting provider payloads.
 - Public API failures use the standard `{"error": {"code": "...", "message": "...", "details": []}}` response shape, and route-specific public failures should raise `ApiError` instead of exposing arbitrary `HTTPException.detail` text.
 - Validation, HTTP, and internal exception handlers must sanitize raw request input, tracebacks, secrets, and private exception details.
 - Frontend code imports API client types and helpers from `frontend/src/api`; `frontend/src/api/generated/` is reserved for OpenAPI-generated output and placeholder destination code.
@@ -59,7 +62,7 @@ Baseline coding standards for every agent and contributor.
 - Use conventional commit messages.
 - Never log secrets, OAuth tokens, API keys, or private email content unnecessarily; route secrets through `SecretStore` and store them encrypted at rest.
 - Use the redaction helpers exported by `app.security` before logging structured data that may contain secrets or retained email bodies.
-- Synthetic fixtures must be private-data-free, must set `contains_private_data` to `false`, and must use synthetic domains and content instead of copied inbox data.
+- Synthetic fixtures and golden-set fixtures must be private-data-free, must set `contains_private_data` to `false`, and must use synthetic domains and content instead of copied inbox data.
 - Do not add telemetry, shared credentials, auto-apply, or autonomous outbound email.
 
 ## Verification
@@ -69,7 +72,8 @@ Baseline coding standards for every agent and contributor.
 - Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Frontend browser smoke changes: run `npm run test:smoke` from `frontend/` after installing Chromium with `npx playwright install chromium` once per machine.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
-- Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
+- Classification changes: run the golden-set eval when the runner exists; regressions block merges unless explicitly accepted.
+- Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.
 

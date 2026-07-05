@@ -658,7 +658,8 @@ The tests should pass.
 The import command should print a typed LLM message.
 
 Caveat:
-This does not implement Azure OpenAI, Ollama, OpenAI, or Anthropic.
+This ticket did not implement Azure OpenAI, Ollama, OpenAI, or Anthropic.
+JT-087 later added Ollama chat generation behind the `LLMProvider` seam.
 Embeddings were also deferred to a later ticket.
 
 ## #29 JT-029 - Add Setup Status API Shell
