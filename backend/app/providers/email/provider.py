@@ -223,6 +223,7 @@ class EmailCandidateQuery(BaseModel):
         normalized_text = (text or "").lower()
         return any(term in normalized_text for term in self.keyword_terms)
 
+
 class EmailMetadataListRequest(BaseModel):
     """Request one provider-normalized metadata page.
 
