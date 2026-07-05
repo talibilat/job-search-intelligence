@@ -752,9 +752,7 @@ class GmailMessageLister:
     ) -> EmailBodyBatch:
         if len(request.refs) > _GMAIL_MAX_BODY_BATCH_SIZE:
             raise EmailProviderError(
-                public_message=(
-                    f"Gmail body batch size cannot exceed {_GMAIL_MAX_BODY_BATCH_SIZE}"
-                )
+                public_message=(f"Gmail body batch size cannot exceed {_GMAIL_MAX_BODY_BATCH_SIZE}")
             )
 
         stored_token = await self._secret_store.get_secret(connection.credential_ref)
