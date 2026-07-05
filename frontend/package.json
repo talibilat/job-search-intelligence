@@ -11,6 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run --environment jsdom",
+    "test:smoke": "playwright test",
     "generate:openapi": "cd ../backend && uv run python -m scripts.generate_openapi",
     "generate:api": "npm run generate:openapi && orval --config orval.config.mjs",
     "check:api": "npm run generate:api && node scripts/check-api-generation.mjs && git diff --exit-code src/api/openapi.json src/api/generated.ts",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",

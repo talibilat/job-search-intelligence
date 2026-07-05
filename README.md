@@ -11,46 +11,31 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 ## Status
 
 Phase 0 (Groundwork).
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health, setup, provider config, and local wipe-data routes, typed settings and API errors, the keyring-backed `SecretStore` adapter, provider registry, backend `LLMProvider` and `EmailProvider` Strategy interfaces, an async SQLite engine module with Phase 0 connection PRAGMAs, shared SQLite URL parsing, shared SQLite repository helpers, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the synthetic fixture DTO contract, sample fixture, and SQLite fixture loader, the backend OpenAPI schema generator, root pre-commit configuration, backend and frontend CI workflows, and the frontend Vite React TypeScript shell with Orval API client generation, Recharts foundation, route-query helpers, shared accessible UI primitives, and npm API contract, typecheck, lint, Vitest, and build gate scripts.
-Concrete Gmail provider behavior and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm OpenAPI generation, typecheck, lint, Vitest, build gate scripts, and route-query helpers.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm OpenAPI generation, typecheck, lint, and build gate scripts.
-The frontend also has a generated API client destination placeholder, a stable `frontend/src/api` import boundary, and a compile-time contract covered by the TypeScript check until full TypeScript client generation is wired.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, provider config API shell, local wipe-data route, and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm OpenAPI generation, typecheck, lint, and build gate scripts.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with an empty API router and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the backend OpenAPI schema generator, the shared SQLite repository base package, and the frontend Vite React TypeScript shell with a Recharts chart wrapper foundation plus npm OpenAPI generation, typecheck, lint, test, and build gate scripts.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings and secret-store seams, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm OpenAPI generation, typecheck, lint, and build gate scripts.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, the frontend Vite React TypeScript shell with npm OpenAPI generation, typecheck, lint, and build gate scripts, and a root pre-commit configuration for backend and frontend checks.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the backend OpenAPI schema generator, the frontend Vite React TypeScript shell with npm OpenAPI generation, typecheck, lint, and build gate scripts, and a frontend GitHub Actions workflow that installs backend tooling before running the combined frontend check.
-Concrete Gmail provider behavior, remaining backend pieces, and remaining CI workflows fill in over subsequent Phase 0 and Phase 1 tickets.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, the synthetic fixture DTO contract and sample fixture, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm OpenAPI generation, typecheck, lint, and build gate scripts.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with a health route, setup shell routes, local wipe-data route, and typed API error boundary, typed settings, the keyring-backed `SecretStore` adapter, the provider registry seam, the backend `LLMProvider` and `EmailProvider` Strategy interfaces, the shared SQLite repository base package, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the backend OpenAPI schema generator, and the frontend Vite React TypeScript shell with npm OpenAPI generation, typecheck, lint, and build gate scripts.
-The frontend shell also includes static first-run setup copy cards for provider, mode, Gmail, and privacy choices while the full wizard flow is still scaffolded.
-Concrete Gmail provider behavior, remaining backend pieces, and the CI scaffold fill in over subsequent Phase 0 and Phase 1 tickets.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health, setup, provider config, and local wipe-data routes, typed settings and API errors, the keyring-backed `SecretStore` adapter, provider registry, backend `LLMProvider` and `EmailProvider` Strategy interfaces, an async SQLite engine module with Phase 0 connection PRAGMAs, shared SQLite URL parsing, an Alembic migration environment, shared SQLite repository helpers, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the synthetic fixture DTO contract, sample fixture, and SQLite fixture loader, the backend OpenAPI schema generator, root pre-commit configuration, backend and frontend CI workflows, and the frontend Vite React TypeScript shell with API client placeholder, Recharts foundation, route-query helpers, shared accessible UI primitives, and npm typecheck, lint, test, and build gate scripts.
-The first application schema revision, sqlite-vec engine loading, concrete Gmail provider behavior, and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health, setup, provider config, and local wipe-data routes, typed settings and API errors, the keyring-backed `SecretStore` adapter, provider registry, backend `LLMProvider` and `EmailProvider` Strategy interfaces, an async SQLite engine module with Phase 0 connection PRAGMAs, shared SQLite URL parsing, an Alembic migration environment, shared SQLite repository helpers, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the synthetic fixture DTO contract, sample fixture, and SQLite fixture loader, the backend OpenAPI schema generator, root pre-commit configuration, backend and frontend CI workflows, and the frontend Vite React TypeScript shell with Orval API client generation, Recharts foundation, route-query helpers, shared accessible UI primitives, setup and sync-readiness shell copy, npm API contract, typecheck, lint, Vitest, build gate scripts, and a Chromium Playwright smoke harness for the current Phase 0 browser shell.
+Concrete Gmail provider behavior, product pages, the first application schema revision, sqlite-vec engine loading, and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
 
-| Area | Decision |
-|---|---|
-| Backend | FastAPI, Python 3.12, async |
-| Frontend | React, TypeScript, Vite, shared accessible primitives |
-| Database | SQLite (single local file) through async SQLAlchemy + aiosqlite |
-| Migrations | Alembic with SQLite batch mode; sqlite-vec and virtual tables are hand-written revisions |
-| Vector store | sqlite-vec (embeddings in the same SQLite file) |
-| LLM providers | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later |
-| Provider registry | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
-| LLM provider seam | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs |
-| Email providers | `EmailProvider` protocol with typed auth, metadata, cursor, and retained-body DTOs; Gmail implementation deferred |
-| API style | REST with an Orval-generated TypeScript client from OpenAPI, imported through `frontend/src/api` |
-| Data contracts | Pydantic v2 DTOs at every boundary |
-| API errors | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details |
-| Secret storage seam | Backend `SecretStore` protocol with Pydantic `SecretRef` identifiers and `SecretStr` values |
-| Frontend charting | Recharts through small accessible wrapper components; currently empty-state only until deterministic metrics APIs exist |
-| Secret storage | Backend `SecretStore` protocol with a default OS keyring adapter, Pydantic `SecretRef` identifiers, and `SecretStr` values |
-| Background sync | APScheduler in-process |
-| RAG agent | LangGraph hybrid router (structured query + semantic retrieval) |
-| Python tooling | uv, ruff, mypy, pre-commit |
+| Area                | Decision                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Backend             | FastAPI, Python 3.12, async                                                                                                |
+| Frontend            | React, TypeScript, Vite, shared accessible primitives                                                                      |
+| Database            | SQLite (single local file) through async SQLAlchemy + aiosqlite                                                            |
+| Migrations          | Alembic with SQLite batch mode; sqlite-vec and virtual tables are hand-written revisions                                   |
+| Vector store        | sqlite-vec (embeddings in the same SQLite file)                                                                            |
+| LLM providers       | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later                                                       |
+| Provider registry   | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
+| LLM provider seam   | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs                                       |
+| Email providers     | `EmailProvider` protocol with typed auth, metadata, cursor, and retained-body DTOs; Gmail implementation deferred          |
+| API style           | REST with an Orval-generated TypeScript client from OpenAPI, imported through `frontend/src/api`                           |
+| Data contracts      | Pydantic v2 DTOs at every boundary                                                                                         |
+| API errors          | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details                               |
+| Secret storage seam | Backend `SecretStore` protocol with Pydantic `SecretRef` identifiers and `SecretStr` values                                |
+| Frontend charting   | Recharts through small accessible wrapper components; currently empty-state only until deterministic metrics APIs exist    |
+| Secret storage      | Backend `SecretStore` protocol with a default OS keyring adapter, Pydantic `SecretRef` identifiers, and `SecretStr` values |
+| Background sync     | APScheduler in-process                                                                                                     |
+| RAG agent           | LangGraph hybrid router (structured query + semantic retrieval)                                                            |
+| Python tooling      | uv, ruff, mypy, pre-commit                                                                                                 |
 
 See `docs/groundwork-spec.md` for the full locked architecture and repository layout.
 
@@ -187,7 +172,7 @@ curl http://127.0.0.1:8000/health
 Expected response:
 
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
 Run the backend smoke test from `backend/`:
@@ -201,6 +186,20 @@ Run the frontend toolchain gate from `frontend/` after backend dependencies have
 ```sh
 npm run check
 ```
+
+Install the Chromium browser for the frontend Playwright smoke suite once per machine:
+
+```sh
+npx playwright install chromium
+```
+
+Run the frontend Playwright smoke suite from `frontend/`:
+
+```sh
+npm run test:smoke
+```
+
+The smoke suite starts the Vite dev server on `127.0.0.1:4173` and asserts the currently rendered Phase 0 shell for setup copy, sync readiness, and dashboard empty-state coverage.
 
 ## Development Commands
 
@@ -251,17 +250,13 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - Frontend lint check: `npm run lint` from `frontend/`.
 - Frontend unit tests: `npm run test` from `frontend/` runs Vitest with jsdom for component behavior such as UI primitive accessibility contracts.
 - Current frontend route-query helper: `frontend/src/lib/routeQuery.ts` parses, serializes, and patches URL query strings for URL-backed filter state.
-- Playwright smoke tests are not scaffolded yet; a later frontend ticket owns those checks.
-- Frontend unit test check: `npm run test` from `frontend/` runs Vitest in jsdom.
+- Frontend Playwright browser install: run `npx playwright install chromium` from `frontend/` once per machine before the browser smoke suite.
+- Frontend Playwright smoke tests: run `npm run test:smoke` from `frontend/`; the suite starts Vite on `127.0.0.1:4173` and covers the current Phase 0 setup copy, sync-readiness copy, and dashboard empty state.
 - Frontend tooling gate: after backend dependencies are synced with `uv`, `npm run check` from `frontend/` runs API contract generation and staleness checks, typecheck, lint, Vitest, and build.
 - Current frontend API boundary: import client types and helpers from `frontend/src/api`; `frontend/src/api/generated.ts` is the Orval-generated fetch client from `frontend/src/api/openapi.json`.
 - Frontend CI: `.github/workflows/frontend-ci.yml` runs on pushes and pull requests to `main`, installs `uv`, sets up Python 3.12, syncs locked backend dependencies, sets up Node.js with npm caching keyed by `frontend/package-lock.json`, runs `npm ci` from `frontend/`, and runs `npm run check` from `frontend/`.
 - Current frontend build check: `npm run build` from `frontend/`.
 - Current frontend preview server: `npm run preview` from `frontend/` after a successful build.
-- Frontend Playwright smoke scripts are not scaffolded yet; later Playwright tickets own those checks.
-- Frontend unit test scripts are scaffolded; Playwright smoke scripts are not scaffolded yet.
 - Classification changes: run the golden-set eval at `backend/evals/run_eval.py`; regressions block merges.
-- Playwright smoke scripts are not scaffolded yet; later Playwright tickets own those checks.
-- Classification changes: run the golden-set eval (`backend/evals/run_eval.py`); regressions block merges.
 
 Never claim work is complete without fresh verification evidence.
