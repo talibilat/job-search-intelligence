@@ -4,8 +4,15 @@ import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from app.config import GMAIL_READONLY_SCOPE, AppSettings, get_settings
+from app.api.auth import get_gmail_email_provider
+from app.config import GMAIL_READONLY_SCOPE, AppSettings, EmailProviderName, get_settings
 from app.main import create_app
+from app.providers.email import (
+    EmailAttachmentPolicy,
+    EmailAuthorizationStartRequest,
+    EmailAuthorizationStartResult,
+    EmailProviderCapabilities,
+)
 from fastapi.testclient import TestClient
 
 
@@ -33,6 +40,35 @@ def create_test_client(settings: AppSettings) -> TestClient:
     fastapi_app = create_app()
     fastapi_app.dependency_overrides[get_settings] = lambda: settings
     return TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+
+
+class FakeGmailProvider:
+    name = EmailProviderName.GMAIL
+    capabilities = EmailProviderCapabilities(
+        provider=EmailProviderName.GMAIL,
+        required_scopes=(GMAIL_READONLY_SCOPE,),
+        supports_oauth=True,
+        supports_full_backfill=True,
+        supports_incremental_sync=True,
+        attachment_policy=EmailAttachmentPolicy.IGNORED,
+        max_metadata_page_size=500,
+        max_body_batch_size=100,
+    )
+
+    def __init__(self) -> None:
+        self.start_request: EmailAuthorizationStartRequest | None = None
+
+    async def start_authorization(
+        self,
+        request: EmailAuthorizationStartRequest,
+    ) -> EmailAuthorizationStartResult:
+        self.start_request = request
+        return EmailAuthorizationStartResult(
+            provider=request.provider,
+            authorization_url=f"https://example.test/oauth?state={request.state}",
+            state=request.state,
+            requested_scopes=self.capabilities.required_scopes,
+        )
 
 
 def test_gmail_auth_endpoint_returns_readonly_authorization_url_without_secrets(
@@ -86,3 +122,23 @@ def test_gmail_auth_endpoint_returns_typed_error_for_missing_client_config(
             "details": [],
         }
     }
+
+
+def test_gmail_auth_endpoint_uses_injected_email_provider() -> None:
+    fastapi_app = create_app()
+    fake_provider = FakeGmailProvider()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(_env_file=None)
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+
+    response = client.get("/auth/gmail")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["authorization_url"] == f"https://example.test/oauth?state={payload['state']}"
+    assert fake_provider.start_request is not None
+    assert fake_provider.start_request.provider is EmailProviderName.GMAIL
+    assert (
+        fake_provider.start_request.redirect_uri
+        == "http://127.0.0.1:8000/auth/gmail/callback"
+    )

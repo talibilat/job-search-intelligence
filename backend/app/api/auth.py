@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, Request
 
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.config import AppSettings, get_settings
-from app.providers.email import EmailAuthorizationStartResult, EmailProviderAuthError
+from app.providers.email import (
+    EmailAuthorizationStartResult,
+    EmailProvider,
+    EmailProviderAuthError,
+)
+from app.providers.email.gmail import GmailEmailProvider
 from app.services.gmail_auth import (
     OAuthStateFactory,
     generate_oauth_state,
@@ -20,6 +25,12 @@ def get_oauth_state_factory() -> OAuthStateFactory:
     return generate_oauth_state
 
 
+def get_gmail_email_provider(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> EmailProvider:
+    return GmailEmailProvider(settings=settings)
+
+
 @router.get(
     "/gmail",
     response_model=EmailAuthorizationStartResult,
@@ -27,13 +38,13 @@ def get_oauth_state_factory() -> OAuthStateFactory:
 )
 async def gmail_auth_url(
     request: Request,
-    settings: Annotated[AppSettings, Depends(get_settings)],
+    email_provider: Annotated[EmailProvider, Depends(get_gmail_email_provider)],
     state_factory: Annotated[OAuthStateFactory, Depends(get_oauth_state_factory)],
 ) -> EmailAuthorizationStartResult:
     redirect_uri = f"{str(request.base_url).rstrip('/')}/auth/gmail/callback"
     try:
         return await start_gmail_authorization(
-            settings=settings,
+            email_provider=email_provider,
             redirect_uri=redirect_uri,
             state_factory=state_factory,
         )

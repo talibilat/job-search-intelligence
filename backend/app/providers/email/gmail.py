@@ -22,7 +22,6 @@ from app.providers.email.provider import (
     EmailProviderError,
 )
 
-_GMAIL_RUNTIME_NOT_IMPLEMENTED = "Gmail provider runtime is not implemented yet."
 _GMAIL_MAX_BODY_BATCH_SIZE = 100
 
 
@@ -44,7 +43,7 @@ class GoogleOAuthClientConfig(BaseModel):
 
 
 class GmailEmailProvider:
-    """Gmail `EmailProvider` skeleton for Phase 1 ingestion work."""
+    """Provider-specific Gmail email adapter."""
 
     name = EmailProviderName.GMAIL
 
@@ -95,24 +94,26 @@ class GmailEmailProvider:
         self,
         request: EmailAuthorizationCallbackRequest,
     ) -> EmailConnection:
-        raise _gmail_runtime_not_implemented()
+        raise EmailProviderAuthError(public_message="Gmail OAuth callback is not implemented yet.")
 
     async def refresh_connection(self, connection: EmailConnection) -> EmailConnection:
-        raise _gmail_runtime_not_implemented()
+        raise EmailProviderAuthError(
+            public_message="Gmail credential refresh is not implemented yet."
+        )
 
     async def list_message_metadata(
         self,
         connection: EmailConnection,
         request: EmailMetadataListRequest,
     ) -> EmailMetadataPage:
-        raise _gmail_runtime_not_implemented()
+        raise EmailProviderError(public_message="Gmail metadata sync is not implemented yet.")
 
     async def fetch_message_bodies(
         self,
         connection: EmailConnection,
         request: EmailBodyFetchRequest,
     ) -> EmailBodyBatch:
-        raise _gmail_runtime_not_implemented()
+        raise EmailProviderError(public_message="Gmail body fetching is not implemented yet.")
 
     def _load_client_config(self) -> GoogleOAuthClientConfig:
         try:
@@ -153,7 +154,3 @@ class GmailEmailProvider:
         )
         separator = "&" if "?" in client_config.installed.auth_uri else "?"
         return f"{client_config.installed.auth_uri}{separator}{query}"
-
-
-def _gmail_runtime_not_implemented() -> EmailProviderError:
-    return EmailProviderError(public_message=_GMAIL_RUNTIME_NOT_IMPLEMENTED)
