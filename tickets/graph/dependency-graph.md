@@ -73,7 +73,7 @@ A stage may start only when every earlier stage is done.
 - JT-069 (#69) Store Gmail history ID [deps: JT-013, JT-017, JT-026]
 - JT-071 (#71) Handle expired history IDs [deps: JT-013, JT-017, JT-026]
 - JT-072 (#72) Add sync job status model [deps: JT-013, JT-017, JT-026]
-- JT-073 (#73) Add sync service [deps: JT-013, JT-017, JT-026]
+- JT-073 (#73) Add sync service [deps: JT-013, JT-017, JT-026, JT-069]
 - JT-075 (#75) Add APScheduler sync-on-open hook [deps: JT-013, JT-017, JT-026]
 - JT-079 (#79) Add ingestion error handling [deps: JT-013, JT-017, JT-026]
 - JT-080 (#80) Add ingestion smoke tests [deps: JT-013, JT-017, JT-026]

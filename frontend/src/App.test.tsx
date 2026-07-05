@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
+import styles from "./index.css?raw";
 
 function renderAtPath(pathname: string) {
   window.history.pushState({}, "", pathname);
@@ -61,6 +62,37 @@ describe("App", () => {
     ).toBeTruthy();
     expect(screen.getByText("Choose provider")).toBeTruthy();
     expect(screen.getByText("Connect Gmail read-only")).toBeTruthy();
+  });
+
+  it("renders the empty chat shell at the chat route", () => {
+    window.history.pushState({}, "", "/chat");
+
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /ask your job search history/i,
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: /message/i })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(
+      screen.getByText(/chat agent work arrives in phase 5/i),
+    ).toBeTruthy();
+  });
+
+  it("keeps the chat shell constrained on narrow mobile viewports", () => {
+    expect(styles).toContain(".chat-hero h1");
+    expect(styles).toContain("font-size: clamp(2rem, 9vw, 2.45rem)");
+    expect(styles).toContain("width: min(100%, 390px)");
+    expect(styles).toContain("margin: 0 auto 0 0");
+    expect(styles).toContain(".chat-panel");
+    expect(styles).toContain("padding: 18px");
+    expect(styles).toContain(".chat-card");
+    expect(styles).toContain("padding: 20px");
   });
 
   it("renders an empty dashboard page shell at the dashboard route", () => {

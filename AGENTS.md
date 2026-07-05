@@ -138,6 +138,7 @@ If a task crosses phases, split it or ask for explicit approval.
 Preserve these core tables unless a documented migration changes them:
 
 - `raw_emails`
+- `email_sync_state` for opaque provider-owned incremental sync cursors
 - `email_classifications`
 - `applications`
 - `application_events`
@@ -300,7 +301,7 @@ Never claim that work is complete without fresh verification evidence.
 
 ## Current Repository State
 
-At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, empty dashboard route shell, Recharts chart wrapper foundation, shared accessible UI primitives, root pre-commit configuration, and backend and frontend CI, but not the full product scaffold.
+At the time this file was written, the repository contains planning docs and a partial Phase 0 scaffold, including the backend app shell, frontend Vite shell, empty dashboard and chat route shells, Recharts chart wrapper foundation, shared accessible UI primitives, root pre-commit configuration, and backend and frontend CI, but not the full product scaffold.
 Do not assume backend, frontend, tickets, scripts, or CI exist until you inspect the filesystem.
 
 When scaffolding begins, follow the layout in `docs/groundwork-spec.md` unless the user approves a change.

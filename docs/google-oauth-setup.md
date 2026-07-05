@@ -116,6 +116,7 @@ Access tokens and refresh tokens must flow through the existing `SecretStore` se
 The configured `SecretStore` adapter must store token material encrypted at rest, using OS keyring by default or the documented Fernet fallback.
 
 Provider connection records should persist only non-secret metadata and a `SecretRef` to the stored token.
+Incremental sync history IDs are opaque provider cursor state, not token material; store them in local SQLite sync state scoped to the Gmail account and never log them with OAuth tokens or email content.
 Logs, API responses, provider DTO dumps, and test fixtures must not expose raw token values.
 
 ## Preflight Checklist

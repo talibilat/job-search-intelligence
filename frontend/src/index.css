@@ -251,6 +251,103 @@ h3 {
   margin-top: 18px;
 }
 
+.chat-shell {
+  display: grid;
+  gap: 32px;
+}
+
+.chat-hero {
+  max-width: 760px;
+}
+
+.chat-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
+  gap: 24px;
+  min-width: 0;
+  padding: 32px;
+  border: 1px solid #d8d0bf;
+  border-radius: 28px;
+  background: #fffaf0;
+  box-shadow: 0 24px 70px rgb(36 50 38 / 12%);
+}
+
+.chat-panel__header {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.chat-panel__header p:last-child {
+  margin-bottom: 0;
+  color: #4e5e53;
+  font-size: 1.05rem;
+}
+
+.chat-card {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 220px;
+  padding: 24px;
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgb(255 250 240 / 8%), rgb(63 107 82 / 28%)),
+    #102417;
+  color: #c9d8ce;
+}
+
+.chat-card__title {
+  margin-bottom: 0;
+  color: #fffaf0;
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.chat-card p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-composer {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 22px;
+  background: #edf6eb;
+}
+
+.chat-composer__label {
+  color: #203f2c;
+  font-weight: 900;
+}
+
+.chat-textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  padding: 0.9rem 1rem;
+  border: 1px solid #b8c8ae;
+  border-radius: 18px;
+  background: #fffdf7;
+  color: #132019;
+}
+
+.chat-textarea:disabled {
+  color: #657269;
+  cursor: not-allowed;
+}
+
+.chat-composer__hint {
+  margin-bottom: 0;
+  color: #4e5e53;
+  font-size: 0.92rem;
+}
+
 .dashboard-shell {
   display: grid;
   gap: 24px;
@@ -360,10 +457,19 @@ h3 {
     padding: 40px 18px;
   }
 
+  .chat-shell {
+    width: min(100%, 390px);
+    margin: 0 auto 0 0;
+  }
+
   h1 {
     font-size: clamp(2.1rem, 10vw, 3rem);
     line-height: 0.98;
     letter-spacing: -0.06em;
+  }
+
+  .chat-hero h1 {
+    font-size: clamp(2rem, 9vw, 2.45rem);
   }
 
   .status-card {
@@ -377,6 +483,15 @@ h3 {
 
   .chart-empty-state {
     padding: 24px;
+  }
+
+  .chat-panel {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px;
+  }
+
+  .chat-card {
+    padding: 20px;
   }
 
   .dashboard-hero,
