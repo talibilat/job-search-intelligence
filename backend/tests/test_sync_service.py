@@ -415,6 +415,7 @@ def test_paginated_sync_with_cursor_requires_explicit_mode() -> None:
 
     assert provider.requests == []
 
+
 def test_manual_sync_backfills_all_pages_and_persists_latest_cursor() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
