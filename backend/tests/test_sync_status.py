@@ -90,22 +90,17 @@ def test_sync_status_endpoint_exposes_typed_idle_status() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["phase"] == "idle"
+    assert payload["state"] == "idle"
     assert payload["provider"] is None
     assert payload["account_id"] is None
-    assert payload["counts"] == {
-        "metadata_pages": 0,
-        "metadata_messages": 0,
-        "raw_emails_written": 0,
-        "retained_bodies": 0,
-        "errors": 0,
-    }
-    assert payload["errors"] == []
+    assert payload["mode"] is None
     assert payload["started_at"] is None
-    assert payload["completed_at"] is None
-    assert payload["last_run_at"] is None
-    assert payload["progress"] == 0
-    assert isinstance(datetime.fromisoformat(payload["updated_at"]), datetime)
+    assert payload["finished_at"] is None
+    assert payload["page_count"] == 0
+    assert payload["message_count"] == 0
+    assert payload["raw_email_count"] == 0
+    assert payload["recovered_from_expired_cursor"] is False
+    assert payload["last_error"] is None
 
 
 def test_sync_status_endpoint_is_documented_in_openapi() -> None:
@@ -116,4 +111,4 @@ def test_sync_status_endpoint_is_documented_in_openapi() -> None:
     assert response.status_code == 200
     operation = response.json()["paths"]["/sync/status"]["get"]
     schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
-    assert schema["$ref"] == "#/components/schemas/SyncJobStatus"
+    assert schema["$ref"] == "#/components/schemas/EmailSyncStatus"

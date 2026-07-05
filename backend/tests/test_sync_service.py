@@ -13,7 +13,11 @@ from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
     EmailAttachmentPolicy,
+    EmailBodyBatch,
+    EmailBodyFetchRequest,
+    EmailBodySource,
     EmailConnection,
+    EmailMessageBody,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
@@ -22,6 +26,7 @@ from app.providers.email import (
     EmailProviderCursor,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
+    build_broad_candidate_query,
 )
 from app.security import SecretKind, SecretRef
 from app.services.sync_service import (
@@ -100,6 +105,57 @@ class RecordingHistoryProvider:
                 issued_at=NOW,
             ),
         )
+
+
+class RecordingRetainedBodyProvider(RecordingHistoryProvider):
+    capabilities = EmailProviderCapabilities(
+        provider=EmailProviderName.GMAIL,
+        required_scopes=(GMAIL_READONLY_SCOPE,),
+        supports_oauth=True,
+        supports_full_backfill=True,
+        supports_incremental_sync=True,
+        attachment_policy=EmailAttachmentPolicy.IGNORED,
+        max_metadata_page_size=500,
+        max_body_batch_size=100,
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.body_requests: list[EmailBodyFetchRequest] = []
+
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        self.body_requests.append(request)
+        return EmailBodyBatch(
+            bodies=tuple(
+                EmailMessageBody(
+                    ref=ref,
+                    body_text=f"Retained body for {ref.message_id}",
+                    body_source=EmailBodySource.TEXT_PLAIN,
+                    truncated=False,
+                    fetched_at=NOW,
+                )
+                for ref in request.refs
+            )
+        )
+
+
+class PagingRetainedBodyProvider(RecordingRetainedBodyProvider):
+    def __init__(self, pages: tuple[EmailMetadataPage, ...]) -> None:
+        super().__init__()
+        self._pages = list(pages)
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        del connection
+        self.requests.append(request)
+        return self._pages.pop(0)
 
 
 class RecordingScheduler:
@@ -598,6 +654,69 @@ def test_manual_sync_metadata_upsert_preserves_existing_retained_body() -> None:
     assert tuple(row) == ("Retained candidate body", "retained", "Application received")
 
 
+def test_manual_sync_persists_retained_bodies_for_candidate_messages() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    mailbox = email_connection()
+    provider = PagingRetainedBodyProvider(
+        (
+            EmailMetadataPage(
+                messages=(
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-candidate",
+                            thread_id="thread-candidate",
+                        ),
+                        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Application received",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-newsletter",
+                            thread_id="thread-newsletter",
+                        ),
+                        from_addr=EmailAddress(address="news@example.com"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Product newsletter",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-next",
+                    issued_at=NOW,
+                ),
+            ),
+        )
+    )
+    service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
+        clock=lambda: NOW,
+    )
+
+    asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    rows = connection.execute(
+        "SELECT id, body_text, body_retention_state FROM raw_emails ORDER BY id"
+    ).fetchall()
+    assert [tuple(row) for row in rows] == [
+        ("gmail-candidate", "Retained body for gmail-candidate", "retained"),
+        ("gmail-newsletter", None, "metadata_only"),
+    ]
+    assert len(provider.body_requests) == 1
+    assert [ref.message_id for ref in provider.body_requests[0].refs] == ["gmail-candidate"]
+
+
 def test_manual_sync_updates_running_status_between_pages() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -646,6 +765,92 @@ def test_manual_sync_records_failed_status_when_provider_fails() -> None:
     assert status.state is EmailSyncRunState.FAILED
     assert status.last_error == "Sync failed."
     assert status.finished_at == NOW
+
+
+def test_sync_service_fetches_retained_bodies_only_for_candidates_and_debug_refs() -> None:
+    provider = RecordingRetainedBodyProvider()
+    service = EmailSyncService(provider=provider, page_size=250)
+    connection = email_connection()
+    candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id="msg-candidate",
+            thread_id="thread-candidate",
+        ),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Weekly digest",
+        labels=("INBOX",),
+    )
+    non_candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id="msg-newsletter",
+            thread_id="thread-newsletter",
+        ),
+        from_addr=EmailAddress(address="news@example.com"),
+        subject="Product newsletter",
+        labels=("INBOX",),
+    )
+    debugging_ref = EmailMessageRef(
+        account=connection.account,
+        message_id="msg-debugging",
+        thread_id="thread-debugging",
+    )
+
+    batch = asyncio.run(
+        service.fetch_retained_bodies(
+            connection=connection,
+            metadata=(candidate, non_candidate),
+            candidate_query=build_broad_candidate_query(),
+            reconciliation_or_debug_refs=(debugging_ref,),
+            max_body_bytes=10_000,
+        )
+    )
+
+    assert [body.ref.message_id for body in batch.bodies] == [
+        "msg-candidate",
+        "msg-debugging",
+    ]
+    assert len(provider.body_requests) == 1
+    assert [ref.message_id for ref in provider.body_requests[0].refs] == [
+        "msg-candidate",
+        "msg-debugging",
+    ]
+    assert provider.body_requests[0].max_body_bytes == 10_000
+
+
+def test_sync_service_chunks_retained_body_fetches_by_provider_limit() -> None:
+    provider = RecordingRetainedBodyProvider()
+    service = EmailSyncService(provider=provider, page_size=250)
+    connection = email_connection()
+    metadata = tuple(
+        EmailMessageMetadata(
+            ref=EmailMessageRef(
+                account=connection.account,
+                message_id=f"msg-candidate-{index}",
+                thread_id=f"thread-candidate-{index}",
+            ),
+            from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+            subject="Application received",
+            labels=("INBOX",),
+        )
+        for index in range(101)
+    )
+
+    batch = asyncio.run(
+        service.fetch_retained_bodies(
+            connection=connection,
+            metadata=metadata,
+            candidate_query=build_broad_candidate_query(),
+            max_body_bytes=10_000,
+        )
+    )
+
+    assert len(batch.bodies) == 101
+    assert [len(request.refs) for request in provider.body_requests] == [100, 1]
+    assert provider.body_requests[0].refs[0].message_id == "msg-candidate-0"
+    assert provider.body_requests[1].refs[0].message_id == "msg-candidate-100"
+    assert all(request.max_body_bytes == 10_000 for request in provider.body_requests)
 
 
 def email_connection() -> EmailConnection:

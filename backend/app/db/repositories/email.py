@@ -9,7 +9,7 @@ from app.config import EmailProviderName
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
 from app.models.records import RawEmailBodyRetentionState, RawEmailRecord
-from app.providers.email import EmailAddress, EmailMessageMetadata
+from app.providers.email import EmailAddress, EmailMessageBody, EmailMessageMetadata
 
 
 class EmailRepository(BaseRepository[RawEmailRecord]):
@@ -108,6 +108,44 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             for message in messages
         )
         return len(messages)
+
+    def upsert_retained_bodies(
+        self,
+        bodies: Iterable[EmailMessageBody],
+        *,
+        retention_state: RawEmailBodyRetentionState = RawEmailBodyRetentionState.RETAINED,
+    ) -> int:
+        """Attach retained body text to existing raw-email metadata rows."""
+
+        body_tuple = tuple(bodies)
+        if not body_tuple:
+            return 0
+        if retention_state is RawEmailBodyRetentionState.METADATA_ONLY:
+            msg = "retained body writes require a retained body state"
+            raise ValueError(msg)
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            self.execute_many(
+                """
+                UPDATE raw_emails
+                SET body_text = ?, body_retention_state = ?
+                WHERE id = ? AND provider = ?
+                """,
+                [
+                    (
+                        body.body_text,
+                        retention_state.value,
+                        body.ref.message_id,
+                        body.ref.account.provider.value,
+                    )
+                    for body in body_tuple
+                ],
+            )
+
+        if should_commit:
+            self.connection.commit()
+        return len(body_tuple)
 
     def count_raw_emails(self, *, provider: EmailProviderName | None = None) -> int:
         if provider is None:

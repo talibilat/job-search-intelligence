@@ -11,16 +11,30 @@ from app.config import EmailProviderName
 from app.db.repositories import BackfillStateRepository, EmailRepository
 from app.db.repositories.sync_state import SyncStateRepository
 from app.models import SyncJobCounts, SyncJobPhase, SyncJobStatus
-from app.models.records import EmailBackfillStateRecord, EmailBackfillStatus, EmailSyncStateRecord
+from app.models.records import (
+    EmailBackfillStateRecord,
+    EmailBackfillStatus,
+    EmailSyncStateRecord,
+    RawEmailBodyRetentionState,
+)
 from app.providers.email import (
     EmailAccountRef,
+    EmailBodyBatch,
+    EmailBodyFetchFailure,
+    EmailBodyFetchRequest,
+    EmailCandidateQuery,
     EmailConnection,
+    EmailMessageBody,
+    EmailMessageMetadata,
+    EmailMessageRef,
     EmailMetadataListRequest,
     EmailMetadataPage,
+    EmailProviderCapabilities,
     EmailProviderCursor,
     EmailProviderError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
+    build_broad_candidate_query,
 )
 
 SyncJob = Callable[[], Awaitable[None]]
@@ -389,6 +403,16 @@ class MetadataListingProvider(Protocol):
         ...
 
 
+class RetainedBodyProvider(Protocol):
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        """Return retained bodies for selected provider message refs."""
+        ...
+
+
 class EmailSyncPageResult(BaseModel):
     """One metadata sync page plus the mode that produced it."""
 
@@ -410,7 +434,7 @@ class EmailBackfillPageResult(BaseModel):
 
 
 class EmailSyncService:
-    """Service-layer coordination for resumable provider metadata sync."""
+    """Service-layer coordination for resumable sync and retained-body storage."""
 
     def __init__(
         self,
@@ -421,11 +445,13 @@ class EmailSyncService:
         sync_service: SyncService | None = None,
         clock: Callable[[], datetime] | None = None,
         status_callback: Callable[[EmailSyncStatus], None] | None = None,
+        body_provider: RetainedBodyProvider | None = None,
     ) -> None:
         if page_size < 1:
             msg = "page_size must be at least 1"
             raise ValueError(msg)
         self._provider = provider
+        self._body_provider = body_provider or cast(RetainedBodyProvider, provider)
         self._page_size = page_size
         self._email_repository = email_repository
         self._sync_service = sync_service
@@ -437,7 +463,7 @@ class EmailSyncService:
         return self._status
 
     async def run_manual_sync(self, *, connection: EmailConnection) -> EmailSyncStatus:
-        """Run a manual sync using full backfill first, then incremental cursors."""
+        """Run metadata sync and retain bodies for broad job-search candidates."""
 
         if self._email_repository is None or self._sync_service is None:
             raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
@@ -583,6 +609,54 @@ class EmailSyncService:
             state=state,
         )
 
+    async def fetch_retained_bodies(
+        self,
+        *,
+        connection: EmailConnection,
+        metadata: Iterable[EmailMessageMetadata],
+        candidate_query: EmailCandidateQuery,
+        reconciliation_or_debug_refs: Iterable[EmailMessageRef] = (),
+        max_body_bytes: int | None = None,
+    ) -> EmailBodyBatch:
+        """Fetch bodies only for broad candidates or explicit reconciliation refs."""
+
+        selected_refs: list[EmailMessageRef] = []
+        seen_message_ids: set[str] = set()
+
+        def select_ref(ref: EmailMessageRef) -> None:
+            if ref.message_id in seen_message_ids:
+                return
+            seen_message_ids.add(ref.message_id)
+            selected_refs.append(ref)
+
+        for message in metadata:
+            if candidate_query.matches_metadata(message):
+                select_ref(message.ref)
+
+        for ref in reconciliation_or_debug_refs:
+            select_ref(ref)
+
+        if not selected_refs:
+            return EmailBodyBatch(bodies=(), failures=())
+
+        bodies: list[EmailMessageBody] = []
+        failures: list[EmailBodyFetchFailure] = []
+        for ref_chunk in _chunk_refs(
+            selected_refs,
+            chunk_size=_retained_body_batch_size(self._body_provider) or len(selected_refs),
+        ):
+            batch = await self._body_provider.fetch_message_bodies(
+                connection,
+                EmailBodyFetchRequest(
+                    refs=ref_chunk,
+                    max_body_bytes=max_body_bytes,
+                ),
+            )
+            bodies.extend(batch.bodies)
+            failures.extend(batch.failures)
+
+        return EmailBodyBatch(bodies=tuple(bodies), failures=tuple(failures))
+
     async def _list_full_backfill_page(
         self,
         connection: EmailConnection,
@@ -642,6 +716,17 @@ class EmailSyncService:
                     page_result.page.messages,
                     ingested_at=self._clock(),
                 )
+                if _can_fetch_retained_bodies(self._body_provider):
+                    body_batch = await self.fetch_retained_bodies(
+                        connection=connection,
+                        metadata=page_result.page.messages,
+                        candidate_query=build_broad_candidate_query(),
+                    )
+                    if body_batch.bodies:
+                        self._email_repository.upsert_retained_bodies(
+                            body_batch.bodies,
+                            retention_state=RawEmailBodyRetentionState.RETAINED,
+                        )
             if page_result.page.next_sync_cursor is not None:
                 latest_cursor = page_result.page.next_sync_cursor
             self._set_status(
@@ -699,6 +784,27 @@ class EmailSyncService:
             ),
             recovered_from_expired_cursor=recovered_from_expired_cursor,
         )
+
+
+def _retained_body_batch_size(body_provider: RetainedBodyProvider) -> int | None:
+    capabilities = getattr(body_provider, "capabilities", None)
+    if not isinstance(capabilities, EmailProviderCapabilities):
+        return None
+    return capabilities.max_body_batch_size
+
+
+def _can_fetch_retained_bodies(body_provider: object) -> bool:
+    return callable(getattr(body_provider, "fetch_message_bodies", None))
+
+
+def _chunk_refs(
+    refs: list[EmailMessageRef],
+    *,
+    chunk_size: int,
+) -> tuple[tuple[EmailMessageRef, ...], ...]:
+    return tuple(
+        tuple(refs[index : index + chunk_size]) for index in range(0, len(refs), chunk_size)
+    )
 
 
 def build_idle_sync_status(*, now: datetime | None = None) -> SyncJobStatus:

@@ -140,7 +140,7 @@ def test_get_sync_status_returns_current_runtime_status() -> None:
     response = client.get("/sync/status")
 
     assert response.status_code == 200
-    assert response.json()["phase"] == "idle"
+    assert response.json()["state"] == "idle"
 
 
 def test_post_sync_returns_typed_error_until_gmail_connection_is_configured() -> None:
@@ -187,7 +187,7 @@ def test_post_sync_uses_dependency_wired_provider_repositories_and_connection(
 
     status_response = client.get("/sync/status")
     assert status_response.status_code == 200
-    assert status_response.json()["phase"] == "completed"
+    assert status_response.json()["state"] == "succeeded"
 
     with sqlite3.connect(database_path) as connection:
         row = connection.execute("SELECT COUNT(*) FROM raw_emails").fetchone()
