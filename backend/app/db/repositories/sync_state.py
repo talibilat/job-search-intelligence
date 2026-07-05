@@ -13,20 +13,6 @@ from app.providers.email import EmailAccountRef, EmailProviderCursor
 class SyncStateRepository(BaseRepository[EmailSyncStateRecord]):
     """Persist provider-owned email sync anchors for resumable ingestion."""
 
-    def ensure_schema(self) -> None:
-        self.execute(
-            """
-            CREATE TABLE IF NOT EXISTS email_sync_state (
-                provider TEXT NOT NULL,
-                account_id TEXT NOT NULL,
-                sync_cursor TEXT NOT NULL,
-                cursor_issued_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (provider, account_id)
-            )
-            """,
-        )
-
     def save_cursor(
         self,
         cursor: EmailProviderCursor,
@@ -36,7 +22,6 @@ class SyncStateRepository(BaseRepository[EmailSyncStateRecord]):
         should_commit = not self.connection.in_transaction
 
         with self.transaction():
-            self.ensure_schema()
             self.execute(
                 """
                 INSERT INTO email_sync_state (
@@ -70,7 +55,6 @@ class SyncStateRepository(BaseRepository[EmailSyncStateRecord]):
         return record
 
     def fetch_state(self, account: EmailAccountRef) -> EmailSyncStateRecord | None:
-        self.ensure_schema()
         return self.fetch_one(
             """
             SELECT

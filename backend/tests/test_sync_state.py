@@ -4,6 +4,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from app.config import EmailProviderName
@@ -15,8 +16,16 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 7, 5, 9, 0, tzinfo=UTC)
 
 
-def test_sync_service_persists_latest_gmail_history_id() -> None:
-    repository = SyncStateRepository(sqlite3.connect(":memory:"))
+def migrated_connection(tmp_path: Path) -> sqlite3.Connection:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
+    command.upgrade(config, "head")
+    return sqlite3.connect(database_path)
+
+
+def test_sync_service_persists_latest_gmail_history_id(tmp_path: Path) -> None:
+    repository = SyncStateRepository(migrated_connection(tmp_path))
     service = SyncService(sync_state_repository=repository)
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
 
@@ -45,8 +54,8 @@ def test_sync_service_persists_latest_gmail_history_id() -> None:
     assert row[0] == 1
 
 
-def test_sync_state_is_scoped_by_gmail_account() -> None:
-    repository = SyncStateRepository(sqlite3.connect(":memory:"))
+def test_sync_state_is_scoped_by_gmail_account(tmp_path: Path) -> None:
+    repository = SyncStateRepository(migrated_connection(tmp_path))
     service = SyncService(sync_state_repository=repository)
     first_account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
     second_account = EmailAccountRef(
@@ -70,6 +79,14 @@ def test_sync_state_is_scoped_by_gmail_account() -> None:
     assert first_cursor.value == "history-10"
     assert second_cursor is not None
     assert second_cursor.value == "history-20"
+
+
+def test_sync_state_repository_does_not_create_missing_schema() -> None:
+    repository = SyncStateRepository(sqlite3.connect(":memory:"))
+    account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
+
+    with pytest.raises(sqlite3.OperationalError, match="no such table: email_sync_state"):
+        repository.fetch_state(account)
 
 
 def test_alembic_upgrade_creates_email_sync_state_table(tmp_path: Path) -> None:
