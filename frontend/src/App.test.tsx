@@ -3,6 +3,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
 import styles from "./index.css?raw";
 
+function renderAtPath(pathname: string) {
+  window.history.pushState({}, "", pathname);
+  return render(<App />);
+}
+
 afterEach(() => {
   cleanup();
   window.history.pushState({}, "", "/");
@@ -23,9 +28,7 @@ describe("App", () => {
   });
 
   it("shows a chart foundation empty state without implementing dashboard metrics", () => {
-    window.history.pushState({}, "", "/");
-
-    render(<App />);
+    renderAtPath("/");
 
     expect(
       screen.getByRole("region", { name: "Chart foundation" }),
@@ -90,5 +93,28 @@ describe("App", () => {
     expect(styles).toContain("padding: 18px");
     expect(styles).toContain(".chat-card");
     expect(styles).toContain("padding: 20px");
+  });
+
+  it("renders an empty dashboard page shell at the dashboard route", () => {
+    renderAtPath("/dashboard");
+
+    expect(screen.getByRole("main", { name: "Dashboard" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Dashboard" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Dashboard filters" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Metrics overview" }),
+    ).toBeTruthy();
+
+    const emptyState = screen.getByRole("status", {
+      name: "Dashboard metrics pending",
+    });
+
+    expect(emptyState.textContent).toContain(
+      "Deterministic metrics will appear here after the metrics API is available.",
+    );
   });
 });

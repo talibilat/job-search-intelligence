@@ -46,6 +46,8 @@ The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
 The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
 The frontend also has a primary navigation shell with a `/setup` Phase 0 setup page for provider, mode, Gmail read-only, privacy, checklist, disabled action, and not-ready copy.
+The frontend also has an empty `/dashboard` page shell with placeholder filter and metrics regions.
+The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
 The frontend also has an empty `/chat` route shell with a disabled composer for the later Phase 5 RAG chat work.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations, plus an exported Gmail provider skeleton.
@@ -54,9 +56,9 @@ There is configuration infrastructure, a keyring-backed secret-store path, Alemb
 What does not exist yet is the full product.
 There is no working Gmail sync yet.
 There is no application database schema or ingestion pipeline yet.
-There is no real dashboard yet.
+There is no populated metrics dashboard yet.
 There is no backend chat agent, retrieval, streaming, or persisted chat history yet.
-There is no concrete Azure OpenAI, Ollama, or Gmail adapter yet.
+There is no concrete Azure OpenAI or Ollama adapter yet.
 
 ## #1 JT-001 - Create Private GitHub Repository
 
@@ -818,7 +820,7 @@ Expected result:
 Opening that URL should show the static JobTracker shell.
 
 Caveat:
-At the time this shell landed, there was no real dashboard, generated API client, routing, Playwright smoke suite, or backend integration yet.
+At the time this shell landed, dashboard routing, generated API client work, Playwright smoke suite, and backend integration were reserved for later tickets.
 
 ## #34 JT-034 - Configure Frontend Lint And Type Checks
 
