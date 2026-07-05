@@ -118,6 +118,7 @@ job-search-intelligence/
 
 - **`raw_emails`** - `id` (provider msg id), `thread_id`, `from_addr`, `to_addr`, `subject`, `sent_at`, `body_text`, `body_retention_state`, `labels`, `provider`, `ingested_at`.
   `body_retention_state` is `metadata_only`, `retained`, or `debugging`; metadata-only rows must not carry `body_text`, while retained and debugging rows must carry it.
+[JT-065 2026-07-05 v3] Current raw email retention states are `metadata_only`, `retained`, and `debugging`; `metadata_only` rows omit `body_text`, while retained and debugging rows include `body_text`.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
@@ -143,8 +144,7 @@ EmailProvider -> metadata-only raw_emails
                  │
                  ├─ full backfill: paginated metadata pages, no body snippets
                  ├─ incremental sync: provider-owned cursor required
-                 └─ candidate query applied after listing; retained bodies fetched only for selected candidate/reconciliation refs
-                 └─ retained bodies fetched only for selected candidate or debugging/reconciliation refs
+                 └─ candidate query applied after listing; retained bodies fetched only for selected candidate or debugging/reconciliation refs
                  │
                  ▼
    1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
