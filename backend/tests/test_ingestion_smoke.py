@@ -132,25 +132,27 @@ def test_ingestion_smoke_metadata_replay_preserves_retained_raw_email_body() -> 
     assert stored.body_retention_state is RawEmailBodyRetentionState.RETAINED
 
 
-def test_ingestion_smoke_sync_state_tracks_latest_cursor() -> None:
+def test_ingestion_smoke_sync_state_status_tracks_latest_cursor() -> None:
     connection = sqlite3.connect(":memory:")
     create_email_sync_state_table(connection)
     service = SyncService(sync_state_repository=SyncStateRepository(connection))
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
 
-    assert service.get_sync_cursor(account) is None
+    assert service.get_sync_status(account) is None
 
     service.store_sync_cursor(
         EmailProviderCursor(account=account, value="history-10", issued_at=NOW),
         updated_at=NOW,
     )
 
-    status_cursor = service.get_sync_cursor(account)
+    status = service.get_sync_status(account)
 
-    assert status_cursor is not None
-    assert status_cursor.account == account
-    assert status_cursor.value == "history-10"
-    assert status_cursor.issued_at == NOW
+    assert status is not None
+    assert status.account == account
+    assert status.cursor is not None
+    assert status.cursor.value == "history-10"
+    assert status.cursor.issued_at == NOW
+    assert status.last_state_update_at == NOW
 
 
 def email_connection() -> EmailConnection:
