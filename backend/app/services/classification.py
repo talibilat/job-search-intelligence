@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.config import AppSettings, LLMProviderName
 from app.models import EmailClassificationCandidate, EmailClassificationRecord
 from app.pipeline.classify import (
+    AcceptedLLMExtraction,
     ClassificationPromptEmail,
     MalformedLLMExtraction,
     build_classification_prompt_request,
@@ -27,16 +28,20 @@ class ClassificationServiceResult(BaseModel):
     candidate_count: int = Field(ge=0)
     classified_count: int = Field(ge=0)
     malformed_count: int = Field(ge=0)
-    classifications: tuple[EmailClassificationRecord, ...]
+    accepted: tuple[AcceptedLLMExtraction, ...]
     malformed: tuple[MalformedLLMExtraction, ...]
     prompt_tokens: int = Field(ge=0)
     completion_tokens: int = Field(ge=0)
     total_tokens: int = Field(ge=0)
 
+    @property
+    def classifications(self) -> tuple[EmailClassificationRecord, ...]:
+        return tuple(result.classification for result in self.accepted)
+
     @model_validator(mode="after")
     def validate_counts_and_tokens(self) -> Self:
-        if self.classified_count != len(self.classifications):
-            raise ValueError("classified_count must match classifications length")
+        if self.classified_count != len(self.accepted):
+            raise ValueError("classified_count must match accepted length")
         if self.malformed_count != len(self.malformed):
             raise ValueError("malformed_count must match malformed length")
         if self.classified_count + self.malformed_count > self.candidate_count:
@@ -66,7 +71,7 @@ class ClassificationService:
     ) -> ClassificationServiceResult:
         """Return accepted classifications and public-safe malformed results."""
 
-        classifications: list[EmailClassificationRecord] = []
+        accepted: list[AcceptedLLMExtraction] = []
         malformed: list[MalformedLLMExtraction] = []
         prompt_tokens = 0
         completion_tokens = 0
@@ -95,16 +100,16 @@ class ClassificationService:
                 prompt_version=self._settings.classification_prompt_version,
                 classified_at=self._clock(),
             )
-            if isinstance(result, EmailClassificationRecord):
-                classifications.append(result)
+            if isinstance(result, AcceptedLLMExtraction):
+                accepted.append(result)
             else:
                 malformed.append(result)
 
         return ClassificationServiceResult(
             candidate_count=len(candidates),
-            classified_count=len(classifications),
+            classified_count=len(accepted),
             malformed_count=len(malformed),
-            classifications=tuple(classifications),
+            accepted=tuple(accepted),
             malformed=tuple(malformed),
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,

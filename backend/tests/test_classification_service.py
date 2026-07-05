@@ -51,6 +51,7 @@ def test_classification_service_classifies_candidates_with_configured_prompt() -
     assert result.completion_tokens == 7
     assert result.total_tokens == 27
     assert result.malformed == ()
+    assert len(result.accepted) == 1
 
     classification = result.classifications[0]
     assert classification.email_id == "email-1"
@@ -60,6 +61,12 @@ def test_classification_service_classifies_candidates_with_configured_prompt() -
     assert classification.model == "llama3.1"
     assert classification.prompt_version == "classification-service-v2"
     assert classification.classified_at == CLASSIFIED_AT
+    extraction = result.accepted[0].extraction
+    assert extraction.company == "Example Systems"
+    assert extraction.role_title == "Backend Engineer"
+    assert extraction.status == "applied"
+    assert extraction.event_type == "applied"
+    assert extraction.tech_stack == ["Python", "FastAPI"]
 
     assert len(provider.requests) == 1
     request = provider.requests[0]
@@ -99,6 +106,7 @@ def test_classification_service_quarantines_malformed_output() -> None:
     assert result.classified_count == 0
     assert result.malformed_count == 1
     assert result.classifications == ()
+    assert result.accepted == ()
 
     malformed = result.malformed[0]
     assert malformed.email_id == "email-1"
