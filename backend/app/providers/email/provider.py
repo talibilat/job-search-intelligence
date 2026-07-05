@@ -1,13 +1,156 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from html.parser import HTMLParser
+from typing import Protocol, cast, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
 from app.security import SecretRef
+
+
+def normalize_email_html_to_text(html_body: str) -> str:
+    parser = _EmailHTMLTextExtractor()
+    parser.feed(html_body)
+    parser.close()
+    return parser.text
+
+
+class _EmailHTMLTextExtractor(HTMLParser):
+    _BLOCK_TAGS = frozenset(
+        {
+            "address",
+            "article",
+            "aside",
+            "blockquote",
+            "br",
+            "div",
+            "footer",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "header",
+            "hr",
+            "li",
+            "main",
+            "ol",
+            "p",
+            "pre",
+            "section",
+            "table",
+            "td",
+            "th",
+            "tr",
+            "ul",
+        }
+    )
+    _IGNORED_TAGS = frozenset(
+        {
+            "head",
+            "math",
+            "meta",
+            "noscript",
+            "script",
+            "style",
+            "svg",
+            "title",
+        }
+    )
+    _PUNCTUATION_WITHOUT_LEADING_SPACE = frozenset({".", ",", ";", ":", "!", "?", ")", "]", "}"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+        self._ignored_depth = 0
+        self._link_stack: list[tuple[str | None, int]] = []
+
+    @property
+    def text(self) -> str:
+        lines = [
+            re.sub(r"[ \t]+", " ", line).strip()
+            for line in "".join(self._parts).splitlines()
+        ]
+        return "\n".join(line for line in lines if line)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag in self._IGNORED_TAGS:
+            self._ignored_depth += 1
+            return
+        if self._ignored_depth:
+            return
+        if normalized_tag in self._BLOCK_TAGS:
+            self._append_break()
+        if normalized_tag == "a":
+            self._link_stack.append((self._safe_href(attrs), len(self._parts)))
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag in self._IGNORED_TAGS and self._ignored_depth:
+            self._ignored_depth -= 1
+            return
+        if self._ignored_depth:
+            return
+        if normalized_tag == "a" and self._link_stack:
+            href, start_index = self._link_stack.pop()
+            if href is not None and len(self._parts) > start_index:
+                self._append_text(f" ({href})")
+        if normalized_tag in self._BLOCK_TAGS:
+            self._append_break()
+
+    def handle_data(self, data: str) -> None:
+        if not self._ignored_depth:
+            self._append_text(data)
+
+    def _append_text(self, text: str) -> None:
+        collapsed = re.sub(r"\s+", " ", text.replace("\xa0", " "))
+        if not collapsed.strip():
+            self._append_space()
+            return
+
+        starts_with_space = collapsed[0].isspace()
+        ends_with_space = collapsed[-1].isspace()
+        stripped = collapsed.strip()
+
+        if starts_with_space:
+            self._append_space()
+        if self._needs_separator_before(stripped):
+            self._append_space()
+        self._parts.append(stripped)
+        if ends_with_space:
+            self._append_space()
+
+    def _needs_separator_before(self, text: str) -> bool:
+        if not self._parts:
+            return False
+        previous = self._parts[-1]
+        return bool(
+            previous
+            and not previous[-1].isspace()
+            and text[0] not in self._PUNCTUATION_WITHOUT_LEADING_SPACE
+        )
+
+    def _append_space(self) -> None:
+        if self._parts and not self._parts[-1].endswith((" ", "\n")):
+            self._parts.append(" ")
+
+    def _append_break(self) -> None:
+        if self._parts and not self._parts[-1].endswith("\n"):
+            self._parts.append("\n")
+
+    def _safe_href(self, attrs: list[tuple[str, str | None]]) -> str | None:
+        for name, value in attrs:
+            if name.lower() == "href" and value is not None:
+                stripped = value.strip()
+                if stripped.startswith(("https://", "http://", "mailto:")):
+                    return stripped
+        return None
 
 
 class EmailSyncMode(StrEnum):
@@ -312,12 +455,31 @@ class EmailBodyFetchRequest(BaseModel):
 class EmailMessageBody(BaseModel):
     """Provider-normalized retained plain-text body content."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
     ref: EmailMessageRef
     body_text: str = Field(repr=False)
     body_source: EmailBodySource
     truncated: bool
     fetched_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_html_body_source(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+
+        body_data = cast(dict[str, object], data)
+        body_source = body_data.get("body_source")
+        body_text = body_data.get("body_text")
+        is_html_source = body_source in {
+            EmailBodySource.HTML_CONVERTED,
+            EmailBodySource.HTML_CONVERTED.value,
+        }
+        if is_html_source and isinstance(body_text, str):
+            normalized_data = body_data.copy()
+            normalized_data["body_text"] = normalize_email_html_to_text(body_text)
+            return normalized_data
+        return data
 
 
 class EmailBodyFetchFailure(BaseModel):

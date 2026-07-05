@@ -30,6 +30,7 @@ from .provider import (
     EmailSyncCursorExpiredError,
     EmailSyncMode,
     build_broad_candidate_query,
+    normalize_email_html_to_text,
 )
 
 __all__ = [
@@ -62,4 +63,5 @@ __all__ = [
     "EmailSyncMode",
     "build_broad_candidate_query",
     "GmailEmailProvider",
+    "normalize_email_html_to_text",
 ]

@@ -30,6 +30,7 @@ from app.providers.email import (
     EmailProviderTransientError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
+    normalize_email_html_to_text,
 )
 from app.security import SecretKind, SecretRef
 from pydantic import SecretStr, ValidationError
@@ -267,6 +268,58 @@ def test_message_body_redacts_retained_body_text_from_repr() -> None:
 
     assert body.body_text == "Private recruiter feedback"
     assert "Private recruiter feedback" not in repr(body)
+
+
+def test_html_message_body_is_normalized_to_safe_text() -> None:
+    account = EmailAccountRef(
+        provider=EmailProviderName.GMAIL,
+        account_id="me@example.com",
+    )
+
+    body = EmailMessageBody(
+        ref=EmailMessageRef(account=account, message_id="msg-1"),
+        body_text=(
+            "<html><head><style>.hidden{display:none}</style>"
+            "<script>alert('x')</script></head>"
+            "<body><h1>Application update</h1>"
+            "<p>Thanks&nbsp;for applying to <strong>Example Corp</strong>.</p>"
+            "<p>View <a href=\"https://example.test/status\">your status</a>.</p>"
+            "</body></html>"
+        ),
+        body_source=EmailBodySource.HTML_CONVERTED,
+        truncated=False,
+        fetched_at=NOW,
+    )
+
+    assert body.body_text == (
+        "Application update\n"
+        "Thanks for applying to Example Corp.\n"
+        "View your status (https://example.test/status)."
+    )
+
+
+def test_email_body_rejects_raw_html_storage_field() -> None:
+    account = EmailAccountRef(
+        provider=EmailProviderName.GMAIL,
+        account_id="me@example.com",
+    )
+
+    with pytest.raises(ValidationError):
+        EmailMessageBody.model_validate(
+            {
+                "ref": EmailMessageRef(account=account, message_id="msg-1"),
+                "body_text": "Application update",
+                "body_source": EmailBodySource.HTML_CONVERTED,
+                "raw_html": "<p>Application update</p>",
+                "truncated": False,
+                "fetched_at": NOW,
+            }
+        )
+
+
+def test_normalize_email_html_to_text_handles_empty_and_malformed_html() -> None:
+    assert normalize_email_html_to_text("<p>&nbsp;</p>") == ""
+    assert normalize_email_html_to_text("Hello<br><br><b>there") == "Hello\nthere"
 
 
 def test_email_provider_boundary_dtos_validate_safe_batches() -> None:
