@@ -310,7 +310,7 @@ class EmailSyncPageResult(BaseModel):
 
 
 class EmailBackfillPageResult(BaseModel):
-    """One persisted full-backfill page plus the durable state after it."""
+    """One full-backfill page plus the durable state used to select its resume token."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -388,6 +388,8 @@ class EmailSyncService:
         backfill_state_service: BackfillStateService,
         updated_at: datetime | None = None,
     ) -> EmailBackfillPageResult:
+        """List one page; callers persist raw emails before recording page progress."""
+
         timestamp = updated_at or datetime.now(UTC)
         state = backfill_state_service.start_or_resume_backfill(
             connection.account,
