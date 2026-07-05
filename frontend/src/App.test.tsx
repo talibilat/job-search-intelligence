@@ -29,7 +29,10 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
   const responseQueues = new Map<string, MockResponse[]>();
 
   for (const [path, response] of Object.entries(responses)) {
-    responseQueues.set(path, Array.isArray(response) ? [...response] : [response]);
+    responseQueues.set(
+      path,
+      Array.isArray(response) ? [...response] : [response],
+    );
   }
 
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -52,7 +55,9 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
       throw new Error(`No mock fetch responses left for: ${path}`);
     }
 
-    const body = isMockResponseConfig(nextConfig) ? nextConfig.body : nextConfig;
+    const body = isMockResponseConfig(nextConfig)
+      ? nextConfig.body
+      : nextConfig;
     const status = isMockResponseConfig(nextConfig) ? nextConfig.status : 200;
 
     return Promise.resolve(

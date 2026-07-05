@@ -55,7 +55,11 @@ function formatLabel(value: string | null | undefined) {
     .join(" ");
 }
 
-function formatCount(value: number | undefined, singular: string, plural: string) {
+function formatCount(
+  value: number | undefined,
+  singular: string,
+  plural: string,
+) {
   const count = value ?? 0;
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -180,7 +184,9 @@ function SyncActionPanel() {
     <div className="sync-action-panel">
       <div className="sync-status-summary" role="status" aria-live="polite">
         <p className="sync-status-summary__title">
-          {isLoadingStatus ? "Loading sync status" : syncStatusTitle(syncStatus)}
+          {isLoadingStatus
+            ? "Loading sync status"
+            : syncStatusTitle(syncStatus)}
         </p>
         <dl className="sync-metrics">
           <div>
@@ -189,12 +195,18 @@ function SyncActionPanel() {
           </div>
           <div>
             <dt>Messages</dt>
-            <dd>{formatCount(syncStatus?.message_count, "message", "messages")}</dd>
+            <dd>
+              {formatCount(syncStatus?.message_count, "message", "messages")}
+            </dd>
           </div>
           <div>
             <dt>Raw emails</dt>
             <dd>
-              {formatCount(syncStatus?.raw_email_count, "raw email", "raw emails")}
+              {formatCount(
+                syncStatus?.raw_email_count,
+                "raw email",
+                "raw emails",
+              )}
             </dd>
           </div>
         </dl>
