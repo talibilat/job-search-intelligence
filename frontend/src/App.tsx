@@ -1,4 +1,12 @@
+import { useEffect, useState } from "react";
+
+import {
+  syncNowSyncPost,
+  syncStatusSyncStatusGet,
+  type EmailSyncStatus,
+} from "./api";
 import { ChartPanel } from "./components/charts";
+import { Alert, Button } from "./components/ui";
 import Chat from "./pages/Chat";
 import { DashboardPage } from "./pages/DashboardPage";
 import { Insights } from "./pages/Insights";
@@ -17,6 +25,171 @@ const navigationItems = [
   { href: "/insights", label: "Insights" },
   { href: "/chat", label: "Chat" },
 ] as const;
+
+function apiErrorMessage(data: unknown, fallback: string) {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "error" in data &&
+    typeof data.error === "object" &&
+    data.error !== null &&
+    "message" in data.error &&
+    typeof data.error.message === "string"
+  ) {
+    return data.error.message;
+  }
+
+  return fallback;
+}
+
+function formatLabel(value: string | null | undefined) {
+  if (!value) {
+    return "Not reported";
+  }
+
+  return value
+    .split("_")
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(" ");
+}
+
+function formatCount(value: number | undefined, singular: string, plural: string) {
+  const count = value ?? 0;
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function syncStatusTitle(status: EmailSyncStatus | null) {
+  if (!status) {
+    return "Current sync state: Unknown";
+  }
+
+  if (status.state === "succeeded") {
+    return "Last sync succeeded";
+  }
+
+  if (status.state === "failed") {
+    return "Last sync failed";
+  }
+
+  if (status.state === "running") {
+    return "Sync is running";
+  }
+
+  return `Current sync state: ${formatLabel(status.state)}`;
+}
+
+function SyncActionPanel() {
+  const [syncStatus, setSyncStatus] = useState<EmailSyncStatus | null>(null);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSyncStatus() {
+      setIsLoadingStatus(true);
+      try {
+        const response = await syncStatusSyncStatusGet();
+        if (!ignore) {
+          setSyncStatus(response.data);
+        }
+      } catch {
+        if (!ignore) {
+          setSyncError(
+            "Sync status is unavailable. Start the local backend before syncing.",
+          );
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoadingStatus(false);
+        }
+      }
+    }
+
+    void loadSyncStatus();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  async function handleSyncNow() {
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      const response = await syncNowSyncPost();
+      if (response.status !== 200) {
+        setSyncError(
+          apiErrorMessage(
+            response.data,
+            "Sync could not start. Check the local backend and Gmail setup.",
+          ),
+        );
+        return;
+      }
+
+      setSyncStatus(response.data);
+    } catch {
+      setSyncError(
+        "Sync could not start. Check that the local backend is running.",
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
+  const isRunning = syncStatus?.state === "running";
+  const syncButtonLabel = isSyncing || isRunning ? "Syncing" : "Sync now";
+
+  return (
+    <div className="sync-action-panel">
+      <div className="sync-status-summary" role="status" aria-live="polite">
+        <p className="sync-status-summary__title">
+          {isLoadingStatus ? "Loading sync status" : syncStatusTitle(syncStatus)}
+        </p>
+        <dl className="sync-metrics">
+          <div>
+            <dt>Mode</dt>
+            <dd>{formatLabel(syncStatus?.mode)}</dd>
+          </div>
+          <div>
+            <dt>Messages</dt>
+            <dd>{formatCount(syncStatus?.message_count, "message", "messages")}</dd>
+          </div>
+          <div>
+            <dt>Raw emails</dt>
+            <dd>
+              {formatCount(syncStatus?.raw_email_count, "raw email", "raw emails")}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="sync-actions">
+        <Button
+          disabled={isLoadingStatus || isSyncing || isRunning}
+          onClick={() => {
+            void handleSyncNow();
+          }}
+        >
+          {syncButtonLabel}
+        </Button>
+        <p className="sync-actions__hint">
+          Uses the local backend sync API. Gmail data stays in the local SQLite
+          store and OAuth tokens stay behind SecretStore.
+        </p>
+      </div>
+
+      {syncError ? (
+        <Alert title="Sync could not start" tone="danger">
+          <p>{syncError}</p>
+        </Alert>
+      ) : null}
+    </div>
+  );
+}
 
 function OverviewPage() {
   return (
@@ -47,17 +220,9 @@ function OverviewPage() {
       <section className="status-card" aria-labelledby="sync-title">
         <div>
           <p className="eyebrow">Sync readiness</p>
-          <h2 id="sync-title">Sync status ready for backend wiring</h2>
+          <h2 id="sync-title">Run a local Gmail sync on demand</h2>
         </div>
-        <ul>
-          <li>
-            Manual sync and last-run state will appear here once the sync API
-            exists.
-          </li>
-          <li>
-            No Gmail data is fetched or retained by the Phase 0 frontend shell.
-          </li>
-        </ul>
+        <SyncActionPanel />
       </section>
 
       <ChartPanel

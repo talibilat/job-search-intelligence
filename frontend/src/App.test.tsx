@@ -8,7 +8,20 @@ function renderAtPath(pathname: string) {
   return render(<App />);
 }
 
-function mockFetchResponses(responses: Record<string, object>) {
+type MockResponseConfig =
+  | object
+  | {
+      body: object;
+      status: number;
+    };
+
+function isMockResponseConfig(
+  value: MockResponseConfig,
+): value is { body: object; status: number } {
+  return "body" in value && "status" in value;
+}
+
+function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url =
       typeof input === "string"
@@ -17,16 +30,19 @@ function mockFetchResponses(responses: Record<string, object>) {
           ? input.href
           : input.url;
     const path = url.startsWith("http") ? new URL(url).pathname : url;
-    const body = responses[path];
+    const config = responses[path];
 
-    if (!body) {
+    if (!config) {
       throw new Error(`Unhandled fetch request: ${path}`);
     }
+
+    const body = isMockResponseConfig(config) ? config.body : config;
+    const status = isMockResponseConfig(config) ? config.status : 200;
 
     return Promise.resolve(
       new Response(JSON.stringify(body), {
         headers: { "Content-Type": "application/json" },
-        status: 200,
+        status,
       }),
     );
   });
@@ -68,6 +84,67 @@ describe("App", () => {
 
     expect(emptyState.textContent).toContain(
       "Future deterministic dashboard metrics will render here after the metrics API exists.",
+    );
+  });
+
+  it("starts manual sync from the overview page and renders the returned status", async () => {
+    const fetchMock = mockFetchResponses({
+      "/sync/status": {
+        state: "idle",
+      },
+      "/sync": {
+        account_id: "me@example.com",
+        finished_at: "2026-07-05T12:00:00Z",
+        last_error: null,
+        message_count: 2,
+        mode: "full_backfill",
+        page_count: 1,
+        provider: "gmail",
+        raw_email_count: 2,
+        recovered_from_expired_cursor: false,
+        started_at: "2026-07-05T12:00:00Z",
+        state: "succeeded",
+      },
+    });
+
+    renderAtPath("/");
+
+    expect(await screen.findByText("Current sync state: Idle")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+
+    expect(await screen.findByText("Last sync succeeded")).toBeTruthy();
+    expect(screen.getByText("2 messages")).toBeTruthy();
+    expect(screen.getByText("2 raw emails")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/sync",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("shows typed sync API errors when manual sync cannot start", async () => {
+    mockFetchResponses({
+      "/sync/status": {
+        state: "idle",
+      },
+      "/sync": {
+        body: {
+          error: {
+            code: "bad_request",
+            details: [],
+            message: "Gmail connection is not configured yet.",
+          },
+        },
+        status: 400,
+      },
+    });
+
+    renderAtPath("/");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Gmail connection is not configured yet.",
     );
   });
 
