@@ -216,6 +216,7 @@ def test_parse_llm_extraction_response_accepts_valid_structured_extraction() -> 
     assert result.extraction.company == "Example Systems"
     assert result.extraction.role_title == "Backend Engineer"
     assert result.extraction.status == "rejected"
+    assert result.extraction.event_type == "rejection"
     assert result.extraction.tech_stack == ["Python", "FastAPI"]
 
 
@@ -227,7 +228,8 @@ def valid_structured_response_json() -> str:
         '"confidence":0.92,'
         '"company":"Example Systems",'
         '"role_title":"Backend Engineer",'
-        '"status":"rejected",'
+        '"application_status":"rejected",'
+        '"event_type":"rejection",'
         '"event_at":"2026-07-04T12:30:00+00:00",'
         '"salary_min":120000,'
         '"salary_max":150000,'

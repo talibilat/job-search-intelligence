@@ -8,7 +8,12 @@ from datetime import datetime
 from app.config import EmailProviderName
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
-from app.models.classification import ClassificationCandidateStats, ClassificationReprocessingStats
+from app.models.classification import (
+    ClassificationCandidateStats,
+    ClassificationReprocessingStats,
+    EmailClassificationCandidate,
+    EmailClassificationRecord,
+)
 from app.models.records import RawEmailBodyRetentionState, RawEmailRecord
 from app.providers.email import EmailAddress, EmailMessageBody, EmailMessageMetadata
 
@@ -378,6 +383,103 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         if row is None:
             return 0
         return int(row["retained_candidate_count"])
+
+    def list_classification_candidates(
+        self,
+        *,
+        provider: EmailProviderName,
+        model: str,
+        prompt_version: str,
+        limit: int,
+    ) -> list[EmailClassificationCandidate]:
+        """Return retained emails needing classification for this model and prompt."""
+
+        if limit < 1:
+            msg = "limit must be at least 1"
+            raise ValueError(msg)
+
+        if not self._table_exists("raw_emails") or not self._table_exists("email_classifications"):
+            return []
+
+        rows = self.execute(
+            """
+            SELECT
+                raw_emails.id AS email_id,
+                raw_emails.subject AS subject,
+                raw_emails.from_addr AS from_addr,
+                raw_emails.sent_at AS sent_at,
+                raw_emails.body_text AS body_text
+            FROM raw_emails
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = raw_emails.id
+            WHERE raw_emails.provider = ?
+                AND raw_emails.body_retention_state = ?
+                AND raw_emails.body_text IS NOT NULL
+                AND (
+                    email_classifications.email_id IS NULL
+                    OR email_classifications.model != ?
+                    OR email_classifications.prompt_version != ?
+                )
+            ORDER BY raw_emails.sent_at, raw_emails.id
+            LIMIT ?
+            """,
+            (
+                provider.value,
+                RawEmailBodyRetentionState.RETAINED.value,
+                model,
+                prompt_version,
+                limit,
+            ),
+        ).fetchall()
+        return [EmailClassificationCandidate.model_validate(row_to_dict(row)) for row in rows]
+
+    def upsert_email_classifications(
+        self,
+        records: Iterable[EmailClassificationRecord],
+    ) -> None:
+        """Write per-email classifications idempotently by raw email ID."""
+
+        record_tuple = tuple(records)
+        if not record_tuple:
+            return
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            self.execute_many(
+                """
+                INSERT INTO email_classifications (
+                    email_id,
+                    is_job_related,
+                    category,
+                    confidence,
+                    model,
+                    prompt_version,
+                    classified_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(email_id) DO UPDATE SET
+                    is_job_related = excluded.is_job_related,
+                    category = excluded.category,
+                    confidence = excluded.confidence,
+                    model = excluded.model,
+                    prompt_version = excluded.prompt_version,
+                    classified_at = excluded.classified_at
+                """,
+                [
+                    (
+                        record.email_id,
+                        int(record.is_job_related),
+                        record.category.value,
+                        record.confidence,
+                        record.model,
+                        record.prompt_version,
+                        record.classified_at.isoformat(),
+                    )
+                    for record in record_tuple
+                ],
+            )
+
+        if should_commit:
+            self.connection.commit()
 
     def list_raw_email_ids(self, *, provider: EmailProviderName) -> list[str]:
         rows = self.execute(

@@ -5,13 +5,14 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator, model_validator
 
 from app.config import ClassificationMode, EmailProviderName, LLMProviderName
 from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
 from app.models.event import ApplicationEventType
 
-NonEmptyString = Annotated[str, Field(min_length=1)]
+NonEmptyString = Annotated[StrictStr, Field(min_length=1)]
+CurrencyCode = Annotated[StrictStr, Field(min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")]
 
 
 class JobEmailCategory(StrEnum):
@@ -116,25 +117,74 @@ class ClassificationRunRecord(BaseModel):
 class ClassificationPromptOutput(BaseModel):
     """Structured LLM output expected from the classification prompt."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
 
     is_job_related: bool
     category: JobEmailCategory
     confidence: float = Field(ge=0, le=1)
-    company: str | None = Field(min_length=1)
-    role_title: str | None = Field(min_length=1)
+    company: NonEmptyString | None
+    role_title: NonEmptyString | None
     application_status: ApplicationStatus | None
     event_type: ApplicationEventType | None
     event_at: datetime | None
     salary_min: int | None = Field(ge=0)
     salary_max: int | None = Field(ge=0)
-    currency: str | None = Field(min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
-    location: str | None = Field(min_length=1)
+    currency: CurrencyCode | None
+    location: NonEmptyString | None
     work_mode: WorkMode | None
-    seniority: str | None = Field(min_length=1)
+    seniority: NonEmptyString | None
     sponsorship: SponsorshipStatus
     tech_stack: tuple[NonEmptyString, ...]
-    rejection_reason: str | None = Field(min_length=1)
+    rejection_reason: NonEmptyString | None
+
+    @field_validator("is_job_related", mode="before")
+    @classmethod
+    def require_boolean_classification(cls, value: object) -> object:
+        if not isinstance(value, bool):
+            msg = "is_job_related must be a JSON boolean"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def require_numeric_confidence(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            msg = "confidence must be a JSON number"
+            raise ValueError(msg)
+        return float(value)
+
+    @field_validator("salary_min", "salary_max", mode="before")
+    @classmethod
+    def require_integer_salary(cls, value: object) -> object:
+        if value is None:
+            return value
+        if isinstance(value, bool) or not isinstance(value, int):
+            msg = "salary values must be JSON integers"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("event_at", mode="before")
+    @classmethod
+    def reject_numeric_event_at(cls, value: object) -> object:
+        if value is None or isinstance(value, datetime):
+            return value
+        if isinstance(value, int | float):
+            msg = "event_at must be an ISO datetime string"
+            raise ValueError(msg)
+        if isinstance(value, str):
+            stripped_value = value.strip()
+            if _is_numeric_string(stripped_value):
+                msg = "event_at must be an ISO datetime string"
+                raise ValueError(msg)
+            return stripped_value
+        return value
+
+    @field_validator("tech_stack", mode="before")
+    @classmethod
+    def strip_tech_stack_items(cls, value: object) -> object:
+        if isinstance(value, list | tuple):
+            return [item.strip() if isinstance(item, str) else item for item in value]
+        return value
 
     @field_validator("is_job_related", mode="before")
     @classmethod
