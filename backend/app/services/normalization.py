@@ -7,8 +7,14 @@ _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _LEVEL_TOKEN_RE = re.compile(r"(?:[1-9][0-9]*|e[0-9]+|ic[0-9]+|l[0-9]+|m[0-9]+)")
 _EMPLOYMENT_PHRASES = (
     re.compile(r"\bfull[-\s]?time\b"),
+    re.compile(r"\bremote[-\s]?eligible\b"),
     re.compile(r"\bpart[-\s]?time\b"),
     re.compile(r"\bon[-\s]?site\b"),
+    re.compile(r"\bin[-\s]?office\b"),
+)
+_PUNCTUATED_TOKEN_REPLACEMENTS = (
+    (re.compile(r"(?<![a-z0-9])c\+\+(?![a-z0-9])"), " c plus plus "),
+    (re.compile(r"(?<![a-z0-9])c#(?![a-z0-9])"), " c sharp "),
 )
 _TOKEN_EXPANSIONS: dict[str, tuple[str, ...]] = {
     "backend": ("back", "end"),
@@ -57,6 +63,7 @@ _DROP_TOKENS = frozenset(
         "united",
         "us",
         "usa",
+        "wfh",
         "york",
     },
 )
@@ -67,7 +74,7 @@ _BASE_ROLES: tuple[_BaseRole, ...] = (
     (
         frozenset({"machine", "learning", "engineer"}),
         ("machine", "learning", "engineer"),
-        frozenset({"machine", "learning", "engineer"}),
+        frozenset({"machine", "learning", "software", "engineer"}),
     ),
     (
         frozenset({"software", "engineer"}),
@@ -119,6 +126,8 @@ def _normalize_tokens(role_title: str) -> tuple[str, ...]:
     normalized = unicodedata.normalize("NFKD", role_title)
     normalized = normalized.encode("ascii", "ignore").decode("ascii")
     normalized = normalized.lower().replace("&", " and ")
+    for pattern, replacement in _PUNCTUATED_TOKEN_REPLACEMENTS:
+        normalized = pattern.sub(replacement, normalized)
     for phrase in _EMPLOYMENT_PHRASES:
         normalized = phrase.sub(" ", normalized)
 
@@ -174,6 +183,9 @@ def _dedupe_tokens(tokens: tuple[str, ...] | list[str]) -> tuple[str, ...]:
     deduped: list[str] = []
     seen: set[str] = set()
     for token in tokens:
+        if token == "plus" and deduped[-1:] == ["plus"]:
+            deduped.append(token)
+            continue
         if token in seen:
             continue
         deduped.append(token)
