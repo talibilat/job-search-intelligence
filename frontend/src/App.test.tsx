@@ -1,4 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
 
@@ -6,6 +8,8 @@ afterEach(() => {
   cleanup();
   window.history.pushState({}, "", "/");
 });
+
+const styles = readFileSync(join(process.cwd(), "src", "index.css"), "utf8");
 
 describe("App", () => {
   it("renders the insights page shell on the insights route", () => {
@@ -76,5 +80,16 @@ describe("App", () => {
       true,
     );
     expect(screen.getByText(/chat agent work arrives in phase 5/i)).toBeTruthy();
+  });
+
+  it("keeps the chat shell constrained on narrow mobile viewports", () => {
+    expect(styles).toContain(".chat-hero h1");
+    expect(styles).toContain("font-size: clamp(2rem, 9vw, 2.45rem)");
+    expect(styles).toContain("width: min(100%, 390px)");
+    expect(styles).toContain("margin: 0 auto 0 0");
+    expect(styles).toContain(".chat-panel");
+    expect(styles).toContain("padding: 18px");
+    expect(styles).toContain(".chat-card");
+    expect(styles).toContain("padding: 20px");
   });
 });
