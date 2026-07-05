@@ -198,6 +198,10 @@ EmailProvider -> metadata-only raw_emails
         invalid enums, contradictory category/status pairs, inverted salary ranges,
         and extracted non-job data return public-safe quarantine results before storage
       - store model + prompt_version per row (reproducible re-runs)
+      - `ClassificationService` builds one configured prompt per retained candidate,
+        calls the configured `LLMProvider`, validates full provider generations,
+        returns accepted and malformed DTOs, and aggregates token usage without
+        writing classification, application, or event rows
                  │
                  ▼
    3. aggregate.py  emails -> applications + application_events (dedup)
@@ -229,10 +233,10 @@ The same static keyword terms may be applied to already-normalized retained body
 The sync runtime evaluates metadata pages as batches so same-page thread siblings use the same decision path for retained-body selection and persisted audit rows.
 It persists the broad job-search filter outcome and public-safe reason for every evaluated normalized metadata record in `email_filter_decisions`, keyed by raw email ID and strategy so re-runs update the same audit row.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
-The classification parser validates provider-neutral `LLMGenerationResponse` content before storage: accepted results produce an `EmailClassificationRecord` and typed extraction fields, while malformed results include only public-safe quarantine metadata and must not write `email_classifications`, `applications`, or `application_events` rows.
+The classification service validates provider-neutral `LLMGenerationResponse` content before storage: accepted results produce an `EmailClassificationRecord` and typed extraction fields, while malformed results include only public-safe quarantine metadata and must not write `email_classifications`, `applications`, or `application_events` rows.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
 Classification prompt requests are built by `app.pipeline.classify.build_classification_prompt_request`, require retained email body text, request `LLMResponseFormat.JSON_OBJECT`, use temperature `0`, and embed `CLASSIFICATION_PROMPT_VERSION` in the system prompt.
-Provider responses must pass `app.pipeline.classify.parse_classification_prompt_output` before any downstream classification storage or aggregation.
+Provider responses must pass `app.pipeline.classify.parse_classification_generation_response` before any downstream classification storage or aggregation.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 

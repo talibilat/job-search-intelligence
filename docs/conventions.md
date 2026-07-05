@@ -9,7 +9,7 @@ Baseline coding standards for every agent and contributor.
 - Cross every boundary with a Pydantic v2 DTO, never a raw dict.
 - Keep core storage DTOs in focused `app.models` domain modules, and preserve stable aggregate imports through `app.models` and `app.models.records` for shared repository and pipeline code.
 - Validate structured LLM output with Pydantic and reject malformed output instead of storing it.
-- Classification provider responses must be parsed through `ClassificationPromptOutput` before any storage or aggregation code can consume extracted fields.
+- Classification provider responses must be parsed through the classification generation parser before any storage or aggregation code can consume extracted fields.
 - Malformed classification or extraction output must cross downstream boundaries as public-safe quarantine metadata only, without raw provider content or storage-ready classification records.
 
 ## Architecture patterns
@@ -20,6 +20,7 @@ Baseline coding standards for every agent and contributor.
 - LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
 - Ollama provider adapters must keep local mode local: reject non-local base URLs, do not use HTTP proxy routing for local calls, and map transport failures to public-safe LLM provider errors without prompt or completion content.
 - Classification prompt requests go through `app.pipeline.classify.build_classification_prompt_request`, request `LLMResponseFormat.JSON_OBJECT`, embed `CLASSIFICATION_PROMPT_VERSION`, and send only retained email candidate fields needed for classification.
+- Classification service orchestration belongs in `app.services.classification`: it calls the configured `LLMProvider`, validates responses before storage, returns accepted and malformed DTOs, aggregates token usage, and leaves persistence plus aggregation to later pipeline stages.
 - `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, normalize retained HTML bodies to plain text, reject raw HTML retention fields, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
 - Gmail metadata listing must keep full backfill and incremental sync metadata-only: use message list pages for full backfill, `users.history.list` `messageAdded` records for incremental sync, withhold replacement history cursors until paginated listing is fully drained, and map Gmail history `404` responses to expired-cursor recovery.
 - Sync services persist provider-owned cursors through `SyncStateRepository`, keyed by provider and account, without treating cursor values as OAuth token material or email content.
