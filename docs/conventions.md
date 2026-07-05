@@ -15,7 +15,8 @@ Baseline coding standards for every agent and contributor.
 - Strategy pattern for `EmailProvider` and `LLMProvider`; provider-specific code stays behind the interface.
 - Provider selection metadata belongs in `app.providers.provider_registry`; it declares supported providers, non-secret setting requirements, and `SecretRef` metadata without instantiating adapters or reading secrets.
 - LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
-- `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
+- `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, normalize retained HTML bodies to plain text, reject raw HTML retention fields, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
+- Sync services coordinate provider metadata pagination and must recover from expired incremental cursors by restarting resumable full metadata reconciliation without passing stale cursors into full-backfill requests.
 - Broad job-search candidate selection belongs in provider-neutral DTOs over normalized metadata; provider metadata listing requests must not accept body content, snippets, or provider-specific candidate filters.
 - Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
 [JT-065 2026-07-05 v4] Raw email DTO boundaries track body retention with `metadata_only`, `retained`, or `debugging`; metadata-only rows omit `body_text`, retained and debugging rows include it, and retained body text stays out of repr output.
@@ -57,3 +58,7 @@ Baseline coding standards for every agent and contributor.
 - Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.
+
+## Ticket-specific conventions
+
+- [JT-063 2026-07-05 v2] Email providers must retain body content as normalized plain text: HTML MIME bodies are converted through the email HTML normalizer before storage, raw HTML fields are forbidden on retained body DTOs, and plain-text bodies that still look like raw HTML are rejected instead of silently retained.
