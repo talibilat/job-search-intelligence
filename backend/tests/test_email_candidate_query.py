@@ -104,6 +104,23 @@ def test_candidate_query_matches_metadata_with_executable_any_signal_semantics()
     assert not query.matches_metadata(non_match)
 
 
+def test_candidate_query_matches_keywords_across_subject_and_normalized_body_text() -> None:
+    query = build_broad_candidate_query()
+
+    assert query.matches_keywords(
+        subject="General update from ExampleCo",
+        normalized_body_text="Thank you for applying to ExampleCo. We received your application.",
+    )
+    assert query.matches_keywords(
+        subject="Next steps for your interview",
+        normalized_body_text=None,
+    )
+    assert not query.matches_keywords(
+        subject="Weekly product update",
+        normalized_body_text="Your account digest is ready.",
+    )
+
+
 def test_candidate_query_excludes_metadata_with_blocked_labels() -> None:
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
     query = build_broad_candidate_query()

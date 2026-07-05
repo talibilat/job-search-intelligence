@@ -66,7 +66,8 @@ JOBTRACKER_FERNET_KEY_FILE=./.jobtracker/fernet.key
 
 Do not commit the Fernet key file or place it in screenshots, tickets, logs, or setup notes.
 
-When JT-096 and JT-097 land, verify before a bulk classification pass that the selected mode shows a token and cost estimate.
+JT-096 provides durable local storage for completed-run token and cost accounting.
+When JT-097 and the display work land, verify before a bulk classification pass that the selected mode shows a token and cost estimate.
 Hosted Azure calls should be used through the configured provider path only, never by ad hoc scripts that bypass redaction or prompt-version tracking.
 
 ## Ollama
@@ -96,12 +97,25 @@ Keep the base URL local: the provider registry and runtime adapter reject non-lo
 Local calls use a proxy-disabled urllib opener so environment or system HTTP proxy settings do not reroute Ollama traffic.
 If you change model names, update both the setup value and any local model pulls so the provider adapter can resolve them consistently.
 
+## Verify Provider Health
+
+After selecting a provider and configuring its visible model or deployment names, call `POST /config/providers/llm/health` before bulk classification, insight, embedding, or chat runs that depend on the LLM.
+The request body is empty because the backend derives the provider, chat model, and embedding model from the current non-secret settings.
+
+The response is a provider-neutral `LLMProviderHealthCheckResponse` with the selected provider name, an overall `available` or `unavailable` status, and one check for the configured chat model plus one check for the configured embedding model.
+For Azure OpenAI, the checked values are `azure_openai_chat_deployment` and `azure_openai_embedding_deployment`.
+For Ollama, the checked values are `ollama_chat_model` and `ollama_embedding_model`.
+
+Provider failures return sanitized typed API errors such as `llm_provider_unavailable`, `llm_provider_request_failed`, `llm_provider_invalid_response`, or `llm_provider_timeout`.
+The shared API route exists before concrete Azure OpenAI and Ollama adapter HTTP checks land; until an adapter is dependency-injected, the route reports that the LLM provider adapter is not configured.
+
 ## Readiness Checklist
 
 - The selected LLM provider is either `azure_openai` or `ollama`.
 - `classification_mode` follows the intended default pairing for that provider unless the user explicitly chooses another supported non-local mode.
 - Azure OpenAI has endpoint, API version, chat deployment, embedding deployment, and an API key stored through `SecretStore`.
 - Ollama has a reachable local base URL and the configured chat and embedding models are pulled locally.
+- `POST /config/providers/llm/health` returns an `available` response for the configured chat and embedding models once the selected provider adapter is wired.
 - Gmail setup still uses `gmail.readonly` and a user-owned Google OAuth client.
 - LLM output is routed through application code that uses deterministic queries or constrained query builders for facts, never raw SQL emitted by the model.
 - No API keys, OAuth tokens, client secrets, or provider credentials are committed to the repository.

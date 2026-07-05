@@ -9,7 +9,11 @@ from app.models.application import (
 )
 from app.models.chat import ChatMessageRecord, ChatMessageRole
 from app.models.chunk import EmailChunkRecord
-from app.models.classification import EmailClassificationRecord, JobEmailCategory
+from app.models.classification import (
+    ClassificationRunRecord,
+    EmailClassificationRecord,
+    JobEmailCategory,
+)
 from app.models.connection import EmailConnectionRecord
 from app.models.correction import (
     ApplicationCorrectionRecord,
@@ -35,6 +39,7 @@ __all__ = [
     "ApplicationStatus",
     "ChatMessageRecord",
     "ChatMessageRole",
+    "ClassificationRunRecord",
     "CorrectionType",
     "EmailBackfillStateRecord",
     "EmailBackfillStatus",

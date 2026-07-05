@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from app import models
@@ -14,6 +15,7 @@ def test_domain_dtos_are_exported_from_model_package() -> None:
     expected_model_names = [
         "RawEmailRecord",
         "EmailClassificationRecord",
+        "ClassificationRunRecord",
         "ApplicationRecord",
         "ApplicationEventRecord",
         "InsightRecord",
@@ -60,6 +62,41 @@ def test_email_classification_record_validates_category_and_confidence() -> None
             model="synthetic-classifier",
             prompt_version="prompt-v1",
             classified_at=NOW,
+        )
+
+
+def test_classification_run_record_validates_token_usage_and_estimated_cost() -> None:
+    run = models.ClassificationRunRecord(
+        id="classification-run-1",
+        provider="azure_openai",
+        model="gpt-4.1-mini",
+        prompt_version="prompt-v1",
+        started_at=NOW,
+        completed_at=NOW,
+        candidate_count=3,
+        classified_count=3,
+        prompt_tokens=120,
+        completion_tokens=30,
+        total_tokens=150,
+        estimated_cost_usd=Decimal("0.000450"),
+    )
+
+    assert run.total_tokens == 150
+    assert run.estimated_cost_usd == Decimal("0.000450")
+
+    with pytest.raises(ValidationError, match="classified_count cannot exceed candidate_count"):
+        models.ClassificationRunRecord.model_validate(
+            run.model_dump() | {"classified_count": 4},
+        )
+
+    with pytest.raises(ValidationError, match="total_tokens cannot be less"):
+        models.ClassificationRunRecord.model_validate(
+            run.model_dump() | {"total_tokens": 149},
+        )
+
+    with pytest.raises(ValidationError):
+        models.ClassificationRunRecord.model_validate(
+            run.model_dump() | {"estimated_cost_usd": Decimal("-0.000001")},
         )
 
 
