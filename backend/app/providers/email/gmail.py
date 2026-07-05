@@ -752,7 +752,9 @@ class GmailMessageLister:
     ) -> EmailBodyBatch:
         if len(request.refs) > _GMAIL_MAX_BODY_BATCH_SIZE:
             raise EmailProviderError(
-                public_message=(f"Gmail body batch size cannot exceed {_GMAIL_MAX_BODY_BATCH_SIZE}")
+                public_message=(
+                    f"Gmail body batch size cannot exceed {_GMAIL_MAX_BODY_BATCH_SIZE}"
+                )
             )
 
         stored_token = await self._secret_store.get_secret(connection.credential_ref)
@@ -1095,7 +1097,6 @@ def _decode_body_text(encoded_body: str, *, max_body_bytes: int | None) -> tuple
     if max_body_bytes is not None and truncated:
         body_text = body_bytes[:max_body_bytes].decode("utf-8", errors="ignore")
     return body_text, truncated
-
 
 def _retained_body_from_parts(
     parts: list[tuple[str, bool]],

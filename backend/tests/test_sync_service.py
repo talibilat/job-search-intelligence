@@ -414,8 +414,6 @@ def test_paginated_sync_with_cursor_requires_explicit_mode() -> None:
         )
 
     assert provider.requests == []
-
-
 def test_manual_sync_backfills_all_pages_and_persists_latest_cursor() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -687,8 +685,6 @@ def test_manual_sync_records_failed_status_when_provider_fails() -> None:
     assert status.state is EmailSyncRunState.FAILED
     assert status.last_error == "Sync failed."
     assert status.finished_at == NOW
-
-
 def test_sync_service_fetches_retained_bodies_only_for_candidates_and_debug_refs() -> None:
     provider = RecordingRetainedBodyProvider()
     service = EmailSyncService(provider=provider, page_size=250)

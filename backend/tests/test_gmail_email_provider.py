@@ -168,7 +168,6 @@ class FakeGmailTransport:
                     "body": {"data": _gmail_body_data("éé")},
                 },
             }
-
         raise AssertionError(f"unexpected Gmail path: {path}")
 
 
