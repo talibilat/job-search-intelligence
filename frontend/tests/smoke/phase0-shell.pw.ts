@@ -3,6 +3,45 @@ import { expect, test } from "@playwright/test";
 test("renders the Phase 0 setup, sync, and dashboard shell", async ({
   page,
 }) => {
+  await page.route("**/sync/status", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        account_id: "talib@example.test",
+        finished_at: "2026-07-05T09:45:30Z",
+        last_error: null,
+        message_count: 2500,
+        mode: "full_backfill",
+        page_count: 12,
+        provider: "gmail",
+        raw_email_count: 1240,
+        recovered_from_expired_cursor: true,
+        started_at: "2026-07-05T09:15:00Z",
+        state: "succeeded",
+      },
+      status: 200,
+    });
+  });
+  await page.route("**/sync", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        account_id: "talib@example.test",
+        finished_at: null,
+        last_error: null,
+        message_count: 2600,
+        mode: "incremental",
+        page_count: 13,
+        provider: "gmail",
+        raw_email_count: 1305,
+        recovered_from_expired_cursor: false,
+        started_at: "2026-07-05T10:00:00Z",
+        state: "running",
+      },
+      status: 200,
+    });
+  });
+
   await page.goto("/");
 
   await expect(page).toHaveTitle("JobTracker");
@@ -21,14 +60,19 @@ test("renders the Phase 0 setup, sync, and dashboard shell", async ({
     page.getByText("Connect Gmail through a local-only setup flow"),
   ).toBeVisible();
 
-  await expect(
-    page.getByRole("heading", { name: "Sync status ready for backend wiring" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      "Manual sync and last-run state will appear here once the sync API exists.",
-    ),
-  ).toBeVisible();
+  const syncPanel = page.getByRole("region", { name: "Gmail sync progress" });
+
+  await expect(syncPanel).toBeVisible();
+  await expect(syncPanel.getByText("Last sync succeeded")).toBeVisible();
+  await expect(syncPanel.getByText("1,240 raw emails")).toBeVisible();
+  await expect(syncPanel.getByText("2,500 messages")).toBeVisible();
+  await expect(syncPanel.getByText("12 pages")).toBeVisible();
+  await expect(syncPanel.getByText("Recovered expired cursor")).toBeVisible();
+  await expect(syncPanel.getByText("talib@example.test")).toBeVisible();
+
+  await syncPanel.getByRole("button", { name: "Sync now" }).click();
+  await expect(syncPanel.getByText("Sync is running")).toBeVisible();
+  await expect(syncPanel.getByText("1,305 raw emails")).toBeVisible();
 
   await expect(
     page.getByRole("region", { name: "Chart foundation" }),
