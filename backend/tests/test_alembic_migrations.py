@@ -148,6 +148,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "email_classifications",
             "applications",
             "application_events",
+            "application_corrections",
             "insights",
             "email_chunks",
         }.issubset(table_names)
@@ -214,6 +215,15 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "event_at",
             "extract_note",
         ]
+        assert sqlite_column_names(connection, "application_corrections") == [
+            "id",
+            "application_id",
+            "correction_type",
+            "before_json",
+            "after_json",
+            "reason",
+            "created_at",
+        ]
         assert sqlite_column_names(connection, "insights") == [
             "id",
             "type",
@@ -242,6 +252,135 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             ("application_id", "applications", "id"),
             ("email_id", "raw_emails", "id"),
         }
+        assert foreign_key_targets(connection, "application_corrections") == {
+            ("application_id", "applications", "id"),
+        }
+
+
+def test_application_corrections_store_audited_manual_overrides(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        insert_application(connection)
+
+        connection.execute(
+            """
+            INSERT INTO application_corrections (
+                application_id,
+                correction_type,
+                before_json,
+                after_json,
+                reason,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "status_edit",
+                '{"current_status": "applied"}',
+                '{"current_status": "rejected"}',
+                "User corrected aggregation status.",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        row = connection.execute(
+            """
+            SELECT
+                application_id,
+                correction_type,
+                before_json,
+                after_json,
+                reason,
+                created_at
+            FROM application_corrections
+            """,
+        ).fetchone()
+
+    assert row == (
+        "app_1",
+        "status_edit",
+        '{"current_status": "applied"}',
+        '{"current_status": "rejected"}',
+        "User corrected aggregation status.",
+        "2026-07-31T00:00:00Z",
+    )
+
+
+def test_application_corrections_reject_unknown_correction_type(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        insert_application(connection)
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO application_corrections (
+                    application_id,
+                    correction_type,
+                    before_json,
+                    after_json,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "app_1",
+                    "invalid_edit",
+                    '{"current_status": "applied"}',
+                    '{"current_status": "rejected"}',
+                    "2026-07-31T00:00:00Z",
+                ),
+            )
+
+
+def test_application_corrections_cascade_with_application_deletes(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        insert_application(connection)
+        connection.execute(
+            """
+            INSERT INTO application_corrections (
+                application_id,
+                correction_type,
+                before_json,
+                after_json,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "reset_lock",
+                '{"manual_lock": true}',
+                '{"manual_lock": false}',
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        connection.execute("DELETE FROM applications WHERE id = ?", ("app_1",))
+
+        assert connection.execute(
+            "SELECT COUNT(*) FROM application_corrections",
+        ).fetchone() == (0,)
 
 
 def test_application_events_allow_ghost_inferred_without_email(tmp_path: Path) -> None:
@@ -450,6 +589,7 @@ def test_alembic_downgrade_removes_jt020_core_schema(tmp_path: Path) -> None:
         assert "email_classifications" not in table_names
         assert "applications" not in table_names
         assert "application_events" not in table_names
+        assert "application_corrections" not in table_names
         assert "insights" not in table_names
         assert not any(table_name.startswith("email_chunks") for table_name in table_names)
 
@@ -484,6 +624,35 @@ def foreign_key_targets(
         (str(row[3]), str(row[2]), str(row[4]))
         for row in connection.execute(f"PRAGMA foreign_key_list({table_name})")
     }
+
+
+def insert_application(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        INSERT INTO applications (
+            id,
+            company,
+            role_title,
+            source,
+            first_seen_at,
+            current_status,
+            last_activity_at,
+            created_at,
+            updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "app_1",
+            "Example Co",
+            "Software Engineer",
+            "company_site",
+            "2026-07-01T00:00:00Z",
+            "applied",
+            "2026-07-01T00:00:00Z",
+            "2026-07-01T00:00:00Z",
+            "2026-07-01T00:00:00Z",
+        ),
+    )
 
 
 def load_sqlite_vec(connection: sqlite3.Connection) -> None:
