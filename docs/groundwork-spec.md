@@ -61,7 +61,7 @@ job-search-intelligence/
 │   │   │   ├── engine.py           # SQLite engine, sqlite-vec loading, and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
 │   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
-│   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
+│   │   ├── models/                 # Focused Pydantic DTO modules plus stable aggregate exports
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider protocol + Gmail OAuth start/callback/metadata lister + retained-body text normalization + future outlook.py/imap.py
 │   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)

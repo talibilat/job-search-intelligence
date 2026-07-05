@@ -7,6 +7,7 @@ Baseline coding standards for every agent and contributor.
 
 - Type everything; code is `mypy`-clean.
 - Cross every boundary with a Pydantic v2 DTO, never a raw dict.
+- Keep core storage DTOs in focused `app.models` domain modules, and preserve stable aggregate imports through `app.models` and `app.models.records` for shared repository and pipeline code.
 - Validate structured LLM output with Pydantic and reject malformed output instead of storing it.
 
 ## Architecture patterns
