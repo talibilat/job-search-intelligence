@@ -248,6 +248,7 @@ Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite s
 
 **Phase 1 - Gmail ingestion**
 Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, retained body text for candidate messages, incremental sync via `historyId`, `raw_emails` populated.
+[JT-065 2026-07-05 docs sync] Phase 1 raw email population tracks `metadata_only`, `retained`, and `debugging` body retention states; debugging and reconciliation bodies are retained only when explicitly needed.
 **DoD:** your inbox backfilled; incremental pulls only new messages; local count reconciles with Gmail.
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
