@@ -81,6 +81,7 @@ Retained synthetic email body text is excluded from object repr output to preser
 Fixture enum values mirror the planned database contract:
 
 - `body_retention_state`: `metadata_only`, `retained`, `omitted`
+[JT-065 2026-07-05 v2] `body_retention_state`: `metadata_only`, `retained`, `debugging`; `omitted` is no longer accepted by the typed raw email retention contract.
 - `category`: `application_confirmation`, `rejection`, `interview_invite`, `recruiter_outreach`, `offer`, `assessment`, `follow_up`, `other`
 - `source`: `linkedin`, `company_site`, `indeed`, `referral`, `other`
 - `current_status`: `applied`, `in_review`, `assessment`, `interview`, `offer`, `rejected`, `ghosted`, `withdrawn`

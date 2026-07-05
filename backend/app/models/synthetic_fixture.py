@@ -8,12 +8,9 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.config import EmailProviderName
+from app.models.records import RawEmailBodyRetentionState
 
-
-class SyntheticBodyRetentionState(StrEnum):
-    METADATA_ONLY = "metadata_only"
-    RETAINED = "retained"
-    OMITTED = "omitted"
+SyntheticBodyRetentionState = RawEmailBodyRetentionState
 
 
 class SyntheticJobEmailCategory(StrEnum):
