@@ -163,15 +163,12 @@ class EmailCandidateQuery(BaseModel):
     def _matches_sender_domain(self, metadata: EmailMessageMetadata) -> bool:
         if metadata.from_addr is None:
             return False
-        _local_part, separator, domain = (
-            metadata.from_addr.address.strip().lower().rpartition("@")
-        )
+        _local_part, separator, domain = metadata.from_addr.address.strip().lower().rpartition("@")
         if not separator or not domain:
             return False
         domain = domain.strip(">")
         return any(
-            domain == term or domain.endswith(f".{term}")
-            for term in self.sender_domain_terms
+            domain == term or domain.endswith(f".{term}") for term in self.sender_domain_terms
         )
 
     def _matches_subject_keyword(self, metadata: EmailMessageMetadata) -> bool:
