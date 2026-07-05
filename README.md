@@ -10,9 +10,9 @@ The LLM synthesizes narrative insight only after deterministic facts are prepare
 
 ## Status
 
-Phase 0 (Groundwork) plus early Phase 1 Gmail ingestion pieces.
-The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health, setup, provider config, and local wipe-data routes, typed settings and API errors, the keyring-backed `SecretStore` adapter, provider registry, backend `LLMProvider` and `EmailProvider` Strategy interfaces, the backend `EmailSyncService` coordinator for paginated metadata sync and expired-cursor reconciliation, a provider-neutral broad job-search candidate query DTO and static signal factory, the exported `GmailEmailProvider` skeleton with readonly scope validation, public-safe not-implemented runtime errors, and a Gmail metadata lister for safe full-backfill pages, retained email body HTML-to-text normalization, an async SQLite engine module with sqlite-vec loading, `vec_version()` verification, and Phase 0 connection PRAGMAs, shared SQLite URL parsing, an Alembic migration environment, shared SQLite repository helpers, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the synthetic fixture DTO contract, sample fixture, and SQLite fixture loader, the backend OpenAPI schema generator, root pre-commit configuration, backend and frontend CI workflows, and the frontend Vite React TypeScript shell with Orval API client generation, Recharts foundation, route-query helpers, shared accessible UI primitives, setup and sync-readiness shell copy, empty `/dashboard` and `/insights` route shells, npm API contract, typecheck, lint, Vitest, build gate scripts, and a Chromium Playwright smoke harness for the current Phase 0 browser shell.
-Gmail OAuth flows, token refresh, retained-body fetching, incremental sync, product pages, the first application schema revision, and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
+Phase 1 (Gmail ingestion) has started on top of the Phase 0 scaffold.
+The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health, setup, provider config, local wipe-data, and Gmail auth-start routes, typed settings and API errors, the keyring-backed `SecretStore` adapter, provider registry, backend `LLMProvider` and `EmailProvider` Strategy interfaces, the backend `EmailSyncService` coordinator for paginated metadata sync and expired-cursor reconciliation, a provider-neutral broad job-search candidate query DTO and static signal factory, a Gmail provider helper for building read-only OAuth authorization URLs, the exported `GmailEmailProvider` skeleton with readonly scope validation, public-safe not-implemented runtime errors, and a Gmail metadata lister for safe full-backfill pages, retained email body HTML-to-text normalization, an async SQLite engine module with sqlite-vec loading, `vec_version()` verification, and Phase 0 connection PRAGMAs, shared SQLite URL parsing, an Alembic migration environment, shared SQLite repository helpers, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the `email_sync_state` migration, `SyncStateRepository`, `SyncService`, the synthetic fixture DTO contract, sample fixture, and SQLite fixture loader, the backend OpenAPI schema generator, root pre-commit configuration, backend and frontend CI workflows, and the frontend Vite React TypeScript shell with Orval API client generation, Recharts foundation, route-query helpers, shared accessible UI primitives, setup and sync-readiness shell copy, empty `/dashboard`, `/insights`, and `/chat` route shells, npm API contract, typecheck, lint, Vitest, build gate scripts, and a Chromium Playwright smoke harness for the current browser shell.
+Gmail OAuth callback handling, token exchange, token persistence, retained-body fetching, incremental sync, product pages, the first application schema revision, and remaining backend pieces fill in over subsequent Phase 1 tickets.
 
 ## Architecture at a glance
 
@@ -26,7 +26,7 @@ Gmail OAuth flows, token refresh, retained-body fetching, incremental sync, prod
 | LLM providers       | Pluggable: Azure OpenAI and Ollama first; OpenAI and Anthropic later                                                       |
 | Provider registry   | Backend `app.providers.provider_registry` metadata for supported providers, non-secret requirements, and secret references |
 | LLM provider seam   | Backend `app.providers.llm.LLMProvider` protocol with typed Pydantic generation DTOs                                       |
-| Email providers     | `EmailProvider` protocol with typed auth, metadata, cursor, candidate-query, and normalized retained-body DTOs; Gmail skeleton and metadata listing present |
+| Email providers     | `EmailProvider` protocol with typed auth, metadata, cursor, candidate-query, and normalized retained-body DTOs; Gmail can build read-only OAuth authorization URLs and list safe metadata-only full-backfill pages, while callback, token exchange, and retained-body access remain deferred |
 | API style           | REST with an Orval-generated TypeScript client from OpenAPI, imported through `frontend/src/api`                           |
 | Data contracts      | Pydantic v2 DTOs at every boundary                                                                                         |
 | API errors          | Typed `{"error": ...}` responses with sanitized validation, HTTP, and internal error details                               |
@@ -59,12 +59,13 @@ scripts/          repository-level developer and operational scripts
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
 - Fernet fallback storage is documented in `docs/secret-storage.md`; set `JOBTRACKER_SECRET_STORE_BACKEND=fernet` until the OS keyring adapter lands or when OS keyring is unavailable.
 - Secrets are stored encrypted at rest through OS keyring by default and never logged; backend redaction helpers are exported from `app.security` for logging boundaries.
-- Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate or reconciliation messages.
+- Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate, debugging, or reconciliation messages, and raw email DTOs track `metadata_only`, `retained`, or `debugging` retention state.
 - If a provider reports an expired incremental cursor, the sync service restarts as full metadata reconciliation and returns the provider page token plus replacement sync cursor for resumable progress.
 - Candidate selection uses provider-neutral static sender-domain, subject keyword, and excluded-label signals after metadata listing, so broad Gmail metadata queries do not expose snippets or body content.
 - Retained email bodies are stored as normalized plain text: HTML MIME bodies are converted to text, raw HTML fields are rejected, and mislabelled plain-text bodies that still look like HTML fail validation.
 - Broad email metadata excludes body-derived snippets, and v1 ignores attachment content.
 - Current Gmail metadata listing requests Gmail `format=metadata` plus partial fields for message IDs, thread IDs, labels, size estimates, and selected headers only.
+- Incremental sync anchors are stored in local SQLite as opaque provider cursor values scoped by provider and account; they are not OAuth token material or email content.
 - `backend/.env.example` documents operational settings only; keep API keys, OAuth tokens, passwords, client secrets, and Google OAuth client JSON out of the repo.
 - Local wipe-data path: `POST /local-data/wipe` clears configured local app data and derived artifacts after the request body confirms `{"confirmation":"wipe-local-data"}`.
 - The wipe deletes `JOBTRACKER_DATA_DIR` recursively, and when `JOBTRACKER_DATABASE_URL` points to a local SQLite file outside that directory, it also deletes the database file plus `-wal`, `-shm`, and `-journal` sidecars.
@@ -95,9 +96,12 @@ Developer instructions:
 
 ## Local Developer Quickstart
 
-Use this path for a fresh local checkout in Phase 0.
+Use this path for a fresh local checkout in the current Phase 1 scaffold.
 The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment exists, but the first schema revision is later Phase 0 work.
 Schema-specific upgrade behavior will apply once that revision lands.
+Use this path for a fresh local checkout in Phase 0.
+The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment and first sync-state schema revision exist.
+Run Alembic upgrades before using repository code that expects migrated tables.
 The synthetic fixture loader can still populate caller-provided local SQLite connections for deterministic backend tests.
 
 ### 1. Clone the repository
@@ -131,6 +135,7 @@ cp .env.example .env
 Do not put API keys, OAuth tokens, passwords, client secrets, or Google OAuth client JSON in `backend/.env`.
 Keep Google OAuth client JSON outside the repository, for example at `~/.config/jobtracker/google-oauth-client.json`, and point `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` at that path.
 Keep `JOBTRACKER_GMAIL_SCOPES` set to `https://www.googleapis.com/auth/gmail.readonly` for v1 ingestion.
+`GET /auth/gmail` reads the client JSON to build a Google authorization URL, returns the generated state and requested read-only scope, and never returns the Google client secret or tokens.
 The default `JOBTRACKER_DATA_DIR=./.jobtracker` is local app storage and is ignored by git.
 
 ### 4. Run the backend
@@ -141,9 +146,10 @@ From `backend/`:
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Current backend endpoints include `GET /health`, `GET /setup/status`, `POST /setup`, `GET|PUT /config/providers`, and `POST /local-data/wipe`.
+Current backend endpoints include `GET /health`, `GET /setup/status`, `POST /setup`, `GET|PUT /config/providers`, `GET /auth/gmail`, and `POST /local-data/wipe`.
 The health endpoint returns `{"status":"ok"}`.
 The setup status endpoint returns typed first-run readiness fields without reading or returning secrets.
+The Gmail auth-start endpoint returns a provider-built Google authorization URL for `gmail.readonly` and maps missing, unreadable, or invalid client config files to typed `400` errors.
 The wipe-data endpoint requires the exact confirmation phrase `wipe-local-data` before deleting configured local app data.
 
 ### 5. Install frontend dependencies
@@ -166,6 +172,7 @@ npm run dev
 Vite serves the Phase 0 frontend shell locally, usually at `http://127.0.0.1:5173/`.
 The setup shell is available at `http://127.0.0.1:5173/setup`.
 The empty dashboard page shell is available at `http://127.0.0.1:5173/dashboard`.
+The static chat page shell is available at `http://127.0.0.1:5173/chat`, with streaming chat, persisted history, retrieval, provider calls, and backend chat endpoints deferred to Phase 5.
 Keep the backend running separately on `127.0.0.1:8000` when testing API-backed flows.
 
 ### 7. Smoke-check the local setup
@@ -210,9 +217,10 @@ The smoke suite starts the Vite dev server on `127.0.0.1:4173` and asserts the c
 
 ## Development Commands
 
-The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup and provider config DTOs/routes/services, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol, keyring adapter, and redaction helpers in `backend/app/security/`, the `EmailProvider` contract, broad candidate query DTO, `GmailEmailProvider` skeleton, Gmail metadata lister, and retained body HTML normalizer in `backend/app/providers/email/`, the `EmailSyncService` metadata-page coordinator in `backend/app/services/sync_service.py`, an async SQLite engine with sqlite-vec setup in `backend/app/db/engine.py`, shared SQLite URL parsing in `backend/app/db/sqlite_url.py`, an Alembic migration environment in `backend/app/db/migrations/`, shared SQLite repository helpers and repository stubs in `backend/app/db/repositories/`, table-shaped record DTOs in `backend/app/models/records.py`, synthetic fixture DTOs in `backend/app/models/synthetic_fixture.py`, the `SyntheticFixtureRepository` loader in `backend/app/db/repositories/synthetic_fixture.py`, a sample fixture in `backend/tests/fixtures/synthetic/basic_job_search.json`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
+The backend has an initial FastAPI app factory, typed API error DTOs in `backend/app/api/errors.py`, setup, auth-start, and provider config DTOs/routes/services, the `app.providers.provider_registry` metadata and validation seam, the `app.providers.llm.LLMProvider` strategy seam, typed settings in `backend/app/config.py`, the `SecretStore` protocol, keyring adapter, and redaction helpers in `backend/app/security/`, the `EmailProvider` contract, broad candidate query DTO, `GmailEmailProvider` skeleton, Gmail metadata lister, retained body HTML normalizer, and Gmail read-only OAuth authorization URL helper in `backend/app/providers/email/`, the `EmailSyncService` metadata-page coordinator in `backend/app/services/sync_service.py`, an async SQLite engine with sqlite-vec setup in `backend/app/db/engine.py`, shared SQLite URL parsing in `backend/app/db/sqlite_url.py`, an Alembic migration environment in `backend/app/db/migrations/`, shared SQLite repository helpers and repository stubs in `backend/app/db/repositories/`, `SyncStateRepository` for persisted provider cursors, table-shaped record DTOs in `backend/app/models/records.py`, `SyncService` for sync cursor business flow, synthetic fixture DTOs in `backend/app/models/synthetic_fixture.py`, the `SyntheticFixtureRepository` loader in `backend/app/db/repositories/synthetic_fixture.py`, a sample fixture in `backend/tests/fixtures/synthetic/basic_job_search.json`, `backend/scripts/generate_openapi.py` for deterministic OpenAPI schema generation, a `backend/pyproject.toml` with strict mypy defaults plus `uv` project metadata, `backend/pytest.ini`, and `backend/.env.example` documenting expected v1 operational settings.
 The database engine creates the configured local database parent directory, accepts `sqlite:///` or `sqlite+aiosqlite:///` file-backed URLs, loads sqlite-vec from the bundled runtime dependency or `JOBTRACKER_SQLITE_VEC_EXTENSION_PATH`, verifies availability with `vec_version()`, registers `foreign_keys=ON`, `journal_mode=WAL`, `synchronous=NORMAL`, and a 5000 ms busy timeout, and exposes a transaction context manager for future repositories and services.
-The backend database schema does not exist yet; `uv run alembic ensure_version` can initialize the Alembic version table, and schema-specific upgrades will apply once the first revision lands.
+The backend database schema is migration-owned; `uv run alembic ensure_version` can initialize the Alembic version table without applying schema revisions.
+The first Alembic schema revision creates `email_sync_state`; run `uv run alembic upgrade head` before using sync-state repository behavior against a fresh local database.
 
 - Backend: `uv sync` then `uv run <command>` from `backend/`. The project targets Python 3.12, declares `fastapi`/`uvicorn`, `keyring`, `cryptography`, `sqlalchemy[asyncio]`, `aiosqlite`, `sqlite-vec`, and `alembic` as runtime dependencies, and uses `ruff`, `mypy`, `pytest`, and `pre-commit` as dev-dependency verification tooling; `backend/pyproject.toml` also holds the strict mypy defaults.
 - Backend tests: `uv run pytest` from `backend/`; `backend/pytest.ini` discovers `tests/` and sets `pythonpath = .` so tests import the local `app` package deterministically.
@@ -220,8 +228,13 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - SQLite engine test: `uv run pytest tests/test_sqlite_engine.py -v` from `backend/` verifies async engine creation, sync-to-async SQLite URL normalization, sqlite-vec loading and `vec_version()` availability, connection PRAGMAs, transaction commit/rollback behavior, and local database parent directory creation.
 - Alembic migration test: `uv run pytest tests/test_alembic_migrations.py -v` from `backend/` verifies the Alembic config, SQLite batch mode, sync migration URL normalization, virtual-table autogenerate exclusion, and SQLite version-table creation.
 - Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, retained-body repr redaction, and the checked-in sample fixture.
+- Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, shared raw-email retention enum validation, retained-body repr redaction, and the checked-in sample fixture.
+[JT-065 2026-07-05 v4] Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, shared raw-email retention enum validation, retained-body repr redaction, and the checked-in sample fixture.
 - Synthetic fixture loader test: `uv run pytest tests/test_synthetic_fixture_loader.py -v` from `backend/` verifies JSON fixture loading into the four core SQLite tables, typed per-table load counts, repository reads, and idempotent reloads.
 - Repository stubs: import `EmailRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports and row-to-record mapping for Phase 0 table-shaped DTOs.
+- Repository stubs: import `EmailRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports, raw-email retention-state invariants, retained-body repr redaction, and row-to-record mapping for Phase 0 table-shaped DTOs.
+[JT-065 2026-07-05 v4] Repository stubs: import `EmailRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports, raw-email retention-state invariants, retained-body repr redaction, and row-to-record mapping for Phase 0 table-shaped DTOs.
+- Sync-state persistence test: `uv run pytest tests/test_sync_state.py -v` from `backend/` verifies Alembic creates `email_sync_state`, cursors upsert per provider account, and repository reads require migrated schema.
 - Backend smoke test: `uv run pytest tests/test_health.py -q` from `backend/`.
 - Email provider contract test: `uv run pytest tests/test_email_provider_contract.py -v` from `backend/` verifies the provider boundary keeps OAuth token material behind `SecretRef`, separates metadata from retained body fetching, supports full and incremental cursor shapes, excludes body-derived metadata snippets, excludes attachment content, normalizes HTML bodies to retained plain text, and rejects raw HTML retention fields.
 - Sync service test: `uv run pytest tests/test_sync_service.py -v` from `backend/` verifies metadata-page coordination, expired history cursor fallback to full reconciliation, continuation page-token forwarding, and ambiguity rejection when paginated sync includes a cursor without an explicit mode.
@@ -232,6 +245,7 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
 - Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Current setup shell: `GET /setup/status` returns typed first-run setup readiness fields without reading or returning secrets, and `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns `{"status":"accepted",...}` without running provider auth flows or persisting secrets.
+- Current Gmail auth-start endpoint: `GET /auth/gmail` returns a Google authorization URL, generated OAuth state, provider name, and the single `gmail.readonly` scope; callback handling, token exchange, token persistence, and message access remain later Phase 1 work.
 - LLM provider setup guide: [`docs/llm-provider-setup.md`](docs/llm-provider-setup.md) documents the Azure OpenAI and Ollama values the first-run setup flow needs, including `classification_mode` choices and `SecretStore` boundaries.
 - Current local wipe-data endpoint: `POST /local-data/wipe` removes configured local storage targets after the exact confirmation phrase `wipe-local-data`.
 - Current provider registry: `app.providers.provider_registry` declares Gmail, Ollama, and Azure OpenAI metadata; validation checks selected non-secret LLM settings only and does not read secret values.
@@ -264,6 +278,7 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - Frontend lint check: `npm run lint` from `frontend/`.
 - Frontend unit tests: `npm run test` from `frontend/` runs Vitest with jsdom for component behavior such as UI primitive accessibility contracts and the accessible `/dashboard` shell.
 - Current frontend route-query helper: `frontend/src/lib/routeQuery.ts` parses, serializes, and patches URL query strings for URL-backed filter state.
+- Current frontend chat shell: `/chat` renders `frontend/src/pages/Chat.tsx` with disabled composer copy that reserves the page entry point without implementing streaming, history, retrieval, provider calls, or backend chat behavior.
 - Frontend Playwright browser install: run `npx playwright install chromium` from `frontend/` once per machine before the browser smoke suite.
 - Frontend Playwright smoke tests: run `npm run test:smoke` from `frontend/`; the suite starts Vite on `127.0.0.1:4173` and covers the current Phase 0 setup copy, sync-readiness copy, and dashboard empty state.
 - Frontend tooling gate: after backend dependencies are synced with `uv`, `npm run check` from `frontend/` runs API contract generation and staleness checks, typecheck, lint, Vitest, and build.

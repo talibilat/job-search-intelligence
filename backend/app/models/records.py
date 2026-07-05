@@ -63,6 +63,8 @@ class RawEmailBodyRetentionState(StrEnum):
 
 
 class RawEmailRecord(BaseModel):
+    """Raw email row DTO with explicit retained-body consistency checks."""
+
     id: str
     thread_id: str | None
     from_addr: str | None
@@ -103,6 +105,16 @@ class RawEmailRecord(BaseModel):
             RawEmailBodyRetentionState.RETAINED,
             RawEmailBodyRetentionState.DEBUGGING,
         }
+
+
+class EmailSyncStateRecord(BaseModel):
+    """Persisted opaque provider cursor for one email account."""
+
+    provider: str
+    account_id: str
+    sync_cursor: str
+    cursor_issued_at: datetime
+    updated_at: datetime
 
 
 class ApplicationRecord(BaseModel):

@@ -9,7 +9,6 @@ from app.providers.email import (
     EmailAccountRef,
     EmailAttachmentPolicy,
     EmailAuthorizationCallbackRequest,
-    EmailAuthorizationStartRequest,
     EmailBodyFetchRequest,
     EmailConnection,
     EmailMessageRef,
@@ -76,11 +75,6 @@ def test_gmail_email_provider_rejects_non_readonly_scope_configuration() -> None
 def test_gmail_email_provider_skeleton_raises_public_safe_errors() -> None:
     provider = _gmail_provider(_settings())
 
-    start_request = EmailAuthorizationStartRequest(
-        provider=EmailProviderName.GMAIL,
-        redirect_uri="http://127.0.0.1:8000/auth/gmail/callback",
-        state="csrf-state",
-    )
     callback_request = EmailAuthorizationCallbackRequest(
         provider=EmailProviderName.GMAIL,
         redirect_uri="http://127.0.0.1:8000/auth/gmail/callback",
@@ -97,7 +91,6 @@ def test_gmail_email_provider_skeleton_raises_public_safe_errors() -> None:
     )
 
     operations = (
-        provider.start_authorization(start_request),
         provider.complete_authorization(callback_request),
         provider.refresh_connection(connection),
         provider.list_message_metadata(connection, metadata_request),
@@ -108,7 +101,7 @@ def test_gmail_email_provider_skeleton_raises_public_safe_errors() -> None:
         with pytest.raises(EmailProviderError) as error_info:
             asyncio.run(operation)
 
-        assert error_info.value.public_message == "Gmail provider runtime is not implemented yet."
+        assert error_info.value.public_message.endswith("not implemented yet.")
         assert "authorization-code" not in str(error_info.value)
         assert "csrf-state" not in str(error_info.value)
         assert "me@example.com" not in str(error_info.value)

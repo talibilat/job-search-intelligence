@@ -89,6 +89,40 @@
         "title": "ClassificationMode",
         "type": "string"
       },
+      "EmailAuthorizationStartResult": {
+        "description": "Provider-neutral authorization URL and scope request.",
+        "properties": {
+          "authorization_url": {
+            "minLength": 1,
+            "title": "Authorization Url",
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          },
+          "requested_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Requested Scopes",
+            "type": "array"
+          },
+          "state": {
+            "minLength": 1,
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "authorization_url",
+          "state",
+          "requested_scopes"
+        ],
+        "title": "EmailAuthorizationStartResult",
+        "type": "object"
+      },
       "EmailProviderConfigResponse": {
         "description": "Email provider metadata exposed by the provider config API shell.",
         "properties": {
@@ -842,6 +876,37 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/auth/gmail": {
+      "get": {
+        "operationId": "gmail_auth_url_auth_gmail_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailAuthorizationStartResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          }
+        },
+        "summary": "Gmail Auth Url",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/config/providers": {
       "get": {
         "description": "Return selected provider config and non-secret supported-provider metadata.",

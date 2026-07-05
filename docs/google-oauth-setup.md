@@ -1,10 +1,11 @@
 # Google OAuth Setup Guide
 
 This guide documents the user-created Google OAuth client needed for Gmail ingestion.
-It maps to FR-0, FR-0.2, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 0.
+It maps to FR-0, FR-0.2, FR-1.1, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 1.
 
 Gmail message listing currently reads existing OAuth token material only through `SecretStore`.
-Gmail OAuth URL, callback, and token-refresh runtime behavior is deferred to later Gmail ingestion tickets.
+The backend can start Gmail OAuth with `GET /auth/gmail`.
+The callback, token exchange, token persistence, token refresh, and retained body fetching remain later Gmail ingestion work.
 This guide documents the setup and runtime security contract the app must follow.
 
 ## Security Boundaries
@@ -48,7 +49,7 @@ Do not move toward a public multi-user OAuth app unless the product scope change
 5. Download the OAuth client JSON.
 
 Use a Desktop app client, not a Web application client.
-The future local OAuth flow should use the installed-app loopback flow and must not require a hosted callback service.
+The local OAuth start endpoint builds a callback URL on the running backend at `/auth/gmail/callback`; that callback is not implemented yet.
 
 ## Store The Client JSON Outside The Repo
 
@@ -87,6 +88,29 @@ JOBTRACKER_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly
 Do not add broader Gmail scopes.
 The backend config validates that v1 uses only `gmail.readonly`, preserving read-only ingestion and preventing outbound email behavior.
 
+## Start Gmail Authorization
+
+After the backend is running and `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` points to your downloaded Desktop client JSON, request an authorization URL from the backend:
+
+```sh
+curl http://127.0.0.1:8000/auth/gmail
+```
+
+The response contains the provider, requested scopes, OAuth state, and Google authorization URL:
+
+```json
+{
+  "provider": "gmail",
+  "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?...",
+  "state": "generated-state",
+  "requested_scopes": ["https://www.googleapis.com/auth/gmail.readonly"]
+}
+```
+
+Open the `authorization_url` in your browser to authorize Gmail read-only access.
+The backend does not return the Google client secret, access tokens, refresh tokens, or authorization codes from this endpoint.
+If the client JSON is missing, unreadable, or invalid, the endpoint returns the standard typed `400` API error with a public-safe message.
+
 ## Token Storage Contract
 
 Current Gmail metadata listing reads access tokens through the existing `SecretStore` seam.
@@ -95,6 +119,7 @@ Access tokens and refresh tokens must continue to flow through `SecretStore`.
 The configured `SecretStore` adapter must store token material encrypted at rest, using OS keyring by default or the documented Fernet fallback.
 
 Provider connection records should persist only non-secret metadata and a `SecretRef` to the stored token.
+Incremental sync history IDs are opaque provider cursor state, not token material; store them in local SQLite sync state scoped to the Gmail account and never log them with OAuth tokens or email content.
 Logs, API responses, provider DTO dumps, and test fixtures must not expose raw token values.
 
 ## Metadata Listing Boundary
@@ -115,4 +140,5 @@ Incremental sync cursors, retained body fetching, richer normalization, and repo
 - The downloaded client JSON is outside the repository.
 - `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` points to that file if you did not use the default path.
 - The only Gmail scope is `https://www.googleapis.com/auth/gmail.readonly`.
+- `GET /auth/gmail` returns a Google authorization URL and never returns client secrets or tokens.
 - No credentials, tokens, client JSON, or secret-store files are committed or logged.
