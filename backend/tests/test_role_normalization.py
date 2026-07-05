@@ -13,6 +13,15 @@ from app.services.normalization import normalize_role_title
         ("Data Scientist III", "data scientist"),
         ("Staff Product Manager - Growth", "growth product manager"),
         ("Machine-Learning Engineer", "machine learning engineer"),
+        ("Software Engineer - NYC", "software engineer"),
+        ("Software Engineer - New York, NY", "software engineer"),
+        ("Backend Engineer", "back end software engineer"),
+        ("Frontend Engineer", "front end software engineer"),
+        ("Software Engineer IC4", "software engineer"),
+        ("Software Engineer E5", "software engineer"),
+        ("Software Engineer M2", "software engineer"),
+        ("Software Engineer L10", "software engineer"),
+        ("Software Engineer Level 10", "software engineer"),
     ],
 )
 def test_normalize_role_title_canonicalizes_common_title_variants(

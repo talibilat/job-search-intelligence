@@ -4,7 +4,7 @@ import re
 import unicodedata
 
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
-_LEVEL_TOKEN_RE = re.compile(r"(?:[1-9]|l[1-9])")
+_LEVEL_TOKEN_RE = re.compile(r"(?:[1-9][0-9]*|e[0-9]+|ic[0-9]+|l[0-9]+|m[0-9]+)")
 _EMPLOYMENT_PHRASES = (
     re.compile(r"\bfull[-\s]?time\b"),
     re.compile(r"\bpart[-\s]?time\b"),
@@ -23,23 +23,41 @@ _DROP_TOKENS = frozenset(
     {
         "apprentice",
         "associate",
+        "ca",
+        "california",
+        "canada",
         "entry",
+        "england",
         "grad",
         "graduate",
         "hybrid",
         "intern",
         "internship",
+        "francisco",
         "jr",
         "junior",
         "lead",
         "level",
+        "london",
         "new",
+        "ny",
+        "nyc",
         "onsite",
         "principal",
         "remote",
+        "san",
+        "sf",
+        "sfo",
         "senior",
         "sr",
         "staff",
+        "states",
+        "toronto",
+        "uk",
+        "united",
+        "us",
+        "usa",
+        "york",
     },
 )
 
@@ -129,12 +147,12 @@ def _coerce_developer_roles(tokens: tuple[str, ...]) -> tuple[str, ...]:
         or {"front", "end"}.issubset(token_set)
         or {"full", "stack"}.issubset(token_set)
     )
-    if "developer" not in token_set or not has_software_context:
+    if not {"developer", "engineer"}.intersection(token_set) or not has_software_context:
         return tokens
 
     coerced: list[str] = []
     for token in tokens:
-        if token != "developer":
+        if token not in {"developer", "engineer"}:
             coerced.append(token)
             continue
         if "software" not in token_set:
