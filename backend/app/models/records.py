@@ -105,6 +105,16 @@ class RawEmailRecord(BaseModel):
         }
 
 
+class EmailSyncStateRecord(BaseModel):
+    """Persisted opaque provider cursor for one email account."""
+
+    provider: str
+    account_id: str
+    sync_cursor: str
+    cursor_issued_at: datetime
+    updated_at: datetime
+
+
 class ApplicationRecord(BaseModel):
     id: str
     company: str
