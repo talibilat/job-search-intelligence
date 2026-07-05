@@ -138,7 +138,4 @@ def test_gmail_auth_endpoint_uses_injected_email_provider() -> None:
     assert payload["authorization_url"] == f"https://example.test/oauth?state={payload['state']}"
     assert fake_provider.start_request is not None
     assert fake_provider.start_request.provider is EmailProviderName.GMAIL
-    assert (
-        fake_provider.start_request.redirect_uri
-        == "http://127.0.0.1:8000/auth/gmail/callback"
-    )
+    assert fake_provider.start_request.redirect_uri == "http://127.0.0.1:8000/auth/gmail/callback"
