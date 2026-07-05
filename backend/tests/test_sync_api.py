@@ -33,7 +33,9 @@ from app.providers.email import (
     EmailMetadataPage,
     EmailProvider,
     EmailProviderAuthError,
+    EmailProviderCursor,
     EmailProviderErrorCode,
+    EmailSyncCursorExpiredError,
     EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef, create_secret_store
@@ -106,6 +108,29 @@ class FakeMetadataProvider:
                     sent_at=NOW,
                 ),
             )
+        )
+
+
+class ExpiringCursorMetadataProvider:
+    def __init__(self) -> None:
+        self.requests: list[EmailMetadataListRequest] = []
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        self.requests.append(request)
+        if request.mode is EmailSyncMode.INCREMENTAL:
+            raise EmailSyncCursorExpiredError(public_message="history cursor expired")
+
+        return EmailMetadataPage(
+            messages=(metadata_message(connection, "gmail-reconciled-1"),),
+            next_sync_cursor=EmailProviderCursor(
+                account=connection.account,
+                value="history-recovered",
+                issued_at=NOW,
+            ),
         )
 
 
@@ -291,6 +316,52 @@ def test_default_sync_email_provider_uses_configured_secret_store(tmp_path: Path
         )
 
     assert error_info.value.public_message == "Gmail authorization is required"
+
+
+def test_post_sync_recovers_expired_incremental_cursor(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO email_sync_state (
+                provider,
+                account_id,
+                sync_cursor,
+                cursor_issued_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "history-expired",
+                "2026-07-04T12:00:00+00:00",
+                "2026-07-04T12:00:00+00:00",
+            ),
+        )
+    provider = ExpiringCursorMetadataProvider()
+    status_store = EmailSyncStatusStore()
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    app.dependency_overrides[get_sync_email_provider] = lambda: provider
+    app.dependency_overrides[get_email_sync_connection_resolver] = lambda: email_connection
+    app.dependency_overrides[get_sync_status_store] = lambda: status_store
+    client = TestClient(app)
+
+    response = client.post("/sync")
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "succeeded"
+    assert response.json()["mode"] == "full_backfill"
+    assert response.json()["recovered_from_expired_cursor"] is True
+    assert [request.mode for request in provider.requests] == [
+        EmailSyncMode.INCREMENTAL,
+        EmailSyncMode.FULL_BACKFILL,
+    ]
 
 
 def test_configured_runtime_rejects_concurrent_manual_syncs(tmp_path: Path) -> None:

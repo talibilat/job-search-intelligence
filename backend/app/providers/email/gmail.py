@@ -1290,6 +1290,7 @@ def _raise_gmail_api_request_error(*, path: str, error: GmailApiRequestError) ->
         ) from error
 
     if error.status_code == 403 and error.reason in {
+        "dailyLimitExceeded",
         "rateLimitExceeded",
         "userRateLimitExceeded",
         "quotaExceeded",

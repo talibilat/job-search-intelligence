@@ -136,8 +136,8 @@ Example response shape:
 ```
 
 The response never includes the raw authorization code, Google client secret, access token, or refresh token.
-Provider auth failures return typed `401` or `403` errors, rate limits return `429`, transient Google failures return `503`, expired incremental cursors return `409`, and other provider failures return `502` with public-safe messages.
-Email-provider error responses include a stable email-specific error code and a `user_action` detail such as `reconnect_email`, `restart_full_sync`, or `try_again_later`.
+OAuth callback provider auth failures return typed `400` errors, transient Google failures return `503`, and other provider failures return `502` with public-safe messages.
+Metadata-listing provider failures return typed `401`, `403`, `409`, `429`, `502`, or `503` errors with stable email-specific error codes and a `user_action` detail.
 
 ## Token Storage Contract
 
