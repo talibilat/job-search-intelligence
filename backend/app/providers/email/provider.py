@@ -28,6 +28,8 @@ class EmailAttachmentPolicy(StrEnum):
 
 
 class EmailBodySource(StrEnum):
+    """Source format used to produce retained plain-text body content."""
+
     TEXT_PLAIN = "text_plain"
     HTML_CONVERTED = "html_converted"
     EMPTY = "empty"
@@ -314,7 +316,11 @@ class EmailBodyFetchRequest(BaseModel):
 
 
 class EmailMessageBody(BaseModel):
-    """Provider-normalized retained plain-text body content."""
+    """Provider-normalized retained plain-text body content.
+
+    HTML source bodies are converted to normalized text before this DTO is
+    retained, and raw HTML fields or mislabelled HTML text are rejected.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
     ref: EmailMessageRef
@@ -427,5 +433,5 @@ class EmailProvider(Protocol):
         connection: EmailConnection,
         request: EmailBodyFetchRequest,
     ) -> EmailBodyBatch:
-        """Return normalized body text for selected messages, ignoring attachments."""
+        """Return normalized plain text for selected messages, ignoring attachments."""
         ...
