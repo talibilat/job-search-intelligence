@@ -66,7 +66,8 @@ JOBTRACKER_FERNET_KEY_FILE=./.jobtracker/fernet.key
 
 Do not commit the Fernet key file or place it in screenshots, tickets, logs, or setup notes.
 
-When JT-096 and JT-097 land, verify before a bulk classification pass that the selected mode shows a token and cost estimate.
+JT-096 provides durable local storage for completed-run token and cost accounting.
+When JT-097 and the display work land, verify before a bulk classification pass that the selected mode shows a token and cost estimate.
 Hosted Azure calls should be used through the configured provider path only, never by ad hoc scripts that bypass redaction or prompt-version tracking.
 
 ## Ollama
