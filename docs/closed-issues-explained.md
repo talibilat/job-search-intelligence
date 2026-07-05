@@ -719,7 +719,7 @@ Expected result:
 
 Caveat:
 This is only a shell.
-The boolean values are still always `false` because real OAuth, credential checks, and setup completion logic are later work.
+The boolean values are still always `false` because OAuth connection checks, credential checks, and setup completion logic are later work.
 
 ## #32 JT-032 - Add Local Wipe-Data Command Or Endpoint
 
@@ -1011,8 +1011,8 @@ You can see typed settings and a safe `.env.example`.
 Real secrets should not be committed.
 
 Providers:
-You can see abstract provider contracts for email and LLM systems, plus an exported Gmail provider skeleton.
-Working Gmail runtime behavior and concrete LLM implementations are not done yet.
+You can see abstract provider contracts for email and LLM systems.
+Gmail can start read-only OAuth authorization, but the callback, token persistence, message adapter, and concrete LLM implementations are not done yet.
 
 Privacy and safety:
 You can see early safety work for typed errors, secret references, safe configuration examples, and local data wiping.
@@ -1028,5 +1028,5 @@ Frontend CI now runs the existing frontend typecheck, lint, unit test, and build
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, initialize Alembic's version table, run tests, lint, and type checks.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation, a non-persistent `/setup` page shell, and a disabled chat route shell.
 Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
-The provider interfaces prepare the app for Gmail and LLM integrations, and Gmail now has an exported skeleton while runtime behavior remains deferred.
+The provider interfaces prepare the app for Gmail and LLM integrations; Gmail auth-start exists, while Gmail callback, token persistence, message access, and concrete LLM adapters remain later work.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, Alembic migrations, and the wipe-data endpoint.

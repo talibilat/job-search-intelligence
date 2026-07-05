@@ -42,6 +42,26 @@ export const ClassificationMode = {
   local: "local",
 } as const;
 
+export type EmailProviderName =
+  (typeof EmailProviderName)[keyof typeof EmailProviderName];
+
+export const EmailProviderName = {
+  gmail: "gmail",
+} as const;
+
+/**
+ * Provider-neutral authorization URL and scope request.
+ */
+export interface EmailAuthorizationStartResult {
+  /** @minLength 1 */
+  authorization_url: string;
+  provider: EmailProviderName;
+  /** @minItems 1 */
+  requested_scopes: string[];
+  /** @minLength 1 */
+  state: string;
+}
+
 export type ProviderRequirementEnforcement =
   (typeof ProviderRequirementEnforcement)[keyof typeof ProviderRequirementEnforcement];
 
@@ -59,13 +79,6 @@ export interface ProviderConfigRequirementResponse {
   required: boolean;
   setting_name: string;
 }
-
-export type EmailProviderName =
-  (typeof EmailProviderName)[keyof typeof EmailProviderName];
-
-export const EmailProviderName = {
-  gmail: "gmail",
-} as const;
 
 export type SecretKind = (typeof SecretKind)[keyof typeof SecretKind];
 
@@ -258,6 +271,56 @@ export interface WipeDataResponse {
   missing_paths?: string[];
   status: "wiped";
 }
+
+export type gmailAuthUrlAuthGmailGetResponse200 = {
+  data: EmailAuthorizationStartResult;
+  status: 200;
+};
+
+export type gmailAuthUrlAuthGmailGetResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
+export type gmailAuthUrlAuthGmailGetResponseSuccess =
+  gmailAuthUrlAuthGmailGetResponse200 & {
+    headers: Headers;
+  };
+export type gmailAuthUrlAuthGmailGetResponseError =
+  gmailAuthUrlAuthGmailGetResponse400 & {
+    headers: Headers;
+  };
+
+export type gmailAuthUrlAuthGmailGetResponse =
+  | gmailAuthUrlAuthGmailGetResponseSuccess
+  | gmailAuthUrlAuthGmailGetResponseError;
+
+export const getGmailAuthUrlAuthGmailGetUrl = () => {
+  return `/auth/gmail`;
+};
+
+/**
+ * @summary Gmail Auth Url
+ */
+export const gmailAuthUrlAuthGmailGet = async (
+  options?: RequestInit,
+): Promise<gmailAuthUrlAuthGmailGetResponse> => {
+  const res = await fetch(getGmailAuthUrlAuthGmailGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: gmailAuthUrlAuthGmailGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as gmailAuthUrlAuthGmailGetResponse;
+};
 
 export type getProviderConfigConfigProvidersGetResponse200 = {
   data: ProviderConfigResponse;
