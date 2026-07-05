@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   gmailAuthUrlAuthGmailGet,
   setupStatusSetupStatusGet,
+  type ClassificationMode,
   type EmailAuthorizationStartResult,
   type SetupStatusResponse,
 } from "../api";
@@ -29,6 +30,28 @@ const setupSteps = [
   },
 ] as const;
 
+const classificationModeOptions: readonly {
+  value: ClassificationMode;
+  label: string;
+  body: string;
+}[] = [
+  {
+    value: "hybrid",
+    label: "hybrid",
+    body: "Run the heuristic pre-filter first, then classify only likely job-search email with the configured provider.",
+  },
+  {
+    value: "llm",
+    label: "llm",
+    body: "Send every retained email selected for classification to the configured provider when you intentionally prefer coverage over cost control.",
+  },
+  {
+    value: "local",
+    label: "local",
+    body: "Use the local Ollama path so classification and extraction stay on this machine.",
+  },
+] as const;
+
 function apiErrorMessage(data: unknown, fallback: string) {
   if (
     typeof data === "object" &&
@@ -45,12 +68,28 @@ function apiErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
+function classificationModePreselectionCopy(
+  setupStatus: SetupStatusResponse | null,
+) {
+  if (!setupStatus) {
+    return "Loading provider-based preselection";
+  }
+
+  if (setupStatus.recommended_classification_mode === "hybrid") {
+    return "Preselected from Azure OpenAI setup";
+  }
+
+  return "Preselected from local Ollama setup";
+}
+
 export function SetupPage() {
   const [setupStatus, setSetupStatus] = useState<SetupStatusResponse | null>(
     null,
   );
   const [authorization, setAuthorization] =
     useState<EmailAuthorizationStartResult | null>(null);
+  const [selectedClassificationMode, setSelectedClassificationMode] =
+    useState<ClassificationMode | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
   const [isStartingAuth, setIsStartingAuth] = useState(false);
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null);
@@ -86,6 +125,11 @@ export function SetupPage() {
   }, []);
 
   const gmailConnected = setupStatus?.gmail_connected ?? false;
+  const recommendedClassificationMode =
+    setupStatus?.recommended_classification_mode ?? "local";
+  const activeClassificationMode =
+    selectedClassificationMode ?? recommendedClassificationMode;
+  const preselectionCopy = classificationModePreselectionCopy(setupStatus);
   const authButtonLabel = isCheckingStatus
     ? "Checking Gmail status"
     : gmailConnected
@@ -176,6 +220,41 @@ export function SetupPage() {
             This UI only names the choices the setup API shell will validate.
           </p>
         </aside>
+
+        <section
+          className="setup-mode-card"
+          aria-labelledby="setup-mode-title"
+        >
+          <p className="eyebrow">Classification mode</p>
+          <h2 id="setup-mode-title">Preselected mode</h2>
+          <p>{preselectionCopy}</p>
+          <div
+            className="classification-mode-options"
+            role="radiogroup"
+            aria-label="Classification mode"
+          >
+            {classificationModeOptions.map((option) => (
+              <label className="classification-mode-option" key={option.value}>
+                <input
+                  checked={activeClassificationMode === option.value}
+                  name="classification-mode"
+                  onChange={() => {
+                    setSelectedClassificationMode(option.value);
+                  }}
+                  type="radio"
+                  value={option.value}
+                />
+                <span>
+                  <strong>{option.label}</strong>
+                  <span>{option.body}</span>
+                  {recommendedClassificationMode === option.value ? (
+                    <em>Recommended default</em>
+                  ) : null}
+                </span>
+              </label>
+            ))}
+          </div>
+        </section>
 
         <section
           className="setup-gmail-card"

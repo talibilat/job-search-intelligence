@@ -94,6 +94,7 @@ def test_setup_status_endpoint_returns_phase_zero_shell_status(
         "email_provider": "gmail",
         "llm_provider": "ollama",
         "classification_mode": "local",
+        "recommended_classification_mode": "local",
     }
 
 
@@ -113,6 +114,28 @@ def test_setup_status_endpoint_reports_configured_setup_choices(
     assert response.status_code == 200
     assert response.json()["llm_provider"] == "azure_openai"
     assert response.json()["classification_mode"] == "hybrid"
+    assert response.json()["recommended_classification_mode"] == "hybrid"
+
+
+def test_setup_status_endpoint_recommends_hybrid_for_azure_openai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        classification_mode=ClassificationMode.LLM,
+        azure_openai_endpoint="https://example.openai.azure.com",
+        azure_openai_chat_deployment="chat",
+        azure_openai_embedding_deployment="embeddings",
+    )
+    client = TestClient(create_test_app(settings))
+
+    response = client.get("/setup/status")
+
+    assert response.status_code == 200
+    assert response.json()["classification_mode"] == "llm"
+    assert response.json()["recommended_classification_mode"] == "hybrid"
 
 
 def test_setup_status_endpoint_reports_persisted_gmail_connection(
@@ -176,7 +199,49 @@ def test_setup_submit_endpoint_accepts_phase_zero_shell_payload(
         "email_provider": "gmail",
         "llm_provider": "ollama",
         "classification_mode": "local",
+        "recommended_classification_mode": "local",
     }
+
+
+def test_setup_submit_endpoint_preselects_local_mode_for_ollama(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    client = TestClient(create_test_app(AppSettings(_env_file=None)))
+
+    response = client.post(
+        "/setup",
+        json={
+            "email_provider": "gmail",
+            "llm_provider": "ollama",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["classification_mode"] == "local"
+    assert response.json()["recommended_classification_mode"] == "local"
+
+
+def test_setup_submit_endpoint_preselects_hybrid_mode_for_azure_openai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    client = TestClient(create_test_app(AppSettings(_env_file=None)))
+
+    response = client.post(
+        "/setup",
+        json={
+            "email_provider": "gmail",
+            "llm_provider": "azure_openai",
+            "azure_openai_endpoint": "https://example.openai.azure.com",
+            "azure_openai_chat_deployment": "chat",
+            "azure_openai_embedding_deployment": "embeddings",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["classification_mode"] == "hybrid"
+    assert response.json()["recommended_classification_mode"] == "hybrid"
 
 
 def test_setup_submit_endpoint_rejects_incomplete_selected_provider_metadata(

@@ -275,6 +275,7 @@ export interface ProviderConfigValues {
 export interface ProviderConfigResponse {
   email_providers: EmailProviderConfigResponse[];
   llm_providers: LLMProviderConfigResponse[];
+  recommended_classification_mode: ClassificationMode;
   selection: ProviderSelection;
   settings: ProviderConfigValues;
 }
@@ -306,6 +307,7 @@ export interface SetupStatusResponse {
   gmail_connected: boolean;
   llm_configured: boolean;
   llm_provider: LLMProviderName;
+  recommended_classification_mode: ClassificationMode;
   setup_complete: boolean;
 }
 
@@ -317,7 +319,7 @@ export interface SetupSubmitRequest {
   azure_openai_chat_deployment?: string | null;
   azure_openai_embedding_deployment?: string | null;
   azure_openai_endpoint?: string | null;
-  classification_mode: ClassificationMode;
+  classification_mode?: ClassificationMode | null;
   email_provider?: EmailProviderName;
   gmail_client_config_file?: string | null;
   llm_provider: LLMProviderName;
@@ -335,6 +337,7 @@ export interface SetupSubmitResponse {
   gmail_connected: boolean;
   llm_configured: boolean;
   llm_provider: LLMProviderName;
+  recommended_classification_mode: ClassificationMode;
   setup_complete: boolean;
   status: "accepted";
 }

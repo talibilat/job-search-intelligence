@@ -516,6 +516,9 @@
             "title": "Llm Providers",
             "type": "array"
           },
+          "recommended_classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
           "selection": {
             "$ref": "#/components/schemas/ProviderSelection"
           },
@@ -525,6 +528,7 @@
         },
         "required": [
           "selection",
+          "recommended_classification_mode",
           "settings",
           "email_providers",
           "llm_providers"
@@ -847,6 +851,9 @@
           "llm_provider": {
             "$ref": "#/components/schemas/LLMProviderName"
           },
+          "recommended_classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
           "setup_complete": {
             "title": "Setup Complete",
             "type": "boolean"
@@ -858,7 +865,8 @@
           "llm_configured",
           "email_provider",
           "llm_provider",
-          "classification_mode"
+          "classification_mode",
+          "recommended_classification_mode"
         ],
         "title": "SetupStatusResponse",
         "type": "object"
@@ -912,7 +920,14 @@
             "title": "Azure Openai Endpoint"
           },
           "classification_mode": {
-            "$ref": "#/components/schemas/ClassificationMode"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassificationMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "email_provider": {
             "$ref": "#/components/schemas/EmailProviderName",
@@ -968,8 +983,7 @@
           }
         },
         "required": [
-          "llm_provider",
-          "classification_mode"
+          "llm_provider"
         ],
         "title": "SetupSubmitRequest",
         "type": "object"
@@ -994,6 +1008,9 @@
           "llm_provider": {
             "$ref": "#/components/schemas/LLMProviderName"
           },
+          "recommended_classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
           "setup_complete": {
             "title": "Setup Complete",
             "type": "boolean"
@@ -1011,6 +1028,7 @@
           "email_provider",
           "llm_provider",
           "classification_mode",
+          "recommended_classification_mode",
           "status"
         ],
         "title": "SetupSubmitResponse",

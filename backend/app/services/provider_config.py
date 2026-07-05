@@ -20,6 +20,7 @@ from app.providers import (
     ProviderRegistry,
     ProviderSecretRequirement,
 )
+from app.services.classification_mode_config import recommend_classification_mode
 
 
 def build_provider_config_response(
@@ -34,6 +35,7 @@ def build_provider_config_response(
             llm_provider=settings.llm_provider,
             classification_mode=settings.classification_mode,
         ),
+        recommended_classification_mode=recommend_classification_mode(settings),
         settings=ProviderConfigValues(
             gmail_client_config_file=settings.gmail_client_config_file,
             gmail_scopes=settings.gmail_scopes,
@@ -65,7 +67,11 @@ def apply_provider_config_update(
     updated_settings = _updated_settings(settings, updates)
     registry.validate_settings(updated_settings)
 
-    for field_name in updates:
+    fields_to_apply = set(updates)
+    if "llm_provider" in updates and "classification_mode" not in updates:
+        fields_to_apply.add("classification_mode")
+
+    for field_name in fields_to_apply:
         setattr(settings, field_name, getattr(updated_settings, field_name))
 
     return build_provider_config_response(settings, registry)
@@ -74,6 +80,9 @@ def apply_provider_config_update(
 def _updated_settings(settings: AppSettings, updates: dict[str, Any]) -> AppSettings:
     values = settings.model_dump()
     values.update(updates)
+    if "llm_provider" in updates and "classification_mode" not in updates:
+        candidate_settings = AppSettings(_env_file=None, **values)
+        values["classification_mode"] = recommend_classification_mode(candidate_settings)
     return AppSettings(_env_file=None, **values)
 
 

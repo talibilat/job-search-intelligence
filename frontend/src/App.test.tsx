@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -334,6 +335,7 @@ describe("App", () => {
         gmail_connected: false,
         llm_configured: false,
         llm_provider: "ollama",
+        recommended_classification_mode: "local",
         setup_complete: false,
       },
       "/auth/gmail": {
@@ -377,6 +379,7 @@ describe("App", () => {
         gmail_connected: true,
         llm_configured: false,
         llm_provider: "ollama",
+        recommended_classification_mode: "local",
         setup_complete: false,
       },
     });
@@ -387,6 +390,31 @@ describe("App", () => {
     expect(
       screen.getByRole("button", { name: "Gmail connected" }),
     ).toHaveProperty("disabled", true);
+  });
+
+  it("preselects the recommended classification mode in setup", async () => {
+    mockFetchResponses({
+      "/setup/status": {
+        classification_mode: "llm",
+        email_provider: "gmail",
+        gmail_connected: false,
+        llm_configured: false,
+        llm_provider: "azure_openai",
+        recommended_classification_mode: "hybrid",
+        setup_complete: false,
+      },
+    });
+
+    renderAtPath("/setup");
+
+    const hybridMode = await screen.findByRole("radio", {
+      name: /hybrid/i,
+    });
+
+    await waitFor(() => {
+      expect(hybridMode).toHaveProperty("checked", true);
+    });
+    expect(screen.getByText("Preselected from Azure OpenAI setup")).toBeTruthy();
   });
 
   it("renders the empty chat shell at the chat route", () => {

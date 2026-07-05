@@ -5,6 +5,7 @@ from typing import Protocol
 from app.config import AppSettings, EmailProviderName
 from app.models import SetupStatusResponse
 from app.providers.email import EmailConnection
+from app.services.classification_mode_config import recommend_classification_mode
 
 
 class EmailConnectionStatusReader(Protocol):
@@ -31,4 +32,5 @@ def build_setup_status(
         email_provider=settings.email_provider,
         llm_provider=settings.llm_provider,
         classification_mode=settings.classification_mode,
+        recommended_classification_mode=recommend_classification_mode(settings),
     )
