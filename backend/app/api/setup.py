@@ -23,7 +23,7 @@ async def setup_status(
         Depends(get_email_connection_repository),
     ],
 ) -> SetupStatusResponse:
-    """Report the Phase 0 setup shell without validating or exposing secrets."""
+    """Report setup status plus current and recommended classification modes."""
 
     return build_setup_status(settings, connection_repository)
 
@@ -34,7 +34,9 @@ async def setup_status(
     summary="Submit first-run setup choices",
     description=(
         "Accepts non-secret Phase 0 setup choices and validates selected provider "
-        "metadata without running provider auth flows or persisting secrets."
+        "metadata without running provider auth flows or persisting secrets. "
+        "When classification_mode is omitted, the backend applies the selected "
+        "provider recommendation before validation."
     ),
     responses={400: {"model": ApiErrorResponse}, 422: {"model": ApiErrorResponse}},
 )

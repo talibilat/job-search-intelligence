@@ -599,6 +599,9 @@
             "title": "Llm Providers",
             "type": "array"
           },
+          "recommended_classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
           "selection": {
             "$ref": "#/components/schemas/ProviderSelection"
           },
@@ -608,6 +611,7 @@
         },
         "required": [
           "selection",
+          "recommended_classification_mode",
           "settings",
           "email_providers",
           "llm_providers"
@@ -930,6 +934,9 @@
           "llm_provider": {
             "$ref": "#/components/schemas/LLMProviderName"
           },
+          "recommended_classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
           "setup_complete": {
             "title": "Setup Complete",
             "type": "boolean"
@@ -941,7 +948,8 @@
           "llm_configured",
           "email_provider",
           "llm_provider",
-          "classification_mode"
+          "classification_mode",
+          "recommended_classification_mode"
         ],
         "title": "SetupStatusResponse",
         "type": "object"
@@ -995,7 +1003,14 @@
             "title": "Azure Openai Endpoint"
           },
           "classification_mode": {
-            "$ref": "#/components/schemas/ClassificationMode"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassificationMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "email_provider": {
             "$ref": "#/components/schemas/EmailProviderName",
@@ -1051,8 +1066,7 @@
           }
         },
         "required": [
-          "llm_provider",
-          "classification_mode"
+          "llm_provider"
         ],
         "title": "SetupSubmitRequest",
         "type": "object"
@@ -1077,6 +1091,9 @@
           "llm_provider": {
             "$ref": "#/components/schemas/LLMProviderName"
           },
+          "recommended_classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
           "setup_complete": {
             "title": "Setup Complete",
             "type": "boolean"
@@ -1094,6 +1111,7 @@
           "email_provider",
           "llm_provider",
           "classification_mode",
+          "recommended_classification_mode",
           "status"
         ],
         "title": "SetupSubmitResponse",
@@ -1290,7 +1308,7 @@
     },
     "/config/providers": {
       "get": {
-        "description": "Return selected provider config and non-secret supported-provider metadata.",
+        "description": "Return selected provider config plus recommended classification mode.",
         "operationId": "get_provider_config_config_providers_get",
         "responses": {
           "200": {
@@ -1310,7 +1328,7 @@
         ]
       },
       "put": {
-        "description": "Validate and update the in-process provider config shell.",
+        "description": "Validate and update provider config, applying recommendations on provider changes.",
         "operationId": "update_provider_config_config_providers_put",
         "requestBody": {
           "content": {
@@ -1447,7 +1465,7 @@
     },
     "/setup": {
       "post": {
-        "description": "Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets.",
+        "description": "Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets. When classification_mode is omitted, the backend applies the selected provider recommendation before validation.",
         "operationId": "setup_submit_setup_post",
         "requestBody": {
           "content": {
@@ -1499,7 +1517,7 @@
     },
     "/setup/status": {
       "get": {
-        "description": "Report the Phase 0 setup shell without validating or exposing secrets.",
+        "description": "Report setup status plus current and recommended classification modes.",
         "operationId": "setup_status_setup_status_get",
         "responses": {
           "200": {

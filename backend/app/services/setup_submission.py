@@ -5,6 +5,7 @@ from typing import Any
 from app.config import AppSettings
 from app.models import SetupSubmitRequest, SetupSubmitResponse
 from app.providers import ProviderConfigurationError, ProviderRegistry, provider_registry
+from app.services.classification_mode_config import recommend_classification_mode
 from app.services.setup_status import build_setup_status
 
 
@@ -45,7 +46,11 @@ def _settings_with_submission(
     request: SetupSubmitRequest,
 ) -> AppSettings:
     values: dict[str, Any] = settings.model_dump()
-    values.update(request.model_dump(exclude_none=True))
+    updates = request.model_dump(exclude_none=True)
+    values.update(updates)
+    if "classification_mode" not in updates:
+        candidate_settings = AppSettings(_env_file=None, **values)
+        values["classification_mode"] = recommend_classification_mode(candidate_settings)
     return AppSettings(_env_file=None, **values)
 
 

@@ -17,6 +17,7 @@ class SetupStatusResponse(BaseModel):
     email_provider: EmailProviderName
     llm_provider: LLMProviderName
     classification_mode: ClassificationMode
+    recommended_classification_mode: ClassificationMode
 
 
 class SetupSubmitRequest(BaseModel):
@@ -26,7 +27,7 @@ class SetupSubmitRequest(BaseModel):
 
     email_provider: EmailProviderName = EmailProviderName.GMAIL
     llm_provider: LLMProviderName
-    classification_mode: ClassificationMode
+    classification_mode: ClassificationMode | None = None
     gmail_client_config_file: Path | None = None
     azure_openai_endpoint: str | None = None
     azure_openai_api_version: str | None = None

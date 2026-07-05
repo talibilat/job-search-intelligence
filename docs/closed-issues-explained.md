@@ -713,7 +713,8 @@ Expected result:
   "llm_configured": false,
   "email_provider": "gmail",
   "llm_provider": "ollama",
-  "classification_mode": "local"
+  "classification_mode": "local",
+  "recommended_classification_mode": "local"
 }
 ```
 
@@ -989,6 +990,8 @@ curl -s -X POST http://127.0.0.1:8765/setup \
   -H 'content-type: application/json' \
   -d '{"email_provider":"gmail","llm_provider":"ollama","classification_mode":"local"}'
 ```
+
+`classification_mode` may be omitted; setup then applies `local` for Ollama or `hybrid` for Azure OpenAI before provider validation.
 
 Run the frontend manually from `frontend/`:
 

@@ -35,6 +35,7 @@
 
 .setup-checklist-card,
 .setup-privacy-card,
+.setup-mode-card,
 .setup-gmail-card {
   display: grid;
   gap: 16px;
@@ -55,11 +56,68 @@
   background: #fffdf7;
 }
 
+.setup-mode-card {
+  grid-column: 1 / -1;
+  background: #f7fbf2;
+}
+
 .setup-checklist-card p,
 .setup-privacy-card p,
+.setup-mode-card p,
 .setup-gmail-card p {
   margin-bottom: 0;
   color: #4e5e53;
+}
+
+.classification-mode-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.classification-mode-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #d8d0bf;
+  border-radius: 18px;
+  background: #fffdf7;
+  cursor: pointer;
+}
+
+.classification-mode-option:has(input:checked) {
+  border-color: #4f7c52;
+  background: #edf6eb;
+  box-shadow: 0 14px 36px rgb(36 50 38 / 12%);
+}
+
+.classification-mode-option input {
+  margin-top: 0.2rem;
+  accent-color: #153f29;
+}
+
+.classification-mode-option > span {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.classification-mode-option strong {
+  color: #203f2c;
+}
+
+.classification-mode-option span span,
+.classification-mode-option em {
+  color: #4e5e53;
+  overflow-wrap: anywhere;
+}
+
+.classification-mode-option em {
+  font-style: normal;
+  font-weight: 800;
 }
 
 .setup-oauth-result {
@@ -202,6 +260,7 @@
   .setup-hero,
   .setup-checklist-card,
   .setup-privacy-card,
+  .setup-mode-card,
   .setup-gmail-card {
     padding: 24px;
   }
@@ -211,6 +270,10 @@
   }
 
   .wizard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .classification-mode-options {
     grid-template-columns: minmax(0, 1fr);
   }
 }

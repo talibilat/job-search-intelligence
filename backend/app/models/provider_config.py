@@ -72,6 +72,7 @@ class ProviderConfigResponse(BaseModel):
     """Selected provider config plus supported provider metadata."""
 
     selection: ProviderSelection
+    recommended_classification_mode: ClassificationMode
     settings: ProviderConfigValues
     email_providers: tuple[EmailProviderConfigResponse, ...]
     llm_providers: tuple[LLMProviderConfigResponse, ...]
