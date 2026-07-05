@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import styles from "./index.css?raw";
 
@@ -8,8 +8,36 @@ function renderAtPath(pathname: string) {
   return render(<App />);
 }
 
+function mockFetchResponses(responses: Record<string, object>) {
+  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
+    const path = url.startsWith("http") ? new URL(url).pathname : url;
+    const body = responses[path];
+
+    if (!body) {
+      throw new Error(`Unhandled fetch request: ${path}`);
+    }
+
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   window.history.pushState({}, "", "/");
 });
 
@@ -62,6 +90,68 @@ describe("App", () => {
     ).toBeTruthy();
     expect(screen.getByText("Choose provider")).toBeTruthy();
     expect(screen.getByText("Connect Gmail read-only")).toBeTruthy();
+  });
+
+  it("starts Gmail OAuth from the setup page and exposes the read-only authorization link", async () => {
+    const fetchMock = mockFetchResponses({
+      "/setup/status": {
+        classification_mode: "local",
+        email_provider: "gmail",
+        gmail_connected: false,
+        llm_configured: false,
+        llm_provider: "ollama",
+        setup_complete: false,
+      },
+      "/auth/gmail": {
+        authorization_url: "https://accounts.google.com/o/oauth2/v2/auth?state=issued-state",
+        provider: "gmail",
+        requested_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+        state: "issued-state",
+      },
+    });
+
+    renderAtPath("/setup");
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Start Gmail OAuth" }),
+    );
+
+    const googleLink = await screen.findByRole("link", {
+      name: "Continue to Google",
+    });
+
+    expect(googleLink.getAttribute("href")).toBe(
+      "https://accounts.google.com/o/oauth2/v2/auth?state=issued-state",
+    );
+    expect(
+      screen.getByText(
+        "Requested scope: https://www.googleapis.com/auth/gmail.readonly",
+      ),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/auth/gmail",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("shows Gmail callback completion when setup status reports a connection", async () => {
+    mockFetchResponses({
+      "/setup/status": {
+        classification_mode: "local",
+        email_provider: "gmail",
+        gmail_connected: true,
+        llm_configured: false,
+        llm_provider: "ollama",
+        setup_complete: false,
+      },
+    });
+
+    renderAtPath("/setup");
+
+    expect(await screen.findByText("Gmail callback complete")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Gmail connected" }),
+    ).toHaveProperty("disabled", true);
   });
 
   it("renders the empty chat shell at the chat route", () => {

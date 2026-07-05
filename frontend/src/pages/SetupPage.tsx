@@ -1,4 +1,12 @@
-import { Button } from "../components/ui";
+import { useEffect, useState } from "react";
+
+import {
+  gmailAuthUrlAuthGmailGet,
+  setupStatusSetupStatusGet,
+  type EmailAuthorizationStartResult,
+  type SetupStatusResponse,
+} from "../api";
+import { Alert, Button } from "../components/ui";
 import { setupWizardSections } from "../setupWizardCopy";
 import "./SetupPage.css";
 
@@ -21,7 +29,98 @@ const setupSteps = [
   },
 ] as const;
 
+function apiErrorMessage(data: unknown, fallback: string) {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "error" in data &&
+    typeof data.error === "object" &&
+    data.error !== null &&
+    "message" in data.error &&
+    typeof data.error.message === "string"
+  ) {
+    return data.error.message;
+  }
+
+  return fallback;
+}
+
 export function SetupPage() {
+  const [setupStatus, setSetupStatus] = useState<SetupStatusResponse | null>(
+    null,
+  );
+  const [authorization, setAuthorization] =
+    useState<EmailAuthorizationStartResult | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+  const [isStartingAuth, setIsStartingAuth] = useState(false);
+  const [gmailAuthError, setGmailAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSetupStatus() {
+      setIsCheckingStatus(true);
+      try {
+        const response = await setupStatusSetupStatusGet();
+        if (!ignore) {
+          setSetupStatus(response.data);
+        }
+      } catch {
+        if (!ignore) {
+          setGmailAuthError(
+            "Setup status is unavailable. Start the local backend before connecting Gmail.",
+          );
+        }
+      } finally {
+        if (!ignore) {
+          setIsCheckingStatus(false);
+        }
+      }
+    }
+
+    void loadSetupStatus();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const gmailConnected = setupStatus?.gmail_connected ?? false;
+  const authButtonLabel = isCheckingStatus
+    ? "Checking Gmail status"
+    : gmailConnected
+      ? "Gmail connected"
+      : isStartingAuth
+        ? "Preparing Gmail OAuth"
+        : "Start Gmail OAuth";
+
+  async function handleStartGmailAuth() {
+    setIsStartingAuth(true);
+    setAuthorization(null);
+    setGmailAuthError(null);
+
+    try {
+      const response = await gmailAuthUrlAuthGmailGet();
+      if (response.status !== 200) {
+        setGmailAuthError(
+          apiErrorMessage(
+            response.data,
+            "Gmail authorization could not start. Check the OAuth client JSON path.",
+          ),
+        );
+        return;
+      }
+
+      setAuthorization(response.data);
+    } catch {
+      setGmailAuthError(
+        "Gmail authorization could not start. Check that the local backend is running.",
+      );
+    } finally {
+      setIsStartingAuth(false);
+    }
+  }
+
   return (
     <main className="app-shell setup-page">
       <section className="setup-hero" aria-labelledby="setup-page-title">
@@ -33,8 +132,14 @@ export function SetupPage() {
         </p>
         <div className="setup-actions" aria-label="Setup actions">
           <Button disabled>Save setup choices</Button>
-          <Button disabled variant="secondary">
-            Gmail OAuth pending
+          <Button
+            disabled={isCheckingStatus || gmailConnected || isStartingAuth}
+            onClick={() => {
+              void handleStartGmailAuth();
+            }}
+            variant="secondary"
+          >
+            {authButtonLabel}
           </Button>
         </div>
       </section>
@@ -71,6 +176,53 @@ export function SetupPage() {
             This UI only names the choices the setup API shell will validate.
           </p>
         </aside>
+
+        <section className="setup-gmail-card" aria-labelledby="setup-gmail-title">
+          <p className="eyebrow">Gmail auth</p>
+          <h2 id="setup-gmail-title">Gmail callback status</h2>
+          {gmailConnected ? (
+            <Alert role="status" title="Gmail callback complete" tone="success">
+              <p>
+                A non-secret Gmail connection is stored locally. OAuth token
+                material remains behind SecretStore and is never returned to the
+                setup page.
+              </p>
+            </Alert>
+          ) : (
+            <Alert
+              role="status"
+              title={
+                authorization
+                  ? "Ready to authorize read-only Gmail access"
+                  : "Waiting for Gmail callback"
+              }
+              tone={authorization ? "info" : "warning"}
+            >
+              <p>
+                Start the backend-built OAuth flow, approve only the read-only
+                Gmail scope, then return here after the backend callback stores
+                connection metadata.
+              </p>
+            </Alert>
+          )}
+
+          {authorization ? (
+            <div className="setup-oauth-result">
+              <a className="setup-oauth-link" href={authorization.authorization_url}>
+                Continue to Google
+              </a>
+              <p>
+                Requested scope: {authorization.requested_scopes.join(", ")}
+              </p>
+            </div>
+          ) : null}
+
+          {gmailAuthError ? (
+            <Alert title="Gmail auth failed" tone="danger">
+              <p>{gmailAuthError}</p>
+            </Alert>
+          ) : null}
+        </section>
       </section>
 
       <section

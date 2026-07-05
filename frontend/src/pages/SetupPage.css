@@ -34,7 +34,8 @@
 }
 
 .setup-checklist-card,
-.setup-privacy-card {
+.setup-privacy-card,
+.setup-gmail-card {
   display: grid;
   gap: 16px;
   min-width: 0;
@@ -49,10 +50,43 @@
   background: #edf6eb;
 }
 
+.setup-gmail-card {
+  grid-column: 1 / -1;
+  background: #fffdf7;
+}
+
 .setup-checklist-card p,
-.setup-privacy-card p {
+.setup-privacy-card p,
+.setup-gmail-card p {
   margin-bottom: 0;
   color: #4e5e53;
+}
+
+.setup-oauth-result {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.setup-oauth-link {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.72rem 1rem;
+  border-radius: 999px;
+  background: #153f29;
+  color: #fffaf0;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.setup-oauth-link:focus-visible {
+  outline: 3px solid #94c8ff;
+  outline-offset: 3px;
 }
 
 .setup-checklist {
@@ -167,7 +201,8 @@
 @media (max-width: 720px) {
   .setup-hero,
   .setup-checklist-card,
-  .setup-privacy-card {
+  .setup-privacy-card,
+  .setup-gmail-card {
     padding: 24px;
   }
 

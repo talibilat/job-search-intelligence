@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import sqlite3
-from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import SecretStr
 
+from app.api.dependencies import (
+    get_email_connection_repository as get_email_connection_repository,
+)
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.db.repositories.connection import EmailConnectionRepository
-from app.db.sqlite_url import sqlite_database_path
 from app.providers.email import (
     EmailAuthorizationStartResult,
     EmailConnection,
@@ -44,18 +44,6 @@ def get_oauth_state_store(request: Request) -> OAuthStateStore:
         state_store = InMemoryOAuthStateStore()
         request.app.state.oauth_state_store = state_store
     return state_store
-
-
-def get_email_connection_repository(
-    settings: Annotated[AppSettings, Depends(get_settings)],
-) -> Iterator[EmailConnectionRepository]:
-    database_path = sqlite_database_path(settings.database_url)
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path, check_same_thread=False)
-    try:
-        yield EmailConnectionRepository(connection)
-    finally:
-        connection.close()
 
 
 def get_gmail_secret_store(
