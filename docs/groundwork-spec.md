@@ -154,7 +154,9 @@ job-search-intelligence/
 ### Aggregation rule (the hard part)
 
 An **application** is reconstructed from _many_ emails: a confirmation + later a rejection = **one** application whose `current_status` = `rejected`, with two `application_events`.
-Grouping key is approximately `(normalized_company, normalized_role, thread/time-window)`.
+`ApplicationGroupingKey` is `(normalized_company, normalized_role, thread_id, time_window_start, time_window_days)`.
+It always uses normalized company and role values, trims opaque provider thread IDs without case-folding them, prefers a present thread signal over date bucketing, and falls back to a UTC date-window bucket when the thread signal is missing.
+The default grouping window is 30 days.
 `ghosted` is **inferred** when an application has an `applied` event but no response after your personal ghost-threshold (default 30 days, tunable).
 Aggregation must be **idempotent** - re-runs never duplicate.
 Manual corrections are audited, lock affected grouping/status from automatic overwrite by default, and surface conflicts when new evidence disagrees.
@@ -209,6 +211,9 @@ EmailProvider -> metadata-only raw_emails
                  │
                  ▼
    3. aggregate.py  emails -> applications + application_events (dedup)
+      - `build_application_grouping_key()` returns a frozen `ApplicationGroupingKey`
+        from normalized company, normalized role, trimmed opaque provider thread ID,
+        and a UTC date-window fallback when no thread signal is available
                  │
                  ▼
          applications  (single source of truth)
@@ -388,3 +393,5 @@ The approved ticket plan is recorded in `docs/github-backlog-plan.md`.
 
 [JT-103 2026-07-05 v1] Services layout now includes `backend/app/services/normalization.py` for deterministic role-title grouping logic.
 [JT-103 2026-07-05 v1] Aggregation `normalized_role` uses `normalize_role_title()` to fold casing, punctuation, seniority labels, title levels, role abbreviations, common location tokens, and work-arrangement notes while preserving meaningful descriptors such as `back end`, `front end`, `growth`, and `machine learning`.
+[JT-104 2026-07-06] Aggregation grouping-key assembly now lives in `backend/app/pipeline/aggregate.py` as a frozen `ApplicationGroupingKey` built by `build_application_grouping_key()`.
+[JT-104 2026-07-06] The key combines `normalize_company_name()`, `normalize_role_title()`, a trimmed opaque provider thread ID when present, and a 30-day UTC time-window fallback when the thread signal is missing, without adding database writes or API behavior.
