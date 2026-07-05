@@ -60,7 +60,7 @@ job-search-intelligence/
 │   │   ├── db/
 │   │   │   ├── engine.py           # SQLite engine, sqlite-vec loading, and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
-│   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
+│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider protocol + gmail.py skeleton + retained-body text normalization + future outlook.py/imap.py
@@ -110,6 +110,8 @@ job-search-intelligence/
 └── README.md
 ```
 
+[JT-069 2026-07-05 v2] `backend/app/db/repositories/` now includes `SyncStateRepository` for provider-owned sync anchors.
+
 ---
 
 ## 3. Data model (the crux)
@@ -118,6 +120,8 @@ job-search-intelligence/
 
 - **`raw_emails`** - `id` (provider msg id), `thread_id`, `from_addr`, `to_addr`, `subject`, `sent_at`, `body_text`, `body_retention_state`, `labels`, `provider`, `ingested_at`.
   `body_retention_state` is `metadata_only`, `retained`, or `debugging`; metadata-only rows must not carry `body_text`, while retained and debugging rows must carry it.
+[JT-065 2026-07-05 v3] Current raw email retention states are `metadata_only`, `retained`, and `debugging`; `metadata_only` rows omit `body_text`, while retained and debugging rows include `body_text`.
+- **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `updated_at`; stores opaque provider-owned incremental sync anchors scoped to one connected account.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
@@ -142,7 +146,7 @@ Manual corrections are audited, lock affected grouping/status from automatic ove
 EmailProvider -> metadata-only raw_emails
                  │
                  ├─ full backfill: paginated metadata pages, no body snippets
-                 ├─ incremental sync: provider-owned cursor required
+                 ├─ incremental sync: persisted provider-owned cursor required
                  ├─ expired cursor: restart resumable full metadata reconciliation
                  ├─ candidate query applied after listing
                  └─ retained bodies fetched only for selected candidate or debugging/reconciliation refs
@@ -175,6 +179,7 @@ EmailProvider -> metadata-only raw_emails
 ```
 
 `EmailProvider` adapters own provider-specific auth, metadata normalization, pagination, opaque sync cursors, and retained-body fetching.
+`SyncStateRepository` persists only the opaque cursor value and timestamps, keyed by provider and account, so incremental sync can resume without storing token material or email content in sync state.
 The sync service coordinates one metadata page at a time, carries provider page tokens forward, and turns expired incremental cursors into resumable full metadata reconciliation so callers can persist the next page token and replacement sync cursor.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
@@ -250,7 +255,8 @@ Monorepo, uv/ruff/mypy/pre-commit, FastAPI skeleton + health route, React+Vite s
 **DoD:** API boots via `uv run`, React dev server runs, `/health` green, pre-commit + CI pass.
 
 **Phase 1 - Gmail ingestion**
-Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, normalized retained body text for candidate messages, incremental sync via `historyId`, `raw_emails` populated without raw HTML by default.
+Gmail OAuth desktop flow (Testing mode), broad metadata backfill for roughly 40k emails, normalized retained body text for candidate, debugging, or reconciliation messages, incremental sync via `historyId`, and `raw_emails` populated without raw HTML by default.
+Phase 1 raw email population tracks `metadata_only`, `retained`, and `debugging` body retention states; debugging and reconciliation bodies are retained only when explicitly needed.
 **DoD:** your inbox backfilled; incremental pulls only new messages; local count reconciles with Gmail.
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
