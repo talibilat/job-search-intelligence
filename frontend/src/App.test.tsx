@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import styles from "./index.css?raw";
@@ -109,100 +115,193 @@ describe("App", () => {
     );
   });
 
-  it("starts manual sync from the overview page and renders the returned status", async () => {
-    const fetchMock = mockFetchResponses({
-      "/sync/status": {
-        state: "idle",
-      },
-      "/sync": {
-        account_id: "me@example.com",
-        finished_at: "2026-07-05T12:00:00Z",
-        last_error: null,
-        message_count: 2,
-        mode: "full_backfill",
-        page_count: 1,
-        provider: "gmail",
-        raw_email_count: 2,
-        recovered_from_expired_cursor: false,
-        started_at: "2026-07-05T12:00:00Z",
-        state: "succeeded",
-      },
+  it("shows sync status progress, counts, last run, and starts manual sync", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const path = url.startsWith("http") ? new URL(url).pathname : url;
+      const body = path === "/sync"
+        ? {
+            account_id: "talib@example.test",
+            finished_at: null,
+            last_error: null,
+            message_count: 2600,
+            mode: "incremental",
+            page_count: 13,
+            provider: "gmail",
+            raw_email_count: 1305,
+            recovered_from_expired_cursor: false,
+            started_at: "2026-07-05T10:00:00Z",
+            state: "running",
+          }
+        : path === "/sync/status"
+          ? {
+              account_id: "talib@example.test",
+              finished_at: "2026-07-05T09:45:30Z",
+              last_error: null,
+              message_count: 2500,
+              mode: "full_backfill",
+              page_count: 12,
+              provider: "gmail",
+              raw_email_count: 1240,
+              recovered_from_expired_cursor: true,
+              started_at: "2026-07-05T09:15:00Z",
+              state: "succeeded",
+            }
+          : null;
+
+      if (!body) {
+        throw new Error(`Unhandled fetch request: ${path}`);
+      }
+
+      expect(path === "/sync" ? init?.method : "GET").toBe(
+        path === "/sync" ? "POST" : "GET",
+      );
+
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+      );
     });
+    vi.stubGlobal("fetch", fetchMock);
 
     renderAtPath("/");
 
-    expect(await screen.findByText("Current sync state: Idle")).toBeTruthy();
+    expect(await screen.findByText("Last sync succeeded")).toBeTruthy();
+    expect(screen.getByText("1,240 raw emails")).toBeTruthy();
+    expect(screen.getByText("2,500 messages")).toBeTruthy();
+    expect(screen.getByText("12 pages")).toBeTruthy();
+    expect(screen.getByText("Finished Jul 5, 2026, 9:45 AM UTC")).toBeTruthy();
+    expect(screen.getByText("Recovered expired cursor")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/sync/status",
+      expect.objectContaining({ method: "GET" }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
 
-    expect(await screen.findByText("Last sync succeeded")).toBeTruthy();
-    expect(screen.getByText("2 messages")).toBeTruthy();
-    expect(screen.getByText("2 raw emails")).toBeTruthy();
+    expect(await screen.findByText("Sync is running")).toBeTruthy();
+    expect(screen.getByText("1,305 raw emails")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/sync",
       expect.objectContaining({ method: "POST" }),
     );
   });
 
-  it("shows typed sync API errors when manual sync cannot start", async () => {
-    mockFetchResponses({
-      "/sync/status": {
-        state: "idle",
-      },
-      "/sync": {
-        body: {
-          error: {
-            code: "bad_request",
-            details: [],
-            message: "Gmail connection is not configured yet.",
+  it("shows public sync status API errors instead of idle progress", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const path = url.startsWith("http") ? new URL(url).pathname : url;
+
+      expect(path).toBe("/sync/status");
+      expect(init?.method).toBe("GET");
+
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "email_authorization_required",
+              details: [],
+              message: "Reconnect Gmail before syncing.",
+            },
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 401,
           },
-        },
-        status: 400,
-      },
+        ),
+      );
     });
+    vi.stubGlobal("fetch", fetchMock);
 
     renderAtPath("/");
 
-    fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
-
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Gmail connection is not configured yet.",
-    );
+    expect(
+      await screen.findByText("Reconnect Gmail before syncing."),
+    ).toBeTruthy();
+    expect(screen.queryByText("No sync run yet")).toBeNull();
   });
 
-  it("refreshes running sync status until the sync action is available again", async () => {
-    mockFetchResponses({
-      "/sync/status": [
-        {
-          message_count: 1,
-          raw_email_count: 1,
-          state: "running",
-        },
-        {
-          finished_at: "2026-07-05T12:00:00Z",
-          message_count: 3,
-          raw_email_count: 3,
-          state: "succeeded",
-        },
-      ],
+  it("refreshes running sync status until the latest run completes", async () => {
+    vi.useFakeTimers();
+    const runningStatus = {
+      account_id: "talib@example.test",
+      finished_at: null,
+      last_error: null,
+      message_count: 2600,
+      mode: "incremental",
+      page_count: 13,
+      provider: "gmail",
+      raw_email_count: 1305,
+      recovered_from_expired_cursor: false,
+      started_at: "2026-07-05T10:00:00Z",
+      state: "running",
+    };
+    const completedStatus = {
+      ...runningStatus,
+      finished_at: "2026-07-05T10:05:00Z",
+      message_count: 2700,
+      page_count: 14,
+      raw_email_count: 1325,
+      state: "succeeded",
+    };
+    const statusResponses = [runningStatus, completedStatus];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const path = url.startsWith("http") ? new URL(url).pathname : url;
+
+      expect(path).toBe("/sync/status");
+      expect(init?.method).toBe("GET");
+
+      return Promise.resolve(
+        new Response(JSON.stringify(statusResponses.shift()), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+      );
     });
+    vi.stubGlobal("fetch", fetchMock);
 
     renderAtPath("/");
 
-    expect(await screen.findByText("Sync is running")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Syncing" })).toHaveProperty(
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Sync is running")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sync running" })).toHaveProperty(
       "disabled",
       true,
     );
 
-    expect(
-      await screen.findByText("Last sync succeeded", {}, { timeout: 4000 }),
-    ).toBeTruthy();
-    expect(screen.getByText("3 messages")).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByText("Last sync succeeded")).toBeTruthy();
+    expect(screen.getByText("1,325 raw emails")).toBeTruthy();
+    expect(screen.getByText("2,700 messages")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sync now" })).toHaveProperty(
       "disabled",
       false,
     );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("renders the first-run setup shell at /setup", () => {

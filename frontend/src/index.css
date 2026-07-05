@@ -176,68 +176,90 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.sync-action-panel {
+.sync-panel {
+  align-items: start;
+}
+
+.sync-panel__header,
+.sync-panel__body {
   display: grid;
   gap: 16px;
   min-width: 0;
 }
 
-.sync-status-summary {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-  padding: 18px;
-  border-radius: 20px;
-  background: #edf6eb;
-}
-
-.sync-status-summary__title {
+.sync-panel__header p:not(.eyebrow),
+.sync-panel__meta-grid p,
+.sync-panel__metric-label {
   margin-bottom: 0;
-  color: #203f2c;
-  font-weight: 900;
+  color: #4e5e53;
 }
 
-.sync-metrics {
+.sync-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sync-panel__metrics,
+.sync-panel__meta-grid {
   display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sync-panel__metrics {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  min-width: 0;
-  margin: 0;
 }
 
-.sync-metrics div {
+.sync-panel__metric {
+  display: grid;
+  gap: 6px;
   min-width: 0;
-  padding: 12px;
-  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid #d8d0bf;
+  border-radius: 18px;
   background: #fffdf7;
-}
-
-.sync-metrics dt {
-  color: #3f6b52;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.sync-metrics dd {
-  margin: 4px 0 0;
-  color: #102417;
-  font-weight: 900;
   overflow-wrap: anywhere;
 }
 
-.sync-actions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
+.sync-panel__metric-value {
+  margin-bottom: 0;
+  color: #102417;
+  font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
 }
 
-.sync-actions__hint {
+.sync-panel__metric-label {
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.sync-panel__meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sync-panel__meta-grid p {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #edf6eb;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.sync-panel__badge {
+  width: fit-content;
+  max-width: 100%;
   margin-bottom: 0;
-  color: #4e5e53;
-  font-size: 0.92rem;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #203f2c;
+  color: #fffaf0;
+  font-size: 0.82rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
 }
 
 .chart-panel {
@@ -541,15 +563,6 @@ h3 {
     padding: 24px;
   }
 
-  .sync-metrics {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .sync-actions {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .chart-panel {
     padding: 24px;
   }
@@ -575,7 +588,9 @@ h3 {
 
   .dashboard-layout,
   .filter-placeholder-list,
-  .dashboard-metric-grid {
+  .dashboard-metric-grid,
+  .sync-panel__metrics,
+  .sync-panel__meta-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
