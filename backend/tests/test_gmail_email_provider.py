@@ -21,6 +21,7 @@ from app.providers.email import (
     EmailMessageRef,
     EmailMetadataListRequest,
     EmailProvider,
+    EmailProviderAuthError,
     EmailProviderError,
     EmailSyncMode,
 )
@@ -220,6 +221,25 @@ class FakeOAuthTokenTransport:
         }
 
 
+class FakeRefreshOAuthTokenTransport:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[tuple[str, str], ...]]] = []
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: tuple[tuple[str, str], ...],
+    ) -> dict[str, object]:
+        self.calls.append((url, form))
+        return {
+            "access_token": "fresh-access-token",
+            "expires_in": 7200,
+            "scope": GMAIL_READONLY_SCOPE,
+            "token_type": "Bearer",
+        }
+
+
 def write_google_oauth_client_config(tmp_path: Path) -> Path:
     client_config = tmp_path / "google-oauth-client.json"
     client_config.write_text(
@@ -268,6 +288,24 @@ def _gmail_body_data(value: str) -> str:
     return base64.urlsafe_b64encode(value.encode("utf-8")).decode("ascii").rstrip("=")
 
 
+def _stored_gmail_token(
+    *,
+    access_token: str = "expired-access-token",
+    refresh_token: str | None = "gmail-refresh-token",
+    expires_at: datetime = datetime(2000, 1, 1, tzinfo=UTC),
+    scope: str = GMAIL_READONLY_SCOPE,
+) -> SecretStr:
+    payload: dict[str, object] = {
+        "access_token": access_token,
+        "expires_at": expires_at.isoformat(),
+        "scope": scope,
+        "token_type": "Bearer",
+    }
+    if refresh_token is not None:
+        payload["refresh_token"] = refresh_token
+    return SecretStr(json.dumps(payload, sort_keys=True))
+
+
 def test_gmail_email_provider_satisfies_email_provider_protocol() -> None:
     provider = _gmail_provider(_settings())
 
@@ -293,7 +331,7 @@ def test_gmail_email_provider_rejects_non_readonly_scope_configuration() -> None
         _gmail_provider(settings)
 
 
-def test_gmail_email_provider_remaining_placeholders_raise_public_safe_errors() -> None:
+def test_gmail_email_provider_secret_store_placeholders_raise_public_safe_errors() -> None:
     provider = _gmail_provider(_settings())
 
     connection = _connection()
@@ -305,20 +343,20 @@ def test_gmail_email_provider_remaining_placeholders_raise_public_safe_errors() 
         refs=(EmailMessageRef(account=connection.account, message_id="msg-1"),),
     )
 
-    operations = (
-        provider.refresh_connection(connection),
-        provider.list_message_metadata(connection, metadata_request),
-        provider.fetch_message_bodies(connection, body_request),
-    )
+    with pytest.raises(EmailProviderError) as metadata_error_info:
+        asyncio.run(provider.list_message_metadata(connection, metadata_request))
+    assert_public_safe_not_implemented_error(metadata_error_info.value)
 
-    for operation in operations:
-        with pytest.raises(EmailProviderError) as error_info:
-            asyncio.run(operation)
+    with pytest.raises(EmailProviderError) as body_error_info:
+        asyncio.run(provider.fetch_message_bodies(connection, body_request))
+    assert_public_safe_not_implemented_error(body_error_info.value)
 
-        assert error_info.value.public_message.endswith("not implemented yet.")
-        assert "authorization-code" not in str(error_info.value)
-        assert "csrf-state" not in str(error_info.value)
-        assert "me@example.com" not in str(error_info.value)
+
+def assert_public_safe_not_implemented_error(error: EmailProviderError) -> None:
+    assert error.public_message.endswith("not implemented yet.")
+    assert "authorization-code" not in str(error)
+    assert "csrf-state" not in str(error)
+    assert "me@example.com" not in str(error)
 
 
 def test_gmail_email_provider_completes_authorization_and_persists_tokens(
@@ -388,6 +426,125 @@ def test_gmail_email_provider_completes_authorization_and_persists_tokens(
             "gmail-access-token",
         )
     ]
+
+
+def test_gmail_email_provider_refreshes_connection_without_exposing_tokens(
+    tmp_path: Path,
+) -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    expired_at = datetime(2000, 1, 1, tzinfo=UTC)
+    connection = _connection().model_copy(
+        update={
+            "credential_expires_at": expired_at,
+            "reauth_required": True,
+        }
+    )
+    secret_store = FakeSecretStore(None)
+    secret_store.secrets[connection.credential_ref] = _stored_gmail_token()
+    token_transport = FakeRefreshOAuthTokenTransport()
+    provider = GmailEmailProvider(
+        settings=AppSettings(
+            _env_file=None,
+            gmail_client_config_file=write_google_oauth_client_config(tmp_path),
+        ),
+        secret_store=secret_store,
+        token_transport=token_transport,
+    )
+
+    refreshed_connection = asyncio.run(provider.refresh_connection(connection))
+
+    assert refreshed_connection.account == connection.account
+    assert refreshed_connection.credential_ref == connection.credential_ref
+    assert refreshed_connection.granted_scopes == (GMAIL_READONLY_SCOPE,)
+    assert refreshed_connection.credential_expires_at is not None
+    assert refreshed_connection.credential_expires_at > expired_at
+    assert refreshed_connection.reauth_required is False
+    assert "expired-access-token" not in refreshed_connection.model_dump_json()
+    assert "fresh-access-token" not in refreshed_connection.model_dump_json()
+    assert "gmail-refresh-token" not in refreshed_connection.model_dump_json()
+
+    stored_payload = json.loads(secret_store.secrets[connection.credential_ref].get_secret_value())
+    assert stored_payload["access_token"] == "fresh-access-token"
+    assert stored_payload["refresh_token"] == "gmail-refresh-token"
+    assert stored_payload["scope"] == GMAIL_READONLY_SCOPE
+    assert datetime.fromisoformat(stored_payload["expires_at"]) > expired_at
+
+    assert token_transport.calls == [
+        (
+            "https://oauth2.googleapis.com/token",
+            (
+                ("client_id", "client-id.apps.googleusercontent.com"),
+                ("client_secret", "super-secret-client-secret"),
+                ("grant_type", "refresh_token"),
+                ("refresh_token", "gmail-refresh-token"),
+            ),
+        )
+    ]
+
+
+def test_gmail_email_provider_refreshes_expired_secret_before_listing_metadata(
+    tmp_path: Path,
+) -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    connection = _connection()
+    secret_store = FakeSecretStore(None)
+    secret_store.secrets[connection.credential_ref] = _stored_gmail_token()
+    token_transport = FakeRefreshOAuthTokenTransport()
+    transport = FakeGmailTransport()
+    provider = GmailEmailProvider(
+        settings=AppSettings(
+            _env_file=None,
+            gmail_client_config_file=write_google_oauth_client_config(tmp_path),
+        ),
+        secret_store=secret_store,
+        transport=transport,
+        token_transport=token_transport,
+    )
+
+    page = asyncio.run(
+        provider.list_message_metadata(
+            connection,
+            EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=50),
+        )
+    )
+
+    assert [message.ref.message_id for message in page.messages] == ["msg-1"]
+    assert {call[2] for call in transport.calls} == {"fresh-access-token"}
+    assert "expired-access-token" not in json.dumps(
+        json.loads(secret_store.secrets[connection.credential_ref].get_secret_value()),
+        sort_keys=True,
+    )
+    assert len(token_transport.calls) == 1
+
+
+def test_gmail_email_provider_requires_reconnect_when_refresh_token_is_missing(
+    tmp_path: Path,
+) -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    connection = _connection().model_copy(
+        update={"credential_expires_at": datetime(2000, 1, 1, tzinfo=UTC)}
+    )
+    secret_store = FakeSecretStore(None)
+    secret_store.secrets[connection.credential_ref] = _stored_gmail_token(
+        refresh_token=None,
+    )
+    provider = GmailEmailProvider(
+        settings=AppSettings(
+            _env_file=None,
+            gmail_client_config_file=write_google_oauth_client_config(tmp_path),
+        ),
+        secret_store=secret_store,
+        token_transport=FakeRefreshOAuthTokenTransport(),
+    )
+
+    with pytest.raises(EmailProviderAuthError) as error_info:
+        asyncio.run(provider.refresh_connection(connection))
+
+    assert error_info.value.public_message == "Reconnect Gmail to continue syncing."
+    assert "expired-access-token" not in repr(error_info.value)
 
 
 def test_gmail_email_provider_lists_message_metadata_with_configured_secret_store() -> None:
