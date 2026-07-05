@@ -126,8 +126,8 @@ Gmail ingestion · classification + extraction + aggregation · deterministic da
   *Accept:* user authorizes once; tokens persist and refresh.
 - **FR-1.2 Full historical backfill** *(P0)* - Pull Gmail metadata broadly and retain body text only for messages that pass the broad job-search candidate filter or are needed for reconciliation/debugging.
   *Accept:* local raw-email metadata count reconciles with Gmail; large mailboxes around 40k messages complete without data loss (paginated, resumable); body retention state is tracked.
-- **FR-1.3 Incremental sync** *(P0)* - Use `historyId` to fetch only new messages on subsequent syncs.
-  *Accept:* a second sync pulls only new mail, not the whole box.
+- **FR-1.3 Incremental sync** *(P0)* - Use `historyId` to fetch only new messages on subsequent syncs, and recover from expired history IDs by falling back to resumable full metadata reconciliation.
+  *Accept:* a second sync pulls only new mail when the cursor is valid; an expired cursor restarts metadata reconciliation without losing pagination or next-cursor progress.
 - **FR-1.4 Provider abstraction** *(P0)* - All ingestion behind an `EmailProvider` interface so Outlook/IMAP drop in later without touching the pipeline.
   *Accept:* Gmail is one implementation of a documented interface; adding a provider requires no pipeline changes.
 - **FR-1.5 Sync triggers** *(P0)* - Manual "Sync now" + "sync on open"; background scheduler (APScheduler) while the local backend process is running.
