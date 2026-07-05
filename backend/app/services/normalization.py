@@ -43,6 +43,9 @@ _LEGAL_SUFFIXES = frozenset(
         "sas",
     }
 )
+_DOTTED_LEGAL_SUFFIX_TOKEN_SEQUENCES = tuple(
+    tuple(suffix) for suffix in sorted(_LEGAL_SUFFIXES, key=len, reverse=True) if len(suffix) > 1
+)
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _LEVEL_TOKEN_RE = re.compile(r"(?:[1-9][0-9]*|e[0-9]+|ic[0-9]+|l[0-9]+|m[0-9]+)")
 _EMPLOYMENT_PHRASES = (
@@ -216,10 +219,27 @@ def _drop_trailing_terms(tokens: list[str], terms: frozenset[str]) -> list[str]:
 
 
 def _drop_trailing_legal_suffixes(tokens: list[str]) -> list[str]:
-    trimmed = _drop_trailing_terms(tokens, _LEGAL_SUFFIXES)
+    trimmed = list(tokens)
+    while len(trimmed) > 1:
+        if trimmed[-1] in _LEGAL_SUFFIXES:
+            trimmed.pop()
+            continue
+
+        dotted_suffix = _matching_trailing_dotted_legal_suffix(trimmed)
+        if dotted_suffix is None:
+            break
+        del trimmed[-len(dotted_suffix) :]
+
     if len(trimmed) > 1 and trimmed[-1] == "and":
         trimmed.pop()
     return trimmed
+
+def _matching_trailing_dotted_legal_suffix(tokens: list[str]) -> tuple[str, ...] | None:
+    for suffix_tokens in _DOTTED_LEGAL_SUFFIX_TOKEN_SEQUENCES:
+        trailing_tokens = tuple(tokens[-len(suffix_tokens) :])
+        if len(tokens) > len(suffix_tokens) and trailing_tokens == suffix_tokens:
+            return suffix_tokens
+    return None
 
 
 def _normalize_tokens(role_title: str) -> tuple[str, ...]:

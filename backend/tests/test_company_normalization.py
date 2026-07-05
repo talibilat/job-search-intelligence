@@ -15,6 +15,9 @@ from app.services.normalization import normalize_company_name
         ("jobs.example.com", "example"),
         ("www.data.ai", "data"),
         ("Acme---Labs", "acme labs"),
+        ("Example L.L.C.", "example"),
+        ("Example S.A.R.L.", "example"),
+        ("Example P.T.E.", "example"),
     ],
 )
 def test_normalize_company_name_produces_stable_grouping_key(
