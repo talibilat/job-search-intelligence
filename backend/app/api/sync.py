@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
-from app.config import AppSettings, get_settings
-from app.db.repositories import EmailRepository, SyncStateRepository
+from app.config import AppSettings, EmailProviderName, get_settings
+from app.db.repositories import EmailConnectionRepository, EmailRepository, SyncStateRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.email import EmailConnection, EmailProvider
 from app.providers.email.gmail import GmailEmailProvider
@@ -23,6 +24,7 @@ from app.services.sync_service import (
 )
 
 router = APIRouter(prefix="/sync", tags=["sync"])
+EmailSyncConnectionResolver = Callable[[], EmailConnection | None]
 
 
 class EmailSyncStatusStore:
@@ -49,16 +51,17 @@ class ConfiguredEmailSyncRuntime:
         *,
         settings: AppSettings,
         email_provider: EmailProvider,
-        connection: EmailConnection | None,
+        connection_resolver: EmailSyncConnectionResolver,
         status_store: EmailSyncStatusStore,
     ) -> None:
         self._settings = settings
         self._email_provider = email_provider
-        self._connection = connection
+        self._connection_resolver = connection_resolver
         self._status_store = status_store
 
     async def run_manual_sync(self) -> EmailSyncStatus:
-        if self._connection is None:
+        connection = self._connection_resolver()
+        if connection is None:
             raise SyncConnectionNotConfiguredError("Gmail connection is not configured yet.")
         if not self._status_store.try_acquire_run():
             raise SyncAlreadyRunningError("Email sync is already running.")
@@ -76,7 +79,7 @@ class ConfiguredEmailSyncRuntime:
                     ),
                     status_callback=self._status_store.set_status,
                 )
-                return await sync_service.run_manual_sync(connection=self._connection)
+                return await sync_service.run_manual_sync(connection=connection)
         finally:
             self._status_store.release_run()
 
@@ -93,8 +96,26 @@ def get_sync_email_provider(
     return GmailEmailProvider(settings=settings)
 
 
-def get_email_sync_connection() -> EmailConnection | None:
-    return None
+def resolve_email_sync_connection(settings: AppSettings) -> EmailConnection | None:
+    database_path = sqlite_database_path(settings.database_url)
+    if not database_path.exists():
+        return None
+
+    with sqlite3.connect(database_path) as connection:
+        try:
+            return EmailConnectionRepository(connection).fetch_latest_connection_metadata(
+                provider=EmailProviderName.GMAIL,
+            )
+        except sqlite3.OperationalError as error:
+            if "no such table: email_connections" in str(error):
+                return None
+            raise
+
+
+def get_email_sync_connection_resolver(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> EmailSyncConnectionResolver:
+    return lambda: resolve_email_sync_connection(settings)
 
 
 def get_sync_status_store() -> EmailSyncStatusStore:
@@ -104,13 +125,16 @@ def get_sync_status_store() -> EmailSyncStatusStore:
 def get_email_sync_runtime(
     settings: Annotated[AppSettings, Depends(get_settings)],
     email_provider: Annotated[EmailProvider, Depends(get_sync_email_provider)],
-    connection: Annotated[EmailConnection | None, Depends(get_email_sync_connection)],
+    connection_resolver: Annotated[
+        EmailSyncConnectionResolver,
+        Depends(get_email_sync_connection_resolver),
+    ],
     status_store: Annotated[EmailSyncStatusStore, Depends(get_sync_status_store)],
 ) -> EmailSyncRuntime:
     return ConfiguredEmailSyncRuntime(
         settings=settings,
         email_provider=email_provider,
-        connection=connection,
+        connection_resolver=connection_resolver,
         status_store=status_store,
     )
 

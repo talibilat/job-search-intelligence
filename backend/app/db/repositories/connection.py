@@ -97,6 +97,39 @@ class EmailConnectionRepository(BaseRepository[EmailConnectionRecord]):
         record = self.fetch_connection(account)
         if record is None:
             return None
+        return self._connection_from_record(record)
+
+    def fetch_latest_connection_metadata(
+        self,
+        *,
+        provider: EmailProviderName,
+    ) -> EmailConnection | None:
+        record = self.fetch_one(
+            """
+            SELECT
+                provider,
+                account_id,
+                display_email,
+                credential_ref_kind,
+                credential_ref_provider,
+                credential_ref_name,
+                granted_scopes,
+                connected_at,
+                credential_expires_at,
+                reauth_required,
+                updated_at
+            FROM email_connections
+            WHERE provider = ?
+            ORDER BY updated_at DESC, connected_at DESC, account_id ASC
+            LIMIT 1
+            """,
+            (provider.value,),
+        )
+        if record is None:
+            return None
+        return self._connection_from_record(record)
+
+    def _connection_from_record(self, record: EmailConnectionRecord) -> EmailConnection:
         return EmailConnection(
             account=EmailAccountRef(
                 provider=EmailProviderName(record.provider),
