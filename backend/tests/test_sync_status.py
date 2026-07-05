@@ -113,7 +113,6 @@ def test_sync_status_endpoint_is_documented_in_openapi() -> None:
 
     response = client.get("/openapi.json")
 
-
     assert response.status_code == 200
     operation = response.json()["paths"]["/sync/status"]["get"]
     schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
