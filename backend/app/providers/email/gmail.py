@@ -471,6 +471,10 @@ class UrllibGmailApiTransport:
             with urlopen(request, timeout=self._timeout_seconds) as response:
                 response_body = response.read()
         except HTTPError as error:
+            if path == _HISTORY_PATH and error.code == 404:
+                raise EmailSyncCursorExpiredError(
+                    public_message="Gmail incremental sync cursor expired"
+                ) from error
             raise GmailApiRequestError(status_code=error.code) from error
         except URLError as error:
             raise GmailApiRequestError(status_code=None) from error
