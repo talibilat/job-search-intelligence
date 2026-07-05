@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol, cast, runtime_checkable
+from typing import ClassVar, Protocol, cast, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
@@ -36,6 +36,8 @@ class EmailCandidateDecision(BaseModel):
     strategy: EmailCandidateQueryStrategy
     outcome: EmailCandidateDecisionOutcome
     reason: str = Field(min_length=1)
+    score: int = 0
+    signals: tuple[str, ...] = ()
 
 
 class EmailAttachmentPolicy(StrEnum):
@@ -186,10 +188,16 @@ class EmailCandidateQuery(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    SENDER_DOMAIN_SIGNAL_SCORE: ClassVar[int] = 2
+    SUBJECT_KEYWORD_SIGNAL_SCORE: ClassVar[int] = 2
+    THREAD_SIGNAL_SCORE: ClassVar[int] = 2
+    THREAD_SIGNAL_TOKEN: ClassVar[str] = "thread_signal:candidate_thread"
+
     strategy: EmailCandidateQueryStrategy
     sender_domain_terms: tuple[str, ...] = ()
     keyword_terms: tuple[str, ...] = ()
     excluded_label_terms: tuple[str, ...] = ()
+    candidate_score_threshold: int = Field(default=2, ge=1)
 
     @field_validator("sender_domain_terms", "keyword_terms", "excluded_label_terms")
     @classmethod
@@ -210,6 +218,35 @@ class EmailCandidateQuery(BaseModel):
     def matches_metadata(self, metadata: EmailMessageMetadata) -> bool:
         return self.evaluate_metadata(metadata).outcome is EmailCandidateDecisionOutcome.CANDIDATE
 
+    def evaluate_metadata_batch(
+        self,
+        metadata: Iterable[EmailMessageMetadata],
+    ) -> tuple[EmailCandidateDecision, ...]:
+        """Evaluate metadata with same-page thread context.
+
+        Thread IDs are treated as private provider-owned values, so decisions only
+        expose a static thread signal token instead of the raw thread ID.
+        """
+
+        messages = tuple(metadata)
+        direct_decisions = tuple(self.evaluate_metadata(message) for message in messages)
+        candidate_thread_ids = {
+            message.ref.thread_id
+            for message, decision in zip(messages, direct_decisions, strict=True)
+            if message.ref.thread_id is not None
+            and decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE
+        }
+        if not candidate_thread_ids:
+            return direct_decisions
+
+        return tuple(
+            self._evaluate_metadata(
+                message,
+                candidate_thread_ids=candidate_thread_ids,
+            )
+            for message in messages
+        )
+
     def matches_keywords(
         self,
         *,
@@ -223,35 +260,56 @@ class EmailCandidateQuery(BaseModel):
         )
 
     def evaluate_metadata(self, metadata: EmailMessageMetadata) -> EmailCandidateDecision:
+        return self._evaluate_metadata(metadata, candidate_thread_ids=set())
+
+    def _evaluate_metadata(
+        self,
+        metadata: EmailMessageMetadata,
+        *,
+        candidate_thread_ids: set[str],
+    ) -> EmailCandidateDecision:
         normalized_labels = {label.strip().lower() for label in metadata.labels}
         for excluded_label in self.excluded_label_terms:
             if excluded_label in normalized_labels:
+                signal = f"excluded_label:{excluded_label}"
                 return EmailCandidateDecision(
                     strategy=self.strategy,
                     outcome=EmailCandidateDecisionOutcome.REJECTED,
-                    reason=f"excluded_label:{excluded_label}",
+                    reason=signal,
+                    signals=(signal,),
                 )
 
+        score = 0
+        signals: list[str] = []
         matched_sender_domain = self._matching_sender_domain(metadata)
         if matched_sender_domain is not None:
-            return EmailCandidateDecision(
-                strategy=self.strategy,
-                outcome=EmailCandidateDecisionOutcome.CANDIDATE,
-                reason=f"sender_domain:{matched_sender_domain}",
-            )
+            score += self.SENDER_DOMAIN_SIGNAL_SCORE
+            signals.append(f"sender_domain:{matched_sender_domain}")
 
         matched_subject_keyword = self._matching_subject_keyword(metadata)
         if matched_subject_keyword is not None:
+            score += self.SUBJECT_KEYWORD_SIGNAL_SCORE
+            signals.append(f"subject_keyword:{matched_subject_keyword}")
+
+        if not signals and metadata.ref.thread_id in candidate_thread_ids:
+            score += self.THREAD_SIGNAL_SCORE
+            signals.append(self.THREAD_SIGNAL_TOKEN)
+
+        if score >= self.candidate_score_threshold:
             return EmailCandidateDecision(
                 strategy=self.strategy,
                 outcome=EmailCandidateDecisionOutcome.CANDIDATE,
-                reason=f"subject_keyword:{matched_subject_keyword}",
+                reason=signals[0],
+                score=score,
+                signals=tuple(signals),
             )
 
         return EmailCandidateDecision(
             strategy=self.strategy,
             outcome=EmailCandidateDecisionOutcome.REJECTED,
             reason="no_filter_signal",
+            score=score,
+            signals=tuple(signals),
         )
 
     def _matches_keyword_text(self, text: str | None) -> bool:

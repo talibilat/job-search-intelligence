@@ -28,6 +28,7 @@ from app.providers.email import (
     EmailBodyBatch,
     EmailBodyFetchFailure,
     EmailBodyFetchRequest,
+    EmailCandidateDecisionOutcome,
     EmailCandidateQuery,
     EmailConnection,
     EmailMessageBody,
@@ -743,6 +744,7 @@ class EmailSyncService:
 
         selected_refs: list[EmailMessageRef] = []
         seen_message_ids: set[str] = set()
+        metadata_messages = tuple(metadata)
 
         def select_ref(ref: EmailMessageRef) -> None:
             if ref.message_id in seen_message_ids:
@@ -750,8 +752,9 @@ class EmailSyncService:
             seen_message_ids.add(ref.message_id)
             selected_refs.append(ref)
 
-        for message in metadata:
-            if candidate_query.matches_metadata(message):
+        decisions = candidate_query.evaluate_metadata_batch(metadata_messages)
+        for message, decision in zip(metadata_messages, decisions, strict=True):
+            if decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE:
                 select_ref(message.ref)
 
         for ref in reconciliation_or_debug_refs:
@@ -920,6 +923,8 @@ class EmailSyncService:
         if self._filter_decision_repository is None:
             return
 
+        metadata_messages = tuple(metadata)
+        decisions = candidate_query.evaluate_metadata_batch(metadata_messages)
         decided_at = self._clock()
         self._filter_decision_repository.upsert_filter_decisions(
             EmailFilterDecisionRecord(
@@ -929,8 +934,7 @@ class EmailSyncService:
                 reason=decision.reason,
                 decided_at=decided_at,
             )
-            for message in metadata
-            for decision in (candidate_query.evaluate_metadata(message),)
+            for message, decision in zip(metadata_messages, decisions, strict=True)
         )
 
 
