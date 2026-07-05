@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from email.utils import getaddresses, parsedate_to_datetime
 from typing import Protocol, cast
 from urllib.error import HTTPError, URLError
@@ -27,6 +27,7 @@ from app.providers.email.provider import (
     EmailMetadataPage,
     EmailProviderAuthError,
     EmailProviderCapabilities,
+    EmailProviderCursor,
     EmailProviderError,
     EmailProviderTransientError,
     EmailSyncMode,
@@ -46,8 +47,10 @@ GMAIL_API_BASE_URL = "https://gmail.googleapis.com"
 GMAIL_MAX_METADATA_PAGE_SIZE = 500
 _GMAIL_MAX_BODY_BATCH_SIZE = 100
 _MESSAGES_PATH = "/gmail/v1/users/me/messages"
+_PROFILE_PATH = "/gmail/v1/users/me/profile"
 _MESSAGE_LIST_FIELDS = "messages(id,threadId),nextPageToken"
 _MESSAGE_METADATA_FIELDS = "id,threadId,labelIds,sizeEstimate,payload/headers(name,value)"
+_PROFILE_FIELDS = "historyId"
 _INVALID_DATA_MESSAGE = "Gmail metadata listing returned invalid data"
 
 
@@ -290,6 +293,12 @@ class GmailMessageListResponse(BaseModel):
     next_page_token: str | None = Field(default=None, alias="nextPageToken")
 
 
+class GmailProfileResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore", populate_by_name=True)
+
+    history_id: str = Field(min_length=1, alias="historyId")
+
+
 class GmailMessageHeader(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -359,10 +368,26 @@ class GmailMessageLister:
                 )
             )
 
+        next_sync_cursor = None
+        if list_response.next_page_token is None:
+            profile = _validate_gmail_response(
+                GmailProfileResponse,
+                await self._transport.get_json(
+                    _PROFILE_PATH,
+                    query=_profile_query(),
+                    access_token=access_token,
+                ),
+            )
+            next_sync_cursor = EmailProviderCursor(
+                account=connection.account,
+                value=profile.history_id,
+                issued_at=datetime.now(UTC),
+            )
+
         return EmailMetadataPage(
             messages=tuple(metadata_messages),
             next_page_token=list_response.next_page_token,
-            next_sync_cursor=None,
+            next_sync_cursor=next_sync_cursor,
         )
 
     async def _fetch_message_metadata(
@@ -414,6 +439,10 @@ def _metadata_query() -> tuple[tuple[str, str], ...]:
     return (("fields", _MESSAGE_METADATA_FIELDS), ("format", "metadata")) + tuple(
         ("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS
     )
+
+
+def _profile_query() -> tuple[tuple[str, str], ...]:
+    return (("fields", _PROFILE_FIELDS),)
 
 
 def _metadata_headers(metadata: GmailMessageMetadataResponse) -> dict[str, tuple[str, ...]]:
