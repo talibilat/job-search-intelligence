@@ -424,13 +424,15 @@ class EmailSyncService:
             if existing_cursor is not None
             else EmailSyncMode.FULL_BACKFILL
         )
-        self._set_status(EmailSyncStatus(
-            provider=connection.account.provider,
-            account_id=connection.account.account_id,
-            state=EmailSyncRunState.RUNNING,
-            mode=requested_mode,
-            started_at=started_at,
-        ))
+        self._set_status(
+            EmailSyncStatus(
+                provider=connection.account.provider,
+                account_id=connection.account.account_id,
+                state=EmailSyncRunState.RUNNING,
+                mode=requested_mode,
+                started_at=started_at,
+            )
+        )
 
         try:
             result = await self._run_metadata_pages(
@@ -583,9 +585,7 @@ class EmailSyncService:
         message_count = 0
         recovered_from_expired_cursor = False
         final_mode = (
-            EmailSyncMode.INCREMENTAL
-            if sync_cursor is not None
-            else EmailSyncMode.FULL_BACKFILL
+            EmailSyncMode.INCREMENTAL if sync_cursor is not None else EmailSyncMode.FULL_BACKFILL
         )
 
         while True:
@@ -608,19 +608,21 @@ class EmailSyncService:
                 )
             if page_result.page.next_sync_cursor is not None:
                 latest_cursor = page_result.page.next_sync_cursor
-            self._set_status(EmailSyncStatus(
-                provider=connection.account.provider,
-                account_id=connection.account.account_id,
-                state=EmailSyncRunState.RUNNING,
-                mode=final_mode,
-                started_at=started_at,
-                page_count=page_count,
-                message_count=message_count,
-                raw_email_count=self._email_repository.count_raw_emails(
+            self._set_status(
+                EmailSyncStatus(
                     provider=connection.account.provider,
-                ),
-                recovered_from_expired_cursor=recovered_from_expired_cursor,
-            ))
+                    account_id=connection.account.account_id,
+                    state=EmailSyncRunState.RUNNING,
+                    mode=final_mode,
+                    started_at=started_at,
+                    page_count=page_count,
+                    message_count=message_count,
+                    raw_email_count=self._email_repository.count_raw_emails(
+                        provider=connection.account.provider,
+                    ),
+                    recovered_from_expired_cursor=recovered_from_expired_cursor,
+                )
+            )
             if page_result.page.next_page_token is None:
                 break
 
