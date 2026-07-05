@@ -60,7 +60,7 @@ job-search-intelligence/
 │   │   ├── db/
 │   │   │   ├── engine.py           # SQLite engine, sqlite-vec loading, and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
-│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
+│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ClassificationRunRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Focused Pydantic DTO modules plus stable aggregate exports
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider protocol + Gmail OAuth start/callback/metadata lister + retained-body text normalization + future outlook.py/imap.py
@@ -112,6 +112,7 @@ job-search-intelligence/
 
 [JT-069 2026-07-05 v2] `backend/app/db/repositories/` now includes `SyncStateRepository` for provider-owned sync anchors.
 [JT-066 2026-07-05 v2] `backend/app/db/repositories/` now includes `BackfillStateRepository` for durable full-backfill page progress.
+[JT-096 2026-07-05] `backend/app/db/repositories/` now includes `ClassificationRunRepository` for completed-run token and estimated-cost accounting.
 
 ---
 
@@ -129,6 +130,8 @@ job-search-intelligence/
 - **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `in_progress_mode`, `next_page_token`, `updated_at`; stores opaque provider-owned incremental sync anchors plus resumable page progress scoped to one connected account.
 - **`email_connections`** - `provider`, `account_id`, `display_email`, credential `SecretRef` fields, granted scopes, `connected_at`, optional `credential_expires_at`, `reauth_required`, `updated_at`; stores only non-secret connection metadata for one Gmail account while token payloads live in the configured `SecretStore`.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
+- **`classification_runs`** - `id`, `provider`, `model`, `prompt_version`, `started_at`, `completed_at`, `candidate_count`, `classified_count`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `estimated_cost_usd`; stores one local accounting row per completed classification run.
+  Counts, token totals, and estimated cost are non-negative; `classified_count` cannot exceed `candidate_count`, and `total_tokens` must cover prompt plus completion tokens.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
   [JT-020 2026-07-05 v2] - **`application_events`** - `id`, `application_id` (FK), nullable `email_id` (FK; null for inferred events such as `ghost_inferred`), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
@@ -141,6 +144,7 @@ job-search-intelligence/
 [JT-020 2026-07-05 v1] The initial core schema migration enforces enum, confidence, salary-range, and raw-email retention invariants with SQLite `CHECK` constraints, uses foreign keys for email/application relationships, and adds practical lookup indexes for the regular tables.
 [JT-021 2026-07-05] The manual override schema migration creates `application_corrections` with constrained correction types, valid JSON before/after snapshots, application delete cascade, and an `(application_id, created_at)` lookup index for per-application audit history.
 [JT-022 2026-07-05] The chat history schema migration creates `chat_messages`; `role` is constrained to `user | assistant | tool | system`, `citations_json` and `tool_outputs_json` must be valid JSON arrays, and `(conversation_id, created_at)` is indexed for history reads.
+[JT-096 2026-07-05] The classification run accounting migration creates `classification_runs` with lookup indexes on `started_at` and `(provider, model)` so later classifier services can persist per-run token usage and estimated cost through `ClassificationRunRepository`.
 
 ### Aggregation rule (the hard part)
 
@@ -211,7 +215,7 @@ Phase 1 reconciliation compares provider metadata pages against local `raw_email
 
 **Cost control:** `classification_mode` config - `hybrid` (filter -> LLM), `llm` (LLM on everything), `local` (Ollama, offline/free).
 Setup asks explicitly and preselects `hybrid` when Azure OpenAI credentials are configured, or `local` when only Ollama is configured.
-Show a **pre-run cost estimate** and track tokens per run.
+Show a **pre-run cost estimate** and track tokens per run; completed-run accounting is stored locally in `classification_runs` through `ClassificationRunRepository`.
 
 ---
 
