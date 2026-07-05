@@ -7,7 +7,7 @@ from typing import Protocol, cast, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
-from app.models import EmailFilterDecisionOutcome
+from app.models import EmailCandidateQueryStrategy, EmailFilterDecisionOutcome
 from app.providers.email.html_normalization import (
     email_body_contains_html,
     normalize_email_html_to_text,
@@ -20,10 +20,6 @@ EmailCandidateDecisionOutcome = EmailFilterDecisionOutcome
 class EmailSyncMode(StrEnum):
     FULL_BACKFILL = "full_backfill"
     INCREMENTAL = "incremental"
-
-
-class EmailCandidateQueryStrategy(StrEnum):
-    BROAD_JOB_SEARCH = "broad_job_search"
 
 
 class EmailCandidateDecision(BaseModel):

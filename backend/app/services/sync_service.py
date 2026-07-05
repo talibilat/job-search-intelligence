@@ -924,7 +924,7 @@ class EmailSyncService:
         self._filter_decision_repository.upsert_filter_decisions(
             EmailFilterDecisionRecord(
                 email_id=message.ref.message_id,
-                strategy=decision.strategy.value,
+                strategy=decision.strategy,
                 outcome=decision.outcome,
                 reason=decision.reason,
                 decided_at=decided_at,

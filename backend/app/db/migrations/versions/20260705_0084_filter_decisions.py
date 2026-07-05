@@ -18,6 +18,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 FILTER_DECISION_OUTCOMES = ("candidate", "rejected")
+FILTER_DECISION_STRATEGIES = ("broad_job_search",)
 
 
 def upgrade() -> None:
@@ -31,6 +32,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             _in_values("outcome", FILTER_DECISION_OUTCOMES),
             name="ck_email_filter_decisions_outcome",
+        ),
+        sa.CheckConstraint(
+            _in_values("strategy", FILTER_DECISION_STRATEGIES),
+            name="ck_email_filter_decisions_strategy",
         ),
         sa.ForeignKeyConstraint(["email_id"], ["raw_emails.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("email_id", "strategy"),

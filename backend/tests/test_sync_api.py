@@ -454,6 +454,8 @@ def create_sync_tables(database_path: Path) -> None:
                 outcome TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 decided_at TEXT NOT NULL,
+                CHECK (strategy IN ('broad_job_search')),
+                CHECK (outcome IN ('candidate', 'rejected')),
                 PRIMARY KEY (email_id, strategy),
                 FOREIGN KEY (email_id) REFERENCES raw_emails(id) ON DELETE CASCADE
             )

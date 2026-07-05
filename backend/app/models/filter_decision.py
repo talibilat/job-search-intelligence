@@ -11,11 +11,15 @@ class EmailFilterDecisionOutcome(StrEnum):
     REJECTED = "rejected"
 
 
+class EmailCandidateQueryStrategy(StrEnum):
+    BROAD_JOB_SEARCH = "broad_job_search"
+
+
 class EmailFilterDecisionRecord(BaseModel):
     """Stored heuristic filter decision for one raw email and strategy."""
 
     email_id: str = Field(min_length=1)
-    strategy: str = Field(min_length=1)
+    strategy: EmailCandidateQueryStrategy
     outcome: EmailFilterDecisionOutcome
     reason: str = Field(min_length=1)
     decided_at: datetime

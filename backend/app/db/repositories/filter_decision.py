@@ -35,7 +35,7 @@ class EmailFilterDecisionRepository(BaseRepository[EmailFilterDecisionRecord]):
                 [
                     (
                         record.email_id,
-                        record.strategy,
+                        record.strategy.value,
                         record.outcome.value,
                         record.reason,
                         record.decided_at.isoformat(),
