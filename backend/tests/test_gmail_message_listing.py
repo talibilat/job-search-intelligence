@@ -372,9 +372,7 @@ def test_gmail_message_lister_uses_history_for_incremental_metadata_sync() -> No
         "startHistoryId": "1001",
     }
     assert history_token == "access-token"
-    assert [call[0] for call in transport.calls[1:]] == [
-        "/gmail/v1/users/me/messages/msg-3"
-    ]
+    assert [call[0] for call in transport.calls[1:]] == ["/gmail/v1/users/me/messages/msg-3"]
 
 
 def test_gmail_message_lister_returns_history_cursor_after_final_incremental_page() -> None:
