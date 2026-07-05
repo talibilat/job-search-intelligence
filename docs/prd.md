@@ -137,7 +137,7 @@ Gmail ingestion · classification + extraction + aggregation · deterministic da
 
 ### FR-2 - Classification, extraction & aggregation *(make-or-break)*
 
-- **FR-2.1 Heuristic pre-filter** *(P0)* - Cheaply narrow the inbox using deterministic scored sender-domain, keyword, excluded-label, and same-page thread-context signals before any LLM call.
+- **FR-2.1 Heuristic pre-filter** *(P0)* - Cheaply narrow the inbox using known ATS/recruiter sender domains, keyword signals, excluded-label hard rejections, and same-page thread context before any LLM call.
   *Accept:* filter reduces the candidate set by orders of magnitude while retaining known job emails (validated against the golden set), and each evaluated metadata record has an auditable local outcome, score, and public-safe static signal reason.
 - **FR-2.2 LLM classification** *(P0)* - Classify each candidate into `application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`, with a confidence score.
   *Accept:* categories populate `email_classifications`; model + prompt version stored per row.
