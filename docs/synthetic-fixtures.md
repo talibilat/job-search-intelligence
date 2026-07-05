@@ -38,7 +38,6 @@ Top-level fixture fields:
 - `body_retention_state`: optional, defaults to `metadata_only`.
   Current values are `metadata_only`, `retained`, and `debugging` through the shared backend raw-email retention enum.
   `metadata_only` rows must omit `body_text`; `retained` and `debugging` rows must include it.
-[JT-065 2026-07-05 v3] Current synthetic raw email retention states mirror raw emails: `metadata_only` rows omit `body_text`, while `retained` and `debugging` rows include `body_text`.
 - `labels`: optional string array, defaults to empty.
 - `ingested_at`: required timestamp.
 
@@ -79,19 +78,13 @@ The file-level contract rejects duplicate email IDs, duplicate classification `e
 Application salary ranges must be non-negative, and `salary_min` must be less than or equal to `salary_max` when both are present.
 Retained synthetic email body text is excluded from object repr output to preserve the same redaction habit used for real retained bodies.
 Synthetic fixtures share the backend raw-email retention enum, so obsolete values such as `omitted` are rejected.
-[JT-065 2026-07-05 v3] Synthetic fixtures share the backend raw-email retention enum, so `omitted` is obsolete and rejected by validation.
 Use `debugging` for synthetic emails whose retained body exists only to exercise debugging or reconciliation flows.
 
 ## Enumerations
 
 Fixture enum values mirror the planned database contract:
 
-The first `body_retention_state` bullet is historical only and is not valid for current fixtures.
-Use the second `body_retention_state` bullet as the current contract.
-
-- `body_retention_state`: `metadata_only`, `retained`, `omitted`
 - `body_retention_state`: `metadata_only`, `retained`, `debugging`
-[JT-065 2026-07-05 v3] Current `body_retention_state` values are `metadata_only`, `retained`, and `debugging`; keep the previous line only as historical context.
 - `category`: `application_confirmation`, `rejection`, `interview_invite`, `recruiter_outreach`, `offer`, `assessment`, `follow_up`, `other`
 - `source`: `linkedin`, `company_site`, `indeed`, `referral`, `other`
 - `current_status`: `applied`, `in_review`, `assessment`, `interview`, `offer`, `rejected`, `ghosted`, `withdrawn`

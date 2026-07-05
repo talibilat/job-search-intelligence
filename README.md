@@ -64,10 +64,10 @@ scripts/          repository-level developer and operational scripts
 - Bring-your-own-credentials: no shared or bundled credentials, ever.
 - Fernet fallback storage is documented in `docs/secret-storage.md`; set `JOBTRACKER_SECRET_STORE_BACKEND=fernet` until the OS keyring adapter lands or when OS keyring is unavailable.
 - Secrets are stored encrypted at rest through OS keyring by default and never logged; backend redaction helpers are exported from `app.security` for logging boundaries.
-- Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate, debugging, or reconciliation messages, and raw email DTOs track `metadata_only`, `retained`, or `debugging` retention state.
 - If a provider reports an expired incremental cursor, the sync service restarts as full metadata reconciliation and returns the provider page token plus replacement sync cursor for resumable progress.
 - Candidate selection uses provider-neutral static sender-domain, subject keyword, and excluded-label signals after metadata listing, so broad Gmail metadata queries do not expose snippets or body content.
 - Retained email bodies are stored as normalized plain text: HTML MIME bodies are converted to text, raw HTML fields are rejected, and mislabelled plain-text bodies that still look like HTML fail validation.
+- Email backfill stores broad metadata first; retained body text is fetched separately only for selected candidate, debugging, or reconciliation messages, and raw email DTOs track `metadata_only`, `retained`, or `debugging` retention state.
 - Broad email metadata excludes body-derived snippets, and v1 ignores attachment content.
 - Current Gmail metadata listing requests Gmail `format=metadata` plus partial fields for message IDs, thread IDs, labels, size estimates, and selected headers only.
 - Incremental sync anchors are stored in local SQLite as opaque provider cursor values scoped by provider and account; they are not OAuth token material or email content.
@@ -81,6 +81,8 @@ scripts/          repository-level developer and operational scripts
 - No telemetry.
 - Gmail access is read-only (`gmail.readonly`) in v1.
 - Google OAuth setup is documented in `docs/google-oauth-setup.md` and assumes a user-created Desktop app client with no shared or bundled credentials.
+
+Historical retention note: before JT-065, README privacy guidance mentioned selected candidate or reconciliation messages but did not include debugging retained bodies.
 
 ## Repository guide
 
@@ -236,14 +238,10 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Repository base contract: import `BaseRepository` and the shared `SqlParameters` type from `app.db.repositories`; `uv run pytest tests/test_repository_base.py -v` verifies typed row mapping, parameterized statements, transactions, and the package export contract.
 - SQLite engine test: `uv run pytest tests/test_sqlite_engine.py -v` from `backend/` verifies async engine creation, sync-to-async SQLite URL normalization, sqlite-vec loading and `vec_version()` availability, connection PRAGMAs, transaction commit/rollback behavior, and local database parent directory creation.
 - Alembic migration test: `uv run pytest tests/test_alembic_migrations.py -v` from `backend/` verifies the Alembic config, SQLite batch mode, sync migration URL normalization, virtual-table autogenerate exclusion, and SQLite version-table creation.
-- Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, retained-body repr redaction, and the checked-in sample fixture.
 - Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, shared raw-email retention enum validation, retained-body repr redaction, and the checked-in sample fixture.
-[JT-065 2026-07-05 v4] Synthetic fixture format test: `uv run pytest tests/test_synthetic_fixture_format.py -v` from `backend/` verifies the versioned private-data-free fixture contract, duplicate ID rejection, cross-reference validation, unknown-field rejection, shared raw-email retention enum validation, retained-body repr redaction, and the checked-in sample fixture.
 - Synthetic fixture loader test: `uv run pytest tests/test_synthetic_fixture_loader.py -v` from `backend/` verifies JSON fixture loading into the four core SQLite tables, typed per-table load counts, repository reads, and idempotent reloads.
-- Repository stubs: import `EmailRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports and row-to-record mapping for Phase 0 table-shaped DTOs.
 - Backfill reconciliation service: `build_backfill_reconciliation_metrics` compares provider metadata pages with local `raw_emails` rows for one provider, reports provider page count, total and unique provider message counts, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a deterministic `reconciled` flag; `uv run pytest tests/test_sync_service_reconciliation.py -v` verifies duplicate provider paging and missing or extra local rows.
 - Repository stubs: import `EmailRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports, raw-email retention-state invariants, retained-body repr redaction, and row-to-record mapping for Phase 0 table-shaped DTOs.
-[JT-065 2026-07-05 v4] Repository stubs: import `EmailRepository`, `ApplicationRepository`, `EventRepository`, `InsightRepository`, `CorrectionRepository`, and `ChatRepository` from `app.db.repositories`; `uv run pytest tests/test_repository_stubs.py -v` verifies package exports, raw-email retention-state invariants, retained-body repr redaction, and row-to-record mapping for Phase 0 table-shaped DTOs.
 - Sync-state persistence test: `uv run pytest tests/test_sync_state.py -v` from `backend/` verifies Alembic creates `email_sync_state`, cursors upsert per provider account, and repository reads require migrated schema.
 - Backend smoke test: `uv run pytest tests/test_health.py -q` from `backend/`.
 - Email provider contract test: `uv run pytest tests/test_email_provider_contract.py -v` from `backend/` verifies the provider boundary keeps OAuth token material behind `SecretRef`, separates metadata from retained body fetching, supports full and incremental cursor shapes, excludes body-derived metadata snippets, excludes attachment content, normalizes HTML bodies to retained plain text, and rejects raw HTML retention fields.
