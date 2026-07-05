@@ -240,18 +240,12 @@ class ClassificationPromptOutput(BaseModel):
 
         if self.is_job_related:
             expected_status = _CATEGORY_APPLICATION_STATUS.get(self.category)
-            if (
-                self.application_status is not None
-                and self.application_status != expected_status
-            ):
+            if self.application_status is not None and self.application_status != expected_status:
                 msg = "application_status contradicts category"
                 raise ValueError(msg)
 
             expected_event_type = _CATEGORY_EVENT_TYPE.get(self.category)
-            if (
-                self.event_type is not None
-                and self.event_type != expected_event_type
-            ):
+            if self.event_type is not None and self.event_type != expected_event_type:
                 msg = "event_type contradicts category"
                 raise ValueError(msg)
 
