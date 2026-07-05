@@ -136,7 +136,8 @@ Example response shape:
 ```
 
 The response never includes the raw authorization code, Google client secret, access token, or refresh token.
-Provider auth failures return typed `400` errors, transient Google failures return `503`, and other provider failures return `502` with public-safe messages.
+OAuth callback provider auth failures return typed `400` errors, transient Google failures return `503`, and other provider failures return `502` with public-safe messages.
+Metadata-listing provider failures return typed `401`, `403`, `409`, `429`, `502`, or `503` errors with stable email-specific error codes and a `user_action` detail.
 
 ## Token Storage Contract
 
@@ -161,6 +162,7 @@ Before metadata leaves the Gmail adapter, opaque message IDs, thread IDs, and hi
 [JT-066 2026-07-05 v2] Backfill state and final replacement cursor promotion are repository-backed so full metadata backfills can resume safely.
 Incremental sync cursors, metadata-only repository writes, and retained-body repository writes now flow through the sync service, `email_sync_state`, and `raw_emails` tables.
 Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.
+Metadata-listing failures are mapped into public-safe provider errors: authorization failures ask the client to reconnect Gmail, insufficient scopes ask for read-only access, rate limits and temporary outages ask the client to try again later, invalid Gmail responses are reported without raw payloads, and generic provider failures do not expose OAuth tokens or Gmail response bodies.
 
 Richer Gmail transport behavior and additional connected-account persistence behavior remain separate Phase 1 work.
 Manual sync already uses the persisted non-secret connection metadata to pass a `SecretRef`-backed account to the Gmail provider.
