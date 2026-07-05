@@ -18,6 +18,7 @@ from .records import (
     ChatMessageRecord,
     EmailSyncStateRecord,
     InsightRecord,
+    RawEmailBodyRetentionState,
     RawEmailRecord,
 )
 from .setup import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
@@ -54,6 +55,7 @@ __all__ = [
     "ChatMessageRecord",
     "EmailSyncStateRecord",
     "InsightRecord",
+    "RawEmailBodyRetentionState",
     "RawEmailRecord",
     "SetupStatusResponse",
     "SetupSubmitRequest",
