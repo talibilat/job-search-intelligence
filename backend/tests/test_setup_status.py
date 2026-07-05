@@ -1,15 +1,28 @@
 from __future__ import annotations
 
+import sqlite3
+from datetime import UTC, datetime
+from pathlib import Path
+
 import pytest
+from alembic import command
+from alembic.config import Config
 from app.config import (
+    GMAIL_READONLY_SCOPE,
     AppSettings,
     ClassificationMode,
+    EmailProviderName,
     LLMProviderName,
     get_settings,
 )
+from app.db.repositories import EmailConnectionRepository
 from app.main import create_app
+from app.providers.email import EmailAccountRef, EmailAddress, EmailConnection
+from app.security import SecretKind, SecretRef
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def clear_jobtracker_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -25,6 +38,44 @@ def create_test_app(settings: AppSettings) -> FastAPI:
 
     fastapi_app.dependency_overrides[get_settings] = override_settings
     return fastapi_app
+
+
+def migrate_test_database(database_path: Path) -> None:
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
+    command.upgrade(config, "head")
+
+
+def save_gmail_connection(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        EmailConnectionRepository(connection).save_connection(
+            EmailConnection(
+                account=EmailAccountRef(
+                    provider=EmailProviderName.GMAIL,
+                    account_id="me@example.com",
+                ),
+                display_email=EmailAddress(address="me@example.com"),
+                credential_ref=SecretRef(
+                    kind=SecretKind.OAUTH_TOKEN,
+                    provider="gmail",
+                    name="me-example-com",
+                ),
+                granted_scopes=(GMAIL_READONLY_SCOPE,),
+                connected_at=datetime(2026, 7, 5, 12, 0, tzinfo=UTC),
+            )
+        )
+
+
+def test_connection_repository_reports_no_default_connection_before_migrations(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    with sqlite3.connect(database_path) as connection:
+        default_connection = EmailConnectionRepository(
+            connection,
+        ).fetch_default_connection_metadata(EmailProviderName.GMAIL)
+
+    assert default_connection is None
 
 
 def test_setup_status_endpoint_returns_phase_zero_shell_status(
@@ -62,6 +113,29 @@ def test_setup_status_endpoint_reports_configured_setup_choices(
     assert response.status_code == 200
     assert response.json()["llm_provider"] == "azure_openai"
     assert response.json()["classification_mode"] == "hybrid"
+
+
+def test_setup_status_endpoint_reports_persisted_gmail_connection(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    database_path = tmp_path / "jobtracker.sqlite3"
+    migrate_test_database(database_path)
+    save_gmail_connection(database_path)
+    client = TestClient(
+        create_test_app(
+            AppSettings(
+                _env_file=None,
+                database_url=f"sqlite+aiosqlite:///{database_path}",
+            )
+        )
+    )
+
+    response = client.get("/setup/status")
+
+    assert response.status_code == 200
+    assert response.json()["gmail_connected"] is True
 
 
 def test_setup_status_endpoint_is_documented_in_openapi(

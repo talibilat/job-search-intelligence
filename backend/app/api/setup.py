@@ -4,8 +4,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from app.api.dependencies import get_email_connection_repository
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.config import AppSettings, get_settings
+from app.db.repositories.connection import EmailConnectionRepository
 from app.models import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
 from app.services.setup_status import build_setup_status
 from app.services.setup_submission import SetupSubmissionValidationError, submit_setup
@@ -16,10 +18,14 @@ router = APIRouter(prefix="/setup", tags=["setup"])
 @router.get("/status", response_model=SetupStatusResponse)
 async def setup_status(
     settings: Annotated[AppSettings, Depends(get_settings)],
+    connection_repository: Annotated[
+        EmailConnectionRepository,
+        Depends(get_email_connection_repository),
+    ],
 ) -> SetupStatusResponse:
     """Report the Phase 0 setup shell without validating or exposing secrets."""
 
-    return build_setup_status(settings)
+    return build_setup_status(settings, connection_repository)
 
 
 @router.post(

@@ -130,14 +130,9 @@ def resolve_email_sync_connection(settings: AppSettings) -> EmailConnection | No
         return None
 
     with sqlite3.connect(database_path) as sqlite_connection:
-        try:
-            return EmailConnectionRepository(sqlite_connection).fetch_default_connection_metadata(
-                settings.email_provider,
-            )
-        except sqlite3.OperationalError as error:
-            if "no such table: email_connections" in str(error):
-                return None
-            raise
+        return EmailConnectionRepository(sqlite_connection).fetch_default_connection_metadata(
+            settings.email_provider,
+        )
 
 
 def get_email_sync_connection_resolver(

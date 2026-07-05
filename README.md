@@ -26,8 +26,8 @@ The repository currently contains planning documents, the Phase 0 scaffold, Gmai
 [JT-056 2026-07-05] Gmail OAuth callback handling now exchanges authorization codes, validates `gmail.readonly`, stores token material through the configured `SecretStore`, persists non-secret `email_connections` metadata, and returns only connection metadata.
 [JT-062 2026-07-05] Gmail retained-body fetching now exists behind the provider seam for caller-selected refs; manual sync stores broad candidate retained bodies after metadata persistence; product pages and remaining backend pieces fill in over subsequent Phase 1 tickets.
 Phase 0 (Groundwork) with early Phase 1 ingestion service slices.
-The frontend shell keeps the root overview page intact, adds a `/setup` first-run setup page shell with primary navigation, disabled setup actions, setup checklist, provider and classification mode copy, Gmail read-only boundary copy, privacy copy, and explicit not-ready states until later backend persistence, OAuth, metric, insight, citation, and model-call behavior land.
-[JT-020 2026-07-05 v2] Concrete Gmail provider behavior, product pages, and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
+The frontend shell keeps the root overview page intact, adds a `/setup` first-run setup page with primary navigation, setup checklist, provider and classification mode copy, Gmail read-only boundary copy, privacy copy, a backend-backed Gmail OAuth start action, callback status from setup status, and explicit not-ready states until later setup persistence, metric, insight, citation, and model-call behavior land.
+[JT-020 2026-07-05 v2] Concrete Gmail provider behavior, dashboard, insights, chat, and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
 [JT-073 2026-07-05 v1] Manual sync routes now orchestrate metadata sync through `EmailSyncService`, persist metadata-only raw-email rows without downgrading retained bodies, store broad candidate retained bodies when supported, store running and last-run status, and return typed not-configured responses when no Gmail connection is configured.
 [JT-074 2026-07-05] Manual sync now resolves the latest non-reauth Gmail connection metadata from local SQLite, while product pages and remaining backend pieces fill in over subsequent Phase 1 tickets.
 [JT-067 2026-07-05] Default sync now resolves the latest non-reauth Gmail connection, runs resumable full backfill until `email_backfill_state` is completed and an incremental cursor is promoted, and then uses incremental sync on later runs.
@@ -185,7 +185,7 @@ uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 Current backend endpoints include `GET /health`, `GET /setup/status`, `POST /setup`, `GET|PUT /config/providers`, `GET /auth/gmail`, `GET /auth/gmail/callback`, `POST /sync`, `GET /sync/status`, and `POST /local-data/wipe`.
 The health endpoint returns `{"status":"ok"}`.
-The setup status endpoint returns typed first-run readiness fields without reading or returning secrets.
+The setup status endpoint returns typed first-run readiness fields, derives `gmail_connected` from the latest non-reauth Gmail connection metadata when available, and never returns secrets.
 The Gmail auth-start endpoint returns a provider-built Google authorization URL for `gmail.readonly` and maps missing, unreadable, or invalid client config files to typed `400` errors.
 The Gmail callback endpoint validates state, exchanges the code through the Gmail provider, validates the returned `gmail.readonly` scope, stores token material through `SecretStore`, persists `email_connections` metadata, and maps provider failures to typed public-safe errors.
 Gmail metadata listing and retained-body fetching automatically refresh expired stored credentials before calling Gmail, without returning raw token values.
@@ -213,7 +213,7 @@ npm run dev
 ```
 
 Vite serves the Phase 0 frontend shell locally, usually at `http://127.0.0.1:5173/`.
-The setup shell is available at `http://127.0.0.1:5173/setup`.
+The setup page is available at `http://127.0.0.1:5173/setup` and can start the read-only Gmail OAuth flow when the backend is running.
 The empty dashboard page shell is available at `http://127.0.0.1:5173/dashboard`.
 The static chat page shell is available at `http://127.0.0.1:5173/chat`, with streaming chat, persisted history, retrieval, provider calls, and backend chat endpoints deferred to Phase 5.
 Keep the backend running separately on `127.0.0.1:8000` when testing API-backed flows.
@@ -304,6 +304,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Gmail message listing test: `uv run pytest tests/test_gmail_message_listing.py -v` from `backend/` verifies Gmail full-backfill pagination, incremental history listing, full-backfill history cursor anchoring, expired history cursor mapping, SecretStore token access, metadata-only Gmail partial responses, metadata field normalization, public-safe provider errors with stable codes and user actions, empty pages, and the 500-message page-size limit.
   [JT-066 2026-07-05 v2] - Gmail message listing test also verifies final-page profile `historyId` cursor production.
 - Secret store test: `uv run pytest tests/test_keyring_secret_store.py -v` from `backend/` verifies the default keyring-backed `SecretStore` adapter, sanitized backend failures, idempotent deletion, and factory behavior for configured backends.
+- Setup status test: `uv run pytest tests/test_setup_status.py -v` from `backend/` verifies setup status reports persisted non-reauth Gmail connection metadata without exposing secrets and stays disconnected before `email_connections` exists.
 - Local backend overrides: copy `backend/.env.example` to `backend/.env` only when local settings are needed; `.env` files are ignored and must not contain secrets.
 - Current backend health check: `GET /health` returns `{"status": "ok"}`.
 - Current setup shell: `GET /setup/status` returns typed first-run setup readiness fields without reading or returning secrets, and `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns `{"status":"accepted",...}` without running provider auth flows or persisting secrets.
@@ -323,7 +324,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Current TypeScript API client generation: run `npm run generate:api` from `frontend/` to regenerate `src/api/openapi.json` through the backend script and then generate the Orval fetch client at `src/api/generated.ts`.
 - Frontend API contract check: `npm run check` includes `check:api` so stale generated API artifacts fail before typecheck, lint, and build.
 - Current backend type check: `uv run mypy` from `backend/`.
-- Current frontend setup page shell: `frontend/src/pages/SetupPage.tsx` renders the `/setup` Phase 0 shell with disabled setup actions, setup checklist, provider, classification mode, Gmail read-only OAuth, privacy-boundary, and not-ready copy while real setup persistence, secrets, and OAuth flows remain later work.
+- Current frontend setup page shell: `frontend/src/pages/SetupPage.tsx` renders the `/setup` Phase 0 shell with setup checklist, provider, classification mode, Gmail read-only OAuth, privacy-boundary, setup status loading, a Gmail OAuth start action, a `Continue to Google` link, callback-complete status, and not-ready copy while real setup persistence and secret editing remain later work.
 - Current frontend setup copy: `frontend/src/setupWizardCopy.ts` defines the Phase 0 card copy that the setup page shell renders for LLM provider, classification mode, Gmail read-only OAuth, and privacy-boundary choices while the full wizard flow is still scaffolded.
 - Current frontend dashboard shell: `/dashboard` renders `frontend/src/pages/DashboardPage.tsx` with placeholder filter and metrics regions, and it explicitly waits for deterministic metrics endpoints before showing counts.
 - Setup copy smoke test: `uv run pytest tests/test_setup_wizard_copy.py -v` from `backend/` verifies the static copy keeps the required provider, mode, Gmail, `SecretStore`, and privacy terms visible.
@@ -343,6 +344,7 @@ The first Alembic schema revision creates `email_sync_state`; run `uv run alembi
 - Frontend TypeScript check: `npm run typecheck` from `frontend/`.
 - Frontend lint check: `npm run lint` from `frontend/`.
 - Frontend unit tests: `npm run test` from `frontend/` runs Vitest with jsdom for component behavior such as UI primitive accessibility contracts and the accessible `/dashboard` shell.
+- Setup page unit tests in `frontend/src/App.test.tsx` verify Gmail OAuth start, the read-only authorization link, and callback-complete status rendering.
 - Current frontend route-query helper: `frontend/src/lib/routeQuery.ts` parses, serializes, and patches URL query strings for URL-backed filter state.
 - Current frontend chat shell: `/chat` renders `frontend/src/pages/Chat.tsx` with disabled composer copy that reserves the page entry point without implementing streaming, history, retrieval, provider calls, or backend chat behavior.
 - Frontend Playwright browser install: run `npx playwright install chromium` from `frontend/` once per machine before the browser smoke suite.
