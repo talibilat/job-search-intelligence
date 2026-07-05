@@ -256,6 +256,7 @@ class ClassificationReprocessingPlan(ClassificationReprocessingStats):
     classification_mode: ClassificationMode
     llm_provider: LLMProviderName
     target_model: str = Field(min_length=1)
+    target_model_configured: bool
     target_prompt_version: str = Field(min_length=1)
     should_reprocess: bool
     selection_policy: str = Field(min_length=1)

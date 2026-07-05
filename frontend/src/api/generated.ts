@@ -139,6 +139,7 @@ export interface ClassificationReprocessingPlan {
   stale_prompt_version_count: number;
   /** @minLength 1 */
   target_model: string;
+  target_model_configured: boolean;
   /** @minLength 1 */
   target_prompt_version: string;
   /** @minimum 0 */

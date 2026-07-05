@@ -239,6 +239,10 @@
             "title": "Target Model",
             "type": "string"
           },
+          "target_model_configured": {
+            "title": "Target Model Configured",
+            "type": "boolean"
+          },
           "target_prompt_version": {
             "minLength": 1,
             "title": "Target Prompt Version",
@@ -266,6 +270,7 @@
           "classification_mode",
           "llm_provider",
           "target_model",
+          "target_model_configured",
           "target_prompt_version",
           "should_reprocess",
           "selection_policy"

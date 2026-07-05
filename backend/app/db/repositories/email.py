@@ -224,14 +224,20 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
     ) -> ClassificationReprocessingStats:
         """Partition retained candidates by their stored classification version."""
 
-        if not self._table_exists("raw_emails") or not self._table_exists("email_classifications"):
+        if not self._table_exists("raw_emails"):
+            return _empty_classification_reprocessing_stats()
+
+        if not self._table_exists("email_classifications"):
+            unclassified_count = self._count_retained_classification_candidates(
+                provider=provider,
+            )
             return ClassificationReprocessingStats(
-                retained_candidate_count=0,
+                retained_candidate_count=unclassified_count,
                 up_to_date_count=0,
-                unclassified_count=0,
+                unclassified_count=unclassified_count,
                 stale_model_count=0,
                 stale_prompt_version_count=0,
-                reprocess_count=0,
+                reprocess_count=unclassified_count,
             )
 
         row = self.execute(
@@ -277,14 +283,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             ),
         ).fetchone()
         if row is None:
-            return ClassificationReprocessingStats(
-                retained_candidate_count=0,
-                up_to_date_count=0,
-                unclassified_count=0,
-                stale_model_count=0,
-                stale_prompt_version_count=0,
-                reprocess_count=0,
-            )
+            return _empty_classification_reprocessing_stats()
 
         unclassified_count = int(row["unclassified_count"])
         stale_model_count = int(row["stale_model_count"])
@@ -299,6 +298,25 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                 unclassified_count + stale_model_count + stale_prompt_version_count
             ),
         )
+
+    def _count_retained_classification_candidates(
+        self,
+        *,
+        provider: EmailProviderName,
+    ) -> int:
+        row = self.execute(
+            """
+            SELECT COUNT(*) AS retained_candidate_count
+            FROM raw_emails
+            WHERE provider = ?
+                AND body_retention_state = ?
+                AND body_text IS NOT NULL
+            """,
+            (provider.value, RawEmailBodyRetentionState.RETAINED.value),
+        ).fetchone()
+        if row is None:
+            return 0
+        return int(row["retained_candidate_count"])
 
     def list_raw_email_ids(self, *, provider: EmailProviderName) -> list[str]:
         rows = self.execute(
@@ -342,3 +360,14 @@ def _format_datetime(value: datetime | None) -> str | None:
 
 def _format_json_array(values: tuple[str, ...]) -> str:
     return json.dumps(list(values), separators=(",", ":"))
+
+
+def _empty_classification_reprocessing_stats() -> ClassificationReprocessingStats:
+    return ClassificationReprocessingStats(
+        retained_candidate_count=0,
+        up_to_date_count=0,
+        unclassified_count=0,
+        stale_model_count=0,
+        stale_prompt_version_count=0,
+        reprocess_count=0,
+    )

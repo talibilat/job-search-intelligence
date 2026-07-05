@@ -61,6 +61,7 @@ def test_get_classification_reprocessing_plan_partitions_target_version_candidat
         "classification_mode": "hybrid",
         "llm_provider": "azure_openai",
         "target_model": "gpt-4o-mini",
+        "target_model_configured": True,
         "target_prompt_version": "v2",
         "retained_candidate_count": 4,
         "up_to_date_count": 1,
@@ -105,6 +106,32 @@ def test_get_classification_reprocessing_plan_marks_current_rows_unchanged(
     assert response.json()["should_reprocess"] is False
 
 
+def test_get_classification_reprocessing_plan_marks_missing_target_model_not_runnable(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_raw_email_table(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, "unclassified", body_text="needs first classification")
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        azure_openai_chat_deployment="",
+    )
+    client = TestClient(app)
+
+    response = client.get("/classification/reprocessing-plan")
+
+    assert response.status_code == 200
+    assert response.json()["target_model"] == "unconfigured"
+    assert response.json()["target_model_configured"] is False
+    assert response.json()["reprocess_count"] == 1
+    assert response.json()["should_reprocess"] is False
+
+
 def test_get_classification_reprocessing_plan_does_not_create_missing_database(
     tmp_path: Path,
 ) -> None:
@@ -126,7 +153,49 @@ def test_get_classification_reprocessing_plan_does_not_create_missing_database(
     assert not database_path.parent.exists()
 
 
+def test_get_classification_reprocessing_plan_treats_missing_classification_table_as_unclassified(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_raw_email_table(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, "unclassified", body_text="needs first classification")
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get("/classification/reprocessing-plan")
+
+    assert response.status_code == 200
+    assert response.json()["retained_candidate_count"] == 1
+    assert response.json()["unclassified_count"] == 1
+    assert response.json()["reprocess_count"] == 1
+    assert response.json()["should_reprocess"] is True
+
+
 def create_classification_tables(database_path: Path) -> None:
+    create_raw_email_table(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE email_classifications (
+                email_id TEXT PRIMARY KEY,
+                is_job_related INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                model TEXT NOT NULL,
+                prompt_version TEXT NOT NULL,
+                classified_at TEXT NOT NULL
+            )
+            """,
+        )
+
+
+def create_raw_email_table(database_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
         connection.execute(
             """
@@ -142,19 +211,6 @@ def create_classification_tables(database_path: Path) -> None:
                 labels TEXT NOT NULL,
                 provider TEXT NOT NULL,
                 ingested_at TEXT NOT NULL
-            )
-            """,
-        )
-        connection.execute(
-            """
-            CREATE TABLE email_classifications (
-                email_id TEXT PRIMARY KEY,
-                is_job_related INTEGER NOT NULL,
-                category TEXT NOT NULL,
-                confidence REAL NOT NULL,
-                model TEXT NOT NULL,
-                prompt_version TEXT NOT NULL,
-                classified_at TEXT NOT NULL
             )
             """,
         )
