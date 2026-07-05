@@ -312,6 +312,14 @@ def _token_usage(response: OllamaChatResponse) -> LLMTokenUsage | None:
     )
 
 
+def _health_status(
+    checks: tuple[LLMModelHealthCheck, ...],
+) -> LLMModelHealthStatus:
+    if any(check.status is LLMModelHealthStatus.UNAVAILABLE for check in checks):
+        return LLMModelHealthStatus.UNAVAILABLE
+    return LLMModelHealthStatus.AVAILABLE
+
+
 def _is_unavailable_status(status_code: int | None) -> bool:
     return status_code is None or status_code in {408, 429, 500, 502, 503, 504}
 
