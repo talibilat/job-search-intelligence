@@ -113,6 +113,7 @@ job-search-intelligence/
 [JT-069 2026-07-05 v2] `backend/app/db/repositories/` now includes `SyncStateRepository` for provider-owned sync anchors.
 [JT-066 2026-07-05 v2] `backend/app/db/repositories/` now includes `BackfillStateRepository` for durable full-backfill page progress.
 [JT-096 2026-07-05] `backend/app/db/repositories/` now includes `ClassificationRunRepository` for completed-run token and estimated-cost accounting.
+[JT-094 2026-07-05] `backend/app/services/structured_extraction.py` now owns the Phase 2 structured extraction batch flow from retained candidates through LLM calls, accepted classification storage, public-safe malformed results, and classification-run accounting.
 
 ---
 
@@ -190,7 +191,7 @@ EmailProvider -> metadata-only raw_emails
       - one provider-neutral JSON-object request per retained candidate -> Pydantic model
       - prompt version embedded in the system prompt for reproducible re-runs
       - retained `EmailClassificationCandidate` inputs and provider-neutral
-        `EmailClassificationResult` outputs reject unknown fields, keep retained
+        `EmailClassificationResult`/`EmailClassificationRecord` outputs reject unknown fields, keep retained
         body text out of repr output, and require timezone-aware timestamps
       - fields: company, role, status, dates, salary, location,
         work_mode, seniority, sponsorship, tech_stack, rejection_reason
@@ -202,6 +203,9 @@ EmailProvider -> metadata-only raw_emails
         calls the configured `LLMProvider`, validates full provider generations,
         returns accepted and malformed DTOs, and aggregates token usage without
         writing classification, application, or event rows
+      - `StructuredExtractionService` stores only accepted `email_classifications`
+        rows, returns typed extraction facts for later aggregation, and records one
+        `classification_runs` accounting row per attempted batch
                  │
                  ▼
    3. aggregate.py  emails -> applications + application_events (dedup)
@@ -237,6 +241,7 @@ The classification service validates provider-neutral `LLMGenerationResponse` co
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
 Classification prompt requests are built by `app.pipeline.classify.build_classification_prompt_request`, require retained email body text, request `LLMResponseFormat.JSON_OBJECT`, use temperature `0`, and embed `CLASSIFICATION_PROMPT_VERSION` in the system prompt.
 Provider responses must pass `app.pipeline.classify.parse_classification_generation_response` before any downstream classification storage or aggregation.
+`StructuredExtractionService` lists non-empty retained candidates stale for the configured model or prompt version, calls the configured `LLMProvider`, stores only accepted classification records through `EmailRepository`, writes completed-run accounting through `ClassificationRunRepository`, and returns accepted extraction facts plus public-safe malformed results without writing applications or events.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 

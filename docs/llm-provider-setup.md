@@ -3,8 +3,8 @@
 This guide explains the values a user needs before the first-run setup wizard can configure an LLM provider.
 It maps to FR-0, FR-6, NFR-5, NFR-8, and Phase 0.
 
-The current app has a typed provider registry, setup status shell, Gmail OAuth setup action, Azure OpenAI chat-completions adapter, and a concrete local Ollama chat adapter behind `LLMProvider`.
-Classification prompts and the core classification service are implemented; Ollama embeddings and downstream classification persistence remain later provider and Phase 2 tickets.
+The current app has a typed provider registry, setup status shell, Gmail OAuth setup action, Azure OpenAI and local Ollama chat adapters behind `LLMProvider`, the classification prompt contract, and the structured extraction service.
+Embedding calls and later insight, aggregation, and chat provider use remain deferred, so this document is the setup contract for those screens and adapters.
 The current backend has the `SecretStore` protocol, backend selector settings, the default keyring adapter, and the encrypted Fernet fallback.
 
 ## Setup Principles
@@ -16,6 +16,7 @@ The current backend has the `SecretStore` protocol, backend selector settings, t
 - Keep the app local-first: Ollama keeps LLM calls on the machine, while Azure OpenAI sends only configured LLM requests to the user's Azure resource.
 - Keep LLM providers behind the configured app provider path; providers must never execute raw SQL or produce authoritative dashboard counts.
 - Classification calls use the app's provider-neutral JSON-object prompt contract and validate responses with Pydantic before any classification or extraction result is stored.
+- Structured extraction runs through `StructuredExtractionService`, which stores only accepted classification rows, records local run accounting, and returns malformed provider output as public-safe quarantine metadata.
 - Never paste API keys, OAuth tokens, Google client secrets, or raw email content into docs, tickets, commits, logs, or screenshots.
 
 ## Choosing A Provider
@@ -74,6 +75,16 @@ Before a bulk classification pass, call `GET /classification/estimate` to verify
 Before a version-controlled rerun, call `GET /classification/reprocessing-plan` to verify the selected provider has a configured target model and to see which retained candidates are unclassified, stale by model, or stale by prompt version.
 Local mode reports zero cost, while hosted modes report cost only when both pricing rates are configured.
 Hosted Azure calls should be used through the configured provider path only, never by ad hoc scripts that bypass redaction or prompt-version tracking.
+
+Classification runs also use these non-secret settings:
+
+```env
+JOBTRACKER_CLASSIFICATION_BATCH_SIZE=25
+JOBTRACKER_CLASSIFICATION_PROMPT_VERSION=v1
+```
+
+`JOBTRACKER_CLASSIFICATION_BATCH_SIZE` controls how many non-empty retained candidates one structured extraction batch attempts.
+`JOBTRACKER_CLASSIFICATION_PROMPT_VERSION` is embedded in prompts, used to select stale classifications, and stored on accepted `email_classifications` rows plus `classification_runs` accounting.
 
 Optional non-secret estimate settings are available when local heuristics or provider pricing needs to be tuned:
 
