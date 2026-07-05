@@ -21,8 +21,7 @@ def build_setup_status(
     gmail_connected = False
     if connection_reader is not None:
         gmail_connected = (
-            connection_reader.fetch_default_connection_metadata(settings.email_provider)
-            is not None
+            connection_reader.fetch_default_connection_metadata(settings.email_provider) is not None
         )
 
     return SetupStatusResponse(

@@ -177,7 +177,10 @@ export function SetupPage() {
           </p>
         </aside>
 
-        <section className="setup-gmail-card" aria-labelledby="setup-gmail-title">
+        <section
+          className="setup-gmail-card"
+          aria-labelledby="setup-gmail-title"
+        >
           <p className="eyebrow">Gmail auth</p>
           <h2 id="setup-gmail-title">Gmail callback status</h2>
           {gmailConnected ? (
@@ -208,7 +211,10 @@ export function SetupPage() {
 
           {authorization ? (
             <div className="setup-oauth-result">
-              <a className="setup-oauth-link" href={authorization.authorization_url}>
+              <a
+                className="setup-oauth-link"
+                href={authorization.authorization_url}
+              >
                 Continue to Google
               </a>
               <p>

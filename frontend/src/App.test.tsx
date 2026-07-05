@@ -103,7 +103,8 @@ describe("App", () => {
         setup_complete: false,
       },
       "/auth/gmail": {
-        authorization_url: "https://accounts.google.com/o/oauth2/v2/auth?state=issued-state",
+        authorization_url:
+          "https://accounts.google.com/o/oauth2/v2/auth?state=issued-state",
         provider: "gmail",
         requested_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
         state: "issued-state",
