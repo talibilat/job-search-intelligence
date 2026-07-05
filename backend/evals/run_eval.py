@@ -7,10 +7,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
-
 from app.pipeline.classify import AcceptedLLMExtraction, parse_llm_extraction_response
 from app.providers.llm import LLMFinishReason, LLMGenerationResponse
+from pydantic import BaseModel, Field, ValidationError
 
 MIN_PRECISION = 0.90
 MIN_RECALL = 0.85
