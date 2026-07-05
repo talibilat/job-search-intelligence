@@ -12,11 +12,26 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.providers.email.provider import (
+    EmailProviderAuthError,
+    EmailProviderError,
+    EmailProviderErrorCode,
+    EmailProviderTransientError,
+    EmailSyncCursorExpiredError,
+)
+
 
 class ApiErrorCode(StrEnum):
     BAD_GATEWAY = "bad_gateway"
     BAD_REQUEST = "bad_request"
     CONFLICT = "conflict"
+    EMAIL_AUTHORIZATION_REQUIRED = "email_authorization_required"
+    EMAIL_INSUFFICIENT_SCOPE = "email_insufficient_scope"
+    EMAIL_INVALID_PROVIDER_RESPONSE = "email_invalid_provider_response"
+    EMAIL_PROVIDER_REQUEST_FAILED = "email_provider_request_failed"
+    EMAIL_RATE_LIMITED = "email_rate_limited"
+    EMAIL_SYNC_CURSOR_EXPIRED = "email_sync_cursor_expired"
+    EMAIL_TEMPORARILY_UNAVAILABLE = "email_temporarily_unavailable"
     FORBIDDEN = "forbidden"
     HTTP_ERROR = "http_error"
     INTERNAL_ERROR = "internal_error"
@@ -82,6 +97,16 @@ _HTTP_STATUS_MESSAGES: Final[dict[int, str]] = {
     503: "Service unavailable.",
 }
 
+_EMAIL_PROVIDER_ERROR_CODES: Final[dict[EmailProviderErrorCode, ApiErrorCode]] = {
+    EmailProviderErrorCode.AUTHORIZATION_REQUIRED: ApiErrorCode.EMAIL_AUTHORIZATION_REQUIRED,
+    EmailProviderErrorCode.INSUFFICIENT_SCOPE: ApiErrorCode.EMAIL_INSUFFICIENT_SCOPE,
+    EmailProviderErrorCode.INVALID_PROVIDER_RESPONSE: ApiErrorCode.EMAIL_INVALID_PROVIDER_RESPONSE,
+    EmailProviderErrorCode.PROVIDER_REQUEST_FAILED: ApiErrorCode.EMAIL_PROVIDER_REQUEST_FAILED,
+    EmailProviderErrorCode.RATE_LIMITED: ApiErrorCode.EMAIL_RATE_LIMITED,
+    EmailProviderErrorCode.SYNC_CURSOR_EXPIRED: ApiErrorCode.EMAIL_SYNC_CURSOR_EXPIRED,
+    EmailProviderErrorCode.TEMPORARILY_UNAVAILABLE: ApiErrorCode.EMAIL_TEMPORARILY_UNAVAILABLE,
+}
+
 
 def _error_response(
     *,
@@ -136,6 +161,27 @@ def _http_error_message(exception: StarletteHTTPException) -> str:
     if exception.status_code in _HTTP_STATUS_MESSAGES:
         return _HTTP_STATUS_MESSAGES[exception.status_code]
     return "HTTP error."
+
+
+def _email_provider_status_code(exception: EmailProviderError) -> int:
+    if isinstance(exception, EmailProviderAuthError):
+        if exception.error_code is EmailProviderErrorCode.INSUFFICIENT_SCOPE:
+            return 403
+        return 401
+    if isinstance(exception, EmailProviderTransientError):
+        if exception.error_code is EmailProviderErrorCode.RATE_LIMITED:
+            return 429
+        return 503
+    if isinstance(exception, EmailSyncCursorExpiredError):
+        return 409
+    return 502
+
+
+def _email_provider_error_code(exception: EmailProviderError) -> ApiErrorCode:
+    return _EMAIL_PROVIDER_ERROR_CODES.get(
+        exception.error_code,
+        ApiErrorCode.EMAIL_PROVIDER_REQUEST_FAILED,
+    )
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -195,6 +241,30 @@ def register_exception_handlers(app: FastAPI) -> None:
             headers=exception.headers,
         )
 
+    async def email_provider_error_handler(
+        request: Request,
+        exception: Exception,
+    ) -> JSONResponse:
+        del request
+        if not isinstance(exception, EmailProviderError):
+            return _error_response(
+                status_code=500,
+                code=ApiErrorCode.INTERNAL_ERROR,
+                message="Internal server error.",
+            )
+        return _error_response(
+            status_code=_email_provider_status_code(exception),
+            code=_email_provider_error_code(exception),
+            message=exception.public_message,
+            details=(
+                ApiErrorDetail(
+                    field="email_provider",
+                    message=exception.user_action.value,
+                    type="user_action",
+                ),
+            ),
+        )
+
     async def unhandled_exception_handler(
         request: Request,
         exception: Exception,
@@ -207,6 +277,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     app.add_exception_handler(ApiError, api_error_handler)
+    app.add_exception_handler(EmailProviderError, email_provider_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

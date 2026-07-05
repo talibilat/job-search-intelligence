@@ -10,7 +10,7 @@ from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.db.repositories import EmailRepository, SyncStateRepository
 from app.db.sqlite_url import sqlite_database_path
-from app.providers.email import EmailConnection, EmailProvider, EmailProviderError
+from app.providers.email import EmailConnection, EmailProvider
 from app.providers.email.gmail import GmailEmailProvider
 from app.services.sync_service import (
     EmailSyncRunState,
@@ -118,7 +118,15 @@ def get_email_sync_runtime(
 @router.post(
     "",
     response_model=EmailSyncStatus,
-    responses={400: {"model": ApiErrorResponse}, 409: {"model": ApiErrorResponse}},
+    responses={
+        400: {"model": ApiErrorResponse},
+        401: {"model": ApiErrorResponse},
+        403: {"model": ApiErrorResponse},
+        409: {"model": ApiErrorResponse},
+        429: {"model": ApiErrorResponse},
+        502: {"model": ApiErrorResponse},
+        503: {"model": ApiErrorResponse},
+    },
 )
 async def sync_now(
     sync_runtime: Annotated[EmailSyncRuntime, Depends(get_email_sync_runtime)],
@@ -136,12 +144,6 @@ async def sync_now(
             status_code=409,
             code=ApiErrorCode.CONFLICT,
             message=str(error),
-        ) from error
-    except EmailProviderError as error:
-        raise ApiError(
-            status_code=400,
-            code=ApiErrorCode.BAD_REQUEST,
-            message=error.public_message,
         ) from error
 
 

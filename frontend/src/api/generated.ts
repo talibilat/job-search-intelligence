@@ -10,6 +10,13 @@ export const ApiErrorCode = {
   bad_gateway: "bad_gateway",
   bad_request: "bad_request",
   conflict: "conflict",
+  email_authorization_required: "email_authorization_required",
+  email_insufficient_scope: "email_insufficient_scope",
+  email_invalid_provider_response: "email_invalid_provider_response",
+  email_provider_request_failed: "email_provider_request_failed",
+  email_rate_limited: "email_rate_limited",
+  email_sync_cursor_expired: "email_sync_cursor_expired",
+  email_temporarily_unavailable: "email_temporarily_unavailable",
   forbidden: "forbidden",
   http_error: "http_error",
   internal_error: "internal_error",
@@ -324,66 +331,6 @@ export interface SetupSubmitResponse {
   llm_provider: LLMProviderName;
   setup_complete: boolean;
   status: "accepted";
-}
-
-/**
- * Deterministic counters reported by sync status.
- */
-export interface SyncJobCounts {
-  /** @minimum 0 */
-  errors?: number;
-  /** @minimum 0 */
-  metadata_messages?: number;
-  /** @minimum 0 */
-  metadata_pages?: number;
-  /** @minimum 0 */
-  raw_emails_written?: number;
-  /** @minimum 0 */
-  retained_bodies?: number;
-}
-
-/**
- * Public-safe sync error summary without provider payloads or email content.
- */
-export interface SyncJobError {
-  /** @minLength 1 */
-  message: string;
-  occurred_at: string;
-}
-
-/**
- * Public-safe phase for the current local email sync job.
- */
-export type SyncJobPhase = (typeof SyncJobPhase)[keyof typeof SyncJobPhase];
-
-export const SyncJobPhase = {
-  idle: "idle",
-  queued: "queued",
-  metadata_sync: "metadata_sync",
-  body_retention: "body_retention",
-  reconciling: "reconciling",
-  completed: "completed",
-  failed: "failed",
-} as const;
-
-/**
- * Current sync job state for the `/sync/status` API boundary.
- */
-export interface SyncJobStatus {
-  account_id?: string | null;
-  completed_at?: string | null;
-  counts: SyncJobCounts;
-  errors?: SyncJobError[];
-  last_run_at?: string | null;
-  phase: SyncJobPhase;
-  /**
-   * @minimum 0
-   * @maximum 1
-   */
-  progress: number;
-  provider?: EmailProviderName | null;
-  started_at?: string | null;
-  updated_at: string;
 }
 
 export const WipeDataRequestValue = {
@@ -831,16 +778,47 @@ export type syncNowSyncPostResponse400 = {
   status: 400;
 };
 
+export type syncNowSyncPostResponse401 = {
+  data: ApiErrorResponse;
+  status: 401;
+};
+
+export type syncNowSyncPostResponse403 = {
+  data: ApiErrorResponse;
+  status: 403;
+};
+
 export type syncNowSyncPostResponse409 = {
   data: ApiErrorResponse;
   status: 409;
+};
+
+export type syncNowSyncPostResponse429 = {
+  data: ApiErrorResponse;
+  status: 429;
+};
+
+export type syncNowSyncPostResponse502 = {
+  data: ApiErrorResponse;
+  status: 502;
+};
+
+export type syncNowSyncPostResponse503 = {
+  data: ApiErrorResponse;
+  status: 503;
 };
 
 export type syncNowSyncPostResponseSuccess = syncNowSyncPostResponse200 & {
   headers: Headers;
 };
 export type syncNowSyncPostResponseError = (
-  syncNowSyncPostResponse400 | syncNowSyncPostResponse409
+  | syncNowSyncPostResponse400
+  | syncNowSyncPostResponse401
+  | syncNowSyncPostResponse403
+  | syncNowSyncPostResponse409
+  | syncNowSyncPostResponse429
+  | syncNowSyncPostResponse502
+  | syncNowSyncPostResponse503
 ) & {
   headers: Headers;
 };
@@ -874,7 +852,7 @@ export const syncNowSyncPost = async (
 };
 
 export type syncStatusSyncStatusGetResponse200 = {
-  data: SyncJobStatus;
+  data: EmailSyncStatus;
   status: 200;
 };
 
