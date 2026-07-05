@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 
+import pytest
 from app import models
 from app.db import repositories
 from app.db.repositories.base import BaseRepository
@@ -14,6 +15,7 @@ from app.models import (
     InsightRecord,
     RawEmailRecord,
 )
+from pydantic import ValidationError
 
 
 def test_repository_package_exports_phase_zero_stubs() -> None:
@@ -40,6 +42,7 @@ def test_model_package_exports_repository_record_dtos() -> None:
         "InsightRecord",
         "ApplicationCorrectionRecord",
         "ChatMessageRecord",
+        "RawEmailBodyRetentionState",
     ]
 
     for name in expected_model_names:
@@ -69,8 +72,96 @@ def test_email_repository_maps_raw_email_rows() -> None:
 
     assert isinstance(record, RawEmailRecord)
     assert record.id == "email-1"
+    assert record.body_retention_state is models.RawEmailBodyRetentionState.RETAINED
     assert record.labels == ["Inbox", "Job"]
     assert isinstance(record.sent_at, datetime)
+
+
+def test_raw_email_record_tracks_retention_states() -> None:
+    retention_state = models.RawEmailBodyRetentionState
+    base_data = {
+        "id": "email-1",
+        "thread_id": "thread-1",
+        "from_addr": "sender@example.com",
+        "to_addr": "me@example.com",
+        "subject": "Application received",
+        "sent_at": "2026-07-04T10:00:00+00:00",
+        "labels": ["Inbox", "Job"],
+        "provider": "gmail",
+        "ingested_at": "2026-07-04T10:05:00+00:00",
+    }
+
+    metadata_only = RawEmailRecord.model_validate(
+        base_data
+        | {
+            "body_text": None,
+            "body_retention_state": retention_state.METADATA_ONLY,
+        }
+    )
+    retained = RawEmailRecord.model_validate(
+        base_data
+        | {
+            "body_text": "Thanks for applying.",
+            "body_retention_state": retention_state.RETAINED,
+        }
+    )
+    debugging = RawEmailRecord.model_validate(
+        base_data
+        | {
+            "body_text": "Debugging body retained for reconciliation.",
+            "body_retention_state": retention_state.DEBUGGING,
+        }
+    )
+
+    assert metadata_only.body_retention_state is retention_state.METADATA_ONLY
+    assert retained.body_retention_state is retention_state.RETAINED
+    assert debugging.body_retention_state is retention_state.DEBUGGING
+    assert retained.has_retained_body is True
+    assert debugging.has_retained_body is True
+    assert metadata_only.has_retained_body is False
+    assert "Debugging body retained" not in repr(debugging)
+
+
+def test_raw_email_record_rejects_inconsistent_retention_state() -> None:
+    retention_state = models.RawEmailBodyRetentionState
+    base_data = {
+        "id": "email-1",
+        "thread_id": "thread-1",
+        "from_addr": "sender@example.com",
+        "to_addr": "me@example.com",
+        "subject": "Application received",
+        "sent_at": "2026-07-04T10:00:00+00:00",
+        "labels": ["Inbox", "Job"],
+        "provider": "gmail",
+        "ingested_at": "2026-07-04T10:05:00+00:00",
+    }
+
+    with pytest.raises(ValidationError, match="metadata-only raw emails cannot retain body_text"):
+        RawEmailRecord.model_validate(
+            base_data
+            | {
+                "body_text": "Thanks for applying.",
+                "body_retention_state": retention_state.METADATA_ONLY,
+            }
+        )
+
+    with pytest.raises(ValidationError, match="retained raw emails must include body_text"):
+        RawEmailRecord.model_validate(
+            base_data
+            | {
+                "body_text": None,
+                "body_retention_state": retention_state.RETAINED,
+            }
+        )
+
+    with pytest.raises(ValidationError):
+        RawEmailRecord.model_validate(
+            base_data
+            | {
+                "body_text": None,
+                "body_retention_state": "omitted",
+            }
+        )
 
 
 def test_application_repository_maps_application_rows() -> None:

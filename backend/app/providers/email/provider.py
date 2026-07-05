@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
 from app.security import SecretRef
@@ -13,6 +13,10 @@ from app.security import SecretRef
 class EmailSyncMode(StrEnum):
     FULL_BACKFILL = "full_backfill"
     INCREMENTAL = "incremental"
+
+
+class EmailCandidateQueryStrategy(StrEnum):
+    BROAD_JOB_SEARCH = "broad_job_search"
 
 
 class EmailAttachmentPolicy(StrEnum):
@@ -120,15 +124,119 @@ class EmailProviderCursor(BaseModel):
     issued_at: datetime
 
 
+class EmailCandidateQuery(BaseModel):
+    """Provider-neutral metadata signals for selecting body-retention candidates.
+
+    Candidate queries run over normalized metadata after provider listing
+    instead of becoming provider-specific search filters.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    strategy: EmailCandidateQueryStrategy
+    sender_domain_terms: tuple[str, ...] = ()
+    keyword_terms: tuple[str, ...] = ()
+    excluded_label_terms: tuple[str, ...] = ()
+
+    @field_validator("sender_domain_terms", "keyword_terms", "excluded_label_terms")
+    @classmethod
+    def normalize_terms(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        normalized = tuple(term.strip().lower() for term in value)
+        if any(not term for term in normalized):
+            msg = "candidate query terms must not be blank"
+            raise ValueError(msg)
+        return tuple(dict.fromkeys(normalized))
+
+    @model_validator(mode="after")
+    def validate_at_least_one_positive_signal(self) -> EmailCandidateQuery:
+        if not self.sender_domain_terms and not self.keyword_terms:
+            msg = "candidate query requires at least one sender domain or keyword signal"
+            raise ValueError(msg)
+        return self
+
+    def matches_metadata(self, metadata: EmailMessageMetadata) -> bool:
+        normalized_labels = {label.strip().lower() for label in metadata.labels}
+        if normalized_labels.intersection(self.excluded_label_terms):
+            return False
+        return self._matches_sender_domain(metadata) or self._matches_subject_keyword(metadata)
+
+    def _matches_sender_domain(self, metadata: EmailMessageMetadata) -> bool:
+        if metadata.from_addr is None:
+            return False
+        _local_part, separator, domain = metadata.from_addr.address.strip().lower().rpartition("@")
+        if not separator or not domain:
+            return False
+        domain = domain.strip(">")
+        return any(
+            domain == term or domain.endswith(f".{term}") for term in self.sender_domain_terms
+        )
+
+    def _matches_subject_keyword(self, metadata: EmailMessageMetadata) -> bool:
+        subject = (metadata.subject or "").lower()
+        return any(term in subject for term in self.keyword_terms)
+
+
+def build_broad_candidate_query() -> EmailCandidateQuery:
+    """Build the default broad job-search candidate query signals.
+
+    The query contains static sender-domain, subject keyword, and excluded-label
+    terms only; it carries no snippets, body text, or private message content.
+    """
+
+    return EmailCandidateQuery(
+        strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
+        sender_domain_terms=(
+            "greenhouse.io",
+            "greenhouse-mail.io",
+            "lever.co",
+            "jobs.lever.co",
+            "ashbyhq.com",
+            "myworkday.com",
+            "workday.com",
+            "icims.com",
+            "workable.com",
+            "workablemail.com",
+            "smartrecruiters.com",
+            "jobvite.com",
+            "bamboohr.com",
+            "recruitee.com",
+            "teamtailor.com",
+            "eightfold.ai",
+        ),
+        keyword_terms=(
+            "application",
+            "applied",
+            "thank you for applying",
+            "we received your application",
+            "candidate",
+            "recruiter",
+            "interview",
+            "next steps",
+            "assessment",
+            "take-home",
+            "unfortunately",
+            "regret to inform",
+            "moving forward with other candidates",
+            "offer",
+            "congratulations",
+            "job opportunity",
+            "position",
+            "role",
+        ),
+        excluded_label_terms=("spam", "trash", "chats"),
+    )
+
+
 class EmailMetadataListRequest(BaseModel):
     """Request one provider-normalized metadata page.
 
     `page_token` continues pagination within the current listing run.
     `sync_cursor` is provider-owned incremental state and is required only for
     incremental sync.
+    Candidate filters are intentionally excluded from provider listing requests.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     mode: EmailSyncMode
     page_size: int = Field(ge=1)

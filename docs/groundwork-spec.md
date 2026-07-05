@@ -58,12 +58,12 @@ job-search-intelligence/
 │   │   ├── main.py                 # FastAPI app factory, router registration
 │   │   ├── config.py               # pydantic-settings, provider selection, env overrides
 │   │   ├── db/
-│   │   │   ├── engine.py           # SQLite engine and connection PRAGMAs
+│   │   │   ├── engine.py           # SQLite engine, sqlite-vec loading, and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
 │   │   │   └── repositories/       # EmailRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
-│   │   │   ├── email/              # EmailProvider protocol + future gmail.py/outlook.py/imap.py
+│   │   │   ├── email/              # EmailProvider protocol + gmail.py skeleton + future outlook.py/imap.py
 │   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
@@ -117,6 +117,7 @@ job-search-intelligence/
 ### Tables
 
 - **`raw_emails`** - `id` (provider msg id), `thread_id`, `from_addr`, `to_addr`, `subject`, `sent_at`, `body_text`, `body_retention_state`, `labels`, `provider`, `ingested_at`.
+  `body_retention_state` is `metadata_only`, `retained`, or `debugging`; metadata-only rows must not carry `body_text`, while retained and debugging rows must carry it.
 - **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
@@ -144,9 +145,12 @@ EmailProvider -> metadata-only raw_emails
                  ├─ incremental sync: provider-owned cursor required
                  ├─ expired cursor: restart resumable full metadata reconciliation
                  └─ retained bodies fetched only for selected candidate/reconciliation refs
+                 └─ candidate query applied after listing; retained bodies fetched only for selected candidate/reconciliation refs
+                 └─ retained bodies fetched only for selected candidate or debugging/reconciliation refs
                  │
                  ▼
    1. filter.py  heuristic pre-filter        (40k metadata rows -> retained candidates)
+     - provider-neutral `EmailCandidateQuery` static signals for broad job-search selection
      - known ATS/recruiter sender domains (greenhouse, lever, workday,
        ashby, icims, workable, smartrecruiters, myworkday, ...)
      - keyword signals ("application", "unfortunately", "interview",
@@ -172,6 +176,7 @@ EmailProvider -> metadata-only raw_emails
 
 `EmailProvider` adapters own provider-specific auth, metadata normalization, pagination, opaque sync cursors, and retained-body fetching.
 The sync service coordinates one metadata page at a time, carries provider page tokens forward, and turns expired incremental cursors into resumable full metadata reconciliation so callers can persist the next page token and replacement sync cursor.
+Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, and ignores attachment content in v1.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.

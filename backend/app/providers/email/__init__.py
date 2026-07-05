@@ -1,5 +1,6 @@
-"""Email provider Strategy interface."""
+"""Email provider Strategy interface and implementations."""
 
+from .gmail import GmailEmailProvider
 from .provider import (
     EmailAccountRef,
     EmailAddress,
@@ -12,6 +13,8 @@ from .provider import (
     EmailBodyFetchFailureReason,
     EmailBodyFetchRequest,
     EmailBodySource,
+    EmailCandidateQuery,
+    EmailCandidateQueryStrategy,
     EmailConnection,
     EmailMessageBody,
     EmailMessageMetadata,
@@ -26,6 +29,7 @@ from .provider import (
     EmailProviderTransientError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
+    build_broad_candidate_query,
 )
 
 __all__ = [
@@ -40,6 +44,8 @@ __all__ = [
     "EmailBodyFetchFailureReason",
     "EmailBodyFetchRequest",
     "EmailBodySource",
+    "EmailCandidateQuery",
+    "EmailCandidateQueryStrategy",
     "EmailConnection",
     "EmailMessageBody",
     "EmailMessageMetadata",
@@ -54,4 +60,6 @@ __all__ = [
     "EmailProviderTransientError",
     "EmailSyncCursorExpiredError",
     "EmailSyncMode",
+    "build_broad_candidate_query",
+    "GmailEmailProvider",
 ]
