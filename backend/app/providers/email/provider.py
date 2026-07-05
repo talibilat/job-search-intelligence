@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
 from app.security import SecretRef
@@ -13,6 +13,10 @@ from app.security import SecretRef
 class EmailSyncMode(StrEnum):
     FULL_BACKFILL = "full_backfill"
     INCREMENTAL = "incremental"
+
+
+class EmailCandidateQueryStrategy(StrEnum):
+    BROAD_JOB_SEARCH = "broad_job_search"
 
 
 class EmailAttachmentPolicy(StrEnum):
@@ -120,6 +124,80 @@ class EmailProviderCursor(BaseModel):
     issued_at: datetime
 
 
+class EmailCandidateQuery(BaseModel):
+    """Provider-neutral static signals for finding likely job-search messages."""
+
+    model_config = ConfigDict(frozen=True)
+
+    strategy: EmailCandidateQueryStrategy
+    sender_domain_terms: tuple[str, ...] = ()
+    keyword_terms: tuple[str, ...] = ()
+    excluded_label_terms: tuple[str, ...] = ()
+
+    @field_validator("sender_domain_terms", "keyword_terms", "excluded_label_terms")
+    @classmethod
+    def normalize_terms(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        normalized = tuple(term.strip().lower() for term in value)
+        if any(not term for term in normalized):
+            msg = "candidate query terms must not be blank"
+            raise ValueError(msg)
+        return tuple(dict.fromkeys(normalized))
+
+    @model_validator(mode="after")
+    def validate_at_least_one_positive_signal(self) -> EmailCandidateQuery:
+        if not self.sender_domain_terms and not self.keyword_terms:
+            msg = "candidate query requires at least one sender domain or keyword signal"
+            raise ValueError(msg)
+        return self
+
+
+def build_broad_candidate_query() -> EmailCandidateQuery:
+    """Build the default broad job-search candidate query signals."""
+
+    return EmailCandidateQuery(
+        strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
+        sender_domain_terms=(
+            "greenhouse.io",
+            "greenhouse-mail.io",
+            "lever.co",
+            "jobs.lever.co",
+            "ashbyhq.com",
+            "myworkday.com",
+            "workday.com",
+            "icims.com",
+            "workable.com",
+            "workablemail.com",
+            "smartrecruiters.com",
+            "jobvite.com",
+            "bamboohr.com",
+            "recruitee.com",
+            "teamtailor.com",
+            "eightfold.ai",
+        ),
+        keyword_terms=(
+            "application",
+            "applied",
+            "thank you for applying",
+            "we received your application",
+            "candidate",
+            "recruiter",
+            "interview",
+            "next steps",
+            "assessment",
+            "take-home",
+            "unfortunately",
+            "regret to inform",
+            "moving forward with other candidates",
+            "offer",
+            "congratulations",
+            "job opportunity",
+            "position",
+            "role",
+        ),
+        excluded_label_terms=("spam", "trash", "chats"),
+    )
+
+
 class EmailMetadataListRequest(BaseModel):
     """Request one provider-normalized metadata page.
 
@@ -134,6 +212,7 @@ class EmailMetadataListRequest(BaseModel):
     page_size: int = Field(ge=1)
     page_token: str | None = Field(default=None, min_length=1)
     sync_cursor: EmailProviderCursor | None = None
+    candidate_query: EmailCandidateQuery | None = None
 
     @model_validator(mode="after")
     def validate_cursor_for_mode(self) -> EmailMetadataListRequest:
