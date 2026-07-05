@@ -434,7 +434,7 @@ class EmailBackfillPageResult(BaseModel):
 
 
 class EmailSyncService:
-    """Service-layer coordination for resumable provider metadata sync."""
+    """Service-layer coordination for resumable sync and retained-body storage."""
 
     def __init__(
         self,
@@ -463,7 +463,7 @@ class EmailSyncService:
         return self._status
 
     async def run_manual_sync(self, *, connection: EmailConnection) -> EmailSyncStatus:
-        """Run a manual sync using full backfill first, then incremental cursors."""
+        """Run metadata sync and retain bodies for broad job-search candidates."""
 
         if self._email_repository is None or self._sync_service is None:
             raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")

@@ -110,7 +110,7 @@ class GmailAccountProfileResponse(BaseModel):
 
 
 class GmailEmailProvider:
-    """Gmail adapter with OAuth start and optional SecretStore-backed metadata listing."""
+    """Gmail adapter with OAuth plus SecretStore-backed metadata and body reads."""
 
     name = EmailProviderName.GMAIL
 

@@ -115,6 +115,8 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         *,
         retention_state: RawEmailBodyRetentionState = RawEmailBodyRetentionState.RETAINED,
     ) -> int:
+        """Attach retained body text to existing raw-email metadata rows."""
+
         body_tuple = tuple(bodies)
         if not body_tuple:
             return 0
