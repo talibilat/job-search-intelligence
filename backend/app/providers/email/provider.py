@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, cast, runtime_checkable
@@ -283,57 +284,6 @@ class EmailCandidateQuery(BaseModel):
         return None
 
 
-def build_broad_candidate_query() -> EmailCandidateQuery:
-    """Build the default broad job-search candidate query signals.
-
-    The query contains static sender-domain, keyword, and excluded-label terms
-    only; it carries no snippets, body text, or private message content.
-    """
-
-    return EmailCandidateQuery(
-        strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
-        sender_domain_terms=(
-            "greenhouse.io",
-            "greenhouse-mail.io",
-            "lever.co",
-            "jobs.lever.co",
-            "ashbyhq.com",
-            "myworkday.com",
-            "workday.com",
-            "icims.com",
-            "workable.com",
-            "workablemail.com",
-            "smartrecruiters.com",
-            "jobvite.com",
-            "bamboohr.com",
-            "recruitee.com",
-            "teamtailor.com",
-            "eightfold.ai",
-        ),
-        keyword_terms=(
-            "application",
-            "applied",
-            "thank you for applying",
-            "we received your application",
-            "candidate",
-            "recruiter",
-            "interview",
-            "next steps",
-            "assessment",
-            "take-home",
-            "unfortunately",
-            "regret to inform",
-            "moving forward with other candidates",
-            "offer",
-            "congratulations",
-            "job opportunity",
-            "position",
-            "role",
-        ),
-        excluded_label_terms=("spam", "trash", "chats"),
-    )
-
-
 class EmailMetadataListRequest(BaseModel):
     """Request one provider-normalized metadata page.
 
@@ -601,3 +551,39 @@ class EmailProvider(Protocol):
     ) -> EmailBodyBatch:
         """Return normalized plain text for selected messages, ignoring attachments."""
         ...
+
+
+def sender_matches_domain_terms(sender_address: str | None, domain_terms: Iterable[str]) -> bool:
+    """Return whether a sender's domain equals or is below a configured domain."""
+
+    domain = _extract_sender_domain(sender_address)
+    if domain is None:
+        return False
+
+    return any(
+        domain == term or domain.endswith(f".{term}")
+        for term in _normalize_domain_terms(domain_terms)
+    )
+
+
+def _extract_sender_domain(sender_address: str | None) -> str | None:
+    if sender_address is None:
+        return None
+
+    _local_part, separator, domain = sender_address.strip().lower().rpartition("@")
+    if not separator:
+        return None
+
+    normalized_domain = domain.strip().strip("<>").strip(".")
+    if not normalized_domain or any(character.isspace() for character in normalized_domain):
+        return None
+    return normalized_domain
+
+
+def _normalize_domain_terms(domain_terms: Iterable[str]) -> tuple[str, ...]:
+    normalized_terms: list[str] = []
+    for term in domain_terms:
+        normalized = term.strip().lower().removeprefix("@").strip(".")
+        if normalized:
+            normalized_terms.append(normalized)
+    return tuple(dict.fromkeys(normalized_terms))

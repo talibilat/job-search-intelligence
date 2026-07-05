@@ -68,7 +68,7 @@ job-search-intelligence/
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
 │   │   │   ├── filter.py           # heuristic pre-filter (ATS senders, keywords)
-│   │   │   ├── classify.py         # LLM classify + structured extract
+│   │   │   ├── classify.py         # LLM classify + structured extract validation
 │   │   │   └── aggregate.py        # emails → applications + event timeline (dedup)
 │   │   ├── services/               # sync_service, metrics_service, insights_service, chat_service
 │   │   ├── scripts/                # generate_openapi.py
@@ -191,8 +191,9 @@ EmailProvider -> metadata-only raw_emails
         body text out of repr output, and require timezone-aware timestamps
       - fields: company, role, status, dates, salary, location,
         work_mode, seniority, sponsorship, tech_stack, rejection_reason
-      - malformed JSON, extra fields, invalid enums, contradictory category/status
-        pairs, inverted salary ranges, and extracted non-job data are rejected
+      - malformed JSON, duplicate JSON keys, incomplete generations, extra fields,
+        invalid enums, contradictory category/status pairs, inverted salary ranges,
+        and extracted non-job data return public-safe quarantine results before storage
       - store model + prompt_version per row (reproducible re-runs)
                  │
                  ▼
@@ -223,6 +224,7 @@ Candidate selection is represented by provider-neutral DTOs and applied to norma
 The same static keyword terms may be applied to already-normalized retained body text when a caller has it, but broad provider metadata listing and body-retention selection remain metadata-only.
 The sync runtime persists the broad job-search filter outcome and public-safe reason for every evaluated normalized metadata record in `email_filter_decisions`, keyed by raw email ID and strategy so re-runs update the same audit row.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
+The classification parser validates provider-neutral `LLMGenerationResponse` content before storage: accepted results produce an `EmailClassificationRecord` and typed extraction fields, while malformed results include only public-safe quarantine metadata and must not write `email_classifications`, `applications`, or `application_events` rows.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
 Classification prompt requests are built by `app.pipeline.classify.build_classification_prompt_request`, require retained email body text, request `LLMResponseFormat.JSON_OBJECT`, use temperature `0`, and embed `CLASSIFICATION_PROMPT_VERSION` in the system prompt.
 Provider responses must pass `app.pipeline.classify.parse_classification_prompt_output` before any downstream classification storage or aggregation.
@@ -333,7 +335,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, ch
 
 - **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** starts with the Phase 0 shell for setup copy, overview sync affordance, and dashboard empty-state coverage; later critical paths add dashboard fixture load and chat citation smoke checks as those pages exist.
-- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `uv run python -m evals.run_eval` from `backend/` validates records through the classification contract and reports classification precision/recall. Run it whenever the classify prompt, model, categories, or extraction schema changes. _This is the one thing that keeps the dashboard honest._
+- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `uv run python -m evals.run_eval` from `backend/` validates records through the classification contract and reports classification precision/recall. Run it whenever the classify prompt, model, categories, extraction schema, or parser behavior changes. _This is the one thing that keeps the dashboard honest._
 
 ---
 

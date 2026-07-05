@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from app.config import AppSettings, LLMProviderName
 from app.providers.llm.errors import (
+    LLMProviderError,
     LLMProviderRequestError,
     LLMProviderResponseError,
     LLMProviderTimeoutError,
@@ -41,6 +42,8 @@ _AZURE_OPENAI_API_KEY_REF = SecretRef(
 )
 _TRANSIENT_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
 _INVALID_RESPONSE_MESSAGE = "Azure OpenAI returned an invalid response."
+_HEALTH_CHECK_PROMPT = "Health check. Reply OK."
+_EMBEDDING_HEALTH_DETAIL = "Azure OpenAI embedding health checks are not implemented yet."
 
 
 class AzureOpenAIChatMessageResponse(BaseModel):
@@ -220,31 +223,41 @@ class AzureOpenAIProvider:
         self,
         request: LLMProviderHealthCheckRequest,
     ) -> LLMProviderHealthCheckResponse:
-        await self.generate(
-            LLMGenerationRequest(
-                messages=(
-                    LLMMessage(role=LLMMessageRole.SYSTEM, content="Health check."),
-                    LLMMessage(role=LLMMessageRole.USER, content="Reply with ok."),
-                ),
-                model=request.chat_model,
-                options=LLMGenerationOptions(temperature=0, max_output_tokens=4),
-            )
+        chat_check = await self._chat_health_check(request.chat_model)
+        embedding_check = LLMModelHealthCheck(
+            kind=LLMModelKind.EMBEDDING,
+            model=request.embedding_model,
+            status=LLMModelHealthStatus.UNAVAILABLE,
+            detail=_EMBEDDING_HEALTH_DETAIL,
         )
         return LLMProviderHealthCheckResponse(
             provider_name=self.provider_name,
+            status=_health_status((chat_check, embedding_check)),
+            checks=(chat_check, embedding_check),
+        )
+
+    async def _chat_health_check(self, model: str) -> LLMModelHealthCheck:
+        try:
+            await self.generate(
+                LLMGenerationRequest(
+                    messages=(
+                        LLMMessage(role=LLMMessageRole.USER, content=_HEALTH_CHECK_PROMPT),
+                    ),
+                    model=model,
+                    options=LLMGenerationOptions(max_output_tokens=1),
+                )
+            )
+        except LLMProviderError as error:
+            return LLMModelHealthCheck(
+                kind=LLMModelKind.CHAT,
+                model=model,
+                status=LLMModelHealthStatus.UNAVAILABLE,
+                detail=error.public_message,
+            )
+        return LLMModelHealthCheck(
+            kind=LLMModelKind.CHAT,
+            model=model,
             status=LLMModelHealthStatus.AVAILABLE,
-            checks=(
-                LLMModelHealthCheck(
-                    kind=LLMModelKind.CHAT,
-                    model=request.chat_model,
-                    status=LLMModelHealthStatus.AVAILABLE,
-                ),
-                LLMModelHealthCheck(
-                    kind=LLMModelKind.EMBEDDING,
-                    model=request.embedding_model,
-                    status=LLMModelHealthStatus.AVAILABLE,
-                ),
-            ),
         )
 
     async def _read_api_key(self) -> SecretStr:
@@ -320,6 +333,14 @@ def _token_usage(usage: AzureOpenAIUsageResponse | None) -> LLMTokenUsage | None
         completion_tokens=usage.completion_tokens,
         total_tokens=usage.total_tokens,
     )
+
+
+def _health_status(
+    checks: tuple[LLMModelHealthCheck, ...],
+) -> LLMModelHealthStatus:
+    if any(check.status is LLMModelHealthStatus.UNAVAILABLE for check in checks):
+        return LLMModelHealthStatus.UNAVAILABLE
+    return LLMModelHealthStatus.AVAILABLE
 
 
 def _raise_provider_error_for_transport_error(error: AzureOpenAITransportError) -> NoReturn:

@@ -10,6 +10,7 @@ Baseline coding standards for every agent and contributor.
 - Keep core storage DTOs in focused `app.models` domain modules, and preserve stable aggregate imports through `app.models` and `app.models.records` for shared repository and pipeline code.
 - Validate structured LLM output with Pydantic and reject malformed output instead of storing it.
 - Classification provider responses must be parsed through `ClassificationPromptOutput` before any storage or aggregation code can consume extracted fields.
+- Malformed classification or extraction output must cross downstream boundaries as public-safe quarantine metadata only, without raw provider content or storage-ready classification records.
 
 ## Architecture patterns
 
@@ -43,6 +44,7 @@ Baseline coding standards for every agent and contributor.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Alembic migrations run in SQLite batch mode; sqlite-vec and other virtual or vector tables are excluded from autogenerate and must be managed by hand-written revisions.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
+- Classification pipeline code must parse provider-neutral `LLMGenerationResponse` values before storage side effects, accept only clean finish reasons and strict structured JSON, and keep rejected provider output out of `email_classifications`, `applications`, and `application_events`.
 - Service layer holds business logic; FastAPI route handlers stay thin.
 - FastAPI dependency injection supplies repositories, providers, and config.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
@@ -76,7 +78,7 @@ Baseline coding standards for every agent and contributor.
 - Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Frontend browser smoke changes: run `npm run test:smoke` from `frontend/` after installing Chromium with `npx playwright install chromium` once per machine.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
-- Classification changes: run `uv run python -m evals.run_eval` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
+- Classification changes to prompts, models, categories, extraction schemas, or parser behavior: run `uv run python -m evals.run_eval` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
 - Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.
