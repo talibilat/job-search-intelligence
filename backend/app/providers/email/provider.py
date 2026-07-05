@@ -7,6 +7,7 @@ from typing import Protocol, cast, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
+from app.pipeline.filter import HEURISTIC_SENDER_DOMAIN_TERMS, sender_matches_domain_terms
 from app.providers.email.html_normalization import (
     email_body_contains_html,
     normalize_email_html_to_text,
@@ -216,13 +217,7 @@ class EmailCandidateQuery(BaseModel):
     def _matches_sender_domain(self, metadata: EmailMessageMetadata) -> bool:
         if metadata.from_addr is None:
             return False
-        _local_part, separator, domain = metadata.from_addr.address.strip().lower().rpartition("@")
-        if not separator or not domain:
-            return False
-        domain = domain.strip(">")
-        return any(
-            domain == term or domain.endswith(f".{term}") for term in self.sender_domain_terms
-        )
+        return sender_matches_domain_terms(metadata.from_addr.address, self.sender_domain_terms)
 
     def _matches_keyword_text(self, text: str | None) -> bool:
         normalized_text = (text or "").lower()
@@ -238,24 +233,7 @@ def build_broad_candidate_query() -> EmailCandidateQuery:
 
     return EmailCandidateQuery(
         strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
-        sender_domain_terms=(
-            "greenhouse.io",
-            "greenhouse-mail.io",
-            "lever.co",
-            "jobs.lever.co",
-            "ashbyhq.com",
-            "myworkday.com",
-            "workday.com",
-            "icims.com",
-            "workable.com",
-            "workablemail.com",
-            "smartrecruiters.com",
-            "jobvite.com",
-            "bamboohr.com",
-            "recruitee.com",
-            "teamtailor.com",
-            "eightfold.ai",
-        ),
+        sender_domain_terms=HEURISTIC_SENDER_DOMAIN_TERMS,
         keyword_terms=(
             "application",
             "applied",
