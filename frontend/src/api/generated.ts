@@ -258,6 +258,66 @@ export interface SetupSubmitResponse {
   status: "accepted";
 }
 
+/**
+ * Deterministic counters reported by sync status.
+ */
+export interface SyncJobCounts {
+  /** @minimum 0 */
+  errors?: number;
+  /** @minimum 0 */
+  metadata_messages?: number;
+  /** @minimum 0 */
+  metadata_pages?: number;
+  /** @minimum 0 */
+  raw_emails_written?: number;
+  /** @minimum 0 */
+  retained_bodies?: number;
+}
+
+/**
+ * Public-safe sync error summary without provider payloads or email content.
+ */
+export interface SyncJobError {
+  /** @minLength 1 */
+  message: string;
+  occurred_at: string;
+}
+
+/**
+ * Public-safe phase for the current local email sync job.
+ */
+export type SyncJobPhase = (typeof SyncJobPhase)[keyof typeof SyncJobPhase];
+
+export const SyncJobPhase = {
+  idle: "idle",
+  queued: "queued",
+  metadata_sync: "metadata_sync",
+  body_retention: "body_retention",
+  reconciling: "reconciling",
+  completed: "completed",
+  failed: "failed",
+} as const;
+
+/**
+ * Current sync job state for the `/sync/status` API boundary.
+ */
+export interface SyncJobStatus {
+  account_id?: string | null;
+  completed_at?: string | null;
+  counts: SyncJobCounts;
+  errors?: SyncJobError[];
+  last_run_at?: string | null;
+  phase: SyncJobPhase;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  progress: number;
+  provider?: EmailProviderName | null;
+  started_at?: string | null;
+  updated_at: string;
+}
+
 export const WipeDataRequestValue = {
   /** Must exactly equal wipe-local-data to confirm local data deletion. */
   confirmation: "wipe-local-data",
@@ -608,4 +668,44 @@ export const setupStatusSetupStatusGet = async (
     status: res.status,
     headers: res.headers,
   } as setupStatusSetupStatusGetResponse;
+};
+
+export type syncStatusSyncStatusGetResponse200 = {
+  data: SyncJobStatus;
+  status: 200;
+};
+
+export type syncStatusSyncStatusGetResponseSuccess =
+  syncStatusSyncStatusGetResponse200 & {
+    headers: Headers;
+  };
+export type syncStatusSyncStatusGetResponse =
+  syncStatusSyncStatusGetResponseSuccess;
+
+export const getSyncStatusSyncStatusGetUrl = () => {
+  return `/sync/status`;
+};
+
+/**
+ * Report the current email sync job status without exposing provider payloads.
+ * @summary Sync Status
+ */
+export const syncStatusSyncStatusGet = async (
+  options?: RequestInit,
+): Promise<syncStatusSyncStatusGetResponse> => {
+  const res = await fetch(getSyncStatusSyncStatusGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: syncStatusSyncStatusGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as syncStatusSyncStatusGetResponse;
 };

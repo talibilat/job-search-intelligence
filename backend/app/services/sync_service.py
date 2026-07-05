@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.config import EmailProviderName
 from app.db.repositories import EmailRepository
 from app.db.repositories.sync_state import SyncStateRepository
+from app.models import SyncJobCounts, SyncJobPhase, SyncJobStatus
 from app.models.records import EmailSyncStateRecord
 from app.providers.email import (
     EmailAccountRef,
@@ -218,6 +219,17 @@ class EmailSyncService:
                 page_token=page_token,
             ),
         )
+
+
+def build_idle_sync_status(*, now: datetime | None = None) -> SyncJobStatus:
+    """Build the public status snapshot before any sync job is running."""
+
+    return SyncJobStatus(
+        phase=SyncJobPhase.IDLE,
+        counts=SyncJobCounts(),
+        updated_at=now or datetime.now(UTC),
+        progress=0,
+    )
 
 
 class BackfillReconciliationMetrics(BaseModel):

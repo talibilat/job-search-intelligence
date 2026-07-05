@@ -201,6 +201,8 @@ Show a **pre-run cost estimate** and track tokens per run.
   `GET /auth/gmail/callback`, token exchange, token persistence, and Gmail message access remain later Phase 1 endpoints and adapters.
 - **Local data:** `POST /local-data/wipe` removes configured local app data and derived artifacts after the exact confirmation phrase `wipe-local-data`; unsafe configured filesystem targets return the standard typed `400` API error.
 - **Sync:** `POST /sync`, `GET /sync/status`
+  `GET /sync/status` returns a public-safe `SyncJobStatus` DTO with sync phase, optional provider and account identifiers, deterministic counts, sanitized error summaries, timestamps, last-run timestamp, and `0..1` progress.
+  The current JT-072 implementation exposes the DTO and an idle zero-progress snapshot only; sync execution, scheduling, persistence, and provider behavior remain later Phase 1 work.
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit
 - **Metrics (deterministic):** `GET /metrics/summary`, `/metrics/rates`, `/metrics/funnel`, `/metrics/timeseries`, `/metrics/breakdown?dimension=role|source|salary|tech|sponsorship|seniority|work_mode`, `/metrics/diagnostics`
 - **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
