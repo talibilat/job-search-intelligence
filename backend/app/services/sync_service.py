@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import EmailProviderName
+from app.db.repositories import EmailRepository
 from app.db.repositories.sync_state import SyncStateRepository
 from app.models.records import EmailSyncStateRecord
 from app.providers.email import (
@@ -135,3 +138,58 @@ class EmailSyncService:
                 page_token=page_token,
             ),
         )
+
+
+class BackfillReconciliationMetrics(BaseModel):
+    """Deterministic count comparison for provider pages and local raw email rows."""
+
+    model_config = ConfigDict(frozen=True)
+
+    provider: EmailProviderName
+    provider_page_count: int = Field(ge=0)
+    provider_message_count: int = Field(ge=0)
+    provider_unique_message_count: int = Field(ge=0)
+    provider_duplicate_message_count: int = Field(ge=0)
+    local_raw_email_count: int = Field(ge=0)
+    local_minus_provider_unique_count: int
+    missing_local_message_count: int = Field(ge=0)
+    extra_local_message_count: int = Field(ge=0)
+    reconciled: bool
+
+
+def build_backfill_reconciliation_metrics(
+    *,
+    provider: EmailProviderName,
+    email_repository: EmailRepository,
+    pages: Iterable[EmailMetadataPage],
+) -> BackfillReconciliationMetrics:
+    """Build Phase 1 backfill reconciliation metrics from provider metadata pages."""
+
+    page_tuple = tuple(pages)
+    provider_message_ids: list[str] = []
+
+    for page in page_tuple:
+        for message in page.messages:
+            provider_message_ids.append(message.ref.message_id)
+
+    provider_message_count = len(provider_message_ids)
+    provider_unique_message_ids = set(provider_message_ids)
+    provider_unique_message_count = len(provider_unique_message_ids)
+    local_raw_email_count = email_repository.count_raw_emails(provider=provider)
+    local_raw_email_ids = set(email_repository.list_raw_email_ids(provider=provider))
+    local_minus_provider_unique_count = local_raw_email_count - provider_unique_message_count
+    missing_local_message_count = len(provider_unique_message_ids - local_raw_email_ids)
+    extra_local_message_count = len(local_raw_email_ids - provider_unique_message_ids)
+
+    return BackfillReconciliationMetrics(
+        provider=provider,
+        provider_page_count=len(page_tuple),
+        provider_message_count=provider_message_count,
+        provider_unique_message_count=provider_unique_message_count,
+        provider_duplicate_message_count=(provider_message_count - provider_unique_message_count),
+        local_raw_email_count=local_raw_email_count,
+        local_minus_provider_unique_count=local_minus_provider_unique_count,
+        missing_local_message_count=missing_local_message_count,
+        extra_local_message_count=extra_local_message_count,
+        reconciled=(missing_local_message_count == 0 and extra_local_message_count == 0),
+    )
