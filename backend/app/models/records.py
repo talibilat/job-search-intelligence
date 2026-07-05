@@ -55,6 +55,8 @@ type JsonObjectList = list[JsonObject]
 
 
 class RawEmailBodyRetentionState(StrEnum):
+    """Explicit body retention state for raw email DTO boundaries."""
+
     METADATA_ONLY = "metadata_only"
     RETAINED = "retained"
     DEBUGGING = "debugging"
@@ -95,6 +97,8 @@ class RawEmailRecord(BaseModel):
 
     @property
     def has_retained_body(self) -> bool:
+        """Return whether this row carries body text for pipeline stages."""
+
         return self.body_retention_state in {
             RawEmailBodyRetentionState.RETAINED,
             RawEmailBodyRetentionState.DEBUGGING,

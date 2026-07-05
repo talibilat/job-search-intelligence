@@ -36,6 +36,7 @@ Top-level fixture fields:
 - `sent_at`: optional timestamp.
 - `body_text`: optional synthetic body text, excluded from DTO repr output.
 - `body_retention_state`: optional, defaults to `metadata_only`.
+  `metadata_only` rows must omit `body_text`; `retained` and `debugging` rows must include it.
 - `labels`: optional string array, defaults to empty.
 - `ingested_at`: required timestamp.
 
@@ -75,6 +76,7 @@ All payload fields are strict: unknown fields are rejected at every level.
 The file-level contract rejects duplicate email IDs, duplicate classification `email_id` values, duplicate application IDs, duplicate event IDs, private-data flags, and cross references to missing emails or applications.
 Application salary ranges must be non-negative, and `salary_min` must be less than or equal to `salary_max` when both are present.
 Retained synthetic email body text is excluded from object repr output to preserve the same redaction habit used for real retained bodies.
+Synthetic fixtures share the backend raw-email retention enum, so obsolete values such as `omitted` are rejected.
 
 ## Enumerations
 
