@@ -3,8 +3,10 @@
 This guide documents the user-created Google OAuth client needed for Gmail ingestion.
 It maps to FR-0, FR-0.2, FR-1.1, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 1.
 
+Gmail message listing currently reads existing OAuth token material only through `SecretStore`.
 The backend can start Gmail OAuth with `GET /auth/gmail`.
-The callback, token exchange, token persistence, and Gmail message adapter remain later Gmail ingestion work.
+The callback, token exchange, token persistence, token refresh, and retained body fetching remain later Gmail ingestion work.
+This guide documents the setup and runtime security contract the app must follow.
 
 ## Security Boundaries
 
@@ -111,13 +113,23 @@ If the client JSON is missing, unreadable, or invalid, the endpoint returns the 
 
 ## Token Storage Contract
 
-OAuth callback codes must be treated as secret values when the callback is implemented.
-Access tokens and refresh tokens must flow through the existing `SecretStore` seam.
+Current Gmail metadata listing reads access tokens through the existing `SecretStore` seam.
+When Gmail OAuth callback behavior lands, OAuth callback codes must be treated as secret values.
+Access tokens and refresh tokens must continue to flow through `SecretStore`.
 The configured `SecretStore` adapter must store token material encrypted at rest, using OS keyring by default or the documented Fernet fallback.
 
 Provider connection records should persist only non-secret metadata and a `SecretRef` to the stored token.
 Incremental sync history IDs are opaque provider cursor state, not token material; store them in local SQLite sync state scoped to the Gmail account and never log them with OAuth tokens or email content.
 Logs, API responses, provider DTO dumps, and test fixtures must not expose raw token values.
+
+## Metadata Listing Boundary
+
+Current Gmail message listing is a safe metadata-only step for broad full backfill.
+It calls Gmail list pages with `maxResults` and `pageToken`, then fetches each listed message with `format=metadata` and Gmail partial fields.
+Those partial fields include message IDs, thread IDs, labels, size estimates, and selected headers (`From`, `To`, `Cc`, `Subject`, `Date`, and `Message-ID`).
+They deliberately exclude snippets, payload bodies, raw MIME content, and attachments.
+
+Incremental sync cursors, retained body fetching, richer normalization, and repository writes remain separate Phase 1 work.
 
 ## Preflight Checklist
 
