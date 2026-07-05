@@ -169,6 +169,7 @@ They deliberately exclude snippets, payload bodies, raw MIME content, and attach
 Before metadata leaves the Gmail adapter, opaque message IDs, thread IDs, and history cursors are trimmed without case changes; email addresses are lowercased and deduplicated; display names and headers are trimmed; Gmail system labels are canonicalized while custom label IDs keep their casing; and parsed message timestamps are converted to timezone-aware UTC.
 [JT-066 2026-07-05 v2] Backfill state and final replacement cursor promotion are repository-backed so full metadata backfills can resume safely.
 Incremental sync cursors, metadata-only repository writes, and retained-body repository writes now flow through the sync service, `email_sync_state`, and `raw_emails` tables.
+Retained-body repository writes are insert-or-update, so an explicit candidate, debugging, or reconciliation body fetch can create a minimal `raw_emails` row before metadata arrives.
 Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.
 Metadata-listing failures are mapped into public-safe provider errors: authorization failures ask the client to reconnect Gmail, insufficient scopes ask for read-only access, rate limits and temporary outages ask the client to try again later, invalid Gmail responses are reported without raw payloads, and generic provider failures do not expose OAuth tokens or Gmail response bodies.
 
@@ -182,6 +183,7 @@ Callers must provide selected message refs, such as broad job-search candidates 
 The Gmail adapter fetches those messages with `format=full` and partial fields for IDs, thread IDs, and payload content only; it does not request snippets.
 It prefers `text/plain`, converts `text/html` MIME bodies to normalized plain text through the provider DTO path, ignores attachments, reports typed empty-body failures, and keeps token material behind `SecretStore`.
 Manual sync stores retained bodies for broad job-search candidate messages after metadata persistence.
+Other explicit retained or debugging body fetches can be persisted safely even when the metadata row is not present yet.
 
 ## Preflight Checklist
 
