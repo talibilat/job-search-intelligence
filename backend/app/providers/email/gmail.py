@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime
+from email.utils import getaddresses, parsedate_to_datetime
 from typing import Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -11,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from app.config import GMAIL_READONLY_SCOPE, AppSettings, EmailProviderName
 from app.providers.email.provider import (
+    EmailAddress,
     EmailAttachmentPolicy,
     EmailAuthorizationCallbackRequest,
     EmailAuthorizationStartRequest,
@@ -196,6 +199,19 @@ class GmailMessageListResponse(BaseModel):
     next_page_token: str | None = Field(default=None, alias="nextPageToken")
 
 
+class GmailMessageHeader(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    name: str = Field(min_length=1)
+    value: str = ""
+
+
+class GmailMessagePayload(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    headers: tuple[GmailMessageHeader, ...] = ()
+
+
 class GmailMessageMetadataResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore", populate_by_name=True)
 
@@ -203,6 +219,7 @@ class GmailMessageMetadataResponse(BaseModel):
     thread_id: str | None = Field(default=None, alias="threadId")
     label_ids: tuple[str, ...] = Field(default=(), alias="labelIds")
     size_estimate: int | None = Field(default=None, ge=0, alias="sizeEstimate")
+    payload: GmailMessagePayload | None = None
 
 
 class GmailMessageLister:
@@ -270,12 +287,19 @@ class GmailMessageLister:
                 access_token=access_token,
             ),
         )
+        headers = _metadata_headers(gmail_metadata)
         return EmailMessageMetadata(
             ref=EmailMessageRef(
                 account=connection.account,
                 message_id=gmail_metadata.id,
                 thread_id=gmail_metadata.thread_id or message.thread_id,
             ),
+            rfc822_message_id=_first_header(headers, "message-id"),
+            from_addr=_first_email_address(headers, "from"),
+            to_addrs=_email_addresses(headers, "to"),
+            cc_addrs=_email_addresses(headers, "cc"),
+            subject=_first_header(headers, "subject"),
+            sent_at=_parse_email_datetime(_first_header(headers, "date")),
             labels=gmail_metadata.label_ids,
             size_bytes=gmail_metadata.size_estimate,
         )
@@ -301,6 +325,45 @@ def _metadata_query() -> tuple[tuple[str, str], ...]:
     return (("fields", _MESSAGE_METADATA_FIELDS), ("format", "metadata")) + tuple(
         ("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS
     )
+
+
+def _metadata_headers(metadata: GmailMessageMetadataResponse) -> dict[str, tuple[str, ...]]:
+    headers: dict[str, list[str]] = {}
+    for header in metadata.payload.headers if metadata.payload is not None else ():
+        headers.setdefault(header.name.lower(), []).append(header.value)
+    return {name: tuple(values) for name, values in headers.items()}
+
+
+def _first_header(headers: dict[str, tuple[str, ...]], name: str) -> str | None:
+    values = headers.get(name)
+    if values is None:
+        return None
+    return values[0]
+
+
+def _first_email_address(headers: dict[str, tuple[str, ...]], name: str) -> EmailAddress | None:
+    addresses = _email_addresses(headers, name)
+    if not addresses:
+        return None
+    return addresses[0]
+
+
+def _email_addresses(headers: dict[str, tuple[str, ...]], name: str) -> tuple[EmailAddress, ...]:
+    values = headers.get(name, ())
+    return tuple(
+        EmailAddress(address=address, display_name=display_name or None)
+        for display_name, address in getaddresses(values)
+        if address
+    )
+
+
+def _parse_email_datetime(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        return parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError):
+        return None
 
 
 def _validate_gmail_response[ModelT: BaseModel](

@@ -60,6 +60,19 @@ class FakeGmailTransport:
                 "id": "msg-1",
                 "threadId": "thread-1",
                 "labelIds": ["INBOX", "CATEGORY_PRIMARY"],
+                "payload": {
+                    "headers": [
+                        {"name": "From", "value": "Jane Recruiter <jane@example.com>"},
+                        {
+                            "name": "To",
+                            "value": "Candidate <me@example.com>, jobs@example.com",
+                        },
+                        {"name": "Cc", "value": "Hiring Team <hiring@example.com>"},
+                        {"name": "Subject", "value": "Application received"},
+                        {"name": "Date", "value": "Sun, 05 Jul 2026 12:00:00 +0000"},
+                        {"name": "Message-ID", "value": "<gmail-msg-1@example.com>"},
+                    ]
+                },
                 "snippet": "Thanks for applying.",
                 "sizeEstimate": 2048,
                 "historyId": "12345",
@@ -99,6 +112,18 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
     assert page.next_sync_cursor is None
     assert [message.ref.message_id for message in page.messages] == ["msg-1", "msg-2"]
     assert page.messages[0].ref.thread_id == "thread-1"
+    assert page.messages[0].from_addr is not None
+    assert page.messages[0].from_addr.address == "jane@example.com"
+    assert page.messages[0].from_addr.display_name == "Jane Recruiter"
+    assert [address.address for address in page.messages[0].to_addrs] == [
+        "me@example.com",
+        "jobs@example.com",
+    ]
+    assert [address.display_name for address in page.messages[0].to_addrs] == ["Candidate", None]
+    assert [address.address for address in page.messages[0].cc_addrs] == ["hiring@example.com"]
+    assert page.messages[0].subject == "Application received"
+    assert page.messages[0].sent_at == datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
+    assert page.messages[0].rfc822_message_id == "<gmail-msg-1@example.com>"
     assert page.messages[0].labels == ("INBOX", "CATEGORY_PRIMARY")
     assert page.messages[0].size_bytes == 2048
     assert page.messages[0].body_text is None
