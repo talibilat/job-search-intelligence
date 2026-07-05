@@ -383,8 +383,9 @@ class EmailSyncService:
         provider: MetadataListingProvider,
         page_size: int,
         email_repository: EmailRepository | None = None,
-        sync_state_repository: SyncStateRepository | None = None,
+        sync_service: SyncService | None = None,
         clock: Callable[[], datetime] | None = None,
+        status_callback: Callable[[EmailSyncStatus], None] | None = None,
     ) -> None:
         if page_size < 1:
             msg = "page_size must be at least 1"
@@ -392,8 +393,9 @@ class EmailSyncService:
         self._provider = provider
         self._page_size = page_size
         self._email_repository = email_repository
-        self._sync_state_repository = sync_state_repository
+        self._sync_service = sync_service
         self._clock = clock or _utcnow
+        self._status_callback = status_callback
         self._status = EmailSyncStatus(state=EmailSyncRunState.IDLE)
 
     def current_status(self) -> EmailSyncStatus:
@@ -402,25 +404,25 @@ class EmailSyncService:
     async def run_manual_sync(self, *, connection: EmailConnection) -> EmailSyncStatus:
         """Run a manual sync using full backfill first, then incremental cursors."""
 
-        if self._email_repository is None or self._sync_state_repository is None:
+        if self._email_repository is None or self._sync_service is None:
             raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
         if self._status.state is EmailSyncRunState.RUNNING:
             raise SyncAlreadyRunningError("Email sync is already running.")
 
         started_at = self._clock()
-        existing_cursor = self._sync_state_repository.get_cursor(connection.account)
+        existing_cursor = self._sync_service.get_sync_cursor(connection.account)
         requested_mode = (
             EmailSyncMode.INCREMENTAL
             if existing_cursor is not None
             else EmailSyncMode.FULL_BACKFILL
         )
-        self._status = EmailSyncStatus(
+        self._set_status(EmailSyncStatus(
             provider=connection.account.provider,
             account_id=connection.account.account_id,
             state=EmailSyncRunState.RUNNING,
             mode=requested_mode,
             started_at=started_at,
-        )
+        ))
 
         try:
             result = await self._run_metadata_pages(
@@ -429,17 +431,24 @@ class EmailSyncService:
                 started_at=started_at,
             )
         except Exception as error:
-            self._status = self._status.model_copy(
-                update={
-                    "state": EmailSyncRunState.FAILED,
-                    "finished_at": self._clock(),
-                    "last_error": str(error),
-                }
+            self._set_status(
+                self._status.model_copy(
+                    update={
+                        "state": EmailSyncRunState.FAILED,
+                        "finished_at": self._clock(),
+                        "last_error": _public_sync_error_message(error),
+                    }
+                )
             )
             raise
 
-        self._status = result
+        self._set_status(result)
         return result
+
+    def _set_status(self, status: EmailSyncStatus) -> None:
+        self._status = status
+        if self._status_callback is not None:
+            self._status_callback(status)
 
     async def list_metadata_page(
         self,
@@ -548,7 +557,7 @@ class EmailSyncService:
         sync_cursor: EmailProviderCursor | None,
         started_at: datetime,
     ) -> EmailSyncStatus:
-        if self._email_repository is None or self._sync_state_repository is None:
+        if self._email_repository is None or self._sync_service is None:
             raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
 
         page_token: str | None = None
@@ -583,6 +592,19 @@ class EmailSyncService:
                 )
             if page_result.page.next_sync_cursor is not None:
                 latest_cursor = page_result.page.next_sync_cursor
+            self._set_status(EmailSyncStatus(
+                provider=connection.account.provider,
+                account_id=connection.account.account_id,
+                state=EmailSyncRunState.RUNNING,
+                mode=final_mode,
+                started_at=started_at,
+                page_count=page_count,
+                message_count=message_count,
+                raw_email_count=self._email_repository.count_raw_emails(
+                    provider=connection.account.provider,
+                ),
+                recovered_from_expired_cursor=recovered_from_expired_cursor,
+            ))
             if page_result.page.next_page_token is None:
                 break
 
@@ -592,7 +614,7 @@ class EmailSyncService:
                 sync_cursor = None
 
         if latest_cursor is not None:
-            self._sync_state_repository.save_cursor(
+            self._sync_service.store_sync_cursor(
                 latest_cursor,
                 updated_at=self._clock(),
             )
@@ -681,3 +703,9 @@ def build_backfill_reconciliation_metrics(
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _public_sync_error_message(error: Exception) -> str:
+    if isinstance(error, EmailProviderError):
+        return error.public_message
+    return "Sync failed."

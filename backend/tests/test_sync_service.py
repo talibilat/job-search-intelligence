@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -23,7 +24,13 @@ from app.providers.email import (
     EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef
-from app.services.sync_service import EmailSyncRunState, EmailSyncService, SyncScheduler
+from app.services.sync_service import (
+    EmailSyncRunState,
+    EmailSyncService,
+    EmailSyncStatus,
+    SyncScheduler,
+    SyncService,
+)
 
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 
@@ -157,6 +164,25 @@ class FailingHistoryProvider:
         self.requests.append(request)
         msg = "provider unavailable"
         raise RuntimeError(msg)
+
+
+class ProgressInspectingProvider(PagingHistoryProvider):
+    def __init__(self, pages: tuple[EmailMetadataPage, ...]) -> None:
+        super().__init__(pages)
+        self.status_reader: Callable[[], EmailSyncStatus | None] = lambda: None
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        if len(self.requests) == 1:
+            status = self.status_reader()
+            assert status is not None
+            assert status.state is EmailSyncRunState.RUNNING
+            assert status.page_count == 1
+            assert status.message_count == 1
+        return await super().list_message_metadata(connection, request)
 
 
 def test_expired_history_id_falls_back_to_resumable_reconciliation() -> None:
@@ -368,7 +394,7 @@ def test_manual_sync_backfills_all_pages_and_persists_latest_cursor() -> None:
         provider=provider,
         page_size=250,
         email_repository=email_repository,
-        sync_state_repository=sync_state_repository,
+        sync_service=SyncService(sync_state_repository=sync_state_repository),
         clock=lambda: NOW,
     )
 
@@ -421,7 +447,7 @@ def test_manual_sync_uses_incremental_mode_when_cursor_exists() -> None:
         provider=provider,
         page_size=100,
         email_repository=EmailRepository(connection),
-        sync_state_repository=sync_state_repository,
+        sync_service=SyncService(sync_state_repository=sync_state_repository),
         clock=lambda: NOW,
     )
 
@@ -480,7 +506,7 @@ def test_manual_sync_metadata_upsert_preserves_existing_retained_body() -> None:
         provider=provider,
         page_size=250,
         email_repository=EmailRepository(connection),
-        sync_state_repository=SyncStateRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
         clock=lambda: NOW,
     )
 
@@ -494,6 +520,34 @@ def test_manual_sync_metadata_upsert_preserves_existing_retained_body() -> None:
     assert tuple(row) == ("Retained candidate body", "retained", "Application received")
 
 
+def test_manual_sync_updates_running_status_between_pages() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    mailbox = email_connection()
+    provider = ProgressInspectingProvider(
+        (
+            EmailMetadataPage(
+                messages=(metadata_message(mailbox, "gmail-msg-1"),),
+                next_page_token="page-2",
+            ),
+            EmailMetadataPage(messages=(metadata_message(mailbox, "gmail-msg-2"),)),
+        )
+    )
+    service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
+        clock=lambda: NOW,
+    )
+    provider.status_reader = service.current_status
+
+    asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    assert service.current_status().state is EmailSyncRunState.SUCCEEDED
+
+
 def test_manual_sync_records_failed_status_when_provider_fails() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -503,7 +557,7 @@ def test_manual_sync_records_failed_status_when_provider_fails() -> None:
         provider=provider,
         page_size=100,
         email_repository=EmailRepository(connection),
-        sync_state_repository=SyncStateRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
         clock=lambda: NOW,
     )
 
@@ -512,7 +566,7 @@ def test_manual_sync_records_failed_status_when_provider_fails() -> None:
 
     status = service.current_status()
     assert status.state is EmailSyncRunState.FAILED
-    assert status.last_error == "provider unavailable"
+    assert status.last_error == "Sync failed."
     assert status.finished_at == NOW
 
 
