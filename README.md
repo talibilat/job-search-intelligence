@@ -105,8 +105,10 @@ Developer instructions:
 ## Local Developer Quickstart
 
 Use this path for a fresh local checkout in the current Phase 1 scaffold.
-The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration chain includes sync-state and core schema revisions.
-Schema-specific upgrade behavior applies through `uv run alembic upgrade head`.
+The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment exists, but the first schema revision is later Phase 0 work.
+Schema-specific upgrade behavior will apply once that revision lands.
+[JT-020 2026-07-05 v3] The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration chain includes sync-state and core schema revisions.
+[JT-020 2026-07-05 v3] Schema-specific upgrade behavior applies through `uv run alembic upgrade head`.
 Use this path for a fresh local checkout in Phase 0.
 The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment and first sync-state schema revision exist.
 [JT-020 2026-07-05 v2] The backend SQLite engine loads sqlite-vec, applies Phase 0 connection setup, and the Alembic migration environment can load sqlite-vec for hand-written vector-table revisions.

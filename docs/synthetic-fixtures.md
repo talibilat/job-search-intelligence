@@ -14,7 +14,8 @@ Each fixture has these top-level arrays:
 - `emails` models `raw_emails` rows with provider metadata and retained synthetic body text when needed.
 - `classifications` models `email_classifications` rows and references emails by `email_id`.
 - `applications` models `applications` rows used by deterministic metrics and aggregation tests.
-- `events` models `application_events` rows, references `application_id`, and references `email_id` for evidence-backed events.
+- `events` models `application_events` rows and references both `application_id` and `email_id`.
+[JT-020 2026-07-05 v2] - `events` models `application_events` rows, references `application_id`, and references `email_id` for evidence-backed events.
 
 The DTO can default omitted arrays to empty tuples, but checked-in JSON fixtures should include all four arrays explicitly so fixture intent is obvious in review.
 
@@ -68,14 +69,15 @@ Top-level fixture fields:
 
 - `id`: required non-empty string.
 - `application_id`: required non-empty string referencing an `applications[].id` value.
-- `email_id`: required field; use a non-empty string referencing an `emails[].id` value for evidence-backed events, or `null` only when `event_type` is `ghost_inferred`.
+- `email_id`: required non-empty string referencing an `emails[].id` value.
+[JT-020 2026-07-05 v2] - `email_id`: required field; use a non-empty string referencing an `emails[].id` value for evidence-backed events, or `null` only when `event_type` is `ghost_inferred`.
 - `event_type`: required event type enum value.
 - `event_at`: required timestamp.
 - `extract_note`: optional non-empty string.
 
 All payload fields are strict: unknown fields are rejected at every level.
 The file-level contract rejects duplicate email IDs, duplicate classification `email_id` values, duplicate application IDs, duplicate event IDs, private-data flags, and cross references to missing emails or applications.
-Null event `email_id` values are allowed only for `ghost_inferred` events; every evidence-backed event must reference an existing email.
+[JT-020 2026-07-05 v1] Null event `email_id` values are allowed only for `ghost_inferred` events; every evidence-backed event must reference an existing email.
 Application salary ranges must be non-negative, and `salary_min` must be less than or equal to `salary_max` when both are present.
 Retained synthetic email body text is excluded from object repr output to preserve the same redaction habit used for real retained bodies.
 Synthetic fixtures share the backend raw-email retention enum, so obsolete values such as `omitted` are rejected.
