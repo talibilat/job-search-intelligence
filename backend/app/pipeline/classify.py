@@ -21,6 +21,7 @@ from app.models.classification import (
     EmailClassificationRecord,
     JobEmailCategory,
 )
+from app.models.event import ApplicationEventType
 from app.providers.llm import (
     LLMFinishReason,
     LLMGenerationOptions,
@@ -77,6 +78,7 @@ class JobApplicationExtraction(BaseModel):
     company: NonBlankString | None = None
     role_title: NonBlankString | None = None
     status: ApplicationStatus | None = None
+    event_type: ApplicationEventType | None = None
     event_at: datetime | None = None
     salary_min: int | None = Field(default=None, ge=0)
     salary_max: int | None = Field(default=None, ge=0)
@@ -232,6 +234,65 @@ def parse_classification_prompt_output(content: str) -> ClassificationPromptOutp
     return ClassificationPromptOutput.model_validate_json(content)
 
 
+def parse_classification_generation_response(
+    *,
+    email_id: str,
+    response: LLMGenerationResponse,
+    prompt_version: str,
+    classified_at: datetime,
+) -> LLMExtractionResult:
+    """Validate one LLM generation before exposing accepted extraction data."""
+
+    raw_payload = _load_clean_json_object(
+        email_id=email_id,
+        response=response,
+        prompt_version=prompt_version,
+        invalid_schema_message="LLM response failed structured classification validation.",
+    )
+    if isinstance(raw_payload, MalformedLLMExtraction):
+        return raw_payload
+
+    try:
+        prompt_output = parse_classification_prompt_output(
+            json.dumps(raw_payload, separators=(",", ":")),
+        )
+    except ValidationError:
+        return _malformed_result(
+            email_id=email_id,
+            response=response,
+            prompt_version=prompt_version,
+            reason=MalformedLLMExtractionReason.INVALID_SCHEMA,
+            message="LLM response failed structured classification validation.",
+        )
+
+    classification = EmailClassificationRecord(
+        email_id=email_id,
+        is_job_related=prompt_output.is_job_related,
+        category=prompt_output.category,
+        confidence=prompt_output.confidence,
+        model=response.model,
+        prompt_version=prompt_version,
+        classified_at=classified_at,
+    )
+    extraction = JobApplicationExtraction(
+        company=prompt_output.company,
+        role_title=prompt_output.role_title,
+        status=prompt_output.application_status,
+        event_type=prompt_output.event_type,
+        event_at=prompt_output.event_at,
+        salary_min=prompt_output.salary_min,
+        salary_max=prompt_output.salary_max,
+        currency=prompt_output.currency,
+        location=prompt_output.location,
+        work_mode=prompt_output.work_mode,
+        seniority=prompt_output.seniority,
+        sponsorship=prompt_output.sponsorship,
+        tech_stack=list(prompt_output.tech_stack),
+        rejection_reason=prompt_output.rejection_reason,
+    )
+    return AcceptedLLMExtraction(classification=classification, extraction=extraction)
+
+
 def parse_llm_extraction_response(
     *,
     email_id: str,
@@ -241,45 +302,14 @@ def parse_llm_extraction_response(
 ) -> LLMExtractionResult:
     """Validate one LLM extraction response before any storage side effects."""
 
-    if response.finish_reason != LLMFinishReason.STOP:
-        return _malformed_result(
-            email_id=email_id,
-            response=response,
-            prompt_version=prompt_version,
-            reason=MalformedLLMExtractionReason.INCOMPLETE_GENERATION,
-            message="LLM response did not finish cleanly.",
-        )
-
-    try:
-        raw_payload = json.loads(
-            response.content,
-            object_pairs_hook=_reject_duplicate_json_keys,
-        )
-    except _DuplicateJSONKeyError:
-        return _malformed_result(
-            email_id=email_id,
-            response=response,
-            prompt_version=prompt_version,
-            reason=MalformedLLMExtractionReason.DUPLICATE_JSON_KEY,
-            message="LLM response contained duplicate JSON keys.",
-        )
-    except json.JSONDecodeError:
-        return _malformed_result(
-            email_id=email_id,
-            response=response,
-            prompt_version=prompt_version,
-            reason=MalformedLLMExtractionReason.INVALID_JSON,
-            message="LLM response was not valid JSON.",
-        )
-
-    if not isinstance(raw_payload, dict):
-        return _malformed_result(
-            email_id=email_id,
-            response=response,
-            prompt_version=prompt_version,
-            reason=MalformedLLMExtractionReason.INVALID_SCHEMA,
-            message="LLM response failed structured extraction validation.",
-        )
+    raw_payload = _load_clean_json_object(
+        email_id=email_id,
+        response=response,
+        prompt_version=prompt_version,
+        invalid_schema_message="LLM response failed structured extraction validation.",
+    )
+    if isinstance(raw_payload, MalformedLLMExtraction):
+        return raw_payload
 
     try:
         payload = _LLMExtractionPayload.model_validate(raw_payload)
@@ -357,6 +387,56 @@ def _malformed_result(
         reason=reason,
         message=message,
     )
+
+
+def _load_clean_json_object(
+    *,
+    email_id: str,
+    response: LLMGenerationResponse,
+    prompt_version: str,
+    invalid_schema_message: str,
+) -> dict[str, object] | MalformedLLMExtraction:
+    if response.finish_reason != LLMFinishReason.STOP:
+        return _malformed_result(
+            email_id=email_id,
+            response=response,
+            prompt_version=prompt_version,
+            reason=MalformedLLMExtractionReason.INCOMPLETE_GENERATION,
+            message="LLM response did not finish cleanly.",
+        )
+
+    try:
+        raw_payload = json.loads(
+            response.content,
+            object_pairs_hook=_reject_duplicate_json_keys,
+        )
+    except _DuplicateJSONKeyError:
+        return _malformed_result(
+            email_id=email_id,
+            response=response,
+            prompt_version=prompt_version,
+            reason=MalformedLLMExtractionReason.DUPLICATE_JSON_KEY,
+            message="LLM response contained duplicate JSON keys.",
+        )
+    except json.JSONDecodeError:
+        return _malformed_result(
+            email_id=email_id,
+            response=response,
+            prompt_version=prompt_version,
+            reason=MalformedLLMExtractionReason.INVALID_JSON,
+            message="LLM response was not valid JSON.",
+        )
+
+    if not isinstance(raw_payload, dict):
+        return _malformed_result(
+            email_id=email_id,
+            response=response,
+            prompt_version=prompt_version,
+            reason=MalformedLLMExtractionReason.INVALID_SCHEMA,
+            message=invalid_schema_message,
+        )
+
+    return raw_payload
 
 
 def _reject_duplicate_json_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:

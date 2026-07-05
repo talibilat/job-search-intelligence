@@ -136,6 +136,48 @@ class ClassificationPromptOutput(BaseModel):
     tech_stack: tuple[NonEmptyString, ...]
     rejection_reason: str | None = Field(min_length=1)
 
+    @field_validator("is_job_related", mode="before")
+    @classmethod
+    def require_boolean_classification(cls, value: object) -> object:
+        if not isinstance(value, bool):
+            msg = "is_job_related must be a JSON boolean"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def require_numeric_confidence(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            msg = "confidence must be a JSON number"
+            raise ValueError(msg)
+        return float(value)
+
+    @field_validator("salary_min", "salary_max", mode="before")
+    @classmethod
+    def require_integer_salary(cls, value: object) -> object:
+        if value is None:
+            return value
+        if isinstance(value, bool) or not isinstance(value, int):
+            msg = "salary values must be JSON integers"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("event_at", mode="before")
+    @classmethod
+    def reject_numeric_event_at(cls, value: object) -> object:
+        if value is None or isinstance(value, datetime):
+            return value
+        if isinstance(value, int | float):
+            msg = "event_at must be an ISO datetime string"
+            raise ValueError(msg)
+        if isinstance(value, str):
+            stripped_value = value.strip()
+            if _is_numeric_string(stripped_value):
+                msg = "event_at must be an ISO datetime string"
+                raise ValueError(msg)
+            return stripped_value
+        return value
+
     @model_validator(mode="after")
     def validate_extraction_shape(self) -> Self:
         if (
@@ -322,3 +364,13 @@ def _validate_timezone_aware[
         msg = f"{field_name} must be timezone-aware"
         raise ValueError(msg)
     return value
+
+
+def _is_numeric_string(value: str) -> bool:
+    if not value:
+        return False
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True

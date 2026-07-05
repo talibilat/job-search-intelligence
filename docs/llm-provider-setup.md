@@ -3,10 +3,8 @@
 This guide explains the values a user needs before the first-run setup wizard can configure an LLM provider.
 It maps to FR-0, FR-6, NFR-5, NFR-8, and Phase 0.
 
-The current Phase 0 app has a typed provider registry, setup status shell, Gmail OAuth setup action, and Azure OpenAI chat-completions adapter.
-The Ollama adapter and Azure embedding calls are implemented in later provider tickets, so this document remains the setup contract for those screens and adapters.
-The current app has a typed provider registry, setup status shell, Gmail OAuth setup action, and a concrete local Ollama chat adapter behind `LLMProvider`.
-The Azure OpenAI adapter, Ollama embeddings, classification prompts, and downstream classification pipeline are implemented in later provider and Phase 2 tickets, so this document is the setup contract for those screens and adapters.
+The current app has a typed provider registry, setup status shell, Gmail OAuth setup action, Azure OpenAI chat-completions adapter, and a concrete local Ollama chat adapter behind `LLMProvider`.
+Classification prompts and the core classification service are implemented; Ollama embeddings and downstream classification persistence remain later provider and Phase 2 tickets.
 The current backend has the `SecretStore` protocol, backend selector settings, the default keyring adapter, and the encrypted Fernet fallback.
 
 ## Setup Principles
@@ -71,6 +69,7 @@ JOBTRACKER_FERNET_KEY_FILE=./.jobtracker/fernet.key
 Do not commit the Fernet key file or place it in screenshots, tickets, logs, or setup notes.
 
 JT-096 provides durable local storage for completed-run token and cost accounting.
+JT-091 aggregates provider-reported classification token usage on the service result before later run-accounting persistence is wired.
 Before a bulk classification pass, call `GET /classification/estimate` to verify that the selected mode shows candidate, token, and cost information.
 Before a version-controlled rerun, call `GET /classification/reprocessing-plan` to verify the selected provider has a configured target model and to see which retained candidates are unclassified, stale by model, or stale by prompt version.
 Local mode reports zero cost, while hosted modes report cost only when both pricing rates are configured.
@@ -139,4 +138,5 @@ The shared API route exists before concrete Azure OpenAI and Ollama adapter HTTP
 - Gmail setup still uses `gmail.readonly` and a user-owned Google OAuth client.
 - LLM output is routed through application code that uses deterministic queries or constrained query builders for facts, never raw SQL emitted by the model.
 - Classification provider responses are JSON objects that match `ClassificationPromptOutput`; malformed or contradictory output is rejected before storage.
+- The classification service returns public-safe malformed metadata and does not write classification, application, or event rows directly.
 - No API keys, OAuth tokens, client secrets, or provider credentials are committed to the repository.
