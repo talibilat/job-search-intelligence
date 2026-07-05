@@ -43,6 +43,23 @@ class EmailBodyFetchFailureReason(StrEnum):
     PERMISSION_DENIED = "permission_denied"
 
 
+class EmailProviderErrorCode(StrEnum):
+    AUTHORIZATION_REQUIRED = "email_authorization_required"
+    INSUFFICIENT_SCOPE = "email_insufficient_scope"
+    RATE_LIMITED = "email_rate_limited"
+    TEMPORARILY_UNAVAILABLE = "email_temporarily_unavailable"
+    INVALID_PROVIDER_RESPONSE = "email_invalid_provider_response"
+    PROVIDER_REQUEST_FAILED = "email_provider_request_failed"
+    SYNC_CURSOR_EXPIRED = "email_sync_cursor_expired"
+
+
+class EmailProviderUserAction(StrEnum):
+    CHECK_CONFIGURATION = "check_configuration"
+    RECONNECT_EMAIL = "reconnect_email"
+    RESTART_FULL_SYNC = "restart_full_sync"
+    TRY_AGAIN_LATER = "try_again_later"
+
+
 class EmailProviderCapabilities(BaseModel):
     """Static capabilities advertised by an email provider adapter."""
 
@@ -379,22 +396,71 @@ class EmailProviderError(RuntimeError):
     """Base error for public-safe email-provider failures."""
 
     public_message: str
+    error_code: EmailProviderErrorCode
+    user_action: EmailProviderUserAction
 
-    def __init__(self, *, public_message: str) -> None:
+    def __init__(
+        self,
+        *,
+        public_message: str,
+        error_code: EmailProviderErrorCode = EmailProviderErrorCode.PROVIDER_REQUEST_FAILED,
+        user_action: EmailProviderUserAction = EmailProviderUserAction.TRY_AGAIN_LATER,
+    ) -> None:
         self.public_message = public_message
+        self.error_code = error_code
+        self.user_action = user_action
         super().__init__(public_message)
 
 
 class EmailProviderAuthError(EmailProviderError):
     """Raised when authorization, credentials, or reauth fail."""
 
+    def __init__(
+        self,
+        *,
+        public_message: str,
+        error_code: EmailProviderErrorCode = EmailProviderErrorCode.AUTHORIZATION_REQUIRED,
+        user_action: EmailProviderUserAction = EmailProviderUserAction.RECONNECT_EMAIL,
+    ) -> None:
+        super().__init__(
+            public_message=public_message,
+            error_code=error_code,
+            user_action=user_action,
+        )
+
 
 class EmailSyncCursorExpiredError(EmailProviderError):
     """Raised when incremental sync state is no longer accepted."""
 
+    def __init__(
+        self,
+        *,
+        public_message: str,
+        error_code: EmailProviderErrorCode = EmailProviderErrorCode.SYNC_CURSOR_EXPIRED,
+        user_action: EmailProviderUserAction = EmailProviderUserAction.RESTART_FULL_SYNC,
+    ) -> None:
+        super().__init__(
+            public_message=public_message,
+            error_code=error_code,
+            user_action=user_action,
+        )
+
 
 class EmailProviderTransientError(EmailProviderError):
     """Raised for retryable provider failures such as rate limits."""
+
+    def __init__(
+        self,
+        *,
+        public_message: str,
+        error_code: EmailProviderErrorCode = EmailProviderErrorCode.TEMPORARILY_UNAVAILABLE,
+        user_action: EmailProviderUserAction = EmailProviderUserAction.TRY_AGAIN_LATER,
+    ) -> None:
+        super().__init__(
+            public_message=public_message,
+            error_code=error_code,
+            user_action=user_action,
+        )
 
 
 @runtime_checkable

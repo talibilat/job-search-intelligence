@@ -3,6 +3,7 @@ from __future__ import annotations
 import app.main as main
 import pytest
 from app.api.errors import ApiError, ApiErrorCode
+from app.providers.email import EmailProviderAuthError, EmailProviderErrorCode
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.testclient import TestClient
 
@@ -98,6 +99,39 @@ def test_unmapped_http_exception_detail_is_sanitized(
         },
     }
     assert "api key leaked" not in response.text
+
+
+def test_email_provider_error_maps_to_user_actionable_api_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe_router = APIRouter()
+
+    @probe_router.get("/sync-now")
+    def sync_now() -> None:
+        raise EmailProviderAuthError(
+            public_message="Reconnect Gmail to continue syncing.",
+            error_code=EmailProviderErrorCode.AUTHORIZATION_REQUIRED,
+        )
+
+    monkeypatch.setattr(main, "api_router", probe_router)
+
+    client = TestClient(main.create_app())
+    response = client.get("/sync-now")
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "error": {
+            "code": "email_authorization_required",
+            "message": "Reconnect Gmail to continue syncing.",
+            "details": [
+                {
+                    "field": "email_provider",
+                    "message": "reconnect_email",
+                    "type": "user_action",
+                }
+            ],
+        },
+    }
 
 
 def test_unhandled_exception_returns_sanitized_internal_error(
