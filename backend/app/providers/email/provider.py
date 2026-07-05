@@ -336,10 +336,15 @@ class EmailMessageBody(BaseModel):
             EmailBodySource.HTML_CONVERTED,
             EmailBodySource.HTML_CONVERTED.value,
         }
-        if isinstance(body_text, str) and (is_html_source or email_body_contains_html(body_text)):
+        if not isinstance(body_text, str):
+            return data
+        if is_html_source:
             normalized_data = body_data.copy()
             normalized_data["body_text"] = normalize_email_html_to_text(body_text)
             return normalized_data
+        if email_body_contains_html(body_text):
+            msg = "plain-text email bodies must not contain raw HTML"
+            raise ValueError(msg)
         return data
 
 

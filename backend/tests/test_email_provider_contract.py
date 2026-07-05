@@ -30,8 +30,8 @@ from app.providers.email import (
     EmailProviderTransientError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
-    normalize_email_html_to_text,
 )
+from app.providers.email.html_normalization import normalize_email_html_to_text
 from app.security import SecretKind, SecretRef
 from pydantic import SecretStr, ValidationError
 
@@ -298,21 +298,20 @@ def test_html_message_body_is_normalized_to_safe_text() -> None:
     )
 
 
-def test_message_body_normalizes_html_even_when_provider_mislabels_source() -> None:
+def test_message_body_rejects_html_when_provider_mislabels_source() -> None:
     account = EmailAccountRef(
         provider=EmailProviderName.GMAIL,
         account_id="me@example.com",
     )
 
-    body = EmailMessageBody(
-        ref=EmailMessageRef(account=account, message_id="msg-1"),
-        body_text="<p>Application <strong>update</strong></p>",
-        body_source=EmailBodySource.TEXT_PLAIN,
-        truncated=False,
-        fetched_at=NOW,
-    )
-
-    assert body.body_text == "Application update"
+    with pytest.raises(ValidationError):
+        EmailMessageBody(
+            ref=EmailMessageRef(account=account, message_id="msg-1"),
+            body_text="<font>Application <b>update</b></font>",
+            body_source=EmailBodySource.TEXT_PLAIN,
+            truncated=False,
+            fetched_at=NOW,
+        )
 
 
 def test_email_body_rejects_raw_html_storage_field() -> None:

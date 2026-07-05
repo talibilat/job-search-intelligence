@@ -56,3 +56,4 @@ Baseline coding standards for every agent and contributor.
 - Classification changes: run the golden-set eval; regressions block merges unless explicitly accepted.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Never claim work is complete without fresh verification evidence.
+[JT-063 2026-07-05 v2] Email providers must retain body content as normalized plain text: HTML MIME bodies are converted through the email HTML normalizer before storage, raw HTML fields are forbidden on retained body DTOs, and plain-text bodies that still look like raw HTML are rejected instead of silently retained.

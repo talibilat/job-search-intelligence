@@ -4,8 +4,7 @@ import re
 from html.parser import HTMLParser
 
 _HTML_TAG_RE = re.compile(
-    r"<\s*/?\s*(?:a|body|br|div|em|h[1-6]|head|html|i|li|ol|p|script|span|"
-    r"strong|style|table|td|th|title|tr|ul)(?:\s[^>]*)?/?>",
+    r"<\s*/?\s*[a-z][a-z0-9:-]*(?:\s[^<>]*)?/?>",
     re.IGNORECASE,
 )
 
