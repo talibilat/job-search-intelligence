@@ -120,6 +120,34 @@ export const EmailProviderName = {
 } as const;
 
 /**
+ * Public read-only plan for controlled classification reprocessing.
+ */
+export interface ClassificationReprocessingPlan {
+  classification_mode: ClassificationMode;
+  email_provider: EmailProviderName;
+  llm_provider: LLMProviderName;
+  /** @minimum 0 */
+  reprocess_count: number;
+  /** @minimum 0 */
+  retained_candidate_count: number;
+  /** @minLength 1 */
+  selection_policy: string;
+  should_reprocess: boolean;
+  /** @minimum 0 */
+  stale_model_count: number;
+  /** @minimum 0 */
+  stale_prompt_version_count: number;
+  /** @minLength 1 */
+  target_model: string;
+  /** @minLength 1 */
+  target_prompt_version: string;
+  /** @minimum 0 */
+  unclassified_count: number;
+  /** @minimum 0 */
+  up_to_date_count: number;
+}
+
+/**
  * Provider-neutral stable reference to a connected mailbox account.
  */
 export interface EmailAccountRef {
@@ -620,6 +648,51 @@ export const classificationEstimateClassificationEstimateGet = async (
     headers: res.headers,
   } as classificationEstimateClassificationEstimateGetResponse;
 };
+
+export type classificationReprocessingPlanClassificationReprocessingPlanGetResponse200 =
+  {
+    data: ClassificationReprocessingPlan;
+    status: 200;
+  };
+
+export type classificationReprocessingPlanClassificationReprocessingPlanGetResponseSuccess =
+  classificationReprocessingPlanClassificationReprocessingPlanGetResponse200 & {
+    headers: Headers;
+  };
+export type classificationReprocessingPlanClassificationReprocessingPlanGetResponse =
+  classificationReprocessingPlanClassificationReprocessingPlanGetResponseSuccess;
+
+export const getClassificationReprocessingPlanClassificationReprocessingPlanGetUrl =
+  () => {
+    return `/classification/reprocessing-plan`;
+  };
+
+/**
+ * Returns deterministic prompt/model-version buckets for retained classification candidates without calling an LLM or exposing email content.
+ * @summary Plan Classification Reprocessing
+ */
+export const classificationReprocessingPlanClassificationReprocessingPlanGet =
+  async (
+    options?: RequestInit,
+  ): Promise<classificationReprocessingPlanClassificationReprocessingPlanGetResponse> => {
+    const res = await fetch(
+      getClassificationReprocessingPlanClassificationReprocessingPlanGetUrl(),
+      {
+        ...options,
+        method: "GET",
+      },
+    );
+
+    const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+    const data: classificationReprocessingPlanClassificationReprocessingPlanGetResponse["data"] =
+      body ? JSON.parse(body) : {};
+    return {
+      data,
+      status: res.status,
+      headers: res.headers,
+    } as classificationReprocessingPlanClassificationReprocessingPlanGetResponse;
+  };
 
 export type getProviderConfigConfigProvidersGetResponse200 = {
   data: ProviderConfigResponse;

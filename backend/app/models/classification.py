@@ -7,7 +7,7 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.config import ClassificationMode, LLMProviderName
+from app.config import ClassificationMode, EmailProviderName, LLMProviderName
 from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
 from app.models.event import ApplicationEventType
 
@@ -211,6 +211,54 @@ class ClassificationCandidateStats(BaseModel):
         ge=0,
         description="Total retained body-text characters across candidate emails.",
     )
+
+
+class ClassificationReprocessingStats(BaseModel):
+    """Version-bucketed retained candidate counts for deterministic reprocessing."""
+
+    model_config = ConfigDict(frozen=True)
+
+    retained_candidate_count: int = Field(ge=0)
+    up_to_date_count: int = Field(ge=0)
+    unclassified_count: int = Field(ge=0)
+    stale_model_count: int = Field(ge=0)
+    stale_prompt_version_count: int = Field(ge=0)
+    reprocess_count: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_partition_totals(self) -> Self:
+        bucket_total = (
+            self.up_to_date_count
+            + self.unclassified_count
+            + self.stale_model_count
+            + self.stale_prompt_version_count
+        )
+        if bucket_total != self.retained_candidate_count:
+            msg = "version buckets must sum to retained_candidate_count"
+            raise ValueError(msg)
+
+        reprocess_total = (
+            self.unclassified_count
+            + self.stale_model_count
+            + self.stale_prompt_version_count
+        )
+        if self.reprocess_count != reprocess_total:
+            msg = "reprocess_count must sum all non-current buckets"
+            raise ValueError(msg)
+
+        return self
+
+
+class ClassificationReprocessingPlan(ClassificationReprocessingStats):
+    """Public read-only plan for controlled classification reprocessing."""
+
+    email_provider: EmailProviderName
+    classification_mode: ClassificationMode
+    llm_provider: LLMProviderName
+    target_model: str = Field(min_length=1)
+    target_prompt_version: str = Field(min_length=1)
+    should_reprocess: bool
+    selection_policy: str = Field(min_length=1)
 
 
 class ClassificationPreRunEstimate(BaseModel):
