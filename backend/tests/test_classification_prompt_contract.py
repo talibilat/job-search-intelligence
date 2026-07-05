@@ -226,3 +226,41 @@ def test_classification_prompt_output_rejects_malformed_payloads(
 ) -> None:
     with pytest.raises(ValidationError):
         parse_classification_prompt_output(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("is_job_related", "true"),
+        ("confidence", "0.92"),
+        ("salary_min", "120000"),
+        ("event_at", 1700000000),
+        ("event_at", "1700000000"),
+    ],
+)
+def test_classification_prompt_output_rejects_stringly_typed_scalars(
+    field_name: str,
+    field_value: object,
+) -> None:
+    payload = {
+        "is_job_related": True,
+        "category": "rejection",
+        "confidence": 0.92,
+        "company": "Example Systems",
+        "role_title": "Backend Engineer",
+        "application_status": "rejected",
+        "event_type": "rejection",
+        "event_at": "2026-07-05T12:00:00Z",
+        "salary_min": None,
+        "salary_max": None,
+        "currency": None,
+        "location": None,
+        "work_mode": None,
+        "seniority": None,
+        "sponsorship": "unknown",
+        "tech_stack": [],
+        "rejection_reason": None,
+    }
+
+    with pytest.raises(ValidationError):
+        parse_classification_prompt_output(json.dumps(payload | {field_name: field_value}))

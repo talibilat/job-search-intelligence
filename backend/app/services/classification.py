@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.config import AppSettings, LLMProviderName
 from app.models import EmailClassificationCandidate, EmailClassificationRecord
 from app.pipeline.classify import (
     ClassificationPromptEmail,
     MalformedLLMExtraction,
-    MalformedLLMExtractionReason,
     build_classification_prompt_request,
-    parse_classification_prompt_output,
+    parse_classification_generation_response,
 )
-from app.providers.llm import LLMFinishReason, LLMGenerationResponse, LLMProvider
+from app.providers.llm import LLMGenerationResponse, LLMProvider
 
 type Clock = Callable[[], datetime]
 
@@ -91,8 +89,8 @@ class ClassificationService:
             completion_tokens += response_completion_tokens
             total_tokens += response_total_tokens
 
-            result = _classification_from_response(
-                candidate=candidate,
+            result = parse_classification_generation_response(
+                email_id=candidate.email_id,
                 response=response,
                 prompt_version=self._settings.classification_prompt_version,
                 classified_at=self._clock(),
@@ -132,68 +130,6 @@ def _classification_model(settings: AppSettings) -> str | None:
     return settings.ollama_chat_model
 
 
-def _classification_from_response(
-    *,
-    candidate: EmailClassificationCandidate,
-    response: LLMGenerationResponse,
-    prompt_version: str,
-    classified_at: datetime,
-) -> EmailClassificationRecord | MalformedLLMExtraction:
-    if response.finish_reason is not LLMFinishReason.STOP:
-        return _malformed_result(
-            email_id=candidate.email_id,
-            response=response,
-            prompt_version=prompt_version,
-            reason=MalformedLLMExtractionReason.INCOMPLETE_GENERATION,
-            message="LLM response did not finish cleanly.",
-        )
-
-    try:
-        raw_payload = json.loads(
-            response.content,
-            object_pairs_hook=_reject_duplicate_json_keys,
-        )
-    except _DuplicateJSONKeyError:
-        return _malformed_result(
-            email_id=candidate.email_id,
-            response=response,
-            prompt_version=prompt_version,
-            reason=MalformedLLMExtractionReason.DUPLICATE_JSON_KEY,
-            message="LLM response contained duplicate JSON keys.",
-        )
-    except json.JSONDecodeError:
-        return _malformed_result(
-            email_id=candidate.email_id,
-            response=response,
-            prompt_version=prompt_version,
-            reason=MalformedLLMExtractionReason.INVALID_JSON,
-            message="LLM response was not valid JSON.",
-        )
-
-    try:
-        prompt_output = parse_classification_prompt_output(
-            json.dumps(raw_payload, separators=(",", ":")),
-        )
-    except ValidationError:
-        return _malformed_result(
-            email_id=candidate.email_id,
-            response=response,
-            prompt_version=prompt_version,
-            reason=MalformedLLMExtractionReason.INVALID_SCHEMA,
-            message="LLM response failed structured classification validation.",
-        )
-
-    return EmailClassificationRecord(
-        email_id=candidate.email_id,
-        is_job_related=prompt_output.is_job_related,
-        category=prompt_output.category,
-        confidence=prompt_output.confidence,
-        model=response.model,
-        prompt_version=prompt_version,
-        classified_at=classified_at,
-    )
-
-
 def _usage_tokens(response: LLMGenerationResponse) -> tuple[int, int, int]:
     if response.usage is None:
         return 0, 0, 0
@@ -202,33 +138,3 @@ def _usage_tokens(response: LLMGenerationResponse) -> tuple[int, int, int]:
     completion_tokens = response.usage.completion_tokens
     total_tokens = max(response.usage.total_tokens, prompt_tokens + completion_tokens)
     return prompt_tokens, completion_tokens, total_tokens
-
-
-def _malformed_result(
-    *,
-    email_id: str,
-    response: LLMGenerationResponse,
-    prompt_version: str,
-    reason: MalformedLLMExtractionReason,
-    message: str,
-) -> MalformedLLMExtraction:
-    return MalformedLLMExtraction(
-        email_id=email_id,
-        model=response.model,
-        prompt_version=prompt_version,
-        reason=reason,
-        message=message,
-    )
-
-
-class _DuplicateJSONKeyError(ValueError):
-    """Raised when provider JSON repeats a key in the same object."""
-
-
-def _reject_duplicate_json_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    payload: dict[str, object] = {}
-    for key, value in pairs:
-        if key in payload:
-            raise _DuplicateJSONKeyError
-        payload[key] = value
-    return payload
