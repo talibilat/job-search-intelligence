@@ -16,6 +16,7 @@ from app.providers.email.provider import (
 )
 
 _GMAIL_RUNTIME_NOT_IMPLEMENTED = "Gmail provider runtime is not implemented yet."
+_GMAIL_MAX_BODY_BATCH_SIZE = 100
 
 
 class GmailEmailProvider:
@@ -23,7 +24,7 @@ class GmailEmailProvider:
 
     name = EmailProviderName.GMAIL
 
-    def __init__(self, *, settings: AppSettings, max_body_batch_size: int = 100) -> None:
+    def __init__(self, *, settings: AppSettings) -> None:
         if tuple(settings.gmail_scopes) != (GMAIL_READONLY_SCOPE,):
             raise EmailProviderError(
                 public_message="Gmail provider requires only the gmail.readonly scope."
@@ -37,7 +38,7 @@ class GmailEmailProvider:
             supports_incremental_sync=True,
             attachment_policy=EmailAttachmentPolicy.IGNORED,
             max_metadata_page_size=settings.gmail_page_size,
-            max_body_batch_size=max_body_batch_size,
+            max_body_batch_size=_GMAIL_MAX_BODY_BATCH_SIZE,
         )
 
     async def start_authorization(
