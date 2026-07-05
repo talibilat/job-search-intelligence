@@ -11,7 +11,11 @@ from app.providers.llm import (
     LLMGenerationRequest,
     LLMMessage,
     LLMMessageRole,
+    LLMModelHealthCheck,
+    LLMModelHealthStatus,
+    LLMModelKind,
     LLMProvider,
+    LLMProviderHealthCheckRequest,
     LLMProviderResponseError,
     LLMProviderTimeoutError,
     LLMProviderUnavailableError,
@@ -136,6 +140,45 @@ def test_azure_openai_provider_satisfies_llm_provider_protocol() -> None:
     )
 
     assert isinstance(provider, LLMProvider)
+
+
+def test_azure_openai_health_check_verifies_chat_deployment() -> None:
+    transport = FakeAzureTransport()
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=FakeSecretStore("secret-api-key"),
+        transport=transport,
+    )
+
+    response = asyncio.run(
+        provider.health_check(
+            LLMProviderHealthCheckRequest(
+                chat_model="jobtracker-chat",
+                embedding_model="jobtracker-embedding",
+            )
+        )
+    )
+
+    assert len(transport.calls) == 1
+    assert transport.calls[0].url == (
+        "https://example.openai.azure.com/openai/deployments/"
+        "jobtracker-chat/chat/completions?api-version=2024-06-01"
+    )
+    assert response.provider_name == "azure_openai"
+    assert response.status is LLMModelHealthStatus.UNAVAILABLE
+    assert response.checks == (
+        LLMModelHealthCheck(
+            kind=LLMModelKind.CHAT,
+            model="jobtracker-chat",
+            status=LLMModelHealthStatus.AVAILABLE,
+        ),
+        LLMModelHealthCheck(
+            kind=LLMModelKind.EMBEDDING,
+            model="jobtracker-embedding",
+            status=LLMModelHealthStatus.UNAVAILABLE,
+            detail="Azure OpenAI embedding health checks are not implemented yet.",
+        ),
+    )
 
 
 def test_azure_openai_provider_posts_chat_completion_request() -> None:
