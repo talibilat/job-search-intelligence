@@ -124,35 +124,36 @@ describe("App", () => {
             ? input.href
             : input.url;
       const path = url.startsWith("http") ? new URL(url).pathname : url;
-      const body = path === "/sync"
-        ? {
-            account_id: "talib@example.test",
-            finished_at: null,
-            last_error: null,
-            message_count: 2600,
-            mode: "incremental",
-            page_count: 13,
-            provider: "gmail",
-            raw_email_count: 1305,
-            recovered_from_expired_cursor: false,
-            started_at: "2026-07-05T10:00:00Z",
-            state: "running",
-          }
-        : path === "/sync/status"
+      const body =
+        path === "/sync"
           ? {
               account_id: "talib@example.test",
-              finished_at: "2026-07-05T09:45:30Z",
+              finished_at: null,
               last_error: null,
-              message_count: 2500,
-              mode: "full_backfill",
-              page_count: 12,
+              message_count: 2600,
+              mode: "incremental",
+              page_count: 13,
               provider: "gmail",
-              raw_email_count: 1240,
-              recovered_from_expired_cursor: true,
-              started_at: "2026-07-05T09:15:00Z",
-              state: "succeeded",
+              raw_email_count: 1305,
+              recovered_from_expired_cursor: false,
+              started_at: "2026-07-05T10:00:00Z",
+              state: "running",
             }
-          : null;
+          : path === "/sync/status"
+            ? {
+                account_id: "talib@example.test",
+                finished_at: "2026-07-05T09:45:30Z",
+                last_error: null,
+                message_count: 2500,
+                mode: "full_backfill",
+                page_count: 12,
+                provider: "gmail",
+                raw_email_count: 1240,
+                recovered_from_expired_cursor: true,
+                started_at: "2026-07-05T09:15:00Z",
+                state: "succeeded",
+              }
+            : null;
 
       if (!body) {
         throw new Error(`Unhandled fetch request: ${path}`);
