@@ -27,12 +27,19 @@ const metricPlaceholders = [
 
 export function DashboardPage() {
   return (
-    <main aria-labelledby="dashboard-page-title" className="app-shell dashboard-shell">
-      <section className="dashboard-hero" aria-labelledby="dashboard-page-title">
+    <main
+      aria-labelledby="dashboard-page-title"
+      className="app-shell dashboard-shell"
+    >
+      <section
+        className="dashboard-hero"
+        aria-labelledby="dashboard-page-title"
+      >
         <p className="eyebrow">Phase 0 dashboard shell</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          This route is ready for deterministic job-search metrics once the applications API and metrics endpoints exist.
+          This route is ready for deterministic job-search metrics once the
+          applications API and metrics endpoints exist.
         </p>
       </section>
 
@@ -46,7 +53,8 @@ export function DashboardPage() {
             <h2 id="dashboard-filters-title">Dashboard filters</h2>
           </div>
           <p>
-            Filter state will live in the URL query string so every deterministic metric uses the same scoped view.
+            Filter state will live in the URL query string so every
+            deterministic metric uses the same scoped view.
           </p>
           <ul className="filter-placeholder-list">
             {filterPlaceholders.map((filter) => (
@@ -55,7 +63,10 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section aria-labelledby="metrics-overview-title" className="dashboard-card">
+        <section
+          aria-labelledby="metrics-overview-title"
+          className="dashboard-card"
+        >
           <div>
             <p className="eyebrow">Deterministic source of truth</p>
             <h2 id="metrics-overview-title">Metrics overview</h2>

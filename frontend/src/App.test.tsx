@@ -60,7 +60,9 @@ describe("App", () => {
     expect(
       screen.getByRole("region", { name: "Dashboard filters" }),
     ).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Metrics overview" })).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Metrics overview" }),
+    ).toBeTruthy();
 
     const emptyState = screen.getByRole("status", {
       name: "Dashboard metrics pending",
