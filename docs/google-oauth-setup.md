@@ -151,15 +151,17 @@ Logs, API responses, provider DTO dumps, and test fixtures must not expose raw t
 
 ## Metadata Listing Boundary
 
-Current Gmail message listing is a safe metadata-only step for broad full backfill.
-It calls Gmail list pages with `maxResults` and `pageToken`, then fetches each listed message with `format=metadata` and Gmail partial fields.
+Current Gmail message listing is a safe metadata-only step for broad full backfill and incremental sync.
+Full backfill captures the current Gmail profile `historyId` before the first page, calls Gmail message list pages with `maxResults` and `pageToken`, then fetches each listed message with `format=metadata` and Gmail partial fields.
+When a full backfill has more pages, the Gmail page token is wrapped with that captured history cursor and the replacement sync cursor is withheld until the final page.
+Incremental sync calls Gmail `users.history.list` with the stored history cursor, requests only `messageAdded` history records, de-duplicates repeated message IDs within a history page, and returns the replacement history cursor only after all history pages are drained.
 Those partial fields include message IDs, thread IDs, labels, size estimates, and selected headers (`From`, `To`, `Cc`, `Subject`, `Date`, and `Message-ID`).
 They deliberately exclude snippets, payload bodies, raw MIME content, and attachments.
-[JT-066 2026-07-05 v2] On the final full-backfill page, Gmail message listing also reads the Gmail profile `historyId` and returns it as an opaque replacement sync cursor for later incremental sync.
-
 [JT-066 2026-07-05 v2] Backfill state and final replacement cursor promotion are repository-backed so full metadata backfills can resume safely.
 Incremental sync cursors and metadata-only repository writes now flow through the sync service, `email_sync_state`, and `raw_emails` tables.
-Incremental Gmail transport API calls, retained body fetching, richer Gmail transport behavior, and connected-account persistence remain separate Phase 1 work.
+Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.
+
+Retained body fetching, richer normalization, and connected-account persistence remain separate Phase 1 work.
 
 ## Preflight Checklist
 
