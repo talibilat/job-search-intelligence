@@ -300,8 +300,7 @@ def test_gmail_message_lister_uses_history_for_incremental_metadata_sync() -> No
 
     assert [message.ref.message_id for message in page.messages] == ["msg-3"]
     assert page.next_page_token == "history-page-2"
-    assert page.next_sync_cursor is not None
-    assert page.next_sync_cursor.value == "1003"
+    assert page.next_sync_cursor is None
     history_path, history_query, history_token = transport.calls[0]
     assert history_path == "/gmail/v1/users/me/history"
     assert dict(history_query) == {
@@ -315,6 +314,48 @@ def test_gmail_message_lister_uses_history_for_incremental_metadata_sync() -> No
     assert [call[0] for call in transport.calls[1:]] == [
         "/gmail/v1/users/me/messages/msg-3"
     ]
+
+
+def test_gmail_message_lister_returns_history_cursor_after_final_incremental_page() -> None:
+    class FinalHistoryTransport(FakeGmailTransport):
+        async def get_json(
+            self,
+            path: str,
+            *,
+            query: tuple[tuple[str, str], ...],
+            access_token: SecretStr,
+        ) -> dict[str, object]:
+            self.calls.append((path, query, access_token.get_secret_value()))
+            if path == "/gmail/v1/users/me/history":
+                return {"history": [], "historyId": "1004"}
+            raise AssertionError(f"unexpected Gmail path: {path}")
+
+    transport = FinalHistoryTransport()
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=transport,
+    )
+    cursor = EmailProviderCursor(
+        account=_connection().account,
+        value="1003",
+        issued_at=NOW,
+    )
+
+    page = asyncio.run(
+        lister.list_message_metadata(
+            _connection(),
+            EmailMetadataListRequest(
+                mode=EmailSyncMode.INCREMENTAL,
+                page_size=2,
+                sync_cursor=cursor,
+            ),
+        )
+    )
+
+    assert page.messages == ()
+    assert page.next_page_token is None
+    assert page.next_sync_cursor is not None
+    assert page.next_sync_cursor.value == "1004"
 
 
 def test_gmail_history_404_maps_to_expired_sync_cursor(monkeypatch: pytest.MonkeyPatch) -> None:

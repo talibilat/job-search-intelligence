@@ -655,14 +655,18 @@ class GmailMessageLister:
                 )
             )
 
-        return EmailMetadataPage(
-            messages=tuple(metadata_messages),
-            next_page_token=history_response.next_page_token,
-            next_sync_cursor=EmailProviderCursor(
+        next_sync_cursor = None
+        if history_response.next_page_token is None:
+            next_sync_cursor = EmailProviderCursor(
                 account=connection.account,
                 value=history_response.history_id,
                 issued_at=datetime.now(UTC),
-            ),
+            )
+
+        return EmailMetadataPage(
+            messages=tuple(metadata_messages),
+            next_page_token=history_response.next_page_token,
+            next_sync_cursor=next_sync_cursor,
         )
 
     async def _fetch_current_history_cursor(
