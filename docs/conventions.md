@@ -15,7 +15,7 @@ Baseline coding standards for every agent and contributor.
 - Repository pattern for all database access; no raw SQL scattered through services.
 - Strategy pattern for `EmailProvider` and `LLMProvider`; provider-specific code stays behind the interface.
 - Provider selection metadata belongs in `app.providers.provider_registry`; it declares supported providers, non-secret setting requirements, and `SecretRef` metadata without instantiating adapters or reading secrets.
-- LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation DTOs; concrete provider adapters own vendor payloads and credential lookup.
+- LLM calls go through the `app.providers.llm.LLMProvider` protocol using provider-neutral Pydantic generation and health-check DTOs; concrete provider adapters own vendor payloads, credential lookup, and model-availability checks.
 - `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, normalize retained HTML bodies to plain text, reject raw HTML retention fields, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
 - Gmail metadata listing must keep full backfill and incremental sync metadata-only: use message list pages for full backfill, `users.history.list` `messageAdded` records for incremental sync, withhold replacement history cursors until paginated listing is fully drained, and map Gmail history `404` responses to expired-cursor recovery.
 - Sync services persist provider-owned cursors through `SyncStateRepository`, keyed by provider and account, without treating cursor values as OAuth token material or email content.
@@ -42,6 +42,7 @@ Baseline coding standards for every agent and contributor.
 - FastAPI dependency injection supplies repositories, providers, and config.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
 - Email-provider failures that can cross the API boundary must use stable `EmailProviderErrorCode` values and `EmailProviderUserAction` hints so clients can distinguish reconnect, scope, rate-limit, temporary outage, expired-cursor, invalid-provider-response, and generic provider-failure cases without inspecting provider payloads.
+- LLM-provider failures that can cross the API boundary must use typed `LLMProviderError` subclasses so clients can distinguish unavailable providers, failed requests, invalid responses, and timeouts without inspecting provider payloads.
 - Public API failures use the standard `{"error": {"code": "...", "message": "...", "details": []}}` response shape, and route-specific public failures should raise `ApiError` instead of exposing arbitrary `HTTPException.detail` text.
 - Validation, HTTP, and internal exception handlers must sanitize raw request input, tracebacks, secrets, and private exception details.
 - Frontend code imports API client types and helpers from `frontend/src/api`; `frontend/src/api/generated/` is reserved for OpenAPI-generated output and placeholder destination code.
