@@ -554,7 +554,7 @@ class GmailMessageMetadataResponse(BaseModel):
 
 
 class GmailMessageLister:
-    """List Gmail full-backfill pages without fetching snippets or body content."""
+    """List Gmail full-backfill and history pages without body content."""
 
     def __init__(
         self,
