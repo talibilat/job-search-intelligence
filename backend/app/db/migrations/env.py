@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from importlib import import_module
 from logging.config import fileConfig
+from typing import Any
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import Engine, engine_from_config, event, pool
 
 from app.config import AppSettings
 from app.db.migrations.config import migration_context_options
@@ -57,6 +59,7 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    _register_sqlite_vec_loader(connectable)
 
     with connectable.connect() as connection:
         context.configure(
@@ -67,6 +70,21 @@ def run_migrations_online() -> None:
 
         with context.begin_transaction():
             context.run_migrations()
+
+
+def _register_sqlite_vec_loader(connectable: Engine) -> None:
+    @event.listens_for(connectable, "connect")
+    def load_sqlite_vec(dbapi_connection: Any, _connection_record: Any) -> None:
+        sqlite_vec = import_module("sqlite_vec")
+        load = getattr(sqlite_vec, "load", None)
+        if not callable(load):
+            raise RuntimeError("sqlite_vec.load is unavailable")
+
+        dbapi_connection.enable_load_extension(True)
+        try:
+            load(dbapi_connection)
+        finally:
+            dbapi_connection.enable_load_extension(False)
 
 
 if context.is_offline_mode():
