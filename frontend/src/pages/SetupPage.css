@@ -9,7 +9,11 @@
   padding: 36px;
   border-radius: 34px;
   background:
-    radial-gradient(circle at top right, rgb(184 200 174 / 45%), transparent 34%),
+    radial-gradient(
+      circle at top right,
+      rgb(184 200 174 / 45%),
+      transparent 34%
+    ),
     #fffaf0;
   box-shadow: 0 24px 70px rgb(36 50 38 / 12%);
 }

@@ -402,7 +402,7 @@ curl -s http://127.0.0.1:8765/health
 Expected result:
 
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
 Caveat:
@@ -442,7 +442,13 @@ The tests should pass.
 A typical error body should look like this:
 
 ```json
-{"error":{"code":"not_found","message":"Resource not found","details":[]}}
+{
+  "error": {
+    "code": "not_found",
+    "message": "Resource not found",
+    "details": []
+  }
+}
 ```
 
 Manual check:
@@ -698,7 +704,14 @@ curl -s http://127.0.0.1:8765/setup/status
 Expected result:
 
 ```json
-{"setup_complete":false,"gmail_connected":false,"llm_configured":false,"email_provider":"gmail","llm_provider":"ollama","classification_mode":"local"}
+{
+  "setup_complete": false,
+  "gmail_connected": false,
+  "llm_configured": false,
+  "email_provider": "gmail",
+  "llm_provider": "ollama",
+  "classification_mode": "local"
+}
 ```
 
 Caveat:
@@ -757,7 +770,7 @@ This is a safe check because it should not delete anything.
 Successful response shape:
 
 ```json
-{"status":"wiped","deleted_paths":["..."],"missing_paths":["..."]}
+{ "status": "wiped", "deleted_paths": ["..."], "missing_paths": ["..."] }
 ```
 
 Caveat:

@@ -11,7 +11,9 @@ describe("App", () => {
   it("shows a chart foundation empty state without implementing dashboard metrics", () => {
     render(<App />);
 
-    expect(screen.getByRole("region", { name: "Chart foundation" })).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Chart foundation" }),
+    ).toBeTruthy();
 
     const emptyState = screen.getByRole("status", {
       name: "Dashboard data pending",
@@ -33,8 +35,12 @@ describe("App", () => {
         name: "Set up JobTracker locally",
       }),
     ).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Primary" }).textContent).toContain("Setup");
-    expect(screen.getByRole("region", { name: "Setup checklist" })).toBeTruthy();
+    expect(
+      screen.getByRole("navigation", { name: "Primary" }).textContent,
+    ).toContain("Setup");
+    expect(
+      screen.getByRole("region", { name: "Setup checklist" }),
+    ).toBeTruthy();
     expect(screen.getByText("Choose provider")).toBeTruthy();
     expect(screen.getByText("Connect Gmail read-only")).toBeTruthy();
   });
