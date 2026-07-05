@@ -183,6 +183,5 @@ def _dedupe_tokens(tokens: tuple[str, ...] | list[str]) -> tuple[str, ...]:
 
 def _is_level_token(token: str) -> bool:
     return (
-        token in {"i", "ii", "iii", "iv", "v", "vi"}
-        or _LEVEL_TOKEN_RE.fullmatch(token) is not None
+        token in {"i", "ii", "iii", "iv", "v", "vi"} or _LEVEL_TOKEN_RE.fullmatch(token) is not None
     )
