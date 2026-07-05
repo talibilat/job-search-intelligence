@@ -14,7 +14,12 @@ from app.models import SyncJobCounts, SyncJobPhase, SyncJobStatus
 from app.models.records import EmailBackfillStateRecord, EmailBackfillStatus, EmailSyncStateRecord
 from app.providers.email import (
     EmailAccountRef,
+    EmailBodyBatch,
+    EmailBodyFetchRequest,
+    EmailCandidateQuery,
     EmailConnection,
+    EmailMessageMetadata,
+    EmailMessageRef,
     EmailMetadataListRequest,
     EmailMetadataPage,
     EmailProviderCursor,
@@ -389,6 +394,16 @@ class MetadataListingProvider(Protocol):
         ...
 
 
+class RetainedBodyProvider(Protocol):
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        """Return retained bodies for selected provider message refs."""
+        ...
+
+
 class EmailSyncPageResult(BaseModel):
     """One metadata sync page plus the mode that produced it."""
 
@@ -421,11 +436,13 @@ class EmailSyncService:
         sync_service: SyncService | None = None,
         clock: Callable[[], datetime] | None = None,
         status_callback: Callable[[EmailSyncStatus], None] | None = None,
+        body_provider: RetainedBodyProvider | None = None,
     ) -> None:
         if page_size < 1:
             msg = "page_size must be at least 1"
             raise ValueError(msg)
         self._provider = provider
+        self._body_provider = body_provider or cast(RetainedBodyProvider, provider)
         self._page_size = page_size
         self._email_repository = email_repository
         self._sync_service = sync_service
@@ -581,6 +598,44 @@ class EmailSyncService:
         return EmailBackfillPageResult(
             page=page,
             state=state,
+        )
+
+    async def fetch_retained_bodies(
+        self,
+        *,
+        connection: EmailConnection,
+        metadata: Iterable[EmailMessageMetadata],
+        candidate_query: EmailCandidateQuery,
+        reconciliation_or_debug_refs: Iterable[EmailMessageRef] = (),
+        max_body_bytes: int | None = None,
+    ) -> EmailBodyBatch:
+        """Fetch bodies only for broad candidates or explicit reconciliation refs."""
+
+        selected_refs: list[EmailMessageRef] = []
+        seen_message_ids: set[str] = set()
+
+        def select_ref(ref: EmailMessageRef) -> None:
+            if ref.message_id in seen_message_ids:
+                return
+            seen_message_ids.add(ref.message_id)
+            selected_refs.append(ref)
+
+        for message in metadata:
+            if candidate_query.matches_metadata(message):
+                select_ref(message.ref)
+
+        for ref in reconciliation_or_debug_refs:
+            select_ref(ref)
+
+        if not selected_refs:
+            return EmailBodyBatch(bodies=(), failures=())
+
+        return await self._body_provider.fetch_message_bodies(
+            connection,
+            EmailBodyFetchRequest(
+                refs=tuple(selected_refs),
+                max_body_bytes=max_body_bytes,
+            ),
         )
 
     async def _list_full_backfill_page(

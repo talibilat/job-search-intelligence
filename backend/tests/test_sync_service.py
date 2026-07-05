@@ -13,7 +13,11 @@ from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
     EmailAttachmentPolicy,
+    EmailBodyBatch,
+    EmailBodyFetchRequest,
+    EmailBodySource,
     EmailConnection,
+    EmailMessageBody,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
@@ -22,6 +26,7 @@ from app.providers.email import (
     EmailProviderCursor,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
+    build_broad_candidate_query,
 )
 from app.security import SecretKind, SecretRef
 from app.services.sync_service import (
@@ -99,6 +104,31 @@ class RecordingHistoryProvider:
                 value="history-next",
                 issued_at=NOW,
             ),
+        )
+
+
+class RecordingRetainedBodyProvider(RecordingHistoryProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.body_requests: list[EmailBodyFetchRequest] = []
+
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        self.body_requests.append(request)
+        return EmailBodyBatch(
+            bodies=tuple(
+                EmailMessageBody(
+                    ref=ref,
+                    body_text=f"Retained body for {ref.message_id}",
+                    body_source=EmailBodySource.TEXT_PLAIN,
+                    truncated=False,
+                    fetched_at=NOW,
+                )
+                for ref in request.refs
+            )
         )
 
 
@@ -374,7 +404,6 @@ def test_paginated_sync_with_cursor_requires_explicit_mode() -> None:
 
     assert provider.requests == []
 
-
 def test_manual_sync_backfills_all_pages_and_persists_latest_cursor() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -646,6 +675,58 @@ def test_manual_sync_records_failed_status_when_provider_fails() -> None:
     assert status.state is EmailSyncRunState.FAILED
     assert status.last_error == "Sync failed."
     assert status.finished_at == NOW
+
+
+def test_sync_service_fetches_retained_bodies_only_for_candidates_and_debug_refs() -> None:
+    provider = RecordingRetainedBodyProvider()
+    service = EmailSyncService(provider=provider, page_size=250)
+    connection = email_connection()
+    candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id="msg-candidate",
+            thread_id="thread-candidate",
+        ),
+        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+        subject="Weekly digest",
+        labels=("INBOX",),
+    )
+    non_candidate = EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id="msg-newsletter",
+            thread_id="thread-newsletter",
+        ),
+        from_addr=EmailAddress(address="news@example.com"),
+        subject="Product newsletter",
+        labels=("INBOX",),
+    )
+    debugging_ref = EmailMessageRef(
+        account=connection.account,
+        message_id="msg-debugging",
+        thread_id="thread-debugging",
+    )
+
+    batch = asyncio.run(
+        service.fetch_retained_bodies(
+            connection=connection,
+            metadata=(candidate, non_candidate),
+            candidate_query=build_broad_candidate_query(),
+            reconciliation_or_debug_refs=(debugging_ref,),
+            max_body_bytes=10_000,
+        )
+    )
+
+    assert [body.ref.message_id for body in batch.bodies] == [
+        "msg-candidate",
+        "msg-debugging",
+    ]
+    assert len(provider.body_requests) == 1
+    assert [ref.message_id for ref in provider.body_requests[0].refs] == [
+        "msg-candidate",
+        "msg-debugging",
+    ]
+    assert provider.body_requests[0].max_body_bytes == 10_000
 
 
 def email_connection() -> EmailConnection:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,7 +12,9 @@ from app.providers.email import (
     EmailAccountRef,
     EmailAttachmentPolicy,
     EmailAuthorizationCallbackRequest,
+    EmailBodyFetchFailureReason,
     EmailBodyFetchRequest,
+    EmailBodySource,
     EmailConnection,
     EmailMessageRef,
     EmailMetadataListRequest,
@@ -60,6 +63,30 @@ class FakeGmailTransport:
         if path == "/gmail/v1/users/me/messages":
             return {"messages": [{"id": "msg-1", "threadId": "thread-1"}]}
 
+        if path == "/gmail/v1/users/me/messages/msg-1" and dict(query).get("format") == "full":
+            return {
+                "id": "msg-1",
+                "threadId": "thread-1",
+                "payload": {
+                    "mimeType": "multipart/mixed",
+                    "parts": [
+                        {
+                            "mimeType": "text/plain",
+                            "body": {
+                                "data": _gmail_body_data(
+                                    "Thanks for applying to Example Corp.\nNext steps soon."
+                                )
+                            },
+                        },
+                        {
+                            "filename": "resume.pdf",
+                            "mimeType": "application/pdf",
+                            "body": {"attachmentId": "attachment-1", "size": 2048},
+                        },
+                    ],
+                },
+            }
+
         if path == "/gmail/v1/users/me/messages/msg-1":
             return {
                 "id": "msg-1",
@@ -74,6 +101,28 @@ class FakeGmailTransport:
                 },
                 "snippet": "Private body-derived snippet must not be retained.",
                 "sizeEstimate": 2048,
+            }
+
+        if path == "/gmail/v1/users/me/messages/msg-html":
+            return {
+                "id": "msg-html",
+                "threadId": "thread-html",
+                "payload": {
+                    "mimeType": "text/html",
+                    "body": {
+                        "data": _gmail_body_data(
+                            "<h1>Application update</h1>"
+                            "<p>Please schedule an <strong>interview</strong>.</p>"
+                        )
+                    },
+                },
+            }
+
+        if path == "/gmail/v1/users/me/messages/msg-empty":
+            return {
+                "id": "msg-empty",
+                "threadId": "thread-empty",
+                "payload": {"mimeType": "text/plain", "body": {}},
             }
 
         raise AssertionError(f"unexpected Gmail path: {path}")
@@ -155,6 +204,10 @@ def _connection() -> EmailConnection:
         granted_scopes=(GMAIL_READONLY_SCOPE,),
         connected_at=NOW,
     )
+
+
+def _gmail_body_data(value: str) -> str:
+    return base64.urlsafe_b64encode(value.encode("utf-8")).decode("ascii").rstrip("=")
 
 
 def test_gmail_email_provider_satisfies_email_provider_protocol() -> None:
@@ -316,3 +369,87 @@ def test_gmail_email_provider_lists_message_metadata_with_configured_secret_stor
         "/gmail/v1/users/me/messages/msg-1",
     ]
     assert {call[2] for call in transport.calls} == {"access-token"}
+
+
+def test_gmail_email_provider_fetches_selected_retained_bodies_with_secret_store() -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    transport = FakeGmailTransport()
+    provider = GmailEmailProvider(
+        settings=_settings(),
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=transport,
+    )
+    connection = _connection()
+
+    batch = asyncio.run(
+        provider.fetch_message_bodies(
+            connection,
+            EmailBodyFetchRequest(
+                refs=(
+                    EmailMessageRef(
+                        account=connection.account,
+                        message_id="msg-1",
+                        thread_id="thread-1",
+                    ),
+                    EmailMessageRef(
+                        account=connection.account,
+                        message_id="msg-html",
+                        thread_id="thread-html",
+                    ),
+                ),
+                max_body_bytes=10_000,
+            ),
+        )
+    )
+
+    assert batch.failures == ()
+    assert [body.ref.message_id for body in batch.bodies] == ["msg-1", "msg-html"]
+    assert batch.bodies[0].body_text == "Thanks for applying to Example Corp.\nNext steps soon."
+    assert batch.bodies[0].body_source is EmailBodySource.TEXT_PLAIN
+    assert batch.bodies[0].truncated is False
+    assert batch.bodies[1].body_text == "Application update\nPlease schedule an interview."
+    assert batch.bodies[1].body_source is EmailBodySource.HTML_CONVERTED
+
+    body_calls = [
+        (path, dict(query), token)
+        for path, query, token in transport.calls
+        if dict(query).get("format") == "full"
+    ]
+    assert [call[0] for call in body_calls] == [
+        "/gmail/v1/users/me/messages/msg-1",
+        "/gmail/v1/users/me/messages/msg-html",
+    ]
+    assert {call[2] for call in body_calls} == {"access-token"}
+    assert all("snippet" not in call[1]["fields"] for call in body_calls)
+
+
+def test_gmail_email_provider_returns_empty_failure_when_body_has_no_text() -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    provider = GmailEmailProvider(
+        settings=_settings(),
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=FakeGmailTransport(),
+    )
+    connection = _connection()
+
+    batch = asyncio.run(
+        provider.fetch_message_bodies(
+            connection,
+            EmailBodyFetchRequest(
+                refs=(
+                    EmailMessageRef(
+                        account=connection.account,
+                        message_id="msg-empty",
+                        thread_id="thread-empty",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert batch.bodies == ()
+    assert len(batch.failures) == 1
+    assert batch.failures[0].ref.message_id == "msg-empty"
+    assert batch.failures[0].reason is EmailBodyFetchFailureReason.EMPTY
