@@ -70,21 +70,9 @@ test("renders the Phase 0 setup, sync, and dashboard shell", async ({
   await expect(syncPanel.getByText("Recovered expired cursor")).toBeVisible();
   await expect(syncPanel.getByText("talib@example.test")).toBeVisible();
 
-  if (process.env.NO_MISTAKES_EVIDENCE_DIR) {
-    await syncPanel.screenshot({
-      path: `${process.env.NO_MISTAKES_EVIDENCE_DIR}/sync-status-panel-succeeded.png`,
-    });
-  }
-
   await syncPanel.getByRole("button", { name: "Sync now" }).click();
   await expect(syncPanel.getByText("Sync is running")).toBeVisible();
   await expect(syncPanel.getByText("1,305 raw emails")).toBeVisible();
-
-  if (process.env.NO_MISTAKES_EVIDENCE_DIR) {
-    await syncPanel.screenshot({
-      path: `${process.env.NO_MISTAKES_EVIDENCE_DIR}/sync-status-panel-running.png`,
-    });
-  }
 
   await expect(
     page.getByRole("region", { name: "Chart foundation" }),
