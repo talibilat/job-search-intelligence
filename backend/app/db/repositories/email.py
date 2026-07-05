@@ -198,7 +198,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             LEFT JOIN email_classifications
                 ON email_classifications.email_id = raw_emails.id
             WHERE raw_emails.provider = ?
-                AND raw_emails.body_retention_state IN ('retained', 'debugging')
+                AND raw_emails.body_retention_state = ?
                 AND raw_emails.body_text IS NOT NULL
                 AND (
                     email_classifications.email_id IS NULL
@@ -206,7 +206,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                     OR email_classifications.prompt_version != ?
                 )
             """,
-            (provider.value, model, prompt_version),
+            (provider.value, RawEmailBodyRetentionState.RETAINED.value, model, prompt_version),
         ).fetchone()
         if row is None:
             return ClassificationCandidateStats(candidate_count=0, body_text_char_count=0)

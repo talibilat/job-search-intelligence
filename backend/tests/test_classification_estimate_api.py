@@ -21,6 +21,12 @@ def test_get_classification_estimate_counts_candidates_tokens_and_cost(
         insert_raw_email(connection, "needs-classification", body_text="a" * 32)
         insert_raw_email(connection, "stale-classification", body_text="b" * 16)
         insert_raw_email(connection, "stale-model", body_text="d" * 8)
+        insert_raw_email(
+            connection,
+            "debugging-retention",
+            body_text="debugging body",
+            body_retention_state="debugging",
+        )
         insert_raw_email(connection, "current-classification", body_text="c" * 80)
         insert_raw_email(
             connection,
@@ -100,6 +106,25 @@ def test_get_classification_estimate_reports_zero_cost_for_local_mode(
     assert response.json()["estimated_cost_usd"] == 0.0
     assert response.json()["cost_estimate_available"] is True
     assert response.json()["model"] == "llama3.1"
+
+
+def test_get_classification_estimate_does_not_create_missing_database(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "missing" / "jobtracker.sqlite3"
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get("/classification/estimate")
+
+    assert response.status_code == 200
+    assert response.json()["candidate_count"] == 0
+    assert not database_path.exists()
+    assert not database_path.parent.exists()
 
 
 def create_classification_tables(database_path: Path) -> None:
