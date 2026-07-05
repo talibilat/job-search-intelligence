@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from app.config import EmailProviderName
 from app.db.repositories import EmailRepository
 from app.models import RawEmailBodyRetentionState
@@ -16,6 +19,7 @@ from app.providers.email import (
     EmailMessageRef,
 )
 
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 
 
@@ -29,9 +33,9 @@ NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 def test_upsert_retained_bodies_inserts_missing_raw_email_and_survives_metadata_replay(
     retention_state: RawEmailBodyRetentionState,
     body_text: str,
+    tmp_path: Path,
 ) -> None:
-    connection = sqlite3.connect(":memory:")
-    create_raw_emails_table(connection)
+    connection = migrated_connection(tmp_path)
     repository = EmailRepository(connection)
     message_body = email_message_body("gmail-msg-1", body_text=body_text)
 
@@ -64,28 +68,12 @@ def test_upsert_retained_bodies_inserts_missing_raw_email_and_survives_metadata_
     assert stored.body_retention_state is retention_state
 
 
-def create_raw_emails_table(connection: sqlite3.Connection) -> None:
-    connection.execute(
-        """
-        CREATE TABLE raw_emails (
-            id TEXT PRIMARY KEY,
-            thread_id TEXT,
-            from_addr TEXT,
-            to_addr TEXT,
-            subject TEXT,
-            sent_at TEXT,
-            body_text TEXT,
-            body_retention_state TEXT NOT NULL,
-            labels TEXT NOT NULL,
-            provider TEXT NOT NULL,
-            ingested_at TEXT NOT NULL,
-            CHECK (
-                (body_retention_state = 'metadata_only' AND body_text IS NULL)
-                OR (body_retention_state IN ('retained', 'debugging') AND body_text IS NOT NULL)
-            )
-        )
-        """,
-    )
+def migrated_connection(tmp_path: Path) -> sqlite3.Connection:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
+    command.upgrade(config, "head")
+    return sqlite3.connect(database_path)
 
 
 def email_message_body(message_id: str, *, body_text: str) -> EmailMessageBody:
