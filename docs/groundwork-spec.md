@@ -61,6 +61,7 @@ job-search-intelligence/
 │   │   │   ├── engine.py           # SQLite engine, sqlite-vec loading, and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
 │   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
+│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, BackfillStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 [JT-066 2026-07-05 v2] │   │   │   └── repositories/       # EmailRepo, SyncStateRepo, BackfillStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
@@ -193,6 +194,10 @@ The sync service coordinates one metadata page at a time, carries provider page 
 `SyncScheduler` owns the APScheduler lifecycle inside the FastAPI lifespan: when `sync_on_open` is true, it registers an immediate interval job for the injected async sync runner, and on shutdown it stops APScheduler without waiting.
 Until the concrete Gmail sync runner lands, the default app factory uses a safe no-op sync job while tests and later wiring can inject the real async runner.
 [JT-066 2026-07-05 v2] Full-backfill page recording and final replacement-cursor promotion must share one local SQLite connection so a completed page and its promoted `email_sync_state` cursor commit atomically.
+Full-backfill orchestration is two-step: `run_backfill_page` lists the next provider page from the stored resume token without advancing durable progress, then the caller persists raw emails and records the page with the expected token.
+[JT-066 2026-07-05 v2] Full-backfill orchestration is two-step: `run_backfill_page` lists the next provider page from the stored resume token without advancing durable progress, then the caller persists raw emails and records the page with the expected token.
+Recording the page advances counters, stores the next page token, and completes the run only when the final page carries a replacement provider cursor.
+[JT-066 2026-07-05 v2] Recording the page advances counters, stores the next page token, and completes the run only when the final page carries a replacement provider cursor.
 Candidate selection is represented by provider-neutral DTOs and applied to normalized metadata outside provider listing, so adapters do not receive brittle Gmail-specific search filters.
 The provider seam keeps OAuth token material behind `SecretRef`, treats OAuth callback codes as `SecretStr`, excludes body-derived snippets from broad metadata backfill, converts HTML MIME bodies to normalized retained plain text, rejects retained-body DTOs with raw HTML fields, and ignores attachment content in v1.
 Phase 1 reconciliation compares provider metadata pages against local `raw_emails` for the same provider using deterministic service-layer metrics: page count, total provider messages, unique provider messages, duplicate provider messages, local raw-email count, local-vs-provider delta, missing local messages, extra local messages, and a `reconciled` flag.
