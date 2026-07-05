@@ -45,7 +45,7 @@ The repository now has the start of a local-first job-search intelligence app.
 The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
 The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
-The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
+The frontend also has a primary navigation shell with a `/setup` Phase 0 setup page for provider, mode, Gmail read-only, privacy, checklist, disabled action, and not-ready copy.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations.
 There is configuration infrastructure, a keyring-backed secret-store path, Alembic migration infrastructure, and lint/type/test tooling.
@@ -945,7 +945,7 @@ Run the frontend manually from `frontend/`:
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Then open `http://127.0.0.1:5173/` in a browser.
+Then open `http://127.0.0.1:5173/` and `http://127.0.0.1:5173/setup` in a browser.
 
 ## What To Look For In The App Right Now
 
@@ -954,7 +954,7 @@ You can see a FastAPI app, generated API docs, a health endpoint, typed errors, 
 
 Frontend:
 You can see a static React shell for JobTracker, an empty Recharts foundation panel for future deterministic dashboard metrics, and shared accessible UI primitives for later pages.
-You can see a static React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics and setup-copy cards for provider, mode, Gmail, and privacy choices.
+You can see a static React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics and a `/setup` page shell for provider, mode, Gmail, privacy, checklist, disabled action, and not-ready copy.
 It is not connected to backend data yet.
 
 Configuration:
@@ -977,7 +977,7 @@ Frontend CI now runs backend OpenAPI generation plus the existing frontend typec
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, run tests, lint, and type checks.
 Frontend CI now runs the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, initialize Alembic's version table, run tests, lint, and type checks.
-The frontend can start, test, and build, but it is still a static shell with an empty chart foundation.
+The frontend can start, test, and build, but it is still a static shell with an empty chart foundation and a non-persistent `/setup` page shell.
 Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, but those integrations are not implemented yet.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, Alembic migrations, and the wipe-data endpoint.
