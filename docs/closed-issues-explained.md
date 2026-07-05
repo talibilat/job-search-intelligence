@@ -56,7 +56,7 @@ There is configuration infrastructure, a keyring-backed secret-store path, Alemb
 What does not exist yet is the full product.
 There is no full Gmail ingestion pipeline yet because classification and aggregation remain pending.
 There is no populated metrics dashboard yet.
-There is no backend chat agent, retrieval, streaming, or persisted chat history yet.
+There is no backend chat agent, retrieval, streaming, or chat history endpoint/UI yet; only the compact local chat history table exists.
 There is no concrete Azure OpenAI or Ollama adapter yet.
 
 ## #1 JT-001 - Create Private GitHub Repository
