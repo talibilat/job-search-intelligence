@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from math import ceil
 
-from app.config import AppSettings, ClassificationMode, LLMProviderName
+from app.config import AppSettings, ClassificationMode
 from app.db.repositories import EmailRepository
 from app.models import ClassificationPreRunEstimate
+from app.services.classification_target import resolve_classification_model
 
 
 def build_classification_pre_run_estimate(
@@ -14,7 +15,7 @@ def build_classification_pre_run_estimate(
 ) -> ClassificationPreRunEstimate:
     """Estimate candidates, tokens, and cost before bulk classification."""
 
-    classification_model = _classification_model(settings)
+    classification_model = resolve_classification_model(settings)
     stats = email_repository.get_classification_candidate_stats(
         provider=settings.email_provider,
         model=classification_model,
@@ -75,9 +76,3 @@ def _estimate_cost_usd(
 
     cost = (prompt_tokens / 1000 * input_rate) + (completion_tokens / 1000 * output_rate)
     return round(cost, 6), True
-
-
-def _classification_model(settings: AppSettings) -> str:
-    if settings.llm_provider is LLMProviderName.AZURE_OPENAI:
-        return settings.azure_openai_chat_deployment or "unconfigured"
-    return settings.ollama_chat_model

@@ -49,7 +49,7 @@ The frontend also has a primary navigation shell with a `/setup` Phase 0 setup p
 The frontend also has an empty `/dashboard` page shell with placeholder filter and metrics regions.
 The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
 The frontend also has an empty `/chat` route shell with a disabled composer for the later Phase 5 RAG chat work.
-There are backend endpoints for health, setup status, setup submission, provider config, Gmail auth start and callback, classification estimates, manual sync, sync status, and wiping local data.
+There are backend endpoints for health, setup status, setup submission, provider config, Gmail auth start and callback, classification estimates, classification reprocessing plans, manual sync, sync status, and wiping local data.
 There are typed provider interfaces for Gmail and LLM implementations, plus an exported Gmail provider adapter with read-only OAuth URL construction, callback token exchange and persistence, non-secret connection metadata persistence, provider-level token refresh, safe metadata-only full-backfill and incremental history listing, retained-body fetching when a `SecretStore` is configured, and an Azure OpenAI chat-completions adapter behind the LLM provider seam.
 There is configuration infrastructure, a keyring-backed secret-store path, Alembic migration infrastructure, raw-email metadata and retained-body persistence, sync-state persistence, and lint/type/test tooling.
 

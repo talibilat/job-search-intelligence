@@ -71,6 +71,7 @@ Do not commit the Fernet key file or place it in screenshots, tickets, logs, or 
 JT-096 provides durable local storage for completed-run token and cost accounting.
 JT-091 aggregates provider-reported classification token usage on the service result before later run-accounting persistence is wired.
 Before a bulk classification pass, call `GET /classification/estimate` to verify that the selected mode shows candidate, token, and cost information.
+Before a version-controlled rerun, call `GET /classification/reprocessing-plan` to verify the selected provider has a configured target model and to see which retained candidates are unclassified, stale by model, or stale by prompt version.
 Local mode reports zero cost, while hosted modes report cost only when both pricing rates are configured.
 Hosted Azure calls should be used through the configured provider path only, never by ad hoc scripts that bypass redaction or prompt-version tracking.
 
@@ -130,6 +131,7 @@ The shared API route exists before concrete Azure OpenAI and Ollama adapter HTTP
 - The selected LLM provider is either `azure_openai` or `ollama`.
 - `classification_mode` follows the intended default pairing for that provider unless the user explicitly chooses another provider-valid mode; Azure OpenAI still rejects `local`.
 - Pre-run classification estimates show candidate and token counts, and hosted-provider cost only when pricing rates are configured.
+- Reprocessing plans show `target_model_configured: true` and bucket retained candidates by stored model and prompt version before reruns are started.
 - Azure OpenAI has endpoint, API version, chat deployment, embedding deployment, and an API key stored through `SecretStore`.
 - Ollama has a reachable local base URL and the configured chat and embedding models are pulled locally.
 - `POST /config/providers/llm/health` returns an `available` response for the configured chat and embedding models once the selected provider adapter is wired.
