@@ -44,6 +44,8 @@ class EmailBodyFetchFailureReason(StrEnum):
 
 
 class EmailProviderErrorCode(StrEnum):
+    """Stable public error codes for provider failures crossing the API boundary."""
+
     AUTHORIZATION_REQUIRED = "email_authorization_required"
     INSUFFICIENT_SCOPE = "email_insufficient_scope"
     RATE_LIMITED = "email_rate_limited"
@@ -54,6 +56,8 @@ class EmailProviderErrorCode(StrEnum):
 
 
 class EmailProviderUserAction(StrEnum):
+    """Stable public actions clients can use to guide recovery UI."""
+
     CHECK_CONFIGURATION = "check_configuration"
     RECONNECT_EMAIL = "reconnect_email"
     RESTART_FULL_SYNC = "restart_full_sync"
@@ -393,7 +397,12 @@ class EmailBodyBatch(BaseModel):
 
 
 class EmailProviderError(RuntimeError):
-    """Base error for public-safe email-provider failures."""
+    """Base error for public-safe email-provider failures.
+
+    Providers attach a stable public error code and a user-action hint so API
+    handlers can return actionable sync failures without exposing provider
+    payloads, OAuth tokens, or private email content.
+    """
 
     public_message: str
     error_code: EmailProviderErrorCode
