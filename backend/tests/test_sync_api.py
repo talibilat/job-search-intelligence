@@ -15,7 +15,13 @@ from app.api.sync import (
     get_sync_email_provider,
     get_sync_status_store,
 )
-from app.config import GMAIL_READONLY_SCOPE, AppSettings, EmailProviderName, get_settings
+from app.config import (
+    GMAIL_READONLY_SCOPE,
+    AppSettings,
+    EmailProviderName,
+    SecretStoreBackend,
+    get_settings,
+)
 from app.main import create_app
 from app.providers.email import (
     EmailAccountRef,
@@ -30,7 +36,7 @@ from app.providers.email import (
     EmailProviderErrorCode,
     EmailSyncMode,
 )
-from app.security import SecretKind, SecretRef
+from app.security import SecretKind, SecretRef, create_secret_store
 from app.services.sync_service import (
     EmailSyncRunState,
     EmailSyncStatus,
@@ -265,6 +271,26 @@ def test_post_sync_uses_dependency_wired_provider_repositories_and_connection(
     with sqlite3.connect(database_path) as connection:
         row = connection.execute("SELECT COUNT(*) FROM raw_emails").fetchone()
     assert row == (1,)
+
+
+def test_default_sync_email_provider_uses_configured_secret_store(tmp_path: Path) -> None:
+    settings = AppSettings(
+        _env_file=None,
+        secret_store_backend=SecretStoreBackend.FERNET,
+        fernet_key_file=tmp_path / "fernet.key",
+        data_dir=tmp_path,
+    )
+    provider = get_sync_email_provider(settings, create_secret_store(settings))
+
+    with pytest.raises(EmailProviderAuthError) as error_info:
+        asyncio.run(
+            provider.list_message_metadata(
+                email_connection(),
+                EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=1),
+            )
+        )
+
+    assert error_info.value.public_message == "Gmail authorization is required"
 
 
 def test_configured_runtime_rejects_concurrent_manual_syncs(tmp_path: Path) -> None:

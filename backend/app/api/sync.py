@@ -7,12 +7,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from app.api.auth import get_gmail_secret_store
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.config import AppSettings, EmailProviderName, get_settings
 from app.db.repositories import EmailConnectionRepository, EmailRepository, SyncStateRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.email import EmailConnection, EmailProvider
 from app.providers.email.gmail import GmailEmailProvider
+from app.security import SecretStore
 from app.services.sync_service import (
     EmailSyncRunState,
     EmailSyncRuntime,
@@ -92,8 +94,9 @@ _sync_status_store = EmailSyncStatusStore()
 
 def get_sync_email_provider(
     settings: Annotated[AppSettings, Depends(get_settings)],
+    secret_store: Annotated[SecretStore, Depends(get_gmail_secret_store)],
 ) -> EmailProvider:
-    return GmailEmailProvider(settings=settings)
+    return GmailEmailProvider(settings=settings, secret_store=secret_store)
 
 
 def resolve_email_sync_connection(settings: AppSettings) -> EmailConnection | None:
