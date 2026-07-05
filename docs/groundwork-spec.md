@@ -129,7 +129,7 @@ job-search-intelligence/
   [JT-066 2026-07-05 v2] `status` is `running`, `completed`, or `failed`; completed backfills clear `next_page_token`, require a replacement provider cursor with issued timestamp, promote that cursor to `email_sync_state`, and failures preserve page progress with `last_error` only when public-safe.
 - **`email_sync_state`** - `provider`, `account_id`, `sync_cursor`, `cursor_issued_at`, `in_progress_mode`, `next_page_token`, `updated_at`; stores opaque provider-owned incremental sync anchors plus resumable page progress scoped to one connected account.
 - **`email_connections`** - `provider`, `account_id`, `display_email`, credential `SecretRef` fields, granted scopes, `connected_at`, optional `credential_expires_at`, `reauth_required`, `updated_at`; stores only non-secret connection metadata for one Gmail account while token payloads live in the configured `SecretStore`.
-- **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, `classified_at`.
+- **`email_classifications`** - `email_id` (FK), `is_job_related`, `category` (`application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`), `confidence`, `model`, `prompt_version`, timezone-aware `classified_at`.
 - **`classification_runs`** - `id`, `provider`, `model`, `prompt_version`, `started_at`, `completed_at`, `candidate_count`, `classified_count`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `estimated_cost_usd`; stores one local accounting row per completed classification run.
   Counts, token totals, and estimated cost are non-negative; `classified_count` cannot exceed `candidate_count`, and `total_tokens` must cover prompt plus completion tokens.
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
@@ -181,6 +181,9 @@ EmailProvider -> metadata-only raw_emails
    2. classify.py  LLM classify + structured extract  (LLMProvider)
       - one provider-neutral JSON-object request per retained candidate -> Pydantic model
       - prompt version embedded in the system prompt for reproducible re-runs
+      - retained `EmailClassificationCandidate` inputs and provider-neutral
+        `EmailClassificationResult` outputs reject unknown fields, keep retained
+        body text out of repr output, and require timezone-aware timestamps
       - fields: company, role, status, dates, salary, location,
         work_mode, seniority, sponsorship, tech_stack, rejection_reason
       - malformed JSON, extra fields, invalid enums, contradictory category/status
