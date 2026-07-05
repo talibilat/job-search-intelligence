@@ -49,13 +49,12 @@ The frontend also has a primary navigation shell with a `/setup` Phase 0 setup p
 The frontend also has an empty `/dashboard` page shell with placeholder filter and metrics regions.
 The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
 The frontend also has an empty `/chat` route shell with a disabled composer for the later Phase 5 RAG chat work.
-There are backend endpoints for health, setup status, setup submission, Gmail auth-start, manual sync, sync status, and wiping local data.
-There are typed provider interfaces for Gmail and future LLM implementations, plus an exported Gmail provider adapter with read-only OAuth URL construction and safe metadata-only full-backfill listing when a `SecretStore` is configured.
+There are backend endpoints for health, setup status, setup submission, provider config, Gmail auth start and callback, manual sync, sync status, and wiping local data.
+There are typed provider interfaces for Gmail and future LLM implementations, plus an exported Gmail provider adapter with read-only OAuth URL construction, callback token exchange and persistence, non-secret connection metadata persistence, and safe metadata-only full-backfill listing when a `SecretStore` is configured.
 There is configuration infrastructure, a keyring-backed secret-store path, Alembic migration infrastructure, raw-email and sync-state persistence, and lint/type/test tooling.
 
 What does not exist yet is the full product.
-There is no end-user Gmail sync yet because OAuth callback, token persistence, and connected-account lookup are still pending; the manual sync service and API route seams exist for dependency-injected connections.
-There is no application database schema or ingestion pipeline yet.
+There is no full Gmail ingestion pipeline yet because token refresh, retained-body fetching, concrete incremental transport, classification, and aggregation remain pending.
 There is no populated metrics dashboard yet.
 There is no backend chat agent, retrieval, streaming, or persisted chat history yet.
 There is no concrete Azure OpenAI or Ollama adapter yet.
@@ -931,7 +930,7 @@ Backend email provider skeleton and privacy boundary.
 Important files to inspect:
 `backend/app/providers/email/gmail.py` defined the Gmail provider skeleton for this ticket and now also contains later safe metadata-listing behavior.
 `backend/app/providers/email/__init__.py` exports it.
-`backend/tests/test_gmail_email_provider.py` verifies protocol conformance, readonly scopes, capabilities, attachment exclusion, public-safe not-implemented errors for deferred behavior, and later provider-level metadata-listing delegation.
+`backend/tests/test_gmail_email_provider.py` verifies protocol conformance, readonly scopes, capabilities, attachment exclusion, provider-level callback token exchange and persistence, public-safe not-implemented errors for remaining deferred behavior, and later provider-level metadata-listing delegation.
 
 How to test it:
 
@@ -1012,7 +1011,7 @@ Real secrets should not be committed.
 
 Providers:
 You can see abstract provider contracts for email and LLM systems.
-Gmail can start read-only OAuth authorization and list safe metadata-only full-backfill pages through the provider seam when constructed with a `SecretStore`, but callback handling, token persistence, connected-account lookup, concrete incremental transport, retained-body fetching, and concrete LLM implementations are not done yet.
+Gmail can start read-only OAuth authorization, complete the callback with encrypted token persistence, store non-secret connection metadata, and list safe metadata-only full-backfill pages when constructed with a `SecretStore`, but token refresh, endpoint-driven sync, retained-body fetching, and concrete LLM implementations are not done yet.
 
 Privacy and safety:
 You can see early safety work for typed errors, secret references, safe configuration examples, and local data wiping.
@@ -1028,5 +1027,5 @@ Frontend CI now runs the existing frontend typecheck, lint, unit test, and build
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, initialize Alembic's version table, run tests, lint, and type checks.
 The frontend can start, test, and build, but it is still a static shell with an empty chart foundation, a non-persistent `/setup` page shell, and a disabled chat route shell.
 Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
-The provider interfaces prepare the app for Gmail and LLM integrations; Gmail auth-start and `SecretStore`-backed metadata listing exist, while Gmail callback handling, token persistence, endpoint-driven sync, retained-body fetching, and concrete LLM adapters remain later work.
+The provider interfaces prepare the app for Gmail and LLM integrations; Gmail auth-start, Gmail callback token persistence, non-secret connection metadata persistence, and `SecretStore`-backed metadata listing exist, while token refresh, endpoint-driven sync, retained-body fetching, and concrete LLM adapters remain later work.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, Alembic migrations, and the wipe-data endpoint.

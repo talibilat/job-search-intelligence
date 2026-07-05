@@ -27,12 +27,14 @@
       },
       "ApiErrorCode": {
         "enum": [
+          "bad_gateway",
           "bad_request",
           "conflict",
           "forbidden",
           "http_error",
           "internal_error",
           "not_found",
+          "service_unavailable",
           "unauthorized",
           "validation_error"
         ],
@@ -89,6 +91,50 @@
         "title": "ClassificationMode",
         "type": "string"
       },
+      "EmailAccountRef": {
+        "description": "Provider-neutral stable reference to a connected mailbox account.",
+        "properties": {
+          "account_id": {
+            "minLength": 1,
+            "title": "Account Id",
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/EmailProviderName"
+          }
+        },
+        "required": [
+          "provider",
+          "account_id"
+        ],
+        "title": "EmailAccountRef",
+        "type": "object"
+      },
+      "EmailAddress": {
+        "properties": {
+          "address": {
+            "minLength": 1,
+            "title": "Address",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "title": "EmailAddress",
+        "type": "object"
+      },
       "EmailAuthorizationStartResult": {
         "description": "Provider-neutral authorization URL and scope request.",
         "properties": {
@@ -121,6 +167,65 @@
           "requested_scopes"
         ],
         "title": "EmailAuthorizationStartResult",
+        "type": "object"
+      },
+      "EmailConnection": {
+        "description": "Stored account connection metadata without raw OAuth token material.",
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/EmailAccountRef"
+          },
+          "connected_at": {
+            "format": "date-time",
+            "title": "Connected At",
+            "type": "string"
+          },
+          "credential_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Expires At"
+          },
+          "credential_ref": {
+            "$ref": "#/components/schemas/SecretRef"
+          },
+          "display_email": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "granted_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Granted Scopes",
+            "type": "array"
+          },
+          "reauth_required": {
+            "default": false,
+            "title": "Reauth Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "account",
+          "credential_ref",
+          "granted_scopes",
+          "connected_at"
+        ],
+        "title": "EmailConnection",
         "type": "object"
       },
       "EmailProviderConfigResponse": {
@@ -163,6 +268,126 @@
         ],
         "title": "EmailProviderName",
         "type": "string"
+      },
+      "EmailSyncMode": {
+        "enum": [
+          "full_backfill",
+          "incremental"
+        ],
+        "title": "EmailSyncMode",
+        "type": "string"
+      },
+      "EmailSyncRunState": {
+        "enum": [
+          "idle",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "title": "EmailSyncRunState",
+        "type": "string"
+      },
+      "EmailSyncStatus": {
+        "description": "Current or last manual sync run status exposed at the API boundary.",
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "message_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailSyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "page_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailProviderName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "raw_email_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Raw Email Count",
+            "type": "integer"
+          },
+          "recovered_from_expired_cursor": {
+            "default": false,
+            "title": "Recovered From Expired Cursor",
+            "type": "boolean"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EmailSyncRunState"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "EmailSyncStatus",
+        "type": "object"
       },
       "HTTPValidationError": {
         "properties": {
@@ -783,174 +1008,6 @@
         "title": "SetupSubmitResponse",
         "type": "object"
       },
-      "SyncJobCounts": {
-        "description": "Deterministic counters reported by sync status.",
-        "properties": {
-          "errors": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Errors",
-            "type": "integer"
-          },
-          "metadata_messages": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Metadata Messages",
-            "type": "integer"
-          },
-          "metadata_pages": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Metadata Pages",
-            "type": "integer"
-          },
-          "raw_emails_written": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Raw Emails Written",
-            "type": "integer"
-          },
-          "retained_bodies": {
-            "default": 0,
-            "minimum": 0.0,
-            "title": "Retained Bodies",
-            "type": "integer"
-          }
-        },
-        "title": "SyncJobCounts",
-        "type": "object"
-      },
-      "SyncJobError": {
-        "description": "Public-safe sync error summary without provider payloads or email content.",
-        "properties": {
-          "message": {
-            "minLength": 1,
-            "title": "Message",
-            "type": "string"
-          },
-          "occurred_at": {
-            "format": "date-time",
-            "title": "Occurred At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "message",
-          "occurred_at"
-        ],
-        "title": "SyncJobError",
-        "type": "object"
-      },
-      "SyncJobPhase": {
-        "description": "Public-safe phase for the current local email sync job.",
-        "enum": [
-          "idle",
-          "queued",
-          "metadata_sync",
-          "body_retention",
-          "reconciling",
-          "completed",
-          "failed"
-        ],
-        "title": "SyncJobPhase",
-        "type": "string"
-      },
-      "SyncJobStatus": {
-        "description": "Current sync job state for the `/sync/status` API boundary.",
-        "properties": {
-          "account_id": {
-            "anyOf": [
-              {
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Account Id"
-          },
-          "completed_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed At"
-          },
-          "counts": {
-            "$ref": "#/components/schemas/SyncJobCounts"
-          },
-          "errors": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SyncJobError"
-            },
-            "title": "Errors",
-            "type": "array"
-          },
-          "last_run_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Run At"
-          },
-          "phase": {
-            "$ref": "#/components/schemas/SyncJobPhase"
-          },
-          "progress": {
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Progress",
-            "type": "number"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EmailProviderName"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "phase",
-          "counts",
-          "updated_at",
-          "progress"
-        ],
-        "title": "SyncJobStatus",
-        "type": "object"
-      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1070,6 +1127,71 @@
           }
         },
         "summary": "Gmail Auth Url",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/gmail/callback": {
+      "get": {
+        "operationId": "gmail_auth_callback_auth_gmail_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "format": "password",
+              "minLength": 1,
+              "title": "Code",
+              "type": "string",
+              "writeOnly": true
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailConnection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gmail Auth Callback",
         "tags": [
           "auth"
         ]
@@ -1284,16 +1406,56 @@
         ]
       }
     },
+    "/sync": {
+      "post": {
+        "operationId": "sync_now_sync_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSyncStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Sync Now",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
     "/sync/status": {
       "get": {
-        "description": "Report the current email sync job status without exposing provider payloads.",
         "operationId": "sync_status_sync_status_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SyncJobStatus"
+                  "$ref": "#/components/schemas/EmailSyncStatus"
                 }
               }
             },

@@ -1,19 +1,37 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from app.api.auth import get_gmail_email_provider
+from alembic import command
+from alembic.config import Config
+from app.api.auth import (
+    get_email_connection_repository,
+    get_gmail_email_provider,
+    get_oauth_state_store,
+)
 from app.config import GMAIL_READONLY_SCOPE, AppSettings, EmailProviderName, get_settings
 from app.main import create_app
 from app.providers.email import (
+    EmailAccountRef,
+    EmailAddress,
     EmailAttachmentPolicy,
+    EmailAuthorizationCallbackRequest,
     EmailAuthorizationStartRequest,
     EmailAuthorizationStartResult,
+    EmailConnection,
     EmailProviderCapabilities,
+    EmailProviderError,
+    EmailProviderTransientError,
 )
+from app.security import SecretKind, SecretRef
+from app.services.gmail_auth import InMemoryOAuthStateStore
 from fastapi.testclient import TestClient
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def write_google_oauth_client_config(tmp_path: Path) -> Path:
@@ -42,6 +60,12 @@ def create_test_client(settings: AppSettings) -> TestClient:
     return TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
 
 
+def migrate_test_database(database_path: Path) -> None:
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
+    command.upgrade(config, "head")
+
+
 class FakeGmailProvider:
     name = EmailProviderName.GMAIL
     capabilities = EmailProviderCapabilities(
@@ -57,6 +81,7 @@ class FakeGmailProvider:
 
     def __init__(self) -> None:
         self.start_request: EmailAuthorizationStartRequest | None = None
+        self.callback_request: EmailAuthorizationCallbackRequest | None = None
 
     async def start_authorization(
         self,
@@ -69,6 +94,48 @@ class FakeGmailProvider:
             state=request.state,
             requested_scopes=self.capabilities.required_scopes,
         )
+
+    async def complete_authorization(
+        self,
+        request: EmailAuthorizationCallbackRequest,
+    ) -> EmailConnection:
+        self.callback_request = request
+        return EmailConnection(
+            account=EmailAccountRef(
+                provider=request.provider,
+                account_id="me@example.com",
+            ),
+            display_email=EmailAddress(address="me@example.com"),
+            credential_ref=SecretRef(
+                kind=SecretKind.OAUTH_TOKEN,
+                provider="gmail",
+                name="me-example-com",
+            ),
+            granted_scopes=(GMAIL_READONLY_SCOPE,),
+            connected_at=datetime(2026, 7, 5, 12, 0, tzinfo=UTC),
+        )
+
+
+class FailingGmailProvider(FakeGmailProvider):
+    def __init__(self, error: EmailProviderError) -> None:
+        super().__init__()
+        self.error = error
+
+    async def complete_authorization(
+        self,
+        request: EmailAuthorizationCallbackRequest,
+    ) -> EmailConnection:
+        self.callback_request = request
+        raise self.error
+
+
+class CapturingConnectionRepository:
+    def __init__(self) -> None:
+        self.saved_connections: list[EmailConnection] = []
+
+    def save_connection(self, connection: EmailConnection) -> EmailConnection:
+        self.saved_connections.append(connection)
+        return connection
 
 
 def test_gmail_auth_endpoint_returns_readonly_authorization_url_without_secrets(
@@ -139,3 +206,202 @@ def test_gmail_auth_endpoint_uses_injected_email_provider() -> None:
     assert fake_provider.start_request is not None
     assert fake_provider.start_request.provider is EmailProviderName.GMAIL
     assert fake_provider.start_request.redirect_uri == "http://127.0.0.1:8000/auth/gmail/callback"
+
+
+def test_gmail_auth_callback_completes_authorization_without_echoing_code() -> None:
+    fastapi_app = create_app()
+    fake_provider = FakeGmailProvider()
+    state_store = InMemoryOAuthStateStore()
+    connection_repository = CapturingConnectionRepository()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_oauth_state_store] = lambda: state_store
+    fastapi_app.dependency_overrides[get_email_connection_repository] = lambda: (
+        connection_repository
+    )
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(_env_file=None)
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+
+    start_response = client.get("/auth/gmail")
+    state = start_response.json()["state"]
+
+    response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["account"] == {"provider": "gmail", "account_id": "me@example.com"}
+    assert payload["display_email"] == {"address": "me@example.com", "display_name": None}
+    assert payload["credential_ref"] == {
+        "kind": "oauth_token",
+        "provider": "gmail",
+        "name": "me-example-com",
+    }
+    assert payload["granted_scopes"] == [GMAIL_READONLY_SCOPE]
+    assert "authorization-code" not in response.text
+    assert state not in response.text
+
+    assert fake_provider.callback_request is not None
+    assert fake_provider.callback_request.provider is EmailProviderName.GMAIL
+    assert fake_provider.callback_request.redirect_uri == (
+        "http://127.0.0.1:8000/auth/gmail/callback"
+    )
+    assert fake_provider.callback_request.state == state
+    assert fake_provider.callback_request.code.get_secret_value() == "authorization-code"
+    assert connection_repository.saved_connections
+
+
+def test_gmail_auth_callback_persists_connection_with_real_repository_dependency(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    migrate_test_database(database_path)
+    fastapi_app = create_app()
+    fake_provider = FakeGmailProvider()
+    state_store = InMemoryOAuthStateStore()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_oauth_state_store] = lambda: state_store
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+    state = client.get("/auth/gmail").json()["state"]
+
+    response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["account"] == {
+        "provider": "gmail",
+        "account_id": "me@example.com",
+    }
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT provider, account_id, credential_ref_name
+            FROM email_connections
+            """,
+        ).fetchall()
+
+    assert rows == [("gmail", "me@example.com", "me-example-com")]
+
+
+def test_gmail_auth_callback_rejects_unissued_state_before_token_exchange() -> None:
+    fastapi_app = create_app()
+    fake_provider = FakeGmailProvider()
+    state_store = InMemoryOAuthStateStore()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_oauth_state_store] = lambda: state_store
+    fastapi_app.dependency_overrides[get_email_connection_repository] = lambda: (
+        CapturingConnectionRepository()
+    )
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(_env_file=None)
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+
+    response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": "csrf-state"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": {
+            "code": "bad_request",
+            "message": "Gmail authorization state is invalid or expired.",
+            "details": [],
+        }
+    }
+    assert fake_provider.callback_request is None
+
+
+def test_gmail_auth_callback_consumes_state_once() -> None:
+    fastapi_app = create_app()
+    fake_provider = FakeGmailProvider()
+    state_store = InMemoryOAuthStateStore()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_oauth_state_store] = lambda: state_store
+    fastapi_app.dependency_overrides[get_email_connection_repository] = lambda: (
+        CapturingConnectionRepository()
+    )
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(_env_file=None)
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+    state = client.get("/auth/gmail").json()["state"]
+
+    first_response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+    second_response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 400
+    assert second_response.json()["error"]["message"] == (
+        "Gmail authorization state is invalid or expired."
+    )
+
+
+def test_gmail_auth_callback_maps_provider_transient_errors() -> None:
+    fastapi_app = create_app()
+    fake_provider = FailingGmailProvider(
+        EmailProviderTransientError(public_message="Gmail provider is temporarily unavailable.")
+    )
+    state_store = InMemoryOAuthStateStore()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_oauth_state_store] = lambda: state_store
+    fastapi_app.dependency_overrides[get_email_connection_repository] = lambda: (
+        CapturingConnectionRepository()
+    )
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(_env_file=None)
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+    state = client.get("/auth/gmail").json()["state"]
+
+    response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "error": {
+            "code": "service_unavailable",
+            "message": "Gmail provider is temporarily unavailable.",
+            "details": [],
+        }
+    }
+
+
+def test_gmail_auth_callback_maps_general_provider_errors() -> None:
+    fastapi_app = create_app()
+    fake_provider = FailingGmailProvider(
+        EmailProviderError(public_message="Gmail profile lookup returned invalid data.")
+    )
+    state_store = InMemoryOAuthStateStore()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_oauth_state_store] = lambda: state_store
+    fastapi_app.dependency_overrides[get_email_connection_repository] = lambda: (
+        CapturingConnectionRepository()
+    )
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(_env_file=None)
+    client = TestClient(fastapi_app, base_url="http://127.0.0.1:8000")
+    state = client.get("/auth/gmail").json()["state"]
+
+    response = client.get(
+        "/auth/gmail/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "error": {
+            "code": "bad_gateway",
+            "message": "Gmail profile lookup returned invalid data.",
+            "details": [],
+        }
+    }

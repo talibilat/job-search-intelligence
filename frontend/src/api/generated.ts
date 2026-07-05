@@ -7,12 +7,14 @@
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
 
 export const ApiErrorCode = {
+  bad_gateway: "bad_gateway",
   bad_request: "bad_request",
   conflict: "conflict",
   forbidden: "forbidden",
   http_error: "http_error",
   internal_error: "internal_error",
   not_found: "not_found",
+  service_unavailable: "service_unavailable",
   unauthorized: "unauthorized",
   validation_error: "validation_error",
 } as const;
@@ -50,6 +52,21 @@ export const EmailProviderName = {
 } as const;
 
 /**
+ * Provider-neutral stable reference to a connected mailbox account.
+ */
+export interface EmailAccountRef {
+  /** @minLength 1 */
+  account_id: string;
+  provider: EmailProviderName;
+}
+
+export interface EmailAddress {
+  /** @minLength 1 */
+  address: string;
+  display_name?: string | null;
+}
+
+/**
  * Provider-neutral authorization URL and scope request.
  */
 export interface EmailAuthorizationStartResult {
@@ -60,24 +77,6 @@ export interface EmailAuthorizationStartResult {
   requested_scopes: string[];
   /** @minLength 1 */
   state: string;
-}
-
-export type ProviderRequirementEnforcement =
-  (typeof ProviderRequirementEnforcement)[keyof typeof ProviderRequirementEnforcement];
-
-export const ProviderRequirementEnforcement = {
-  declarative: "declarative",
-  selection: "selection",
-} as const;
-
-/**
- * Non-secret provider setting required by a supported provider.
- */
-export interface ProviderConfigRequirementResponse {
-  enforcement: ProviderRequirementEnforcement;
-  label: string;
-  required: boolean;
-  setting_name: string;
 }
 
 export type SecretKind = (typeof SecretKind)[keyof typeof SecretKind];
@@ -107,6 +106,38 @@ export interface SecretRef {
 }
 
 /**
+ * Stored account connection metadata without raw OAuth token material.
+ */
+export interface EmailConnection {
+  account: EmailAccountRef;
+  connected_at: string;
+  credential_expires_at?: string | null;
+  credential_ref: SecretRef;
+  display_email?: EmailAddress | null;
+  /** @minItems 1 */
+  granted_scopes: string[];
+  reauth_required?: boolean;
+}
+
+export type ProviderRequirementEnforcement =
+  (typeof ProviderRequirementEnforcement)[keyof typeof ProviderRequirementEnforcement];
+
+export const ProviderRequirementEnforcement = {
+  declarative: "declarative",
+  selection: "selection",
+} as const;
+
+/**
+ * Non-secret provider setting required by a supported provider.
+ */
+export interface ProviderConfigRequirementResponse {
+  enforcement: ProviderRequirementEnforcement;
+  label: string;
+  required: boolean;
+  setting_name: string;
+}
+
+/**
  * Secret reference metadata without the secret value.
  */
 export interface ProviderSecretRequirementResponse {
@@ -124,6 +155,43 @@ export interface EmailProviderConfigResponse {
   display_name: string;
   name: EmailProviderName;
   secret_requirements: ProviderSecretRequirementResponse[];
+}
+
+export type EmailSyncMode = (typeof EmailSyncMode)[keyof typeof EmailSyncMode];
+
+export const EmailSyncMode = {
+  full_backfill: "full_backfill",
+  incremental: "incremental",
+} as const;
+
+export type EmailSyncRunState =
+  (typeof EmailSyncRunState)[keyof typeof EmailSyncRunState];
+
+export const EmailSyncRunState = {
+  idle: "idle",
+  running: "running",
+  succeeded: "succeeded",
+  failed: "failed",
+} as const;
+
+/**
+ * Current or last manual sync run status exposed at the API boundary.
+ */
+export interface EmailSyncStatus {
+  account_id?: string | null;
+  finished_at?: string | null;
+  last_error?: string | null;
+  /** @minimum 0 */
+  message_count?: number;
+  mode?: EmailSyncMode | null;
+  /** @minimum 0 */
+  page_count?: number;
+  provider?: EmailProviderName | null;
+  /** @minimum 0 */
+  raw_email_count?: number;
+  recovered_from_expired_cursor?: boolean;
+  started_at?: string | null;
+  state: EmailSyncRunState;
 }
 
 export type ValidationErrorCtx = { [key: string]: unknown };
@@ -258,66 +326,6 @@ export interface SetupSubmitResponse {
   status: "accepted";
 }
 
-/**
- * Deterministic counters reported by sync status.
- */
-export interface SyncJobCounts {
-  /** @minimum 0 */
-  errors?: number;
-  /** @minimum 0 */
-  metadata_messages?: number;
-  /** @minimum 0 */
-  metadata_pages?: number;
-  /** @minimum 0 */
-  raw_emails_written?: number;
-  /** @minimum 0 */
-  retained_bodies?: number;
-}
-
-/**
- * Public-safe sync error summary without provider payloads or email content.
- */
-export interface SyncJobError {
-  /** @minLength 1 */
-  message: string;
-  occurred_at: string;
-}
-
-/**
- * Public-safe phase for the current local email sync job.
- */
-export type SyncJobPhase = (typeof SyncJobPhase)[keyof typeof SyncJobPhase];
-
-export const SyncJobPhase = {
-  idle: "idle",
-  queued: "queued",
-  metadata_sync: "metadata_sync",
-  body_retention: "body_retention",
-  reconciling: "reconciling",
-  completed: "completed",
-  failed: "failed",
-} as const;
-
-/**
- * Current sync job state for the `/sync/status` API boundary.
- */
-export interface SyncJobStatus {
-  account_id?: string | null;
-  completed_at?: string | null;
-  counts: SyncJobCounts;
-  errors?: SyncJobError[];
-  last_run_at?: string | null;
-  phase: SyncJobPhase;
-  /**
-   * @minimum 0
-   * @maximum 1
-   */
-  progress: number;
-  provider?: EmailProviderName | null;
-  started_at?: string | null;
-  updated_at: string;
-}
-
 export const WipeDataRequestValue = {
   /** Must exactly equal wipe-local-data to confirm local data deletion. */
   confirmation: "wipe-local-data",
@@ -331,6 +339,17 @@ export interface WipeDataResponse {
   missing_paths?: string[];
   status: "wiped";
 }
+
+export type GmailAuthCallbackAuthGmailCallbackGetParams = {
+  /**
+   * @minLength 1
+   */
+  code: string;
+  /**
+   * @minLength 1
+   */
+  state: string;
+};
 
 export type gmailAuthUrlAuthGmailGetResponse200 = {
   data: EmailAuthorizationStartResult;
@@ -380,6 +399,78 @@ export const gmailAuthUrlAuthGmailGet = async (
     status: res.status,
     headers: res.headers,
   } as gmailAuthUrlAuthGmailGetResponse;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponse200 = {
+  data: EmailConnection;
+  status: 200;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponseSuccess =
+  gmailAuthCallbackAuthGmailCallbackGetResponse200 & {
+    headers: Headers;
+  };
+export type gmailAuthCallbackAuthGmailCallbackGetResponseError = (
+  | gmailAuthCallbackAuthGmailCallbackGetResponse400
+  | gmailAuthCallbackAuthGmailCallbackGetResponse422
+) & {
+  headers: Headers;
+};
+
+export type gmailAuthCallbackAuthGmailCallbackGetResponse =
+  | gmailAuthCallbackAuthGmailCallbackGetResponseSuccess
+  | gmailAuthCallbackAuthGmailCallbackGetResponseError;
+
+export const getGmailAuthCallbackAuthGmailCallbackGetUrl = (
+  params: GmailAuthCallbackAuthGmailCallbackGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/auth/gmail/callback?${stringifiedParams}`
+    : `/auth/gmail/callback`;
+};
+
+/**
+ * @summary Gmail Auth Callback
+ */
+export const gmailAuthCallbackAuthGmailCallbackGet = async (
+  params: GmailAuthCallbackAuthGmailCallbackGetParams,
+  options?: RequestInit,
+): Promise<gmailAuthCallbackAuthGmailCallbackGetResponse> => {
+  const res = await fetch(getGmailAuthCallbackAuthGmailCallbackGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: gmailAuthCallbackAuthGmailCallbackGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as gmailAuthCallbackAuthGmailCallbackGetResponse;
 };
 
 export type getProviderConfigConfigProvidersGetResponse200 = {
@@ -670,8 +761,60 @@ export const setupStatusSetupStatusGet = async (
   } as setupStatusSetupStatusGetResponse;
 };
 
+export type syncNowSyncPostResponse200 = {
+  data: EmailSyncStatus;
+  status: 200;
+};
+
+export type syncNowSyncPostResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
+export type syncNowSyncPostResponse409 = {
+  data: ApiErrorResponse;
+  status: 409;
+};
+
+export type syncNowSyncPostResponseSuccess = syncNowSyncPostResponse200 & {
+  headers: Headers;
+};
+export type syncNowSyncPostResponseError = (
+  syncNowSyncPostResponse400 | syncNowSyncPostResponse409
+) & {
+  headers: Headers;
+};
+
+export type syncNowSyncPostResponse =
+  syncNowSyncPostResponseSuccess | syncNowSyncPostResponseError;
+
+export const getSyncNowSyncPostUrl = () => {
+  return `/sync`;
+};
+
+/**
+ * @summary Sync Now
+ */
+export const syncNowSyncPost = async (
+  options?: RequestInit,
+): Promise<syncNowSyncPostResponse> => {
+  const res = await fetch(getSyncNowSyncPostUrl(), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: syncNowSyncPostResponse["data"] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as syncNowSyncPostResponse;
+};
+
 export type syncStatusSyncStatusGetResponse200 = {
-  data: SyncJobStatus;
+  data: EmailSyncStatus;
   status: 200;
 };
 
@@ -687,7 +830,6 @@ export const getSyncStatusSyncStatusGetUrl = () => {
 };
 
 /**
- * Report the current email sync job status without exposing provider payloads.
  * @summary Sync Status
  */
 export const syncStatusSyncStatusGet = async (

@@ -7,6 +7,7 @@ import pytest
 from app.config import AppSettings
 from app.security import (
     FernetSecretStore,
+    KeyringSecretStore,
     SecretKind,
     SecretRef,
     SecretStore,
@@ -128,11 +129,12 @@ def test_build_secret_store_selects_fernet_backend(tmp_path: Path) -> None:
     assert isinstance(store, FernetSecretStore)
 
 
-def test_build_secret_store_rejects_unimplemented_keyring_backend() -> None:
+def test_build_secret_store_selects_keyring_backend() -> None:
     settings = AppSettings(_env_file=None, secret_store_backend="keyring")
 
-    with pytest.raises(SecretStoreUnavailableError):
-        build_secret_store(settings)
+    store = build_secret_store(settings)
+
+    assert isinstance(store, KeyringSecretStore)
 
 
 def test_fernet_store_wraps_secret_directory_errors(

@@ -3,9 +3,10 @@
 This guide documents the user-created Google OAuth client needed for Gmail ingestion.
 It maps to FR-0, FR-0.2, FR-1.1, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 1.
 
-Gmail message listing currently reads existing OAuth token material only through `SecretStore`.
-The backend can start Gmail OAuth with `GET /auth/gmail`.
-The callback, token exchange, token persistence, token refresh, and retained body fetching remain later Gmail ingestion work.
+Gmail message listing reads OAuth token material only through `SecretStore`.
+The backend can start Gmail OAuth with `GET /auth/gmail` and complete the local callback with `GET /auth/gmail/callback`.
+The callback exchanges the authorization code, validates the returned `gmail.readonly` scope, stores token material through the configured `SecretStore`, and persists only non-secret connection metadata in SQLite.
+Token refresh and retained body fetching remain later Gmail ingestion work.
 This guide documents the setup and runtime security contract the app must follow.
 
 ## Security Boundaries
@@ -49,7 +50,7 @@ Do not move toward a public multi-user OAuth app unless the product scope change
 5. Download the OAuth client JSON.
 
 Use a Desktop app client, not a Web application client.
-The local OAuth start endpoint builds a callback URL on the running backend at `/auth/gmail/callback`; that callback is not implemented yet.
+The local OAuth start endpoint builds a callback URL on the running backend at `/auth/gmail/callback`, and that callback is handled by the backend while the local process is running.
 
 ## Store The Client JSON Outside The Repo
 
@@ -111,14 +112,40 @@ Open the `authorization_url` in your browser to authorize Gmail read-only access
 The backend does not return the Google client secret, access tokens, refresh tokens, or authorization codes from this endpoint.
 If the client JSON is missing, unreadable, or invalid, the endpoint returns the standard typed `400` API error with a public-safe message.
 
+## Complete Gmail Authorization
+
+After you approve the Google consent prompt, Google redirects back to the running backend at `/auth/gmail/callback` with a one-time authorization code and the issued state.
+The callback consumes the state once, treats the code as secret input, exchanges it with Google, verifies the granted scope is exactly `https://www.googleapis.com/auth/gmail.readonly`, fetches the Gmail profile email address, and returns non-secret connection metadata.
+
+Example response shape:
+
+```json
+{
+  "account": { "provider": "gmail", "account_id": "me@example.com" },
+  "display_email": { "address": "me@example.com" },
+  "credential_ref": {
+    "kind": "oauth_token",
+    "provider": "gmail",
+    "name": "me-example-com"
+  },
+  "granted_scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
+  "connected_at": "2026-07-05T00:00:00Z",
+  "credential_expires_at": "2026-07-05T01:00:00Z",
+  "reauth_required": false
+}
+```
+
+The response never includes the raw authorization code, Google client secret, access token, or refresh token.
+Provider auth failures return typed `400` errors, transient Google failures return `503`, and other provider failures return `502` with public-safe messages.
+
 ## Token Storage Contract
 
 Current Gmail metadata listing reads access tokens through the existing `SecretStore` seam.
-When Gmail OAuth callback behavior lands, OAuth callback codes must be treated as secret values.
-Access tokens and refresh tokens must continue to flow through `SecretStore`.
+OAuth callback codes are treated as secret values at the API boundary.
+Access tokens and refresh tokens flow through `SecretStore`.
 The configured `SecretStore` adapter must store token material encrypted at rest, using OS keyring by default or the documented Fernet fallback.
 
-Provider connection records should persist only non-secret metadata and a `SecretRef` to the stored token.
+Provider connection records persist only non-secret metadata and a `SecretRef` to the stored token.
 Incremental sync history IDs are opaque provider cursor state, not token material; store them in local SQLite sync state scoped to the Gmail account and never log them with OAuth tokens or email content.
 Logs, API responses, provider DTO dumps, and test fixtures must not expose raw token values.
 
@@ -144,4 +171,5 @@ Incremental Gmail transport API calls, retained body fetching, richer Gmail tran
 - `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` points to that file if you did not use the default path.
 - The only Gmail scope is `https://www.googleapis.com/auth/gmail.readonly`.
 - `GET /auth/gmail` returns a Google authorization URL and never returns client secrets or tokens.
+- `GET /auth/gmail/callback` returns only non-secret connection metadata and stores token material through `SecretStore`.
 - No credentials, tokens, client JSON, or secret-store files are committed or logged.

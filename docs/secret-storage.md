@@ -3,11 +3,16 @@
 JobTracker stores OAuth tokens and provider API keys through the backend `SecretStore` protocol.
 Callers pass non-secret `SecretRef` identifiers and Pydantic `SecretStr` values, so provider code does not choose how secret material is stored.
 
-## Fernet Fallback
+## Configured Backends
 
 `JOBTRACKER_SECRET_STORE_BACKEND` accepts `keyring` and `fernet`.
-The architecture default remains `keyring` for the OS keyring adapter ticket, but the current factory only builds a concrete store for `fernet`.
-Choosing `keyring` raises `SecretStoreUnavailableError` until that adapter lands.
+The architecture default is `keyring`, which stores secret values in the host OS keyring.
+Choosing `fernet` uses the encrypted file-backed fallback.
+
+Both configured backends are available through `app.security.build_secret_store` and `app.security.create_secret_store`.
+An unsupported backend raises `SecretStoreUnavailableError`.
+
+## Fernet Fallback
 
 Use the Fernet fallback when the OS keyring is unavailable by setting `JOBTRACKER_SECRET_STORE_BACKEND=fernet`.
 The fallback writes one encrypted Fernet token per secret under `JOBTRACKER_DATA_DIR/secrets/<kind>/<provider>/<name>.fernet`.

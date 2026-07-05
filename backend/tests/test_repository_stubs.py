@@ -5,6 +5,7 @@ from datetime import datetime
 
 import pytest
 from app import models
+from app.config import EmailProviderName
 from app.db import repositories
 from app.db.repositories.base import BaseRepository
 from app.models import (
@@ -12,15 +13,19 @@ from app.models import (
     ApplicationEventRecord,
     ApplicationRecord,
     ChatMessageRecord,
+    EmailConnectionRecord,
     InsightRecord,
     RawEmailRecord,
 )
+from app.providers.email import EmailAccountRef, EmailAddress, EmailConnection
+from app.security import SecretKind, SecretRef
 from pydantic import ValidationError
 
 
 def test_repository_package_exports_phase_zero_stubs() -> None:
     expected_repository_names = [
         "EmailRepository",
+        "EmailConnectionRepository",
         "ApplicationRepository",
         "EventRepository",
         "InsightRepository",
@@ -42,6 +47,7 @@ def test_model_package_exports_repository_record_dtos() -> None:
         "InsightRecord",
         "ApplicationCorrectionRecord",
         "ChatMessageRecord",
+        "EmailConnectionRecord",
         "RawEmailBodyRetentionState",
     ]
 
@@ -311,6 +317,50 @@ def test_chat_repository_maps_chat_message_rows() -> None:
     assert record.conversation_id == "conversation-1"
     assert record.citations_json == [{"email_id": "email-1"}]
     assert record.tool_outputs_json == [{"tool": "structured_query"}]
+
+
+def test_connection_repository_persists_email_connection_metadata() -> None:
+    repository = repositories.EmailConnectionRepository(sqlite3.connect(":memory:"))
+    repository.execute(
+        """
+        CREATE TABLE email_connections (
+            provider TEXT NOT NULL,
+            account_id TEXT NOT NULL,
+            display_email TEXT,
+            credential_ref_kind TEXT NOT NULL,
+            credential_ref_provider TEXT NOT NULL,
+            credential_ref_name TEXT NOT NULL,
+            granted_scopes TEXT NOT NULL,
+            connected_at TEXT NOT NULL,
+            credential_expires_at TEXT,
+            reauth_required INTEGER NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (provider, account_id)
+        )
+        """
+    )
+    connection = EmailConnection(
+        account=EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com"),
+        display_email=EmailAddress(address="me@example.com"),
+        credential_ref=SecretRef(
+            kind=SecretKind.OAUTH_TOKEN,
+            provider="gmail",
+            name="me-example-com",
+        ),
+        granted_scopes=("https://www.googleapis.com/auth/gmail.readonly",),
+        connected_at=datetime.fromisoformat("2026-07-05T12:00:00+00:00"),
+        credential_expires_at=datetime.fromisoformat("2026-07-05T13:00:00+00:00"),
+    )
+
+    saved = repository.save_connection(connection)
+    fetched = repository.fetch_connection(connection.account)
+
+    assert isinstance(saved, EmailConnectionRecord)
+    assert fetched is not None
+    assert fetched.provider == "gmail"
+    assert fetched.account_id == "me@example.com"
+    assert fetched.credential_ref_name == "me-example-com"
+    assert fetched.granted_scopes == ["https://www.googleapis.com/auth/gmail.readonly"]
 
 
 def fetch_required_record[RecordT](

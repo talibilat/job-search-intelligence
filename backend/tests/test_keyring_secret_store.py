@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 from app.config import AppSettings, SecretStoreBackend
 from app.security import (
+    FernetSecretStore,
     KeyringSecretStore,
     SecretKind,
     SecretRef,
@@ -123,8 +125,14 @@ def test_create_secret_store_uses_keyring_by_default() -> None:
     assert isinstance(store, KeyringSecretStore)
 
 
-def test_create_secret_store_leaves_fernet_to_jt_015() -> None:
-    settings = AppSettings(_env_file=None, secret_store_backend=SecretStoreBackend.FERNET)
+def test_create_secret_store_uses_fernet_fallback(tmp_path: Path) -> None:
+    settings = AppSettings(
+        _env_file=None,
+        secret_store_backend=SecretStoreBackend.FERNET,
+        data_dir=tmp_path / "data",
+        fernet_key_file=tmp_path / "keys" / "fernet.key",
+    )
 
-    with pytest.raises(SecretStoreUnavailableError, match="JT-015"):
-        create_secret_store(settings, keyring_backend=FakeKeyringBackend())
+    store = create_secret_store(settings, keyring_backend=FakeKeyringBackend())
+
+    assert isinstance(store, FernetSecretStore)

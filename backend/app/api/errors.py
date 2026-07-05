@@ -14,12 +14,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 class ApiErrorCode(StrEnum):
+    BAD_GATEWAY = "bad_gateway"
     BAD_REQUEST = "bad_request"
     CONFLICT = "conflict"
     FORBIDDEN = "forbidden"
     HTTP_ERROR = "http_error"
     INTERNAL_ERROR = "internal_error"
     NOT_FOUND = "not_found"
+    SERVICE_UNAVAILABLE = "service_unavailable"
     UNAUTHORIZED = "unauthorized"
     VALIDATION_ERROR = "validation_error"
 
@@ -65,6 +67,8 @@ _HTTP_STATUS_CODES: Final[dict[int, ApiErrorCode]] = {
     404: ApiErrorCode.NOT_FOUND,
     409: ApiErrorCode.CONFLICT,
     422: ApiErrorCode.VALIDATION_ERROR,
+    502: ApiErrorCode.BAD_GATEWAY,
+    503: ApiErrorCode.SERVICE_UNAVAILABLE,
 }
 
 _HTTP_STATUS_MESSAGES: Final[dict[int, str]] = {
@@ -74,6 +78,8 @@ _HTTP_STATUS_MESSAGES: Final[dict[int, str]] = {
     404: "Not found.",
     409: "Conflict.",
     422: "Request validation failed.",
+    502: "Bad gateway.",
+    503: "Service unavailable.",
 }
 
 

@@ -5,7 +5,7 @@ It maps to FR-0, FR-6, NFR-5, NFR-8, and Phase 0.
 
 The current Phase 0 app has a typed provider registry and setup status shell.
 Concrete Azure OpenAI and Ollama adapters are implemented in later provider tickets, so this document is the setup contract for those screens and adapters.
-Phase 0 currently has only the `SecretStore` protocol and backend selector settings; the keyring adapter is tracked by JT-014 and the Fernet fallback is tracked by JT-015.
+The current backend has the `SecretStore` protocol, backend selector settings, the default keyring adapter, and the encrypted Fernet fallback.
 
 ## Setup Principles
 
@@ -51,13 +51,13 @@ provider: azure_openai
 name: api_key
 ```
 
-Use the keyring setting as the intended encrypted-at-rest default once JT-014 lands:
+Use the keyring setting as the encrypted-at-rest default:
 
 ```env
 JOBTRACKER_SECRET_STORE_BACKEND=keyring
 ```
 
-After JT-015 lands, switch to the documented Fernet fallback when keyring is unavailable and keep the key file inside the app-owned local data directory:
+Switch to the documented Fernet fallback when keyring is unavailable and keep the key file inside the app-owned local data directory:
 
 ```env
 JOBTRACKER_SECRET_STORE_BACKEND=fernet
