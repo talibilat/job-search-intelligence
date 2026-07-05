@@ -1,4 +1,5 @@
 import { ChartPanel } from "./components/charts";
+import { DashboardPage } from "./pages/DashboardPage";
 import { SetupPage } from "./pages/SetupPage";
 
 const phaseItems = [
@@ -9,6 +10,7 @@ const phaseItems = [
 
 const navigationItems = [
   { href: "/", label: "Overview" },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },
 ] as const;
 
@@ -68,7 +70,11 @@ function OverviewPage() {
 }
 
 function App() {
-  const currentPath = window.location.pathname === "/setup" ? "/setup" : "/";
+  const currentPath = navigationItems.some(
+    (item) => item.href === window.location.pathname,
+  )
+    ? window.location.pathname
+    : "/";
 
   return (
     <>
@@ -89,7 +95,13 @@ function App() {
           ))}
         </div>
       </nav>
-      {currentPath === "/setup" ? <SetupPage /> : <OverviewPage />}
+      {currentPath === "/setup" ? (
+        <SetupPage />
+      ) : currentPath === "/dashboard" ? (
+        <DashboardPage />
+      ) : (
+        <OverviewPage />
+      )}
     </>
   );
 }
