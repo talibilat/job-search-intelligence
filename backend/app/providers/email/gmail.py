@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import re
 from datetime import UTC, datetime, timedelta
@@ -58,6 +60,7 @@ _PROFILE_EMAIL_FIELDS = "emailAddress"
 _PROFILE_HISTORY_FIELDS = "historyId"
 _HISTORY_LIST_FIELDS = "history(id,messagesAdded(message(id,threadId))),nextPageToken,historyId"
 _INVALID_DATA_MESSAGE = "Gmail metadata listing returned invalid data"
+_FULL_BACKFILL_PAGE_TOKEN_PREFIX = "gmail-full-backfill:"
 
 
 class GoogleOAuthInstalledClientConfig(BaseModel):
@@ -597,6 +600,16 @@ class GmailMessageLister:
         list_query: tuple[tuple[str, str], ...],
         access_token: SecretStr,
     ) -> EmailMetadataPage:
+        page_token = _query_value(list_query, "pageToken")
+        if page_token is None:
+            sync_cursor = await self._fetch_current_history_cursor(
+                connection=connection,
+                access_token=access_token,
+            )
+        else:
+            page_token, sync_cursor = _decode_full_backfill_page_token(page_token)
+            list_query = _replace_query_value(list_query, "pageToken", page_token)
+
         list_response = _validate_gmail_response(
             GmailMessageListResponse,
             await self._transport.get_json(
@@ -616,16 +629,18 @@ class GmailMessageLister:
                 )
             )
 
-        next_sync_cursor = None
-        if list_response.next_page_token is None:
-            next_sync_cursor = await self._fetch_current_history_cursor(
-                connection=connection,
-                access_token=access_token,
+        next_page_token = None
+        next_sync_cursor: EmailProviderCursor | None = sync_cursor
+        if list_response.next_page_token is not None:
+            next_page_token = _encode_full_backfill_page_token(
+                page_token=list_response.next_page_token,
+                sync_cursor=sync_cursor,
             )
+            next_sync_cursor = None
 
         return EmailMetadataPage(
             messages=tuple(metadata_messages),
-            next_page_token=list_response.next_page_token,
+            next_page_token=next_page_token,
             next_sync_cursor=next_sync_cursor,
         )
 
@@ -732,6 +747,59 @@ def _list_query(request: EmailMetadataListRequest) -> tuple[tuple[str, str], ...
     if request.page_token is not None:
         query.append(("pageToken", request.page_token))
     return tuple(query)
+
+
+def _query_value(query: tuple[tuple[str, str], ...], name: str) -> str | None:
+    for key, value in query:
+        if key == name:
+            return value
+    return None
+
+
+def _replace_query_value(
+    query: tuple[tuple[str, str], ...],
+    name: str,
+    replacement: str,
+) -> tuple[tuple[str, str], ...]:
+    return tuple((key, replacement if key == name else value) for key, value in query)
+
+
+def _encode_full_backfill_page_token(
+    *,
+    page_token: str,
+    sync_cursor: EmailProviderCursor,
+) -> str:
+    payload = json.dumps(
+        {
+            "page_token": page_token,
+            "sync_cursor": sync_cursor.model_dump(mode="json"),
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"{_FULL_BACKFILL_PAGE_TOKEN_PREFIX}{base64.urlsafe_b64encode(payload).decode('ascii')}"
+
+
+def _decode_full_backfill_page_token(page_token: str) -> tuple[str, EmailProviderCursor]:
+    if not page_token.startswith(_FULL_BACKFILL_PAGE_TOKEN_PREFIX):
+        raise EmailProviderError(public_message="Gmail full backfill page token is invalid")
+
+    encoded_payload = page_token.removeprefix(_FULL_BACKFILL_PAGE_TOKEN_PREFIX)
+    try:
+        decoded_payload = base64.urlsafe_b64decode(encoded_payload.encode("ascii"))
+        payload = json.loads(decoded_payload.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError
+        decoded_page_token = payload.get("page_token")
+        decoded_sync_cursor = payload.get("sync_cursor")
+        if not isinstance(decoded_page_token, str):
+            raise ValueError
+        sync_cursor = EmailProviderCursor.model_validate(decoded_sync_cursor)
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError, ValueError, ValidationError):
+        raise EmailProviderError(
+            public_message="Gmail full backfill page token is invalid"
+        ) from None
+
+    return decoded_page_token, sync_cursor
 
 
 def _history_query(request: EmailMetadataListRequest) -> tuple[tuple[str, str], ...]:

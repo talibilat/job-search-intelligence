@@ -114,12 +114,12 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
             EmailMetadataListRequest(
                 mode=EmailSyncMode.FULL_BACKFILL,
                 page_size=2,
-                page_token="page-1",
             ),
         )
     )
 
-    assert page.next_page_token == "next-page"
+    assert page.next_page_token is not None
+    assert page.next_page_token != "next-page"
     assert page.next_sync_cursor is None
     assert [message.ref.message_id for message in page.messages] == ["msg-1", "msg-2"]
     assert page.messages[0].ref.thread_id == "thread-1"
@@ -145,7 +145,6 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
     assert dict(list_query) == {
         "fields": "messages(id,threadId),nextPageToken",
         "maxResults": "2",
-        "pageToken": "page-1",
     }
     assert list_token == "access-token"
 
@@ -233,6 +232,68 @@ def test_gmail_message_lister_returns_profile_history_id_on_final_page() -> None
         "/gmail/v1/users/me/messages",
         "/gmail/v1/users/me/profile",
     ]
+
+
+def test_gmail_message_lister_withholds_full_backfill_cursor_until_final_page() -> None:
+    class PaginatedTransport(FakeGmailTransport):
+        async def get_json(
+            self,
+            path: str,
+            *,
+            query: tuple[tuple[str, str], ...],
+            access_token: SecretStr,
+        ) -> dict[str, object]:
+            self.calls.append((path, query, access_token.get_secret_value()))
+            if path == "/gmail/v1/users/me/profile":
+                return {"historyId": "anchor-before-backfill"}
+            if path == "/gmail/v1/users/me/messages":
+                query_dict = dict(query)
+                if "pageToken" not in query_dict:
+                    return {
+                        "messages": [{"id": "msg-1", "threadId": "thread-1"}],
+                        "nextPageToken": "gmail-page-2",
+                    }
+                if query_dict["pageToken"] == "gmail-page-2":
+                    return {"messages": [{"id": "msg-2", "threadId": "thread-2"}]}
+            if path == "/gmail/v1/users/me/messages/msg-1":
+                return {"id": "msg-1", "threadId": "thread-1", "payload": {"headers": []}}
+            if path == "/gmail/v1/users/me/messages/msg-2":
+                return {"id": "msg-2", "threadId": "thread-2", "payload": {"headers": []}}
+            raise AssertionError(f"unexpected Gmail path: {path}")
+
+    transport = PaginatedTransport()
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=transport,
+    )
+
+    first_page = asyncio.run(
+        lister.list_message_metadata(
+            _connection(),
+            EmailMetadataListRequest(mode=EmailSyncMode.FULL_BACKFILL, page_size=1),
+        )
+    )
+    assert first_page.next_page_token is not None
+
+    second_page = asyncio.run(
+        lister.list_message_metadata(
+            _connection(),
+            EmailMetadataListRequest(
+                mode=EmailSyncMode.FULL_BACKFILL,
+                page_size=1,
+                page_token=first_page.next_page_token,
+            ),
+        )
+    )
+
+    assert [message.ref.message_id for message in first_page.messages] == ["msg-1"]
+    assert first_page.next_sync_cursor is None
+    assert [message.ref.message_id for message in second_page.messages] == ["msg-2"]
+    assert second_page.next_page_token is None
+    assert second_page.next_sync_cursor is not None
+    assert second_page.next_sync_cursor.value == "anchor-before-backfill"
+    assert [call[0] for call in transport.calls].count("/gmail/v1/users/me/profile") == 1
+    assert dict(transport.calls[3][1])["pageToken"] == "gmail-page-2"
 
 
 def test_gmail_message_lister_uses_history_for_incremental_metadata_sync() -> None:
