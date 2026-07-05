@@ -7,7 +7,12 @@ from typing import Protocol, cast, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
-from app.models import EmailCandidateQueryStrategy, EmailFilterDecisionOutcome
+from app.models import (
+    EmailCandidateQueryStrategy as EmailCandidateQueryStrategy,
+)
+from app.models import (
+    EmailFilterDecisionOutcome as EmailFilterDecisionOutcome,
+)
 from app.providers.email.html_normalization import (
     email_body_contains_html,
     normalize_email_html_to_text,
