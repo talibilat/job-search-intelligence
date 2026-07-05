@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
+from app.db.repositories import EmailRepository
+from app.db.repositories.sync_state import SyncStateRepository
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
@@ -20,7 +23,7 @@ from app.providers.email import (
     EmailSyncMode,
 )
 from app.security import SecretKind, SecretRef
-from app.services.sync_service import EmailSyncService, SyncScheduler
+from app.services.sync_service import EmailSyncRunState, EmailSyncService, SyncScheduler
 
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 
@@ -124,6 +127,36 @@ class RecordingScheduler:
 
     def shutdown(self, *, wait: bool) -> None:
         self.shutdown_wait = wait
+
+
+class PagingHistoryProvider:
+    def __init__(self, pages: tuple[EmailMetadataPage, ...]) -> None:
+        self._pages = list(pages)
+        self.requests: list[EmailMetadataListRequest] = []
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        del connection
+        self.requests.append(request)
+        return self._pages.pop(0)
+
+
+class FailingHistoryProvider:
+    def __init__(self) -> None:
+        self.requests: list[EmailMetadataListRequest] = []
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        del connection
+        self.requests.append(request)
+        msg = "provider unavailable"
+        raise RuntimeError(msg)
 
 
 def test_expired_history_id_falls_back_to_resumable_reconciliation() -> None:
@@ -303,6 +336,186 @@ def test_paginated_sync_with_cursor_requires_explicit_mode() -> None:
     assert provider.requests == []
 
 
+def test_manual_sync_backfills_all_pages_and_persists_latest_cursor() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    mailbox = email_connection()
+    provider = PagingHistoryProvider(
+        (
+            EmailMetadataPage(
+                messages=(metadata_message(mailbox, "gmail-msg-1"),),
+                next_page_token="page-2",
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-page-1",
+                    issued_at=NOW,
+                ),
+            ),
+            EmailMetadataPage(
+                messages=(metadata_message(mailbox, "gmail-msg-2"),),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-page-2",
+                    issued_at=NOW,
+                ),
+            ),
+        )
+    )
+    email_repository = EmailRepository(connection)
+    sync_state_repository = SyncStateRepository(connection)
+    service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=email_repository,
+        sync_state_repository=sync_state_repository,
+        clock=lambda: NOW,
+    )
+
+    status = asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert status.mode is EmailSyncMode.FULL_BACKFILL
+    assert status.page_count == 2
+    assert status.message_count == 2
+    assert status.raw_email_count == 2
+    assert status.recovered_from_expired_cursor is False
+    assert [request.mode for request in provider.requests] == [
+        EmailSyncMode.FULL_BACKFILL,
+        EmailSyncMode.FULL_BACKFILL,
+    ]
+    assert [request.page_token for request in provider.requests] == [None, "page-2"]
+    assert email_repository.count_raw_emails(provider=EmailProviderName.GMAIL) == 2
+    stored_cursor = sync_state_repository.get_cursor(mailbox.account)
+    assert stored_cursor is not None
+    assert stored_cursor.value == "history-page-2"
+
+
+def test_manual_sync_uses_incremental_mode_when_cursor_exists() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    mailbox = email_connection()
+    sync_state_repository = SyncStateRepository(connection)
+    sync_state_repository.save_cursor(
+        EmailProviderCursor(
+            account=mailbox.account,
+            value="history-current",
+            issued_at=NOW - timedelta(minutes=5),
+        ),
+        updated_at=NOW - timedelta(minutes=5),
+    )
+    provider = PagingHistoryProvider(
+        (
+            EmailMetadataPage(
+                messages=(metadata_message(mailbox, "gmail-msg-3"),),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-next",
+                    issued_at=NOW,
+                ),
+            ),
+        )
+    )
+    service = EmailSyncService(
+        provider=provider,
+        page_size=100,
+        email_repository=EmailRepository(connection),
+        sync_state_repository=sync_state_repository,
+        clock=lambda: NOW,
+    )
+
+    status = asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert status.mode is EmailSyncMode.INCREMENTAL
+    assert len(provider.requests) == 1
+    assert provider.requests[0].mode is EmailSyncMode.INCREMENTAL
+    assert provider.requests[0].sync_cursor is not None
+    assert provider.requests[0].sync_cursor.value == "history-current"
+    stored_cursor = sync_state_repository.get_cursor(mailbox.account)
+    assert stored_cursor is not None
+    assert stored_cursor.value == "history-next"
+
+
+def test_manual_sync_metadata_upsert_preserves_existing_retained_body() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    connection.execute(
+        """
+        INSERT INTO raw_emails (
+            id,
+            thread_id,
+            from_addr,
+            to_addr,
+            subject,
+            sent_at,
+            body_text,
+            body_retention_state,
+            labels,
+            provider,
+            ingested_at
+        ) VALUES (
+            'gmail-msg-1',
+            'thread-old',
+            'jobs@example.com',
+            'me@example.com',
+            'Old subject',
+            ?,
+            'Retained candidate body',
+            'retained',
+            '[]',
+            'gmail',
+            ?
+        )
+        """,
+        (NOW.isoformat(), NOW.isoformat()),
+    )
+    mailbox = email_connection()
+    provider = PagingHistoryProvider(
+        (EmailMetadataPage(messages=(metadata_message(mailbox, "gmail-msg-1"),)),)
+    )
+    service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(connection),
+        sync_state_repository=SyncStateRepository(connection),
+        clock=lambda: NOW,
+    )
+
+    asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    row = connection.execute(
+        "SELECT body_text, body_retention_state, subject FROM raw_emails WHERE id = ?",
+        ("gmail-msg-1",),
+    ).fetchone()
+    assert row is not None
+    assert tuple(row) == ("Retained candidate body", "retained", "Application received")
+
+
+def test_manual_sync_records_failed_status_when_provider_fails() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    provider = FailingHistoryProvider()
+    service = EmailSyncService(
+        provider=provider,
+        page_size=100,
+        email_repository=EmailRepository(connection),
+        sync_state_repository=SyncStateRepository(connection),
+        clock=lambda: NOW,
+    )
+
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        asyncio.run(service.run_manual_sync(connection=email_connection()))
+
+    status = service.current_status()
+    assert status.state is EmailSyncRunState.FAILED
+    assert status.last_error == "provider unavailable"
+    assert status.finished_at == NOW
+
+
 def email_connection() -> EmailConnection:
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
     return EmailConnection(
@@ -315,4 +528,54 @@ def email_connection() -> EmailConnection:
         ),
         granted_scopes=(GMAIL_READONLY_SCOPE,),
         connected_at=NOW,
+    )
+
+
+def metadata_message(connection: EmailConnection, message_id: str) -> EmailMessageMetadata:
+    return EmailMessageMetadata(
+        ref=EmailMessageRef(
+            account=connection.account,
+            message_id=message_id,
+            thread_id=f"thread-{message_id}",
+        ),
+        from_addr=EmailAddress(address="jobs@example.com"),
+        to_addrs=(EmailAddress(address="me@example.com"),),
+        subject="Application received",
+        sent_at=NOW,
+        labels=("INBOX",),
+    )
+
+
+def create_raw_emails_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE raw_emails (
+            id TEXT PRIMARY KEY,
+            thread_id TEXT,
+            from_addr TEXT,
+            to_addr TEXT,
+            subject TEXT,
+            sent_at TEXT,
+            body_text TEXT,
+            body_retention_state TEXT NOT NULL,
+            labels TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            ingested_at TEXT NOT NULL
+        )
+        """,
+    )
+
+
+def create_email_sync_state_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE email_sync_state (
+            provider TEXT NOT NULL,
+            account_id TEXT NOT NULL,
+            sync_cursor TEXT NOT NULL,
+            cursor_issued_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (provider, account_id)
+        )
+        """,
     )

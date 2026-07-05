@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable
+from datetime import datetime
 
 from app.config import EmailProviderName
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
-from app.models.records import RawEmailRecord
+from app.models.records import RawEmailBodyRetentionState, RawEmailRecord
+from app.providers.email import EmailAddress, EmailMessageMetadata
 
 
 class EmailRepository(BaseRepository[RawEmailRecord]):
@@ -81,6 +83,32 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         if should_commit:
             self.connection.commit()
 
+    def upsert_metadata_only(
+        self,
+        messages: tuple[EmailMessageMetadata, ...],
+        *,
+        ingested_at: datetime,
+    ) -> int:
+        """Persist provider metadata without overwriting retained body content."""
+
+        self.upsert_raw_emails(
+            RawEmailRecord(
+                id=message.ref.message_id,
+                thread_id=message.ref.thread_id,
+                from_addr=_format_email_address(message.from_addr),
+                to_addr=_format_email_addresses(message.to_addrs),
+                subject=message.subject,
+                sent_at=message.sent_at or message.received_at,
+                body_text=None,
+                body_retention_state=RawEmailBodyRetentionState.METADATA_ONLY,
+                labels=list(message.labels),
+                provider=message.ref.account.provider.value,
+                ingested_at=ingested_at,
+            )
+            for message in messages
+        )
+        return len(messages)
+
     def count_raw_emails(self, *, provider: EmailProviderName | None = None) -> int:
         if provider is None:
             row = self.execute("SELECT COUNT(*) FROM raw_emails").fetchone()
@@ -103,3 +131,29 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
 
     def map_row(self, row: sqlite3.Row) -> RawEmailRecord:
         return RawEmailRecord.model_validate(row_to_dict(row))
+
+
+def _format_email_address(address: EmailAddress | None) -> str | None:
+    if address is None:
+        return None
+    if address.display_name is None:
+        return address.address
+    return f"{address.display_name} <{address.address}>"
+
+
+def _format_email_addresses(addresses: tuple[EmailAddress, ...]) -> str | None:
+    if not addresses:
+        return None
+    return ", ".join(
+        address for address in (_format_email_address(item) for item in addresses) if address
+    )
+
+
+def _format_datetime(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+def _format_json_array(values: tuple[str, ...]) -> str:
+    return json.dumps(list(values), separators=(",", ":"))
