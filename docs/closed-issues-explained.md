@@ -57,7 +57,7 @@ What does not exist yet is the full product.
 There is no full Gmail ingestion pipeline yet because classification and aggregation remain pending.
 There is no populated metrics dashboard yet.
 There is no backend chat agent, retrieval, streaming, or chat history endpoint/UI yet; only the compact local chat history table exists.
-There is no concrete Azure OpenAI or Ollama adapter yet.
+There is no concrete Azure OpenAI adapter yet, and the Ollama adapter currently covers chat generation only.
 
 ## #1 JT-001 - Create Private GitHub Repository
 
@@ -658,7 +658,8 @@ The tests should pass.
 The import command should print a typed LLM message.
 
 Caveat:
-This does not implement Azure OpenAI, Ollama, OpenAI, or Anthropic.
+This ticket did not implement Azure OpenAI, Ollama, OpenAI, or Anthropic.
+JT-087 later added Ollama chat generation behind the `LLMProvider` seam.
 Embeddings were also deferred to a later ticket.
 
 ## #29 JT-029 - Add Setup Status API Shell

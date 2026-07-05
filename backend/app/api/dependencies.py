@@ -6,9 +6,11 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.config import AppSettings, get_settings
+from app.api.errors import ApiError, ApiErrorCode
+from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.repositories.connection import EmailConnectionRepository
 from app.db.sqlite_url import sqlite_database_path
+from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
 
 
 def get_email_connection_repository(
@@ -21,3 +23,23 @@ def get_email_connection_repository(
         yield EmailConnectionRepository(connection)
     finally:
         connection.close()
+
+
+def get_llm_provider(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> LLMProvider:
+    if settings.llm_provider is LLMProviderName.OLLAMA:
+        try:
+            return OllamaLLMProvider(settings=settings)
+        except LLMProviderUnavailableError as error:
+            raise ApiError(
+                status_code=400,
+                code=ApiErrorCode.BAD_REQUEST,
+                message=error.public_message,
+            ) from error
+
+    raise ApiError(
+        status_code=503,
+        code=ApiErrorCode.SERVICE_UNAVAILABLE,
+        message="Selected LLM provider is unavailable.",
+    )
