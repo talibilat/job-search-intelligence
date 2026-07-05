@@ -25,10 +25,7 @@ def main() -> int:
     args = parser.parse_args()
 
     report = run_eval(args.golden_set)
-    passed = (
-        report["precision"] >= PRECISION_THRESHOLD
-        and report["recall"] >= RECALL_THRESHOLD
-    )
+    passed = report["precision"] >= PRECISION_THRESHOLD and report["recall"] >= RECALL_THRESHOLD
 
     print(f"examples: {report['examples']}")
     print(f"true_positives: {report['true_positives']}")
@@ -68,9 +65,7 @@ def run_eval(golden_set_path: Path) -> dict[str, int | float]:
     precision_denominator = true_positives + false_positives
     recall_denominator = true_positives + false_negatives
 
-    precision = (
-        true_positives / precision_denominator if precision_denominator else 0.0
-    )
+    precision = true_positives / precision_denominator if precision_denominator else 0.0
     recall = true_positives / recall_denominator if recall_denominator else 0.0
 
     return {

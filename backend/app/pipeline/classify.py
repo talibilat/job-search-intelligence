@@ -105,10 +105,6 @@ def _format_prompt_datetime(value: datetime | None) -> str | None:
     if value is None:
         return None
 
-    formatted = (
-        value.isoformat()
-        if value.tzinfo is None
-        else value.astimezone(UTC).isoformat()
-    )
+    formatted = value.isoformat() if value.tzinfo is None else value.astimezone(UTC).isoformat()
 
     return formatted.replace("+00:00", "Z")
