@@ -9,7 +9,7 @@ from app.models.records import RawEmailRecord
 
 
 class EmailRepository(BaseRepository[RawEmailRecord]):
-    """Repository seam for retained raw email records."""
+    """Repository seam for raw email records with typed retention validation."""
 
     def count_raw_emails(self, *, provider: EmailProviderName | None = None) -> int:
         if provider is None:
