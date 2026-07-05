@@ -46,6 +46,7 @@ The backend exists as a Python FastAPI project.
 The frontend exists as a Vite React TypeScript project.
 The frontend also has a Recharts chart wrapper foundation with an empty state for future deterministic dashboard metrics.
 The frontend also has a primary navigation shell with a `/setup` Phase 0 setup page for provider, mode, Gmail read-only, privacy, checklist, disabled action, and not-ready copy.
+The frontend also has an empty `/chat` route shell with a disabled composer for the later Phase 5 RAG chat work.
 There are backend endpoints for health, setup status, setup submission, and wiping local data.
 There are typed provider interfaces for future Gmail and LLM implementations, plus an exported Gmail provider skeleton.
 There is configuration infrastructure, a keyring-backed secret-store path, Alembic migration infrastructure, and lint/type/test tooling.
@@ -54,8 +55,8 @@ What does not exist yet is the full product.
 There is no working Gmail sync yet.
 There is no application database schema or ingestion pipeline yet.
 There is no real dashboard yet.
-There is no chat agent yet.
-There is no concrete Azure OpenAI or Ollama adapter yet.
+There is no backend chat agent, retrieval, streaming, or persisted chat history yet.
+There is no concrete Azure OpenAI, Ollama, or Gmail adapter yet.
 
 ## #1 JT-001 - Create Private GitHub Repository
 
@@ -1000,8 +1001,7 @@ Backend:
 You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, local wipe-data infrastructure, async SQLite engine infrastructure, and Alembic migration infrastructure.
 
 Frontend:
-You can see a static React shell for JobTracker, an empty Recharts foundation panel for future deterministic dashboard metrics, and shared accessible UI primitives for later pages.
-You can see a static React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics and a `/setup` page shell for provider, mode, Gmail, privacy, checklist, disabled action, and not-ready copy.
+You can see a static React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics, a `/setup` page shell for provider, mode, Gmail, privacy, checklist, disabled action, and not-ready copy, a disabled `/chat` shell for later RAG work, and shared accessible UI primitives for later pages.
 It is not connected to backend data yet.
 
 Configuration:
@@ -1019,12 +1019,12 @@ You can see early safety work for typed errors, secret references, safe configur
 
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, prepare Alembic's version table, run tests, lint, and type checks.
-The frontend can start, run unit tests, and build, but it is still a static shell with an empty chart foundation and shared primitive layer.
+The frontend can start, run unit tests, and build, but it is still a static shell with an empty chart foundation, disabled chat route shell, and shared primitive layer.
 Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, run tests, lint, and type checks.
 Frontend CI now runs the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, initialize Alembic's version table, run tests, lint, and type checks.
-The frontend can start, test, and build, but it is still a static shell with an empty chart foundation and a non-persistent `/setup` page shell.
+The frontend can start, test, and build, but it is still a static shell with an empty chart foundation, a non-persistent `/setup` page shell, and a disabled chat route shell.
 Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations, and Gmail now has an exported skeleton while runtime behavior remains deferred.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, Alembic migrations, and the wipe-data endpoint.

@@ -19,6 +19,7 @@ The repository currently contains planning documents, root project metadata, the
 Concrete Gmail provider behavior and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
 The repository currently contains planning documents, root project metadata, the monorepo directory skeleton, the backend `uv` project scaffold, an initial FastAPI app factory (`backend/app/main.py`) with health, setup, provider config, and local wipe-data routes, typed settings and API errors, the keyring-backed `SecretStore` adapter, provider registry, backend `LLMProvider` and `EmailProvider` Strategy interfaces, an async SQLite engine module with Phase 0 connection PRAGMAs, shared SQLite URL parsing, an Alembic migration environment, shared SQLite repository helpers, Phase 0 repository stubs with table-shaped Pydantic record DTOs, the synthetic fixture DTO contract, sample fixture, and SQLite fixture loader, the backend OpenAPI schema generator, root pre-commit configuration, backend and frontend CI workflows, and the frontend Vite React TypeScript shell with Orval API client generation, Recharts foundation, route-query helpers, shared accessible UI primitives, setup and sync-readiness shell copy, npm API contract, typecheck, lint, Vitest, build gate scripts, and a Chromium Playwright smoke harness for the current Phase 0 browser shell.
 The frontend shell keeps the root overview page intact, adds a `/setup` first-run setup page shell with primary navigation, disabled setup actions, setup checklist, provider and classification mode copy, Gmail read-only boundary copy, privacy copy, and an explicit not-ready state until later backend persistence and OAuth wiring land, and adds a static `/insights` route shell that explicitly defers narrative generation, regeneration, citations, and model calls to Phase 4.
+The frontend also adds a disabled `/chat` route shell that reserves the page entry point while streaming chat, persisted history, retrieval, provider calls, and backend chat behavior remain Phase 5 work.
 Concrete Gmail provider behavior, product pages, the first application schema revision, sqlite-vec engine loading, and remaining backend pieces fill in over subsequent Phase 0 and Phase 1 tickets.
 
 ## Architecture at a glance
@@ -169,6 +170,7 @@ npm run dev
 ```
 
 Vite serves the Phase 0 frontend shell locally, usually at `http://127.0.0.1:5173/`, with the setup shell at `http://127.0.0.1:5173/setup`.
+The frontend also serves a static `/chat` route shell with a disabled composer; streaming chat, persisted history, retrieval, provider calls, and backend chat endpoints remain Phase 5 work.
 Keep the backend running separately on `127.0.0.1:8000` when testing API-backed flows.
 
 ### 7. Smoke-check the local setup
@@ -268,6 +270,7 @@ The backend database schema does not exist yet; `uv run alembic ensure_version` 
 - Frontend lint check: `npm run lint` from `frontend/`.
 - Frontend unit tests: `npm run test` from `frontend/` runs Vitest with jsdom for component behavior such as UI primitive accessibility contracts.
 - Current frontend route-query helper: `frontend/src/lib/routeQuery.ts` parses, serializes, and patches URL query strings for URL-backed filter state.
+- Current frontend chat shell: `/chat` renders `frontend/src/pages/Chat.tsx` with disabled composer copy that reserves the page entry point without implementing streaming, history, retrieval, provider calls, or backend chat behavior.
 - Frontend Playwright browser install: run `npx playwright install chromium` from `frontend/` once per machine before the browser smoke suite.
 - Frontend Playwright smoke tests: run `npm run test:smoke` from `frontend/`; the suite starts Vite on `127.0.0.1:4173` and covers the current Phase 0 setup copy, sync-readiness copy, and dashboard empty state.
 - Frontend tooling gate: after backend dependencies are synced with `uv`, `npm run check` from `frontend/` runs API contract generation and staleness checks, typecheck, lint, Vitest, and build.
