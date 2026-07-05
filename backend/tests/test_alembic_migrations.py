@@ -443,25 +443,10 @@ def test_chat_messages_store_compact_history_rows(tmp_path: Path) -> None:
     command.upgrade(config, "head")
 
     with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            """
-            INSERT INTO chat_messages (
-                conversation_id,
-                role,
-                content,
-                citations_json,
-                tool_outputs_json,
-                created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "conversation-1",
-                "assistant",
-                "You have one overdue follow-up.",
-                '[{"application_id": "app_1", "email_id": "email_1"}]',
-                '[{"tool": "structured_query", "result_id": "metric_1"}]',
-                "2026-07-31T00:00:00Z",
-            ),
+        insert_chat_message(
+            connection,
+            citations_json='[{"application_id": "app_1", "email_id": "email_1"}]',
+            tool_outputs_json='[{"tool": "structured_query", "result_id": "metric_1"}]',
         )
 
         row = connection.execute(
