@@ -138,7 +138,7 @@ Gmail ingestion · classification + extraction + aggregation · deterministic da
 ### FR-2 - Classification, extraction & aggregation *(make-or-break)*
 
 - **FR-2.1 Heuristic pre-filter** *(P0)* - Cheaply narrow the inbox using known ATS/recruiter sender domains + keyword signals before any LLM call.
-  *Accept:* filter reduces the candidate set by orders of magnitude while retaining known job emails (validated against the golden set).
+  *Accept:* filter reduces the candidate set by orders of magnitude while retaining known job emails (validated against the golden set), and each evaluated metadata record has an auditable local outcome and public-safe static reason.
 - **FR-2.2 LLM classification** *(P0)* - Classify each candidate into `application_confirmation | rejection | interview_invite | recruiter_outreach | offer | assessment | follow_up | other`, with a confidence score.
   *Accept:* categories populate `email_classifications`; model + prompt version stored per row.
 - **FR-2.3 Structured extraction** *(P0)* - Extract company, role, status, dates, salary, location, work mode, seniority, sponsorship, tech stack, rejection reason, validated by Pydantic.

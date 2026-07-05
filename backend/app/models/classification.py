@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.config import ClassificationMode, LLMProviderName
 from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
@@ -42,16 +42,45 @@ _CATEGORY_EVENT_TYPE = {
 }
 
 
-class EmailClassificationRecord(BaseModel):
-    """Stored classification result for one raw email."""
+class EmailClassificationCandidate(BaseModel):
+    """Retained email content prepared for the classification stage."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
 
     email_id: str = Field(min_length=1)
+    subject: str | None = Field(default=None, min_length=1)
+    from_addr: str | None = Field(default=None, min_length=1)
+    sent_at: datetime | None = None
+    body_text: str = Field(min_length=1, repr=False)
+
+    @field_validator("sent_at")
+    @classmethod
+    def validate_sent_at(cls, value: datetime | None) -> datetime | None:
+        return _validate_timezone_aware(value, field_name="sent_at")
+
+
+class EmailClassificationResult(BaseModel):
+    """Provider-neutral classification output plus reproducibility metadata."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
+
     is_job_related: bool
     category: JobEmailCategory
     confidence: float = Field(ge=0, le=1)
     model: str = Field(min_length=1)
     prompt_version: str = Field(min_length=1)
     classified_at: datetime
+
+    @field_validator("classified_at")
+    @classmethod
+    def validate_classified_at(cls, value: datetime) -> datetime:
+        return _validate_timezone_aware(value, field_name="classified_at")
+
+
+class EmailClassificationRecord(EmailClassificationResult):
+    """Stored classification result for one raw email."""
+
+    email_id: str = Field(min_length=1)
 
 
 class ClassificationRunRecord(BaseModel):
@@ -236,3 +265,12 @@ class ClassificationPreRunEstimate(BaseModel):
         min_length=1,
         description="Human-readable heuristic used for token estimates.",
     )
+
+
+def _validate_timezone_aware[
+    DatetimeT: datetime | None,
+](value: DatetimeT, *, field_name: str) -> DatetimeT:
+    if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+        msg = f"{field_name} must be timezone-aware"
+        raise ValueError(msg)
+    return value

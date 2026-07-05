@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
-from app.db.repositories import EmailRepository
+from app.db.repositories import EmailFilterDecisionRepository, EmailRepository
 from app.db.repositories.sync_state import SyncStateRepository
 from app.providers.email import (
     EmailAccountRef,
@@ -717,6 +717,85 @@ def test_manual_sync_persists_retained_bodies_for_candidate_messages() -> None:
     assert [ref.message_id for ref in provider.body_requests[0].refs] == ["gmail-candidate"]
 
 
+def test_manual_sync_persists_filter_decisions_for_candidate_and_rejected_metadata() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    create_email_filter_decisions_table(connection)
+    mailbox = email_connection()
+    provider = PagingRetainedBodyProvider(
+        (
+            EmailMetadataPage(
+                messages=(
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-candidate",
+                            thread_id="thread-candidate",
+                        ),
+                        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Application received",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-newsletter",
+                            thread_id="thread-newsletter",
+                        ),
+                        from_addr=EmailAddress(address="news@example.com"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Product newsletter",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-next",
+                    issued_at=NOW,
+                ),
+            ),
+        )
+    )
+    service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(connection),
+        filter_decision_repository=EmailFilterDecisionRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
+        clock=lambda: NOW,
+    )
+
+    asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    rows = connection.execute(
+        """
+        SELECT email_id, strategy, outcome, reason, decided_at
+        FROM email_filter_decisions
+        ORDER BY email_id
+        """
+    ).fetchall()
+    assert [tuple(row) for row in rows] == [
+        (
+            "gmail-candidate",
+            "broad_job_search",
+            "candidate",
+            "sender_domain:greenhouse.io",
+            NOW.isoformat(),
+        ),
+        (
+            "gmail-newsletter",
+            "broad_job_search",
+            "rejected",
+            "no_filter_signal",
+            NOW.isoformat(),
+        ),
+    ]
+
+
 def test_manual_sync_updates_running_status_between_pages() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
@@ -915,6 +994,24 @@ def create_email_sync_state_table(connection: sqlite3.Connection) -> None:
             next_page_token TEXT,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (provider, account_id)
+        )
+        """,
+    )
+
+
+def create_email_filter_decisions_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE email_filter_decisions (
+            email_id TEXT NOT NULL,
+            strategy TEXT NOT NULL,
+            outcome TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            decided_at TEXT NOT NULL,
+            CHECK (strategy IN ('broad_job_search')),
+            CHECK (outcome IN ('candidate', 'rejected')),
+            PRIMARY KEY (email_id, strategy),
+            FOREIGN KEY (email_id) REFERENCES raw_emails(id) ON DELETE CASCADE
         )
         """,
     )

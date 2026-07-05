@@ -1,8 +1,51 @@
 from __future__ import annotations
 
+import html
 import re
 import unicodedata
 
+_DOMAIN_PREFIXES = frozenset({"careers", "jobs", "www"})
+_DOMAIN_SUFFIXES = frozenset(
+    {
+        "ai",
+        "app",
+        "ca",
+        "co",
+        "com",
+        "dev",
+        "io",
+        "net",
+        "org",
+        "uk",
+        "us",
+    }
+)
+_LEADING_ARTICLES = frozenset({"the"})
+_LEGAL_SUFFIXES = frozenset(
+    {
+        "ag",
+        "bv",
+        "co",
+        "corp",
+        "corporation",
+        "gmbh",
+        "inc",
+        "incorporated",
+        "limited",
+        "llc",
+        "ltd",
+        "nv",
+        "plc",
+        "pte",
+        "pty",
+        "sa",
+        "sarl",
+        "sas",
+    }
+)
+_DOTTED_LEGAL_SUFFIX_TOKEN_SEQUENCES = tuple(
+    tuple(suffix) for suffix in sorted(_LEGAL_SUFFIXES, key=len, reverse=True) if len(suffix) > 1
+)
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _LEVEL_TOKEN_RE = re.compile(r"(?:[1-9][0-9]*|e[0-9]+|ic[0-9]+|l[0-9]+|m[0-9]+)")
 _EMPLOYMENT_PHRASES = (
@@ -106,6 +149,29 @@ _BASE_ROLES: tuple[_BaseRole, ...] = (
 )
 
 
+def normalize_company_name(company: str) -> str:
+    """Return a deterministic company grouping key for Phase 2 aggregation.
+
+    The key normalizes extracted display strings only; grouping-key assembly stays
+    responsible for combining this with role, thread, and time-window signals.
+    """
+
+    decoded_company = html.unescape(company)
+    tokens = _company_tokens(decoded_company)
+    if not tokens:
+        return ""
+
+    tokens = _drop_leading_terms(tokens, _LEADING_ARTICLES)
+    looks_like_domain = _looks_like_domain(decoded_company)
+    if looks_like_domain:
+        tokens = _drop_leading_terms(tokens, _DOMAIN_PREFIXES)
+    tokens = _drop_trailing_legal_suffixes(tokens)
+    if looks_like_domain:
+        tokens = _drop_trailing_terms(tokens, _DOMAIN_SUFFIXES)
+
+    return " ".join(tokens)
+
+
 def normalize_role_title(role_title: str | None) -> str | None:
     """Return a deterministic grouping key for an extracted role title.
 
@@ -127,6 +193,61 @@ def normalize_role_title(role_title: str | None) -> str | None:
     _required_tokens, base_tokens, consumed_tokens = base_role
     descriptor_tokens = [token for token in tokens if token not in consumed_tokens]
     return " ".join(_dedupe_tokens((*descriptor_tokens, *base_tokens)))
+
+
+def _company_tokens(company: str) -> list[str]:
+    normalized = _strip_combining_marks(company).casefold()
+    normalized = normalized.replace("&", " and ")
+    chars = [char if char.isalnum() else " " for char in normalized]
+    return "".join(chars).split()
+
+
+def _strip_combining_marks(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    return "".join(char for char in normalized if not unicodedata.combining(char))
+
+
+def _looks_like_domain(company: str) -> bool:
+    return "." in company
+
+
+def _drop_leading_terms(tokens: list[str], terms: frozenset[str]) -> list[str]:
+    trimmed = list(tokens)
+    while trimmed and trimmed[0] in terms:
+        trimmed.pop(0)
+    return trimmed
+
+
+def _drop_trailing_terms(tokens: list[str], terms: frozenset[str]) -> list[str]:
+    trimmed = list(tokens)
+    while len(trimmed) > 1 and trimmed[-1] in terms:
+        trimmed.pop()
+    return trimmed
+
+
+def _drop_trailing_legal_suffixes(tokens: list[str]) -> list[str]:
+    trimmed = list(tokens)
+    while len(trimmed) > 1:
+        if trimmed[-1] in _LEGAL_SUFFIXES:
+            trimmed.pop()
+            continue
+
+        dotted_suffix = _matching_trailing_dotted_legal_suffix(trimmed)
+        if dotted_suffix is None:
+            break
+        del trimmed[-len(dotted_suffix) :]
+
+    if len(trimmed) > 1 and trimmed[-1] == "and":
+        trimmed.pop()
+    return trimmed
+
+
+def _matching_trailing_dotted_legal_suffix(tokens: list[str]) -> tuple[str, ...] | None:
+    for suffix_tokens in _DOTTED_LEGAL_SUFFIX_TOKEN_SEQUENCES:
+        trailing_tokens = tuple(tokens[-len(suffix_tokens) :])
+        if len(tokens) > len(suffix_tokens) and trailing_tokens == suffix_tokens:
+            return suffix_tokens
+    return None
 
 
 def _normalize_tokens(role_title: str) -> tuple[str, ...]:
