@@ -63,6 +63,8 @@ class RawEmailBodyRetentionState(StrEnum):
 
 
 class RawEmailRecord(BaseModel):
+    """Raw email row DTO with explicit retained-body consistency checks."""
+
     id: str
     thread_id: str | None
     from_addr: str | None

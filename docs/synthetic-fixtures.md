@@ -36,6 +36,7 @@ Top-level fixture fields:
 - `sent_at`: optional timestamp.
 - `body_text`: optional synthetic body text, excluded from DTO repr output.
 - `body_retention_state`: optional, defaults to `metadata_only`.
+  Current values are `metadata_only`, `retained`, and `debugging` through the shared backend raw-email retention enum.
   `metadata_only` rows must omit `body_text`; `retained` and `debugging` rows must include it.
 [JT-065 2026-07-05 v3] Current synthetic raw email retention states mirror raw emails: `metadata_only` rows omit `body_text`, while `retained` and `debugging` rows include `body_text`.
 - `labels`: optional string array, defaults to empty.
@@ -79,6 +80,7 @@ Application salary ranges must be non-negative, and `salary_min` must be less th
 Retained synthetic email body text is excluded from object repr output to preserve the same redaction habit used for real retained bodies.
 Synthetic fixtures share the backend raw-email retention enum, so obsolete values such as `omitted` are rejected.
 [JT-065 2026-07-05 v3] Synthetic fixtures share the backend raw-email retention enum, so `omitted` is obsolete and rejected by validation.
+Use `debugging` for synthetic emails whose retained body exists only to exercise debugging or reconciliation flows.
 
 ## Enumerations
 
