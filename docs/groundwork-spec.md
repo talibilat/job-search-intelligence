@@ -63,7 +63,7 @@ job-search-intelligence/
 │   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Pydantic DTOs (RawEmail, Application, ...)
 │   │   ├── providers/
-│   │   │   ├── email/              # EmailProvider protocol + gmail.py skeleton/metadata lister + retained-body text normalization + future outlook.py/imap.py
+│   │   │   ├── email/              # EmailProvider protocol + Gmail OAuth start/metadata lister + retained-body text normalization + future outlook.py/imap.py
 │   │   │   └── llm/                # LLMProvider protocol + future azure_openai.py/ollama.py (+ future openai/anthropic)
 │   │   ├── security/               # SecretStore protocol, secret refs, security adapters
 │   │   ├── pipeline/
@@ -196,7 +196,7 @@ Show a **pre-run cost estimate** and track tokens per run.
 
 - **Health:** `GET /health` returns a liveness-only `{ "status": "ok" }` response for Phase 0 smoke checks.
 - **Setup/auth:** `GET /setup/status` reports the Phase 0 first-run setup shell without exposing secrets; `POST /setup` accepts non-secret first-run choices, validates selected provider metadata, and returns an accepted setup status without running provider auth flows or persisting secrets; `GET /config/providers` returns selected provider choices, visible non-secret provider settings, supported provider metadata, and secret-reference requirements without secret values; `PUT /config/providers` validates and applies partial non-secret provider config updates to the running backend process only; `GET /auth/gmail` starts Gmail OAuth by returning a provider-built Google authorization URL, generated state value, and the read-only Gmail scope without returning client secrets or tokens.
-  `GET /auth/gmail/callback`, token exchange, token persistence, and Gmail message access remain later Phase 1 endpoints and adapters.
+  `GET /auth/gmail/callback`, token exchange, token persistence, endpoint-driven Gmail message sync, incremental sync, and retained-body access remain later Phase 1 work.
 - **Local data:** `POST /local-data/wipe` removes configured local app data and derived artifacts after the exact confirmation phrase `wipe-local-data`; unsafe configured filesystem targets return the standard typed `400` API error.
 - **Sync:** `POST /sync`, `GET /sync/status`
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit

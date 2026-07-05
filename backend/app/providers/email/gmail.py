@@ -68,7 +68,7 @@ class GoogleOAuthClientConfig(BaseModel):
 
 
 class GmailEmailProvider:
-    """Provider-specific Gmail email adapter."""
+    """Gmail adapter with OAuth start and optional SecretStore-backed metadata listing."""
 
     name = EmailProviderName.GMAIL
 
