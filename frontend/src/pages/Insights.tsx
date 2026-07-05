@@ -11,14 +11,18 @@ export function Insights() {
         <p className="eyebrow">Phase 0 insights shell</p>
         <h1 id="page-title">Insights</h1>
         <p className="hero-copy">
-          Narrative insights will eventually turn deterministic application history into grounded recommendations without making the LLM authoritative for counts.
+          Narrative insights will eventually turn deterministic application
+          history into grounded recommendations without making the LLM
+          authoritative for counts.
         </p>
       </section>
 
       <section className="status-card" aria-labelledby="insights-status-title">
         <div>
           <p className="eyebrow">Current state</p>
-          <h2 id="insights-status-title">Narrative insights are not generated yet.</h2>
+          <h2 id="insights-status-title">
+            Narrative insights are not generated yet.
+          </h2>
         </div>
         <ul>
           {insightPlaceholders.map((item) => (
