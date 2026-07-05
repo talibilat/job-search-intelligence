@@ -6,7 +6,7 @@ It maps to FR-0, FR-0.2, FR-1.1, FR-6, FR-6.2, NFR-5, NFR-8, and Phase 1.
 Gmail message listing and retained-body fetching read OAuth token material only through `SecretStore`.
 The backend can start Gmail OAuth with `GET /auth/gmail` and complete the local callback with `GET /auth/gmail/callback`.
 The callback exchanges the authorization code, validates the returned `gmail.readonly` scope, stores token material through the configured `SecretStore`, and persists only non-secret connection metadata in SQLite.
-Token refresh, connected-account lookup for default sync runs, and concrete incremental transport remain later Gmail ingestion work.
+Manual sync resolves persisted Gmail connection metadata from local SQLite, while token refresh and concrete incremental transport remain later Gmail ingestion work.
 This guide documents the setup and runtime security contract the app must follow.
 
 ## Security Boundaries
@@ -164,6 +164,7 @@ Gmail history `404` responses are treated as expired sync cursors so the sync se
 Metadata-listing failures are mapped into public-safe provider errors: authorization failures ask the client to reconnect Gmail, insufficient scopes ask for read-only access, rate limits and temporary outages ask the client to try again later, invalid Gmail responses are reported without raw payloads, and generic provider failures do not expose OAuth tokens or Gmail response bodies.
 
 Richer Gmail transport behavior and additional connected-account persistence behavior remain separate Phase 1 work.
+Manual sync already uses the persisted non-secret connection metadata to pass a `SecretRef`-backed account to the Gmail provider.
 
 ## Retained Body Fetching Boundary
 
@@ -184,4 +185,5 @@ Manual sync stores retained bodies for broad job-search candidate messages after
 - The only Gmail scope is `https://www.googleapis.com/auth/gmail.readonly`.
 - `GET /auth/gmail` returns a Google authorization URL and never returns client secrets or tokens.
 - `GET /auth/gmail/callback` returns only non-secret connection metadata and stores token material through `SecretStore`.
+- `POST /sync` uses the persisted non-secret Gmail connection metadata and keeps OAuth token material behind `SecretStore`.
 - No credentials, tokens, client JSON, or secret-store files are committed or logged.
