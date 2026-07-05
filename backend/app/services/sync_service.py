@@ -116,7 +116,7 @@ class EmailSyncService:
 
 
 class BackfillReconciliationMetrics(BaseModel):
-    """Deterministic count comparison for a completed metadata backfill."""
+    """Deterministic count comparison for provider pages and local raw email rows."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -138,6 +138,8 @@ def build_backfill_reconciliation_metrics(
     email_repository: EmailRepository,
     pages: Iterable[EmailMetadataPage],
 ) -> BackfillReconciliationMetrics:
+    """Build Phase 1 backfill reconciliation metrics from provider metadata pages."""
+
     page_tuple = tuple(pages)
     provider_message_ids: list[str] = []
 
