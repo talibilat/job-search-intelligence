@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from app.config import EmailProviderName
+from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
@@ -14,7 +15,6 @@ from app.providers.email import (
     EmailMetadataListRequest,
     EmailProviderCursor,
     EmailSyncMode,
-    build_broad_candidate_query,
 )
 from pydantic import ValidationError
 
@@ -119,6 +119,34 @@ def test_candidate_query_matches_keywords_across_subject_and_normalized_body_tex
         subject="Weekly product update",
         normalized_body_text="Your account digest is ready.",
     )
+
+
+def test_broad_candidate_query_does_not_match_broad_consumer_platform_roots() -> None:
+    account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
+    query = build_broad_candidate_query()
+
+    linkedin_update = EmailMessageMetadata(
+        ref=EmailMessageRef(account=account, message_id="msg-1"),
+        from_addr=EmailAddress(address="notifications@linkedin.com"),
+        subject="Your weekly update",
+        labels=("INBOX",),
+    )
+    indeed_update = EmailMessageMetadata(
+        ref=EmailMessageRef(account=account, message_id="msg-2"),
+        from_addr=EmailAddress(address="updates@indeed.com"),
+        subject="Your account update",
+        labels=("INBOX",),
+    )
+    indeed_job_signal = EmailMessageMetadata(
+        ref=EmailMessageRef(account=account, message_id="msg-3"),
+        from_addr=EmailAddress(address="alerts@indeedemail.com"),
+        subject="Your weekly update",
+        labels=("INBOX",),
+    )
+
+    assert not query.matches_metadata(linkedin_update)
+    assert not query.matches_metadata(indeed_update)
+    assert query.matches_metadata(indeed_job_signal)
 
 
 def test_candidate_query_excludes_metadata_with_blocked_labels() -> None:

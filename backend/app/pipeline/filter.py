@@ -2,6 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from app.providers.email.provider import (
+    EmailCandidateQuery,
+    EmailCandidateQueryStrategy,
+)
+from app.providers.email.provider import (
+    sender_matches_domain_terms as _sender_matches_domain_terms,
+)
+
 HEURISTIC_ATS_SENDER_DOMAIN_TERMS: tuple[str, ...] = (
     "greenhouse.io",
     "greenhouse-mail.io",
@@ -25,9 +33,7 @@ HEURISTIC_ATS_SENDER_DOMAIN_TERMS: tuple[str, ...] = (
 )
 
 HEURISTIC_RECRUITER_SENDER_DOMAIN_TERMS: tuple[str, ...] = (
-    "linkedin.com",
     "linkedinmail.com",
-    "indeed.com",
     "indeedemail.com",
     "ziprecruiter.com",
     "ziprecruiteremail.com",
@@ -48,37 +54,36 @@ def sender_matches_heuristic_sender_domain(sender_address: str | None) -> bool:
     return sender_matches_domain_terms(sender_address, HEURISTIC_SENDER_DOMAIN_TERMS)
 
 
-def sender_matches_domain_terms(sender_address: str | None, domain_terms: Iterable[str]) -> bool:
-    """Match sender domains by exact domain or subdomain, never raw suffix text."""
+def sender_matches_domain_terms(
+    sender_address: str | None,
+    domain_terms: Iterable[str],
+) -> bool:
+    return _sender_matches_domain_terms(sender_address, domain_terms)
 
-    domain = _extract_sender_domain(sender_address)
-    if domain is None:
-        return False
 
-    return any(
-        domain == term or domain.endswith(f".{term}")
-        for term in _normalize_domain_terms(domain_terms)
+def build_broad_candidate_query() -> EmailCandidateQuery:
+    return EmailCandidateQuery(
+        strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
+        sender_domain_terms=HEURISTIC_SENDER_DOMAIN_TERMS,
+        keyword_terms=(
+            "application",
+            "applied",
+            "thank you for applying",
+            "we received your application",
+            "candidate",
+            "recruiter",
+            "interview",
+            "next steps",
+            "assessment",
+            "take-home",
+            "unfortunately",
+            "regret to inform",
+            "moving forward with other candidates",
+            "offer",
+            "congratulations",
+            "job opportunity",
+            "position",
+            "role",
+        ),
+        excluded_label_terms=("spam", "trash", "chats"),
     )
-
-
-def _extract_sender_domain(sender_address: str | None) -> str | None:
-    if sender_address is None:
-        return None
-
-    _local_part, separator, domain = sender_address.strip().lower().rpartition("@")
-    if not separator:
-        return None
-
-    normalized_domain = domain.strip().strip("<>").strip(".")
-    if not normalized_domain or any(character.isspace() for character in normalized_domain):
-        return None
-    return normalized_domain
-
-
-def _normalize_domain_terms(domain_terms: Iterable[str]) -> tuple[str, ...]:
-    normalized_terms: list[str] = []
-    for term in domain_terms:
-        normalized = term.strip().lower().removeprefix("@").strip(".")
-        if normalized:
-            normalized_terms.append(normalized)
-    return tuple(dict.fromkeys(normalized_terms))

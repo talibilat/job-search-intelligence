@@ -5,10 +5,10 @@ from app.pipeline.filter import (
     HEURISTIC_ATS_SENDER_DOMAIN_TERMS,
     HEURISTIC_RECRUITER_SENDER_DOMAIN_TERMS,
     HEURISTIC_SENDER_DOMAIN_TERMS,
+    build_broad_candidate_query,
     sender_matches_domain_terms,
     sender_matches_heuristic_sender_domain,
 )
-from app.providers.email import build_broad_candidate_query
 
 
 def test_heuristic_sender_domains_cover_ats_and_recruiter_families() -> None:
@@ -29,9 +29,7 @@ def test_heuristic_sender_domains_cover_ats_and_recruiter_families() -> None:
         "successfactors.com",
     }.issubset(HEURISTIC_ATS_SENDER_DOMAIN_TERMS)
     assert {
-        "linkedin.com",
         "linkedinmail.com",
-        "indeed.com",
         "indeedemail.com",
         "ziprecruiter.com",
         "ziprecruiteremail.com",
@@ -47,7 +45,6 @@ def test_heuristic_sender_domains_cover_ats_and_recruiter_families() -> None:
         "notifications@mail.greenhouse.io",
         "no-reply@myworkdayjobs.com",
         "candidate@updates.smartrecruitersmail.com",
-        "jobs-noreply@linkedin.com",
         "messages@notifications.linkedinmail.com",
         "apply@indeedemail.com",
         "jobs@alerts.ziprecruiteremail.com",
@@ -64,6 +61,8 @@ def test_heuristic_sender_signal_matches_ats_and_recruiter_domains(sender: str) 
         "",
         "not-an-email-address",
         "alerts@notgreenhouse.io",
+        "notifications@linkedin.com",
+        "updates@indeed.com",
         "jobs@linkedin.com.evil.test",
         "updates@indeedemail.com.example.test",
     ],

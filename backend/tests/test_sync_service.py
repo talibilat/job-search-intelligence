@@ -9,6 +9,7 @@ import pytest
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
 from app.db.repositories import EmailRepository
 from app.db.repositories.sync_state import SyncStateRepository
+from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
@@ -26,7 +27,6 @@ from app.providers.email import (
     EmailProviderCursor,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
-    build_broad_candidate_query,
 )
 from app.security import SecretKind, SecretRef
 from app.services.sync_service import (

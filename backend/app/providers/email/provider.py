@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, cast, runtime_checkable
@@ -7,7 +8,6 @@ from typing import Protocol, cast, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.config import EmailProviderName
-from app.pipeline.filter import HEURISTIC_SENDER_DOMAIN_TERMS, sender_matches_domain_terms
 from app.providers.email.html_normalization import (
     email_body_contains_html,
     normalize_email_html_to_text,
@@ -222,41 +222,6 @@ class EmailCandidateQuery(BaseModel):
     def _matches_keyword_text(self, text: str | None) -> bool:
         normalized_text = (text or "").lower()
         return any(term in normalized_text for term in self.keyword_terms)
-
-
-def build_broad_candidate_query() -> EmailCandidateQuery:
-    """Build the default broad job-search candidate query signals.
-
-    The query contains static sender-domain, keyword, and excluded-label terms
-    only; it carries no snippets, body text, or private message content.
-    """
-
-    return EmailCandidateQuery(
-        strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
-        sender_domain_terms=HEURISTIC_SENDER_DOMAIN_TERMS,
-        keyword_terms=(
-            "application",
-            "applied",
-            "thank you for applying",
-            "we received your application",
-            "candidate",
-            "recruiter",
-            "interview",
-            "next steps",
-            "assessment",
-            "take-home",
-            "unfortunately",
-            "regret to inform",
-            "moving forward with other candidates",
-            "offer",
-            "congratulations",
-            "job opportunity",
-            "position",
-            "role",
-        ),
-        excluded_label_terms=("spam", "trash", "chats"),
-    )
-
 
 class EmailMetadataListRequest(BaseModel):
     """Request one provider-normalized metadata page.
@@ -525,3 +490,37 @@ class EmailProvider(Protocol):
     ) -> EmailBodyBatch:
         """Return normalized plain text for selected messages, ignoring attachments."""
         ...
+
+
+def sender_matches_domain_terms(sender_address: str | None, domain_terms: Iterable[str]) -> bool:
+    domain = _extract_sender_domain(sender_address)
+    if domain is None:
+        return False
+
+    return any(
+        domain == term or domain.endswith(f".{term}")
+        for term in _normalize_domain_terms(domain_terms)
+    )
+
+
+def _extract_sender_domain(sender_address: str | None) -> str | None:
+    if sender_address is None:
+        return None
+
+    _local_part, separator, domain = sender_address.strip().lower().rpartition("@")
+    if not separator:
+        return None
+
+    normalized_domain = domain.strip().strip("<>").strip(".")
+    if not normalized_domain or any(character.isspace() for character in normalized_domain):
+        return None
+    return normalized_domain
+
+
+def _normalize_domain_terms(domain_terms: Iterable[str]) -> tuple[str, ...]:
+    normalized_terms: list[str] = []
+    for term in domain_terms:
+        normalized = term.strip().lower().removeprefix("@").strip(".")
+        if normalized:
+            normalized_terms.append(normalized)
+    return tuple(dict.fromkeys(normalized_terms))

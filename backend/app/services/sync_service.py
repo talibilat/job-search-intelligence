@@ -17,6 +17,7 @@ from app.models.records import (
     EmailSyncStateRecord,
     RawEmailBodyRetentionState,
 )
+from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import (
     EmailAccountRef,
     EmailBodyBatch,
@@ -34,7 +35,6 @@ from app.providers.email import (
     EmailProviderError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
-    build_broad_candidate_query,
 )
 
 SyncJob = Callable[[], Awaitable[None]]
