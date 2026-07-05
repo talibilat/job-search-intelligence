@@ -67,24 +67,48 @@ export const LLMProviderName = {
  * Public pre-run estimate for a bulk classification pass.
  */
 export interface ClassificationPreRunEstimate {
-  /** @minimum 0 */
+  /**
+   * Retained candidate emails needing classification for the current model and prompt.
+   * @minimum 0
+   */
   candidate_count: number;
   classification_mode: ClassificationMode;
+  /** True when the endpoint can report a cost estimate, including zero-cost local mode. */
   cost_estimate_available: boolean;
+  /** Currency for estimated_cost_usd. */
   currency?: string;
-  /** @minimum 0 */
+  /**
+   * Estimated completion/output tokens from the configured per-candidate budget.
+   * @minimum 0
+   */
   estimated_completion_tokens: number;
+  /** Estimated USD cost, or null when non-local provider pricing is not configured. */
   estimated_cost_usd?: number | null;
-  /** @minimum 0 */
+  /**
+   * Estimated prompt/input tokens from retained body text plus configured overhead.
+   * @minimum 0
+   */
   estimated_prompt_tokens: number;
-  /** @minimum 0 */
+  /**
+   * Sum of estimated prompt and completion tokens.
+   * @minimum 0
+   */
   estimated_total_tokens: number;
   llm_provider: LLMProviderName;
-  /** @minLength 1 */
+  /**
+   * Configured classification model identifier used to decide stale rows.
+   * @minLength 1
+   */
   model: string;
-  /** @minLength 1 */
+  /**
+   * Configured classification prompt version used to decide stale rows.
+   * @minLength 1
+   */
   prompt_version: string;
-  /** @minLength 1 */
+  /**
+   * Human-readable heuristic used for token estimates.
+   * @minLength 1
+   */
   token_estimate_method: string;
 }
 
@@ -580,7 +604,8 @@ export const getClassificationEstimateClassificationEstimateGetUrl = () => {
 };
 
 /**
- * @summary Classification Estimate
+ * Returns deterministic candidate counts, token estimates, and cost availability for a future bulk classification pass without calling an LLM or exposing email content.
+ * @summary Estimate Classification Run
  */
 export const classificationEstimateClassificationEstimateGet = async (
   options?: RequestInit,

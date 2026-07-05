@@ -172,8 +172,16 @@ class ClassificationCandidateStats(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    candidate_count: int = Field(ge=0)
-    body_text_char_count: int = Field(ge=0)
+    candidate_count: int = Field(
+        ge=0,
+        description=(
+            "Retained candidate emails needing classification for the current model and prompt."
+        ),
+    )
+    body_text_char_count: int = Field(
+        ge=0,
+        description="Total retained body-text characters across candidate emails.",
+    )
 
 
 class ClassificationPreRunEstimate(BaseModel):
@@ -181,15 +189,50 @@ class ClassificationPreRunEstimate(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    candidate_count: int = Field(ge=0)
-    estimated_prompt_tokens: int = Field(ge=0)
-    estimated_completion_tokens: int = Field(ge=0)
-    estimated_total_tokens: int = Field(ge=0)
-    estimated_cost_usd: float | None = Field(default=None, ge=0)
-    currency: str = "USD"
-    cost_estimate_available: bool
+    candidate_count: int = Field(
+        ge=0,
+        description=(
+            "Retained candidate emails needing classification for the current model and prompt."
+        ),
+    )
+    estimated_prompt_tokens: int = Field(
+        ge=0,
+        description=(
+            "Estimated prompt/input tokens from retained body text plus configured overhead."
+        ),
+    )
+    estimated_completion_tokens: int = Field(
+        ge=0,
+        description="Estimated completion/output tokens from the configured per-candidate budget.",
+    )
+    estimated_total_tokens: int = Field(
+        ge=0,
+        description="Sum of estimated prompt and completion tokens.",
+    )
+    estimated_cost_usd: float | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Estimated USD cost, or null when non-local provider pricing is not configured."
+        ),
+    )
+    currency: str = Field(default="USD", description="Currency for estimated_cost_usd.")
+    cost_estimate_available: bool = Field(
+        description=(
+            "True when the endpoint can report a cost estimate, including zero-cost local mode."
+        )
+    )
     classification_mode: ClassificationMode
     llm_provider: LLMProviderName
-    model: str = Field(min_length=1)
-    prompt_version: str = Field(min_length=1)
-    token_estimate_method: str = Field(min_length=1)
+    model: str = Field(
+        min_length=1,
+        description="Configured classification model identifier used to decide stale rows.",
+    )
+    prompt_version: str = Field(
+        min_length=1,
+        description="Configured classification prompt version used to decide stale rows.",
+    )
+    token_estimate_method: str = Field(
+        min_length=1,
+        description="Human-readable heuristic used for token estimates.",
+    )

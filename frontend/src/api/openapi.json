@@ -106,6 +106,7 @@
         "description": "Public pre-run estimate for a bulk classification pass.",
         "properties": {
           "candidate_count": {
+            "description": "Retained candidate emails needing classification for the current model and prompt.",
             "minimum": 0.0,
             "title": "Candidate Count",
             "type": "integer"
@@ -114,15 +115,18 @@
             "$ref": "#/components/schemas/ClassificationMode"
           },
           "cost_estimate_available": {
+            "description": "True when the endpoint can report a cost estimate, including zero-cost local mode.",
             "title": "Cost Estimate Available",
             "type": "boolean"
           },
           "currency": {
             "default": "USD",
+            "description": "Currency for estimated_cost_usd.",
             "title": "Currency",
             "type": "string"
           },
           "estimated_completion_tokens": {
+            "description": "Estimated completion/output tokens from the configured per-candidate budget.",
             "minimum": 0.0,
             "title": "Estimated Completion Tokens",
             "type": "integer"
@@ -137,14 +141,17 @@
                 "type": "null"
               }
             ],
+            "description": "Estimated USD cost, or null when non-local provider pricing is not configured.",
             "title": "Estimated Cost Usd"
           },
           "estimated_prompt_tokens": {
+            "description": "Estimated prompt/input tokens from retained body text plus configured overhead.",
             "minimum": 0.0,
             "title": "Estimated Prompt Tokens",
             "type": "integer"
           },
           "estimated_total_tokens": {
+            "description": "Sum of estimated prompt and completion tokens.",
             "minimum": 0.0,
             "title": "Estimated Total Tokens",
             "type": "integer"
@@ -153,16 +160,19 @@
             "$ref": "#/components/schemas/LLMProviderName"
           },
           "model": {
+            "description": "Configured classification model identifier used to decide stale rows.",
             "minLength": 1,
             "title": "Model",
             "type": "string"
           },
           "prompt_version": {
+            "description": "Configured classification prompt version used to decide stale rows.",
             "minLength": 1,
             "title": "Prompt Version",
             "type": "string"
           },
           "token_estimate_method": {
+            "description": "Human-readable heuristic used for token estimates.",
             "minLength": 1,
             "title": "Token Estimate Method",
             "type": "string"
@@ -1389,6 +1399,7 @@
     },
     "/classification/estimate": {
       "get": {
+        "description": "Returns deterministic candidate counts, token estimates, and cost availability for a future bulk classification pass without calling an LLM or exposing email content.",
         "operationId": "classification_estimate_classification_estimate_get",
         "responses": {
           "200": {
@@ -1402,7 +1413,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Classification Estimate",
+        "summary": "Estimate Classification Run",
         "tags": [
           "classification"
         ]

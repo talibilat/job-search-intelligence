@@ -71,8 +71,21 @@ JOBTRACKER_FERNET_KEY_FILE=./.jobtracker/fernet.key
 Do not commit the Fernet key file or place it in screenshots, tickets, logs, or setup notes.
 
 JT-096 provides durable local storage for completed-run token and cost accounting.
-When JT-097 and the display work land, verify before a bulk classification pass that the selected mode shows a token and cost estimate.
+Before a bulk classification pass, call `GET /classification/estimate` to verify that the selected mode shows candidate, token, and cost information.
+Local mode reports zero cost, while hosted modes report cost only when both pricing rates are configured.
 Hosted Azure calls should be used through the configured provider path only, never by ad hoc scripts that bypass redaction or prompt-version tracking.
+
+Optional non-secret estimate settings are available when local heuristics or provider pricing needs to be tuned:
+
+```env
+JOBTRACKER_CLASSIFICATION_ESTIMATE_CHARS_PER_UNIT=4
+JOBTRACKER_CLASSIFICATION_ESTIMATE_PROMPT_OVERHEAD_UNITS=300
+JOBTRACKER_CLASSIFICATION_ESTIMATE_COMPLETION_UNITS_PER_CANDIDATE=500
+JOBTRACKER_CLASSIFICATION_INPUT_COST_PER_1K_UNITS_USD=0
+JOBTRACKER_CLASSIFICATION_OUTPUT_COST_PER_1K_UNITS_USD=0
+```
+
+Leave pricing rates at `0` when provider pricing is unknown; the endpoint still reports candidate and token estimates but marks non-local cost unavailable.
 
 ## Ollama
 
@@ -117,6 +130,7 @@ The shared API route exists before concrete Azure OpenAI and Ollama adapter HTTP
 
 - The selected LLM provider is either `azure_openai` or `ollama`.
 - `classification_mode` follows the intended default pairing for that provider unless the user explicitly chooses another provider-valid mode; Azure OpenAI still rejects `local`.
+- Pre-run classification estimates show candidate and token counts, and hosted-provider cost only when pricing rates are configured.
 - Azure OpenAI has endpoint, API version, chat deployment, embedding deployment, and an API key stored through `SecretStore`.
 - Ollama has a reachable local base URL and the configured chat and embedding models are pulled locally.
 - `POST /config/providers/llm/health` returns an `available` response for the configured chat and embedding models once the selected provider adapter is wired.

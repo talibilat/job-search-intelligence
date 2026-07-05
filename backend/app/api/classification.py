@@ -13,7 +13,15 @@ from app.services.classification_estimate import build_classification_pre_run_es
 router = APIRouter(prefix="/classification", tags=["classification"])
 
 
-@router.get("/estimate", response_model=ClassificationPreRunEstimate)
+@router.get(
+    "/estimate",
+    response_model=ClassificationPreRunEstimate,
+    summary="Estimate Classification Run",
+    description=(
+        "Returns deterministic candidate counts, token estimates, and cost availability "
+        "for a future bulk classification pass without calling an LLM or exposing email content."
+    ),
+)
 async def classification_estimate(
     settings: Annotated[AppSettings, Depends(get_settings)],
     email_repository: Annotated[
