@@ -158,6 +158,7 @@ When a full backfill has more pages, the Gmail page token is wrapped with that c
 Incremental sync calls Gmail `users.history.list` with the stored history cursor, requests only `messageAdded` history records, de-duplicates repeated message IDs within a history page, and returns the replacement history cursor only after all history pages are drained.
 Those partial fields include message IDs, thread IDs, labels, size estimates, and selected headers (`From`, `To`, `Cc`, `Subject`, `Date`, and `Message-ID`).
 They deliberately exclude snippets, payload bodies, raw MIME content, and attachments.
+Before metadata leaves the Gmail adapter, opaque message IDs, thread IDs, and history cursors are trimmed without case changes; email addresses are lowercased and deduplicated; display names and headers are trimmed; Gmail system labels are canonicalized while custom label IDs keep their casing; and parsed message timestamps are converted to timezone-aware UTC.
 [JT-066 2026-07-05 v2] Backfill state and final replacement cursor promotion are repository-backed so full metadata backfills can resume safely.
 Incremental sync cursors, metadata-only repository writes, and retained-body repository writes now flow through the sync service, `email_sync_state`, and `raw_emails` tables.
 Gmail history `404` responses are treated as expired sync cursors so the sync service can fall back to resumable full metadata reconciliation.

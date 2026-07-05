@@ -118,6 +118,7 @@
         "type": "object"
       },
       "EmailAddress": {
+        "description": "Provider-normalized email address plus optional display name.\n\nProvider adapters should lower-case parsed addresses, trim display names,\nand deduplicate repeated recipients before returning metadata DTOs.",
         "properties": {
           "address": {
             "minLength": 1,

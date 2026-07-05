@@ -67,6 +67,12 @@ export interface EmailAccountRef {
   provider: EmailProviderName;
 }
 
+/**
+ * Provider-normalized email address plus optional display name.
+ *
+ * Provider adapters should lower-case parsed addresses, trim display names,
+ * and deduplicate repeated recipients before returning metadata DTOs.
+ */
 export interface EmailAddress {
   /** @minLength 1 */
   address: string;
