@@ -18,10 +18,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["code", "message"],
         "title": "ApiErrorBody",
         "type": "object"
       },
@@ -74,10 +71,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "message",
-          "type"
-        ],
+        "required": ["message", "type"],
         "title": "ApiErrorDetail",
         "type": "object"
       },
@@ -87,9 +81,7 @@
             "$ref": "#/components/schemas/ApiErrorBody"
           }
         },
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "title": "ApiErrorResponse",
         "type": "object"
       },
@@ -340,9 +332,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "source_application_id"
-        ],
+        "required": ["source_application_id"],
         "title": "ApplicationMergeRequest",
         "type": "object"
       },
@@ -522,13 +512,7 @@
         "type": "object"
       },
       "ApplicationSource": {
-        "enum": [
-          "linkedin",
-          "company_site",
-          "indeed",
-          "referral",
-          "other"
-        ],
+        "enum": ["linkedin", "company_site", "indeed", "referral", "other"],
         "type": "string"
       },
       "ApplicationSplitNewApplication": {
@@ -627,10 +611,7 @@
             ]
           }
         },
-        "required": [
-          "company",
-          "role_title"
-        ],
+        "required": ["company", "role_title"],
         "title": "ApplicationSplitNewApplication",
         "type": "object"
       },
@@ -670,10 +651,7 @@
             ]
           }
         },
-        "required": [
-          "event_ids",
-          "new_application"
-        ],
+        "required": ["event_ids", "new_application"],
         "title": "ApplicationSplitRequest",
         "type": "object"
       },
@@ -857,11 +835,7 @@
         "type": "object"
       },
       "ClassificationMode": {
-        "enum": [
-          "hybrid",
-          "llm",
-          "local"
-        ],
+        "enum": ["hybrid", "llm", "local"],
         "title": "ClassificationMode",
         "type": "string"
       },
@@ -1141,13 +1115,7 @@
         "type": "object"
       },
       "CorrectionType": {
-        "enum": [
-          "merge",
-          "split",
-          "status_edit",
-          "event_edit",
-          "reset_lock"
-        ],
+        "enum": ["merge", "split", "status_edit", "event_edit", "reset_lock"],
         "type": "string"
       },
       "EmailAccountRef": {
@@ -1162,10 +1130,7 @@
             "$ref": "#/components/schemas/EmailProviderName"
           }
         },
-        "required": [
-          "provider",
-          "account_id"
-        ],
+        "required": ["provider", "account_id"],
         "title": "EmailAccountRef",
         "type": "object"
       },
@@ -1189,9 +1154,7 @@
             "title": "Display Name"
           }
         },
-        "required": [
-          "address"
-        ],
+        "required": ["address"],
         "title": "EmailAddress",
         "type": "object"
       },
@@ -1323,27 +1286,17 @@
         "type": "object"
       },
       "EmailProviderName": {
-        "enum": [
-          "gmail"
-        ],
+        "enum": ["gmail"],
         "title": "EmailProviderName",
         "type": "string"
       },
       "EmailSyncMode": {
-        "enum": [
-          "full_backfill",
-          "incremental"
-        ],
+        "enum": ["full_backfill", "incremental"],
         "title": "EmailSyncMode",
         "type": "string"
       },
       "EmailSyncRunState": {
-        "enum": [
-          "idle",
-          "running",
-          "succeeded",
-          "failed"
-        ],
+        "enum": ["idle", "running", "succeeded", "failed"],
         "title": "EmailSyncRunState",
         "type": "string"
       },
@@ -1443,9 +1396,7 @@
             "$ref": "#/components/schemas/EmailSyncRunState"
           }
         },
-        "required": [
-          "state"
-        ],
+        "required": ["state"],
         "title": "EmailSyncStatus",
         "type": "object"
       },
@@ -1470,9 +1421,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "title": "HealthResponse",
         "type": "object"
       },
@@ -1507,27 +1456,17 @@
             "$ref": "#/components/schemas/LLMModelHealthStatus"
           }
         },
-        "required": [
-          "kind",
-          "model",
-          "status"
-        ],
+        "required": ["kind", "model", "status"],
         "title": "LLMModelHealthCheck",
         "type": "object"
       },
       "LLMModelHealthStatus": {
-        "enum": [
-          "available",
-          "unavailable"
-        ],
+        "enum": ["available", "unavailable"],
         "title": "LLMModelHealthStatus",
         "type": "string"
       },
       "LLMModelKind": {
-        "enum": [
-          "chat",
-          "embedding"
-        ],
+        "enum": ["chat", "embedding"],
         "title": "LLMModelKind",
         "type": "string"
       },
@@ -1590,19 +1529,12 @@
             "$ref": "#/components/schemas/LLMModelHealthStatus"
           }
         },
-        "required": [
-          "provider_name",
-          "status",
-          "checks"
-        ],
+        "required": ["provider_name", "status", "checks"],
         "title": "LLMProviderHealthCheckResponse",
         "type": "object"
       },
       "LLMProviderName": {
-        "enum": [
-          "azure_openai",
-          "ollama"
-        ],
+        "enum": ["azure_openai", "ollama"],
         "title": "LLMProviderName",
         "type": "string"
       },
@@ -1625,12 +1557,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "setting_name",
-          "label",
-          "required",
-          "enforcement"
-        ],
+        "required": ["setting_name", "label", "required", "enforcement"],
         "title": "ProviderConfigRequirementResponse",
         "type": "object"
       },
@@ -1874,10 +1801,7 @@
         "type": "object"
       },
       "ProviderRequirementEnforcement": {
-        "enum": [
-          "declarative",
-          "selection"
-        ],
+        "enum": ["declarative", "selection"],
         "title": "ProviderRequirementEnforcement",
         "type": "string"
       },
@@ -1899,12 +1823,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "ref",
-          "label",
-          "required",
-          "enforcement"
-        ],
+        "required": ["ref", "label", "required", "enforcement"],
         "title": "ProviderSecretRequirementResponse",
         "type": "object"
       },
@@ -1921,19 +1840,12 @@
             "$ref": "#/components/schemas/LLMProviderName"
           }
         },
-        "required": [
-          "email_provider",
-          "llm_provider",
-          "classification_mode"
-        ],
+        "required": ["email_provider", "llm_provider", "classification_mode"],
         "title": "ProviderSelection",
         "type": "object"
       },
       "SecretKind": {
-        "enum": [
-          "oauth_token",
-          "llm_api_key"
-        ],
+        "enum": ["oauth_token", "llm_api_key"],
         "title": "SecretKind",
         "type": "string"
       },
@@ -1958,11 +1870,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "kind",
-          "provider",
-          "name"
-        ],
+        "required": ["kind", "provider", "name"],
         "title": "SecretRef",
         "type": "object"
       },
@@ -2117,9 +2025,7 @@
             "title": "Ollama Embedding Model"
           }
         },
-        "required": [
-          "llm_provider"
-        ],
+        "required": ["llm_provider"],
         "title": "SetupSubmitRequest",
         "type": "object"
       },
@@ -2170,11 +2076,7 @@
         "type": "object"
       },
       "SponsorshipStatus": {
-        "enum": [
-          "offered",
-          "not_offered",
-          "unknown"
-        ],
+        "enum": ["offered", "not_offered", "unknown"],
         "type": "string"
       },
       "ValidationError": {
@@ -2209,11 +2111,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
+        "required": ["loc", "msg", "type"],
         "title": "ValidationError",
         "type": "object"
       },
@@ -2226,9 +2124,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "confirmation"
-        ],
+        "required": ["confirmation"],
         "title": "WipeDataRequest",
         "type": "object"
       },
@@ -2256,18 +2152,12 @@
             "type": "string"
           }
         },
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "title": "WipeDataResponse",
         "type": "object"
       },
       "WorkMode": {
-        "enum": [
-          "remote",
-          "hybrid",
-          "onsite"
-        ],
+        "enum": ["remote", "hybrid", "onsite"],
         "type": "string"
       }
     }
@@ -2615,9 +2505,7 @@
           }
         },
         "summary": "Merge Duplicate Applications",
-        "tags": [
-          "applications"
-        ]
+        "tags": ["applications"]
       }
     },
     "/applications/{application_id}/split": {
@@ -2688,9 +2576,7 @@
           }
         },
         "summary": "Split Application",
-        "tags": [
-          "applications"
-        ]
+        "tags": ["applications"]
       }
     },
     "/applications/{application_id}/status": {
@@ -2804,9 +2690,7 @@
           }
         },
         "summary": "Get Application Detail",
-        "tags": [
-          "applications"
-        ]
+        "tags": ["applications"]
       }
     },
     "/applications/{id}/events": {
@@ -2861,9 +2745,7 @@
           }
         },
         "summary": "List Application Events",
-        "tags": [
-          "applications"
-        ]
+        "tags": ["applications"]
       }
     },
     "/auth/gmail": {
@@ -2892,9 +2774,7 @@
           }
         },
         "summary": "Gmail Auth Url",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/auth/gmail/callback": {
@@ -2957,9 +2837,7 @@
           }
         },
         "summary": "Gmail Auth Callback",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/classification/estimate": {
@@ -2979,9 +2857,7 @@
           }
         },
         "summary": "Estimate Classification Run",
-        "tags": [
-          "classification"
-        ]
+        "tags": ["classification"]
       }
     },
     "/classification/reprocessing-plan": {
@@ -3001,9 +2877,7 @@
           }
         },
         "summary": "Plan Classification Reprocessing",
-        "tags": [
-          "classification"
-        ]
+        "tags": ["classification"]
       }
     },
     "/classification/run": {
@@ -3023,9 +2897,7 @@
           }
         },
         "summary": "Run Classification Batch",
-        "tags": [
-          "classification"
-        ]
+        "tags": ["classification"]
       }
     },
     "/config/providers": {
@@ -3045,9 +2917,7 @@
           }
         },
         "summary": "Get Provider Config",
-        "tags": [
-          "config"
-        ]
+        "tags": ["config"]
       },
       "put": {
         "description": "Validate and update provider config, applying recommendations on provider changes.",
@@ -3085,9 +2955,7 @@
           }
         },
         "summary": "Update Provider Config",
-        "tags": [
-          "config"
-        ]
+        "tags": ["config"]
       }
     },
     "/config/providers/llm/health": {
@@ -3107,9 +2975,7 @@
           }
         },
         "summary": "Check Llm Provider Health",
-        "tags": [
-          "config"
-        ]
+        "tags": ["config"]
       }
     },
     "/health": {
@@ -3128,9 +2994,7 @@
           }
         },
         "summary": "Health",
-        "tags": [
-          "health"
-        ]
+        "tags": ["health"]
       }
     },
     "/local-data/wipe": {
@@ -3180,9 +3044,7 @@
           }
         },
         "summary": "Wipe local app data",
-        "tags": [
-          "local-data"
-        ]
+        "tags": ["local-data"]
       }
     },
     "/setup": {
@@ -3232,9 +3094,7 @@
           }
         },
         "summary": "Submit first-run setup choices",
-        "tags": [
-          "setup"
-        ]
+        "tags": ["setup"]
       }
     },
     "/setup/status": {
@@ -3254,9 +3114,7 @@
           }
         },
         "summary": "Setup Status",
-        "tags": [
-          "setup"
-        ]
+        "tags": ["setup"]
       }
     },
     "/sync": {
@@ -3345,9 +3203,7 @@
           }
         },
         "summary": "Sync Now",
-        "tags": [
-          "sync"
-        ]
+        "tags": ["sync"]
       }
     },
     "/sync/status": {
@@ -3367,9 +3223,7 @@
           }
         },
         "summary": "Sync Status",
-        "tags": [
-          "sync"
-        ]
+        "tags": ["sync"]
       }
     }
   }

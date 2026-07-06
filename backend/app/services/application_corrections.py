@@ -84,9 +84,7 @@ class ApplicationCorrectionService:
 
                 selected_event_ids = {event.id for event in selected_events}
                 remaining_events = [
-                    event
-                    for event in source_events_before
-                    if event.id not in selected_event_ids
+                    event for event in source_events_before if event.id not in selected_event_ids
                 ]
                 new_application_id = make_manual_split_application_id(
                     source_application_id=application_id,
