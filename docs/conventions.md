@@ -51,6 +51,7 @@ Baseline coding standards for every agent and contributor.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
 - Classification pipeline code must parse provider-neutral `LLMGenerationResponse` values before storage side effects, accept only clean finish reasons and strict structured JSON, and keep rejected provider output out of `email_classifications`, `applications`, and `application_events`.
 - Aggregation grouping-key assembly belongs in `app.pipeline.aggregate.build_application_grouping_key`: use normalized company and role values, trim provider thread IDs without case-folding them, prefer a present thread signal, and use the UTC date-window bucket only when the thread signal is missing.
+- Aggregation status derivation belongs in the aggregate service: combine already-persisted `application_events` with the current batch, order them by event timestamp, raw email `sent_at`, and classification timestamp, then derive `applications.current_status` from status-bearing event types without overwriting manual-lock conflicts.
 - Service layer holds business logic; FastAPI route handlers stay thin.
 - FastAPI dependency injection supplies repositories, providers, and config.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
@@ -88,6 +89,7 @@ Baseline coding standards for every agent and contributor.
 - Classification changes to prompts, models, categories, extraction schemas, or parser behavior: run `uv run python -m evals.run_eval` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
 - Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 - Aggregation changes: verify idempotency and no duplicate applications.
+- Status-derivation aggregation changes: verify incremental out-of-order evidence, manual-lock preservation, event-type-only derivation, and missing-`event_at` idempotency.
 - Grouping-key-only aggregation changes: run the focused grouping-key tests plus the company and role normalization tests that feed the key.
 - Never claim work is complete without fresh verification evidence.
 
