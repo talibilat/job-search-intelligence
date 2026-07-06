@@ -247,7 +247,9 @@ def edit_application_event(
     summary="Split Application",
     description=(
         "Splits selected events out of an incorrectly grouped application into a "
-        "new application and records an audited manual correction."
+        "deterministic manually locked application, locks the source application, "
+        "recalculates timeline dates, derives target status from moved events, and "
+        "records an audited manual correction."
     ),
     responses={
         404: {"model": ApiErrorResponse, "description": "Application not found."},
