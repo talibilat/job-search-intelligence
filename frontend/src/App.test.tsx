@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -474,5 +475,302 @@ describe("App", () => {
     expect(emptyState.textContent).toContain(
       "Deterministic metrics will appear here after the metrics API is available.",
     );
+  });
+
+  it("renders the feature status dashboard with searchable frontend feature metadata", () => {
+    renderAtPath("/features");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Feature Status Dashboard",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("navigation", { name: "Primary" }).textContent,
+    ).toContain("Feature Status");
+
+    expect(screen.getAllByText("Completed features").length).toBeGreaterThan(0);
+    expect(screen.getByText("First-run setup shell")).toBeTruthy();
+    expect(screen.getByText("Dashboard route shell")).toBeTruthy();
+    expect(screen.getByText("Insights route shell")).toBeTruthy();
+    expect(screen.getByText("Chat route shell")).toBeTruthy();
+    expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
+    expect(screen.getByText("Manual sync status panel")).toBeTruthy();
+    expect(
+      screen.getByText("How to use Feature Status Dashboard inventory"),
+    ).toBeTruthy();
+    expect(screen.getByText("How to use First-run setup shell")).toBeTruthy();
+    expect(screen.getByText("Setup wizard API")).toBeTruthy();
+    expect(screen.getByText("Frontend routes")).toBeTruthy();
+    expect(screen.getByText("Frontend shared UI elements")).toBeTruthy();
+    expect(
+      screen.getByText("Frontend state management connections"),
+    ).toBeTruthy();
+    expect(screen.getByText("Frontend API integrations")).toBeTruthy();
+    expect(
+      screen.getByText("Backend services consumed by frontend"),
+    ).toBeTruthy();
+
+    const frontendApiIntegrations = screen.getByText(
+      "Frontend API integrations",
+    ).parentElement;
+    expect(frontendApiIntegrations).toBeTruthy();
+    expect(frontendApiIntegrations?.textContent).toContain("GET /setup/status");
+    expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
+    expect(frontendApiIntegrations?.textContent).not.toContain(
+      "GET /metrics/summary",
+    );
+    expect(frontendApiIntegrations?.textContent).not.toContain("GET /insights");
+    expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
+
+    fireEvent.change(screen.getByLabelText("Search features"), {
+      target: { value: "sync" },
+    });
+
+    expect(screen.getByText("Manual sync status panel")).toBeTruthy();
+    expect(screen.queryByText("First-run setup shell")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Status"), {
+      target: { value: "in_progress" },
+    });
+
+    expect(
+      screen.getAllByText("No completed features match these filters.").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Sync orchestration UI hardening")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Search features"), {
+      target: { value: "feature status" },
+    });
+    fireEvent.change(screen.getByLabelText("Status"), {
+      target: { value: "completed" },
+    });
+
+    expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
+    expect(screen.getByText("FeatureStatusDashboard")).toBeTruthy();
+
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "/features" },
+      },
+    );
+
+    expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
+
+    expect(screen.getByText("Controllers")).toBeTruthy();
+    expect(screen.getByText("Services")).toBeTruthy();
+    expect(screen.getByText("Database models")).toBeTruthy();
+    expect(screen.getByText("DTOs and models")).toBeTruthy();
+    expect(screen.getByText("Background jobs")).toBeTruthy();
+    expect(screen.getByText("Workers")).toBeTruthy();
+    expect(screen.getByText("Queues")).toBeTruthy();
+    expect(screen.getAllByText("Dependencies").length).toBeGreaterThan(0);
+    expect(screen.queryByText("External integrations")).toBeNull();
+    expect(screen.getByText("Frontend consumers")).toBeTruthy();
+  });
+
+  it("separates backend runtime and config from database models", () => {
+    renderAtPath("/features");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
+
+    const databaseModels = screen.getByText("Database models").parentElement;
+    expect(databaseModels).toBeTruthy();
+    expect(databaseModels?.textContent).not.toContain("FastAPI runtime");
+    expect(databaseModels?.textContent).not.toContain("Settings");
+    expect(databaseModels?.textContent).not.toContain("AppSettings");
+
+    const runtimeAndConfig =
+      screen.getByText("Runtime and config").parentElement;
+    expect(runtimeAndConfig).toBeTruthy();
+    expect(runtimeAndConfig?.textContent).toContain("FastAPI runtime");
+    expect(runtimeAndConfig?.textContent).toContain("Settings");
+    expect(runtimeAndConfig?.textContent).toContain("AppSettings");
+  });
+
+  it("separates backend DTOs from services", () => {
+    renderAtPath("/features");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
+
+    const services = screen.getByText("Services").parentElement;
+    expect(services).toBeTruthy();
+    expect(services?.textContent).not.toContain("HealthResponse");
+
+    const dtosAndModels = screen.getByText("DTOs and models").parentElement;
+    expect(dtosAndModels).toBeTruthy();
+    expect(dtosAndModels?.textContent).toContain("HealthResponse");
+  });
+
+  it("surfaces implemented backend APIs with testing details and API filtering", () => {
+    renderAtPath("/features");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
+
+    expect(screen.getByText("Gmail read-only OAuth API")).toBeTruthy();
+    expect(screen.getByText("Manual sync API")).toBeTruthy();
+    expect(screen.getByText("Local data wipe API")).toBeTruthy();
+    expect(screen.getByText("Provider configuration API")).toBeTruthy();
+    expect(screen.getByText("Classification control API")).toBeTruthy();
+    expect(screen.getByText("Application read API")).toBeTruthy();
+    expect(screen.getByText("Application manual corrections API")).toBeTruthy();
+    expect(screen.getByText("Health check API")).toBeTruthy();
+    expect(screen.getByText("How to use Local data wipe API")).toBeTruthy();
+    expect(screen.getAllByText("POST /local-data/wipe").length).toBeGreaterThan(
+      0,
+    );
+
+    const providerConfigApi = screen
+      .getByText("Provider configuration API")
+      .closest("article");
+    expect(providerConfigApi).toBeTruthy();
+    expect(
+      within(providerConfigApi!).getByText("Current blockers").parentElement
+        ?.textContent,
+    ).toContain(
+      "LLM health checks remain blocked until the config route is wired to a configured provider adapter.",
+    );
+    expect(
+      within(providerConfigApi!).getByText("Endpoints").parentElement
+        ?.textContent,
+    ).not.toContain("POST /config/providers/llm/health");
+
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "GET /config/providers" },
+      },
+    );
+
+    expect(screen.getByText("Provider configuration API")).toBeTruthy();
+    expect(screen.getAllByText("GET /config/providers").length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByText("Gmail read-only OAuth API")).toBeNull();
+    expect(screen.queryByText("Manual sync API")).toBeNull();
+    expect(screen.queryByText("Local data wipe API")).toBeNull();
+
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "GET /classification/estimate" },
+      },
+    );
+
+    expect(screen.getByText("Classification control API")).toBeTruthy();
+    expect(
+      screen.getAllByText("GET /classification/estimate").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Provider configuration API")).toBeNull();
+
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "GET /applications/{id}/events" },
+      },
+    );
+
+    expect(screen.getByText("Application read API")).toBeTruthy();
+    expect(
+      screen.getAllByText("GET /applications/{id}/events").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Classification control API")).toBeNull();
+
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "PATCH /applications/{application_id}/status" },
+      },
+    );
+
+    expect(screen.getByText("Application manual corrections API")).toBeTruthy();
+    expect(
+      screen.getAllByText("PATCH /applications/{application_id}/status").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Application read API")).toBeNull();
+
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "POST /applications/{application_id}/split" },
+      },
+    );
+
+    expect(screen.getByText("Application manual corrections API")).toBeTruthy();
+    expect(
+      screen.getAllByText("POST /applications/{application_id}/split").length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(
+        screen.getByText("How to use Application manual corrections API")
+          .parentElement!,
+      ).getByText(/Call POST \/applications\/\{application_id\}\/split/),
+    ).toBeTruthy();
+    expect(screen.queryByText("Application read API")).toBeNull();
+
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "GET /health" },
+      },
+    );
+
+    expect(screen.getByText("Health check API")).toBeTruthy();
+    expect(screen.getAllByText("GET /health").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Application manual corrections API")).toBeNull();
+  });
+
+  it("keeps feature status filters and active tab in the route query string", () => {
+    renderAtPath(
+      "/features?tab=backend&search=health&status=completed&testable=yes&scope=GET+%2Fhealth",
+    );
+
+    expect(
+      screen.getByRole("tab", { name: "Backend", selected: true }),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText<HTMLInputElement>("Search features").value,
+    ).toBe("health");
+    expect(screen.getByLabelText<HTMLSelectElement>("Status").value).toBe(
+      "completed",
+    );
+    expect(screen.getByLabelText<HTMLSelectElement>("Testable").value).toBe(
+      "yes",
+    );
+    expect(
+      screen.getByLabelText<HTMLInputElement>(
+        "Module, API, screen, or component",
+      ).value,
+    ).toBe("GET /health");
+    expect(screen.getByText("Health check API")).toBeTruthy();
+    expect(screen.queryByText("Provider configuration API")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Search features"), {
+      target: { value: "sync" },
+    });
+    fireEvent.change(screen.getByLabelText("Status"), {
+      target: { value: "all" },
+    });
+    fireEvent.change(screen.getByLabelText("Testable"), {
+      target: { value: "all" },
+    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "POST /sync" },
+      },
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Frontend" }));
+
+    const queryParams = new URLSearchParams(window.location.search);
+    expect(queryParams.get("tab")).toBe("frontend");
+    expect(queryParams.get("search")).toBe("sync");
+    expect(queryParams.has("status")).toBe(false);
+    expect(queryParams.has("testable")).toBe(false);
+    expect(queryParams.get("scope")).toBe("POST /sync");
   });
 });
