@@ -528,4 +528,24 @@ describe("App", () => {
     expect(screen.getByText("External integrations")).toBeTruthy();
     expect(screen.getByText("Frontend consumers")).toBeTruthy();
   });
+
+  it("surfaces implemented backend APIs with testing details and API filtering", () => {
+    renderAtPath("/features");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
+
+    expect(screen.getByText("Gmail read-only OAuth API")).toBeTruthy();
+    expect(screen.getByText("Manual sync API")).toBeTruthy();
+    expect(screen.getByText("Local data wipe API")).toBeTruthy();
+    expect(screen.getByText("How to use Local data wipe API")).toBeTruthy();
+    expect(screen.getAllByText("POST /local-data/wipe").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
+      target: { value: "POST /local-data/wipe" },
+    });
+
+    expect(screen.getByText("Local data wipe API")).toBeTruthy();
+    expect(screen.queryByText("Gmail read-only OAuth API")).toBeNull();
+    expect(screen.queryByText("Manual sync API")).toBeNull();
+  });
 });
