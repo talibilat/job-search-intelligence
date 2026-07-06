@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   gmailAuthUrlAuthGmailGet,
@@ -93,6 +93,7 @@ export function SetupPage() {
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
   const [isStartingAuth, setIsStartingAuth] = useState(false);
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null);
+  const gmailCardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -162,6 +163,10 @@ export function SetupPage() {
       );
     } finally {
       setIsStartingAuth(false);
+      gmailCardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }
   }
 
@@ -256,6 +261,7 @@ export function SetupPage() {
         <section
           className="setup-gmail-card"
           aria-labelledby="setup-gmail-title"
+          ref={gmailCardRef}
         >
           <p className="eyebrow">Gmail auth</p>
           <h2 id="setup-gmail-title">Gmail callback status</h2>
