@@ -990,7 +990,7 @@ export const getSplitApplicationApplicationsApplicationIdSplitPostUrl = (
 };
 
 /**
- * Splits selected events out of an incorrectly grouped application into a new application and records an audited manual correction.
+ * Splits selected events out of an incorrectly grouped application into a deterministic manually locked application, locks the source application, recalculates timeline dates, derives target status from moved events, and records an audited manual correction.
  * @summary Split Application
  */
 export const splitApplicationApplicationsApplicationIdSplitPost = async (

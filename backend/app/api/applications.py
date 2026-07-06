@@ -20,10 +20,10 @@ from app.models import (
     ApplicationMergeRequest,
     ApplicationMergeResponse,
     ApplicationRecord,
-    ApplicationStatusEditRequest,
-    ApplicationStatusEditResponse,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
+    ApplicationStatusEditRequest,
+    ApplicationStatusEditResponse,
 )
 from app.services.application_corrections import (
     ApplicationCorrectionService,
