@@ -339,6 +339,28 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         if should_commit:
             self.connection.commit()
 
+    def set_manual_lock(
+        self,
+        *,
+        application_id: str,
+        manual_lock: bool,
+        updated_at: str,
+    ) -> bool:
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                UPDATE applications
+                SET manual_lock = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (int(manual_lock), updated_at, application_id),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount > 0
+
     def _is_deleted_merge_source(self, application_id: str) -> bool:
         row = self.execute(
             """

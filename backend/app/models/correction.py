@@ -132,3 +132,14 @@ class ApplicationSplitResponse(BaseModel):
     new_application: ApplicationRecord
     moved_events: list[ApplicationEventRecord]
     correction: ApplicationCorrectionRecord
+
+
+class ApplicationResetLockRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    reason: str | None = None
+
+
+class ApplicationResetLockResponse(BaseModel):
+    application: ApplicationRecord
+    correction: ApplicationCorrectionRecord

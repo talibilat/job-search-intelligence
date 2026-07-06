@@ -21,6 +21,8 @@ from app.models import (
     ApplicationMergeRequest,
     ApplicationMergeResponse,
     ApplicationRecord,
+    ApplicationResetLockRequest,
+    ApplicationResetLockResponse,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
     ApplicationStatusEditRequest,
@@ -30,10 +32,11 @@ from app.models import (
 from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.services.application_corrections import (
     ApplicationCorrectionService,
+    ApplicationLockResetConflictError,
     ApplicationSplitConflictError,
 )
 from app.services.application_corrections import (
-    ApplicationNotFoundError as ApplicationSplitNotFoundError,
+    ApplicationNotFoundError as ApplicationCorrectionNotFoundError,
 )
 from app.services.applications import (
     ApplicationDetailService,
@@ -267,6 +270,48 @@ def edit_application_event(
 
 
 @router.post(
+    "/{application_id}/reset-lock",
+    response_model=ApplicationResetLockResponse,
+    summary="Reset Application Correction Lock",
+    description=(
+        "Clears one application's manual correction lock so future automatic "
+        "aggregation can update the application summary again, and records an "
+        "audited reset_lock correction."
+    ),
+    responses={
+        404: {"model": ApiErrorResponse, "description": "Application not found."},
+        409: {"model": ApiErrorResponse, "description": "Application lock reset conflict."},
+        422: {"model": ApiErrorResponse, "description": "Request validation failed."},
+    },
+)
+async def reset_application_lock(
+    application_id: str,
+    request: ApplicationResetLockRequest,
+    correction_service: Annotated[
+        ApplicationCorrectionService,
+        Depends(get_application_correction_service),
+    ],
+) -> ApplicationResetLockResponse:
+    try:
+        return correction_service.reset_application_lock(
+            application_id=application_id,
+            reason=request.reason,
+        )
+    except ApplicationCorrectionNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message=error.public_message,
+        ) from error
+    except ApplicationLockResetConflictError as error:
+        raise ApiError(
+            status_code=409,
+            code=ApiErrorCode.CONFLICT,
+            message=error.public_message,
+        ) from error
+
+
+@router.post(
     "/{application_id}/split",
     response_model=ApplicationSplitResponse,
     summary="Split Application",
@@ -295,7 +340,7 @@ async def split_application(
             application_id=application_id,
             request=request,
         )
-    except ApplicationSplitNotFoundError as error:
+    except ApplicationCorrectionNotFoundError as error:
         raise ApiError(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,
