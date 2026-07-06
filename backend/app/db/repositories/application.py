@@ -281,6 +281,77 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         ).fetchone()
         return row is not None
 
+    def update_timeline_summary(
+        self,
+        *,
+        application_id: str,
+        first_seen_at: str,
+        current_status: str,
+        company: str,
+        role_title: str,
+        source: str,
+        salary_min: int | None,
+        salary_max: int | None,
+        currency: str | None,
+        location: str | None,
+        work_mode: str | None,
+        seniority: str | None,
+        sponsorship: str,
+        tech_stack: list[str],
+        last_activity_at: str,
+        updated_at: str,
+        manual_lock: bool = False,
+    ) -> bool:
+        """Update timeline-derived summary fields for an existing application."""
+
+        tech_stack_json = json.dumps(tech_stack, separators=(",", ":"))
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                UPDATE applications
+                SET first_seen_at = ?,
+                    current_status = ?,
+                    company = ?,
+                    role_title = ?,
+                    source = ?,
+                    salary_min = ?,
+                    salary_max = ?,
+                    currency = ?,
+                    location = ?,
+                    work_mode = ?,
+                    seniority = ?,
+                    sponsorship = ?,
+                    tech_stack = ?,
+                    last_activity_at = ?,
+                    manual_lock = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    first_seen_at,
+                    current_status,
+                    company,
+                    role_title,
+                    source,
+                    salary_min,
+                    salary_max,
+                    currency,
+                    location,
+                    work_mode,
+                    seniority,
+                    sponsorship,
+                    tech_stack_json,
+                    last_activity_at,
+                    int(manual_lock),
+                    updated_at,
+                    application_id,
+                ),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount > 0
+
     def map_row(self, row: sqlite3.Row) -> ApplicationRecord:
         return ApplicationRecord.model_validate(row_to_dict(row))
 

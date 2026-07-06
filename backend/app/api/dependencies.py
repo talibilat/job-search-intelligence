@@ -14,6 +14,7 @@ from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
+from app.services.application_corrections import ApplicationCorrectionService
 from app.services.applications import ApplicationDetailService, ApplicationEventsService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
@@ -153,6 +154,7 @@ def get_manual_merge_service(
     database_path = sqlite_database_path(settings.database_url)
     database_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(database_path, check_same_thread=False)
+    connection.execute("PRAGMA foreign_keys = ON")
     try:
         yield ManualApplicationMergeService(
             application_repository=ApplicationRepository(connection),
@@ -171,6 +173,23 @@ def get_manual_edit_service(
     connection = sqlite3.connect(database_path, check_same_thread=False)
     try:
         yield ManualApplicationEditService(
+            application_repository=ApplicationRepository(connection),
+            event_repository=EventRepository(connection),
+            correction_repository=CorrectionRepository(connection),
+        )
+    finally:
+        connection.close()
+
+
+def get_application_correction_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ApplicationCorrectionService]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    connection.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield ApplicationCorrectionService(
             application_repository=ApplicationRepository(connection),
             event_repository=EventRepository(connection),
             correction_repository=CorrectionRepository(connection),

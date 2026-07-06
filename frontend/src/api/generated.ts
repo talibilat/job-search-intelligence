@@ -189,6 +189,53 @@ export interface ApplicationMergeResponse {
   target_application_id: string;
 }
 
+export interface ApplicationSplitNewApplication {
+  /** @minLength 1 */
+  company: string;
+  currency?: string | null;
+  location?: string | null;
+  /** @minLength 1 */
+  role_title: string;
+  salary_max?: number | null;
+  salary_min?: number | null;
+  seniority?: string | null;
+  source?: ApplicationSource;
+  sponsorship?: SponsorshipStatus;
+  tech_stack?: string[];
+  work_mode?: WorkMode | null;
+}
+
+export interface ApplicationSplitSourceApplication {
+  /** @minLength 1 */
+  company?: string;
+  currency?: string | null;
+  location?: string | null;
+  /** @minLength 1 */
+  role_title?: string;
+  salary_max?: number | null;
+  salary_min?: number | null;
+  seniority?: string | null;
+  source?: ApplicationSource;
+  sponsorship?: SponsorshipStatus;
+  tech_stack?: string[];
+  work_mode?: WorkMode | null;
+}
+
+export interface ApplicationSplitRequest {
+  /** @minItems 1 */
+  event_ids: string[];
+  new_application: ApplicationSplitNewApplication;
+  reason?: string | null;
+  source_application?: ApplicationSplitSourceApplication | null;
+}
+
+export interface ApplicationSplitResponse {
+  correction: ApplicationCorrectionRecord;
+  moved_events: ApplicationEventRecord[];
+  new_application: ApplicationRecord;
+  source_application: ApplicationRecord;
+}
+
 export interface ApplicationStatusEditRequest {
   current_status: ApplicationStatus;
   reason?: string | null;
@@ -898,6 +945,78 @@ export const mergeApplicationApplicationsApplicationIdMergePost = async (
     status: res.status,
     headers: res.headers,
   } as mergeApplicationApplicationsApplicationIdMergePostResponse;
+};
+
+export type splitApplicationApplicationsApplicationIdSplitPostResponse200 = {
+  data: ApplicationSplitResponse;
+  status: 200;
+};
+
+export type splitApplicationApplicationsApplicationIdSplitPostResponse404 = {
+  data: ApiErrorResponse;
+  status: 404;
+};
+
+export type splitApplicationApplicationsApplicationIdSplitPostResponse409 = {
+  data: ApiErrorResponse;
+  status: 409;
+};
+
+export type splitApplicationApplicationsApplicationIdSplitPostResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type splitApplicationApplicationsApplicationIdSplitPostResponseSuccess =
+  splitApplicationApplicationsApplicationIdSplitPostResponse200 & {
+    headers: Headers;
+  };
+export type splitApplicationApplicationsApplicationIdSplitPostResponseError = (
+  | splitApplicationApplicationsApplicationIdSplitPostResponse404
+  | splitApplicationApplicationsApplicationIdSplitPostResponse409
+  | splitApplicationApplicationsApplicationIdSplitPostResponse422
+) & {
+  headers: Headers;
+};
+
+export type splitApplicationApplicationsApplicationIdSplitPostResponse =
+  | splitApplicationApplicationsApplicationIdSplitPostResponseSuccess
+  | splitApplicationApplicationsApplicationIdSplitPostResponseError;
+
+export const getSplitApplicationApplicationsApplicationIdSplitPostUrl = (
+  applicationId: string,
+) => {
+  return `/applications/${applicationId}/split`;
+};
+
+/**
+ * Splits selected events out of an incorrectly grouped application into a deterministic manually locked application, locks the source application, recalculates timeline dates, derives target status from moved events, and records an audited manual correction.
+ * @summary Split Application
+ */
+export const splitApplicationApplicationsApplicationIdSplitPost = async (
+  applicationId: string,
+  applicationSplitRequest: ApplicationSplitRequest,
+  options?: RequestInit,
+): Promise<splitApplicationApplicationsApplicationIdSplitPostResponse> => {
+  const res = await fetch(
+    getSplitApplicationApplicationsApplicationIdSplitPostUrl(applicationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(applicationSplitRequest),
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: splitApplicationApplicationsApplicationIdSplitPostResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as splitApplicationApplicationsApplicationIdSplitPostResponse;
 };
 
 export type editApplicationStatusApplicationsApplicationIdStatusPatchResponse200 =
