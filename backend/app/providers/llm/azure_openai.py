@@ -240,9 +240,7 @@ class AzureOpenAIProvider:
         try:
             await self.generate(
                 LLMGenerationRequest(
-                    messages=(
-                        LLMMessage(role=LLMMessageRole.USER, content=_HEALTH_CHECK_PROMPT),
-                    ),
+                    messages=(LLMMessage(role=LLMMessageRole.USER, content=_HEALTH_CHECK_PROMPT),),
                     model=model,
                     options=LLMGenerationOptions(max_output_tokens=1),
                 )

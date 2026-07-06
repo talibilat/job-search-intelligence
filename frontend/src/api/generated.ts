@@ -46,6 +46,69 @@ export interface ApiErrorResponse {
   error: ApiErrorBody;
 }
 
+export type ApplicationStatus =
+  (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
+
+export const ApplicationStatus = {
+  applied: "applied",
+  in_review: "in_review",
+  assessment: "assessment",
+  interview: "interview",
+  offer: "offer",
+  rejected: "rejected",
+  ghosted: "ghosted",
+  withdrawn: "withdrawn",
+} as const;
+
+export type ApplicationSource =
+  (typeof ApplicationSource)[keyof typeof ApplicationSource];
+
+export const ApplicationSource = {
+  linkedin: "linkedin",
+  company_site: "company_site",
+  indeed: "indeed",
+  referral: "referral",
+  other: "other",
+} as const;
+
+export type SponsorshipStatus =
+  (typeof SponsorshipStatus)[keyof typeof SponsorshipStatus];
+
+export const SponsorshipStatus = {
+  offered: "offered",
+  not_offered: "not_offered",
+  unknown: "unknown",
+} as const;
+
+export type WorkMode = (typeof WorkMode)[keyof typeof WorkMode];
+
+export const WorkMode = {
+  remote: "remote",
+  hybrid: "hybrid",
+  onsite: "onsite",
+} as const;
+
+export interface ApplicationRecord {
+  company: string;
+  created_at: string;
+  currency: string | null;
+  current_status: ApplicationStatus;
+  first_seen_at: string;
+  id: string;
+  last_activity_at: string;
+  location: string | null;
+  manual_lock: boolean;
+  role_title: string;
+  salary_max?: number | null;
+  salary_min?: number | null;
+  seniority: string | null;
+  source: ApplicationSource;
+  sponsorship: SponsorshipStatus;
+  tech_stack: string[];
+  updated_at: string;
+  work_mode: WorkMode | null;
+}
+
 export type ClassificationMode =
   (typeof ClassificationMode)[keyof typeof ClassificationMode];
 
@@ -514,6 +577,69 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
    * @minLength 1
    */
   state: string;
+};
+
+export type getApplicationDetailApplicationsApplicationIdGetResponse200 = {
+  data: ApplicationRecord;
+  status: 200;
+};
+
+export type getApplicationDetailApplicationsApplicationIdGetResponse404 = {
+  data: ApiErrorResponse;
+  status: 404;
+};
+
+export type getApplicationDetailApplicationsApplicationIdGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type getApplicationDetailApplicationsApplicationIdGetResponseSuccess =
+  getApplicationDetailApplicationsApplicationIdGetResponse200 & {
+    headers: Headers;
+  };
+export type getApplicationDetailApplicationsApplicationIdGetResponseError = (
+  | getApplicationDetailApplicationsApplicationIdGetResponse404
+  | getApplicationDetailApplicationsApplicationIdGetResponse422
+) & {
+  headers: Headers;
+};
+
+export type getApplicationDetailApplicationsApplicationIdGetResponse =
+  | getApplicationDetailApplicationsApplicationIdGetResponseSuccess
+  | getApplicationDetailApplicationsApplicationIdGetResponseError;
+
+export const getGetApplicationDetailApplicationsApplicationIdGetUrl = (
+  applicationId: string,
+) => {
+  return `/applications/${applicationId}`;
+};
+
+/**
+ * Returns one canonical application row from the local SQLite source of truth.
+ * @summary Get Application Detail
+ */
+export const getApplicationDetailApplicationsApplicationIdGet = async (
+  applicationId: string,
+  options?: RequestInit,
+): Promise<getApplicationDetailApplicationsApplicationIdGetResponse> => {
+  const res = await fetch(
+    getGetApplicationDetailApplicationsApplicationIdGetUrl(applicationId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getApplicationDetailApplicationsApplicationIdGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getApplicationDetailApplicationsApplicationIdGetResponse;
 };
 
 export type gmailAuthUrlAuthGmailGetResponse200 = {
