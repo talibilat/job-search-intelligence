@@ -11,7 +11,7 @@ from app.api.dependencies import (
     get_manual_edit_service,
     get_manual_merge_service,
 )
-from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
+from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.models import (
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
@@ -26,6 +26,7 @@ from app.models.records import ApplicationSource, ApplicationStatus, Sponsorship
 from app.services.applications import (
     ApplicationDetailService,
     ApplicationEventsService,
+    ApplicationFilterValidationError,
     ApplicationNotFoundError,
 )
 from app.services.manual_edit import (
@@ -51,6 +52,7 @@ router = APIRouter(prefix="/applications", tags=["applications"])
         "optionally filtered by status, source, sponsorship, first-seen date range, "
         "role title, salary band, and work mode."
     ),
+    responses={422: {"model": ApiErrorResponse}},
 )
 def list_applications(
     service: Annotated[
@@ -67,17 +69,31 @@ def list_applications(
     salary_max: Annotated[int | None, Query(ge=0)] = None,
     work_mode: Annotated[WorkMode | None, Query()] = None,
 ) -> list[ApplicationRecord]:
-    return service.list_applications(
-        status=status,
-        source=source,
-        sponsorship=sponsorship,
-        first_seen_from=first_seen_from,
-        first_seen_to=first_seen_to,
-        role=role,
-        salary_min=salary_min,
-        salary_max=salary_max,
-        work_mode=work_mode,
-    )
+    try:
+        return service.list_applications(
+            status=status,
+            source=source,
+            sponsorship=sponsorship,
+            first_seen_from=first_seen_from,
+            first_seen_to=first_seen_to,
+            role=role,
+            salary_min=salary_min,
+            salary_max=salary_max,
+            work_mode=work_mode,
+        )
+    except ApplicationFilterValidationError as error:
+        raise ApiError(
+            status_code=422,
+            code=ApiErrorCode.VALIDATION_ERROR,
+            message="Request validation failed.",
+            details=(
+                ApiErrorDetail(
+                    field=f"query.{error.field}",
+                    message=error.message,
+                    type=error.error_type,
+                ),
+            ),
+        ) from error
 
 
 @router.get(

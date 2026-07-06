@@ -114,6 +114,50 @@ def test_list_applications_applies_date_role_and_salary_band_filters(tmp_path: P
     assert [record["id"] for record in response.json()] == ["application-offered"]
 
 
+def test_list_applications_rejects_inverted_salary_band(tmp_path: Path) -> None:
+    database_path = database_with_filter_fixture(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get("/applications?salary_min=200000&salary_max=100000")
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "validation_error",
+            "message": "Request validation failed.",
+            "details": [
+                {
+                    "field": "query.salary_min",
+                    "message": "salary_min must be less than or equal to salary_max.",
+                    "type": "value_error",
+                }
+            ],
+        }
+    }
+
+
+def test_list_applications_rejects_naive_first_seen_filter(tmp_path: Path) -> None:
+    database_path = database_with_filter_fixture(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get("/applications?first_seen_to=2026-07-01T09:00:00")
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "validation_error",
+            "message": "Request validation failed.",
+            "details": [
+                {
+                    "field": "query.first_seen_to",
+                    "message": "first_seen_to must include a timezone offset.",
+                    "type": "timezone_aware",
+                }
+            ],
+        }
+    }
+
+
 def test_get_application_detail_returns_typed_not_found(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     client = create_test_client(database_path)
