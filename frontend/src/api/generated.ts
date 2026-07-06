@@ -658,6 +658,18 @@ export interface WipeDataResponse {
   status: "wiped";
 }
 
+export type ListApplicationsApplicationsGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
 export type GmailAuthCallbackAuthGmailCallbackGetParams = {
   /**
    * @minLength 1
@@ -667,6 +679,72 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
    * @minLength 1
    */
   state: string;
+};
+
+export type listApplicationsApplicationsGetResponse200 = {
+  data: ApplicationRecord[];
+  status: 200;
+};
+
+export type listApplicationsApplicationsGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type listApplicationsApplicationsGetResponseSuccess =
+  listApplicationsApplicationsGetResponse200 & {
+    headers: Headers;
+  };
+export type listApplicationsApplicationsGetResponseError =
+  listApplicationsApplicationsGetResponse422 & {
+    headers: Headers;
+  };
+
+export type listApplicationsApplicationsGetResponse =
+  | listApplicationsApplicationsGetResponseSuccess
+  | listApplicationsApplicationsGetResponseError;
+
+export const getListApplicationsApplicationsGetUrl = (
+  params?: ListApplicationsApplicationsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/applications?${stringifiedParams}`
+    : `/applications`;
+};
+
+/**
+ * Returns canonical application rows from the local SQLite source of truth, optionally filtered by status, source, sponsorship, first-seen date range, role title, salary band, and work mode.
+ * @summary List Applications
+ */
+export const listApplicationsApplicationsGet = async (
+  params?: ListApplicationsApplicationsGetParams,
+  options?: RequestInit,
+): Promise<listApplicationsApplicationsGetResponse> => {
+  const res = await fetch(getListApplicationsApplicationsGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listApplicationsApplicationsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listApplicationsApplicationsGetResponse;
 };
 
 export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse200 =
