@@ -89,6 +89,14 @@ def test_application_repository_get_by_id_returns_matching_record(tmp_path: Path
     assert record.tech_stack == ["Python", "FastAPI"]
 
 
+def test_application_repository_get_by_id_raises_when_applications_table_is_missing() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        repository = ApplicationRepository(connection)
+
+        with pytest.raises(sqlite3.OperationalError, match="no such table: applications"):
+            repository.get_by_id("application-42")
+
+
 def test_application_detail_service_raises_for_missing_application(tmp_path: Path) -> None:
     from app.services.applications import ApplicationDetailService, ApplicationNotFoundError
 

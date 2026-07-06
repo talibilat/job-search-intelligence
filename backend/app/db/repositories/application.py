@@ -12,12 +12,7 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
     """Repository seam for canonical job applications."""
 
     def get_by_id(self, application_id: str) -> ApplicationRecord | None:
-        try:
-            return self.fetch_one("SELECT * FROM applications WHERE id = ?", (application_id,))
-        except sqlite3.OperationalError as error:
-            if _is_missing_applications_table(error):
-                return None
-            raise
+        return self.fetch_one("SELECT * FROM applications WHERE id = ?", (application_id,))
 
     def upsert_application(
         self,
@@ -103,7 +98,3 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
 
     def map_row(self, row: sqlite3.Row) -> ApplicationRecord:
         return ApplicationRecord.model_validate(row_to_dict(row))
-
-
-def _is_missing_applications_table(error: sqlite3.OperationalError) -> bool:
-    return "no such table: applications" in str(error)
