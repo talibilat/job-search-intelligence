@@ -163,10 +163,9 @@ export function SetupPage() {
       );
     } finally {
       setIsStartingAuth(false);
-      gmailCardRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      if (typeof gmailCardRef.current?.scrollIntoView === "function") {
+        gmailCardRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     }
   }
 

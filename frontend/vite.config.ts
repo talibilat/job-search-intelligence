@@ -1,3 +1,5 @@
+import type { IncomingMessage } from "node:http";
+
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
@@ -16,7 +18,7 @@ export default defineConfig({
       "/setup": {
         target: BACKEND_URL,
         changeOrigin: true,
-        bypass(req) {
+        bypass(req: IncomingMessage) {
           if (req.method === "GET" && req.url === "/setup") {
             return req.url;
           }
