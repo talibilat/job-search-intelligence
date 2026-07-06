@@ -58,6 +58,7 @@ class GoldenSetCase(BaseModel):
     email: GoldenSetEmail
     expected: GoldenSetExpectedClassification
     rationale: str = Field(min_length=1)
+    expected_to_pass_filter: bool
 
     @model_validator(mode="after")
     def validate_negative_cases_are_other(self) -> Self:
