@@ -8,13 +8,14 @@ from fastapi import Depends
 
 from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
-from app.db.repositories.application import ApplicationRepository
+from app.db.repositories import ApplicationRepository, CorrectionRepository, EventRepository
 from app.db.repositories.classification_run import ClassificationRunRepository
 from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
 from app.services.applications import ApplicationDetailService
+from app.services.manual_merge import ManualApplicationMergeService
 from app.services.structured_extraction import StructuredExtractionService
 
 
@@ -126,5 +127,21 @@ def get_readonly_email_repository(
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
         yield EmailRepository(connection)
+    finally:
+        connection.close()
+
+
+def get_manual_merge_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ManualApplicationMergeService]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    try:
+        yield ManualApplicationMergeService(
+            application_repository=ApplicationRepository(connection),
+            event_repository=EventRepository(connection),
+            correction_repository=CorrectionRepository(connection),
+        )
     finally:
         connection.close()

@@ -2,10 +2,18 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from typing import Literal
 
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
 from app.models.records import ApplicationRecord
+
+type ApplicationUpsertOutcome = Literal[
+    "upserted",
+    "locked_unchanged",
+    "manual_conflict",
+    "merged_source",
+]
 
 
 class ApplicationRepository(BaseRepository[ApplicationRecord]):
@@ -13,6 +21,9 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
 
     def get_by_id(self, application_id: str) -> ApplicationRecord | None:
         return self.fetch_one("SELECT * FROM applications WHERE id = ?", (application_id,))
+
+    def get_application(self, application_id: str) -> ApplicationRecord | None:
+        return self.get_by_id(application_id)
 
     def upsert_application(
         self,
@@ -35,7 +46,7 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         sponsorship: str = "unknown",
         tech_stack: list[str] | None = None,
         manual_lock: bool = False,
-    ) -> None:
+    ) -> ApplicationUpsertOutcome:
         """Insert or update one application row idempotently.
 
         The deterministic ``id`` (derived from the grouping key) acts as
@@ -43,10 +54,33 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         row rather than creating a duplicate.
         """
 
+        if self._is_deleted_merge_source(id):
+            return "merged_source"
+
+        existing = self.get_application(id)
+        if existing is not None and existing.manual_lock:
+            if _locked_application_matches(
+                existing=existing,
+                company=company,
+                role_title=role_title,
+                source=source,
+                current_status=current_status,
+                salary_min=salary_min,
+                salary_max=salary_max,
+                currency=currency,
+                location=location,
+                work_mode=work_mode,
+                seniority=seniority,
+                sponsorship=sponsorship,
+                tech_stack=tech_stack or [],
+            ):
+                return "locked_unchanged"
+            return "manual_conflict"
+
         tech_stack_json = json.dumps(tech_stack or [], separators=(",", ":"))
         should_commit = not self.connection.in_transaction
         with self.transaction():
-            self.execute(
+            cursor = self.execute(
                 """
                 INSERT INTO applications (
                     id, company, role_title, source,
@@ -71,6 +105,7 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
                     tech_stack = excluded.tech_stack,
                     last_activity_at = excluded.last_activity_at,
                     updated_at = excluded.updated_at
+                WHERE applications.manual_lock = 0
                 """,
                 (
                     id,
@@ -95,6 +130,130 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
             )
         if should_commit:
             self.connection.commit()
+        return "upserted" if cursor.rowcount > 0 else "manual_conflict"
+
+    def update_application_summary(
+        self,
+        *,
+        id: str,
+        company: str,
+        role_title: str,
+        source: str,
+        first_seen_at: str,
+        current_status: str,
+        last_activity_at: str,
+        updated_at: str,
+        salary_min: int | None = None,
+        salary_max: int | None = None,
+        currency: str | None = None,
+        location: str | None = None,
+        work_mode: str | None = None,
+        seniority: str | None = None,
+        sponsorship: str = "unknown",
+        tech_stack: list[str] | None = None,
+        manual_lock: bool = False,
+    ) -> None:
+        tech_stack_json = json.dumps(tech_stack or [], separators=(",", ":"))
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            self.execute(
+                """
+                UPDATE applications
+                SET company = ?,
+                    role_title = ?,
+                    source = ?,
+                    first_seen_at = ?,
+                    current_status = ?,
+                    salary_min = ?,
+                    salary_max = ?,
+                    currency = ?,
+                    location = ?,
+                    work_mode = ?,
+                    seniority = ?,
+                    sponsorship = ?,
+                    tech_stack = ?,
+                    last_activity_at = ?,
+                    manual_lock = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    company,
+                    role_title,
+                    source,
+                    first_seen_at,
+                    current_status,
+                    salary_min,
+                    salary_max,
+                    currency,
+                    location,
+                    work_mode,
+                    seniority,
+                    sponsorship,
+                    tech_stack_json,
+                    last_activity_at,
+                    int(manual_lock),
+                    updated_at,
+                    id,
+                ),
+            )
+        if should_commit:
+            self.connection.commit()
+
+    def delete_application(self, application_id: str) -> None:
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            self.execute(
+                "DELETE FROM applications WHERE id = ?",
+                (application_id,),
+            )
+        if should_commit:
+            self.connection.commit()
+
+    def _is_deleted_merge_source(self, application_id: str) -> bool:
+        row = self.execute(
+            """
+            SELECT 1
+            FROM application_corrections
+            WHERE correction_type = 'merge'
+              AND json_extract(after_json, '$.deleted_source_application_id') = ?
+            LIMIT 1
+            """,
+            (application_id,),
+        ).fetchone()
+        return row is not None
 
     def map_row(self, row: sqlite3.Row) -> ApplicationRecord:
         return ApplicationRecord.model_validate(row_to_dict(row))
+
+
+def _locked_application_matches(
+    *,
+    existing: ApplicationRecord,
+    company: str,
+    role_title: str,
+    source: str,
+    current_status: str,
+    salary_min: int | None,
+    salary_max: int | None,
+    currency: str | None,
+    location: str | None,
+    work_mode: str | None,
+    seniority: str | None,
+    sponsorship: str,
+    tech_stack: list[str],
+) -> bool:
+    return (
+        existing.company == company
+        and existing.role_title == role_title
+        and existing.source == source
+        and existing.current_status == current_status
+        and existing.salary_min == salary_min
+        and existing.salary_max == salary_max
+        and existing.currency == currency
+        and existing.location == location
+        and existing.work_mode == work_mode
+        and existing.seniority == seniority
+        and existing.sponsorship == sponsorship
+        and existing.tech_stack == tech_stack
+    )

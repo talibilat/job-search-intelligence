@@ -1,5 +1,6 @@
 """Pydantic DTOs used at application boundaries."""
 
+from .application_merge import ApplicationMergeRequest, ApplicationMergeResponse
 from .classification import (
     ClassificationCandidateStats,
     ClassificationPreRunEstimate,
@@ -83,6 +84,8 @@ __all__ = [
     "ClassificationReprocessingPlan",
     "ClassificationReprocessingStats",
     "ClassificationRunResponse",
+    "ApplicationMergeRequest",
+    "ApplicationMergeResponse",
     "EmailBackfillStateRecord",
     "EmailBackfillStatus",
     "EmailCandidateQueryStrategy",
