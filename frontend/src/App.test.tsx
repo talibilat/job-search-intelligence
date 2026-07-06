@@ -537,15 +537,18 @@ describe("App", () => {
     expect(screen.getByText("Gmail read-only OAuth API")).toBeTruthy();
     expect(screen.getByText("Manual sync API")).toBeTruthy();
     expect(screen.getByText("Local data wipe API")).toBeTruthy();
+    expect(screen.getByText("Provider configuration API")).toBeTruthy();
     expect(screen.getByText("How to use Local data wipe API")).toBeTruthy();
     expect(screen.getAllByText("POST /local-data/wipe").length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "POST /local-data/wipe" },
+      target: { value: "POST /config/providers/llm/health" },
     });
 
-    expect(screen.getByText("Local data wipe API")).toBeTruthy();
+    expect(screen.getByText("Provider configuration API")).toBeTruthy();
+    expect(screen.getAllByText("POST /config/providers/llm/health").length).toBeGreaterThan(0);
     expect(screen.queryByText("Gmail read-only OAuth API")).toBeNull();
     expect(screen.queryByText("Manual sync API")).toBeNull();
+    expect(screen.queryByText("Local data wipe API")).toBeNull();
   });
 });
