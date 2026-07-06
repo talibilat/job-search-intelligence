@@ -100,6 +100,9 @@ def test_get_application_events_returns_ordered_timeline(tmp_path: Path) -> None
             "event_type": "applied",
             "event_at": "2026-07-01T09:00:00Z",
             "extract_note": "Application confirmation received.",
+            "extracted_status": None,
+            "email_sent_at": "2026-07-01T09:00:00Z",
+            "classification_classified_at": None,
         },
         {
             "id": "event-2",
@@ -108,6 +111,9 @@ def test_get_application_events_returns_ordered_timeline(tmp_path: Path) -> None
             "event_type": "rejection",
             "event_at": "2026-07-03T10:00:00Z",
             "extract_note": "Rejected after review.",
+            "extracted_status": None,
+            "email_sent_at": "2026-07-01T09:00:00Z",
+            "classification_classified_at": None,
         },
     ]
 
