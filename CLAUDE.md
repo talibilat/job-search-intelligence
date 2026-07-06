@@ -19,6 +19,7 @@ Key reminders:
 - Never execute raw SQL emitted by an LLM.
 - Keep provider integrations behind interfaces.
 - Use Pydantic DTOs at boundaries.
-- Run the golden-set eval for classification changes.
+- Run the golden-set filter eval for heuristic filter changes.
+- Run the golden-set classification eval for classification changes.
 - Verify before claiming completion.
 - Do not use the em dash character.
