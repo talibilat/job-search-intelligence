@@ -5,12 +5,27 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies import (
+    get_application_correction_service,
     get_application_detail_service,
     get_manual_merge_service,
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
-from app.models import ApplicationMergeRequest, ApplicationMergeResponse, ApplicationRecord
-from app.services.applications import ApplicationDetailService, ApplicationNotFoundError
+from app.models import (
+    ApplicationMergeRequest,
+    ApplicationMergeResponse,
+    ApplicationRecord,
+    ApplicationSplitRequest,
+    ApplicationSplitResponse,
+)
+from app.services.application_corrections import (
+    ApplicationCorrectionService,
+    ApplicationSplitConflictError,
+    ApplicationNotFoundError as ApplicationSplitNotFoundError,
+)
+from app.services.applications import (
+    ApplicationDetailService,
+    ApplicationNotFoundError as ApplicationDetailNotFoundError,
+)
 from app.services.manual_merge import (
     ManualApplicationMergeService,
     ManualMergeInvalidRequestError,
@@ -36,11 +51,51 @@ def get_application_detail(
 ) -> ApplicationRecord:
     try:
         return service.get_application(id)
-    except ApplicationNotFoundError as error:
+    except ApplicationDetailNotFoundError as error:
         raise ApiError(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,
             message="Application not found.",
+        ) from error
+
+
+@router.post(
+    "/{application_id}/split",
+    response_model=ApplicationSplitResponse,
+    summary="Split Application",
+    description=(
+        "Splits selected events out of an incorrectly grouped application into a "
+        "new application and records an audited manual correction."
+    ),
+    responses={
+        404: {"model": ApiErrorResponse, "description": "Application not found."},
+        409: {"model": ApiErrorResponse, "description": "Application split conflict."},
+    },
+)
+async def split_application(
+    application_id: str,
+    request: ApplicationSplitRequest,
+    correction_service: Annotated[
+        ApplicationCorrectionService,
+        Depends(get_application_correction_service),
+    ],
+) -> ApplicationSplitResponse:
+    try:
+        return correction_service.split_application(
+            application_id=application_id,
+            request=request,
+        )
+    except ApplicationSplitNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message=error.public_message,
+        ) from error
+    except ApplicationSplitConflictError as error:
+        raise ApiError(
+            status_code=409,
+            code=ApiErrorCode.CONFLICT,
+            message=error.public_message,
         ) from error
 
 
