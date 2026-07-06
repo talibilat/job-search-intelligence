@@ -140,6 +140,7 @@ class ApplicationCorrectionService:
                 last_activity_at=new_last_activity_at.isoformat(),
                 created_at=now_iso,
                 updated_at=now_iso,
+                manual_lock=True,
             )
             moved_count = self._event_repository.reassign_events(
                 event_ids=request.event_ids,
@@ -168,6 +169,7 @@ class ApplicationCorrectionService:
                 tech_stack=source_application_fields.tech_stack,
                 last_activity_at=source_last_activity_at.isoformat(),
                 updated_at=now_iso,
+                manual_lock=True,
             )
             source_after = self._application_repository.get_by_id(application_id)
             new_application = self._application_repository.get_by_id(new_application_id)

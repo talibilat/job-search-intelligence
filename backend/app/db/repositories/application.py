@@ -300,6 +300,7 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         tech_stack: list[str],
         last_activity_at: str,
         updated_at: str,
+        manual_lock: bool = False,
     ) -> bool:
         """Update timeline-derived summary fields for an existing application."""
 
@@ -323,6 +324,7 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
                     sponsorship = ?,
                     tech_stack = ?,
                     last_activity_at = ?,
+                    manual_lock = ?,
                     updated_at = ?
                 WHERE id = ?
                 """,
@@ -341,6 +343,7 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
                     sponsorship,
                     tech_stack_json,
                     last_activity_at,
+                    int(manual_lock),
                     updated_at,
                     application_id,
                 ),
