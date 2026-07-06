@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.db.repositories import ApplicationRepository, EmailRepository, EventRepository
 from app.db.repositories.application import ApplicationUpsertOutcome
 from app.models.application import ApplicationStatus
-from app.models.event import ApplicationEventType
+from app.models.event import ApplicationEventRecord, ApplicationEventType
 from app.pipeline.aggregate import (
     ApplicationGroupingKey,
     build_application_grouping_key,
@@ -20,6 +20,7 @@ from app.pipeline.classify import AcceptedLLMExtraction, JobApplicationExtractio
 
 type Clock = Callable[[], datetime]
 type RunIdFactory = Callable[[], str]
+type _StatusTimelineEvent = tuple[datetime, ApplicationEventType, ApplicationStatus | None]
 
 _STATUS_BY_EVENT_TYPE: dict[ApplicationEventType, ApplicationStatus | None] = {
     "applied": "applied",
@@ -125,6 +126,7 @@ class AggregationService:
             for key, group in groups.items():
                 application_upsert_outcome = _upsert_application(
                     application_repository=self._application_repository,
+                    event_repository=self._event_repository,
                     key=key,
                     group=group,
                     now=now,
@@ -224,12 +226,14 @@ def _group_by_key(
 def _upsert_application(
     *,
     application_repository: ApplicationRepository,
+    event_repository: EventRepository,
     key: ApplicationGroupingKey,
     group: list[_EnrichedExtraction],
     now: datetime,
 ) -> ApplicationUpsertOutcome:
     application_id = make_application_id(key)
-    timestamps = _collect_timestamps(group)
+    existing_events = event_repository.list_by_application_id(application_id)
+    timestamps = _collect_timestamps(group, existing_events)
     # Prefer the extraction with company/role data for display fields
     best_result = _pick_best_extraction(group)
 
@@ -275,7 +279,7 @@ def _upsert_application(
         role_title=role_title,
         source=source,
         first_seen_at=first_seen_at,
-        current_status=_derive_current_status(group),
+        current_status=_derive_current_status(group, existing_events),
         last_activity_at=last_activity_at,
         created_at=created_at,
         updated_at=updated_at,
@@ -325,19 +329,44 @@ def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
 
 def _collect_timestamps(
     group: list[_EnrichedExtraction],
+    existing_events: list[ApplicationEventRecord],
 ) -> list[datetime]:
-    return sorted(_event_at_for_result(result) for result in group)
+    return sorted(
+        [event.event_at for event in existing_events]
+        + [_event_at_for_result(result) for result in group],
+    )
 
 
 def _derive_current_status(
     group: list[_EnrichedExtraction],
+    existing_events: list[ApplicationEventRecord],
 ) -> ApplicationStatus:
     current_status: ApplicationStatus = "applied"
-    for result in sorted(group, key=_event_at_for_result):
-        event_status = _status_for_event(result)
+    for _, event_type, extracted_status in sorted(
+        _collect_status_timeline(group, existing_events),
+        key=lambda event: event[0],
+    ):
+        event_status = _status_for_event_type(event_type, extracted_status)
         if event_status is not None:
             current_status = event_status
     return current_status
+
+
+def _collect_status_timeline(
+    group: list[_EnrichedExtraction],
+    existing_events: list[ApplicationEventRecord],
+) -> list[_StatusTimelineEvent]:
+    return [
+        *[(event.event_at, event.event_type, None) for event in existing_events],
+        *[
+            (
+                _event_at_for_result(result),
+                _event_type_for_result(result),
+                result.extraction.status,
+            )
+            for result in group
+        ],
+    ]
 
 
 def _event_type_for_result(result: _EnrichedExtraction) -> ApplicationEventType:
@@ -348,12 +377,14 @@ def _event_type_for_result(result: _EnrichedExtraction) -> ApplicationEventType:
     return "applied"
 
 
-def _status_for_event(result: _EnrichedExtraction) -> ApplicationStatus | None:
-    event_type = _event_type_for_result(result)
+def _status_for_event_type(
+    event_type: ApplicationEventType,
+    extracted_status: ApplicationStatus | None,
+) -> ApplicationStatus | None:
     event_status = _STATUS_BY_EVENT_TYPE[event_type]
     if event_status is not None:
         return event_status
-    return result.extraction.status
+    return extracted_status
 
 
 def _pick_best_extraction(

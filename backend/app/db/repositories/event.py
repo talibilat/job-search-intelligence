@@ -14,6 +14,8 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         self,
         application_id: str,
     ) -> list[ApplicationEventRecord]:
+        """Return the persisted timeline for one application in event order."""
+
         return self.fetch_all(
             """
             SELECT *

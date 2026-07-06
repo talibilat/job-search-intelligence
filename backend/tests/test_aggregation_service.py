@@ -124,11 +124,89 @@ def test_status_derivation_uses_latest_event_in_timeline(tmp_path: Path) -> None
 
     make_service(connection).run([offer, rejection])
 
-    current_status = connection.execute(
-        "SELECT current_status FROM applications",
-    ).fetchone()
-    assert current_status is not None
-    assert current_status[0] == "rejected"
+    assert_current_status(connection, "rejected")
+
+
+def test_status_derivation_includes_existing_event_history(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    insert_raw_email(connection, "email-2", thread_id="thread-abc")
+    connection.commit()
+
+    service = make_service(connection)
+    service.run(
+        [
+            make_extraction(
+                email_id="email-1",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.OFFER,
+                status="offer",
+                event_type="offer",
+                event_at=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+            ),
+        ],
+    )
+    service.run(
+        [
+            make_extraction(
+                email_id="email-2",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.REJECTION,
+                status="rejected",
+                event_type="rejection",
+                event_at=datetime(2026, 7, 9, 10, 0, tzinfo=UTC),
+            ),
+        ],
+    )
+
+    assert_current_status(connection, "offer")
+
+
+def test_manual_locked_status_is_not_automatically_overwritten(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    insert_raw_email(connection, "email-2", thread_id="thread-abc")
+    connection.commit()
+
+    service = make_service(connection)
+    service.run(
+        [
+            make_extraction(
+                email_id="email-1",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=datetime(2026, 7, 5, 10, 0, tzinfo=UTC),
+            ),
+        ],
+    )
+    connection.execute(
+        "UPDATE applications SET current_status = 'withdrawn', manual_lock = 1",
+    )
+    connection.commit()
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-2",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.REJECTION,
+                status="rejected",
+                event_type="rejection",
+                event_at=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+            ),
+        ],
+    )
+
+    assert_current_status(connection, "withdrawn")
 
 
 def test_status_derivation_uses_event_type_when_status_is_missing(
@@ -150,11 +228,53 @@ def test_status_derivation_uses_event_type_when_status_is_missing(
 
     make_service(connection).run([extraction])
 
-    current_status = connection.execute(
-        "SELECT current_status FROM applications",
-    ).fetchone()
-    assert current_status is not None
-    assert current_status[0] == "interview"
+    assert_current_status(connection, "interview")
+
+
+def test_grouping_key_uses_email_sent_at_when_event_at_missing_without_thread(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(
+        connection,
+        "email-1",
+        thread_id=None,
+        sent_at=datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+    )
+    insert_raw_email(
+        connection,
+        "email-2",
+        thread_id=None,
+        sent_at=datetime(2026, 4, 5, 10, 0, tzinfo=UTC),
+    )
+    connection.commit()
+
+    service = make_service(connection)
+    result = service.run(
+        [
+            make_extraction(
+                email_id="email-1",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=None,
+            ),
+            make_extraction(
+                email_id="email-2",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=None,
+            ),
+        ],
+    )
+
+    stored_apps = connection.execute("SELECT COUNT(*) FROM applications").fetchone()
+    assert stored_apps is not None
+    assert result.applications_upserted == 2
+    assert stored_apps[0] == 2
 
 
 def test_aggregation_is_idempotent(tmp_path: Path) -> None:
@@ -501,6 +621,7 @@ def insert_raw_email(
     *,
     thread_id: str | None = None,
     body_text: str | None = "Test body content.",
+    sent_at: datetime = NOW,
 ) -> None:
     connection.execute(
         """
@@ -516,7 +637,7 @@ def insert_raw_email(
             "jobs@example.test",
             "me@example.test",
             "Job update",
-            NOW.isoformat(),
+            sent_at.isoformat(),
             body_text,
             "retained" if body_text is not None else "metadata_only",
             "[]",
@@ -524,6 +645,17 @@ def insert_raw_email(
             NOW.isoformat(),
         ),
     )
+
+
+def assert_current_status(
+    connection: sqlite3.Connection,
+    expected: ApplicationStatus,
+) -> None:
+    current_status = connection.execute(
+        "SELECT current_status FROM applications",
+    ).fetchone()
+    assert current_status is not None
+    assert current_status[0] == expected
 
 
 def make_extraction(
