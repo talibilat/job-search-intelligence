@@ -27,6 +27,15 @@ _EVENT_STATUS_BY_TYPE: dict[ApplicationEventType, ApplicationStatus] = {
     "offer": "offer",
     "ghost_inferred": "ghosted",
 }
+_STATUS_PRIORITY: tuple[ApplicationStatus, ...] = (
+    "offer",
+    "rejected",
+    "ghosted",
+    "interview",
+    "assessment",
+    "in_review",
+    "applied",
+)
 
 
 class ApplicationCorrectionServiceError(Exception):
@@ -200,8 +209,11 @@ def make_manual_split_application_id(
 def _derive_current_status(events: list[ApplicationEventRecord]) -> ApplicationStatus:
     if not events:
         return "applied"
-    latest_event = max(events, key=lambda event: (event.event_at, event.id))
-    return _EVENT_STATUS_BY_TYPE[latest_event.event_type]
+    seen_statuses = {_EVENT_STATUS_BY_TYPE[event.event_type] for event in events}
+    for status in _STATUS_PRIORITY:
+        if status in seen_statuses:
+            return status
+    return "applied"
 
 
 def _event_bounds(

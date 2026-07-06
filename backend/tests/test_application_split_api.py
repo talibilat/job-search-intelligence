@@ -14,6 +14,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 APPLIED_AT = datetime(2026, 7, 1, 9, 0, tzinfo=UTC)
 REJECTED_AT = datetime(2026, 7, 3, 17, 30, tzinfo=UTC)
+FEEDBACK_AT = datetime(2026, 7, 4, 10, 0, tzinfo=UTC)
 
 
 def test_post_application_split_moves_events_and_records_audit(
@@ -117,6 +118,84 @@ def test_post_application_split_moves_events_and_records_audit(
             ("app-merged",),
         ).fetchall()
         assert corrections == [("split",)]
+
+
+def test_post_application_split_preserves_terminal_status_priority(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    connection = migrated_connection(database_path)
+    try:
+        insert_raw_email(connection, "email-applied")
+        insert_raw_email(connection, "email-rejected")
+        insert_raw_email(connection, "email-feedback")
+        insert_application(
+            connection,
+            application_id="app-merged",
+            company="Acme Corp",
+            role_title="Software Engineer",
+            first_seen_at=APPLIED_AT,
+            current_status="rejected",
+            last_activity_at=FEEDBACK_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-merged",
+            email_id="email-applied",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-rejected",
+            application_id="app-merged",
+            email_id="email-rejected",
+            event_type="rejection",
+            event_at=REJECTED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-feedback",
+            application_id="app-merged",
+            email_id="email-feedback",
+            event_type="feedback",
+            event_at=FEEDBACK_AT,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/applications/app-merged/split",
+        json={
+            "event_ids": ["event-rejected", "event-feedback"],
+            "new_application": {
+                "company": "Beta Labs",
+                "role_title": "Data Engineer",
+                "source": "linkedin",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    new_application_id = payload["new_application"]["id"]
+    assert payload["new_application"]["current_status"] == "rejected"
+
+    with sqlite3.connect(database_path) as db:
+        target = db.execute(
+            "SELECT current_status FROM applications WHERE id = ?",
+            (new_application_id,),
+        ).fetchone()
+        assert target == ("rejected",)
 
 
 def migrated_connection(database_path: Path) -> sqlite3.Connection:
