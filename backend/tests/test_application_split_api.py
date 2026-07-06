@@ -494,6 +494,124 @@ def test_post_application_split_persists_corrected_source_segmentation_fields(
         )
 
 
+def test_post_application_split_preserves_omitted_source_segmentation_fields(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    connection = migrated_connection(database_path)
+    try:
+        insert_raw_email(connection, "email-applied")
+        insert_raw_email(connection, "email-rejected")
+        insert_application(
+            connection,
+            application_id="app-merged",
+            company="Moved Facts Corp",
+            role_title="Moved Role",
+            first_seen_at=APPLIED_AT,
+            current_status="rejected",
+            last_activity_at=REJECTED_AT,
+        )
+        connection.execute(
+            """
+            UPDATE applications
+            SET salary_min = ?, salary_max = ?, currency = ?, location = ?,
+                work_mode = ?, seniority = ?, sponsorship = ?, tech_stack = ?
+            WHERE id = ?
+            """,
+            (
+                90000,
+                110000,
+                "USD",
+                "Austin, TX",
+                "remote",
+                "mid",
+                "not_offered",
+                '["TypeScript","React"]',
+                "app-merged",
+            ),
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-merged",
+            email_id="email-applied",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-rejected",
+            application_id="app-merged",
+            email_id="email-rejected",
+            event_type="rejection",
+            event_at=REJECTED_AT,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/applications/app-merged/split",
+        json={
+            "event_ids": ["event-rejected"],
+            "source_application": {
+                "company": "Acme Corp",
+                "role_title": "Software Engineer",
+            },
+            "new_application": {
+                "company": "Beta Labs",
+                "role_title": "Data Engineer",
+                "source": "linkedin",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_application"]["company"] == "Acme Corp"
+    assert payload["source_application"]["role_title"] == "Software Engineer"
+    assert payload["source_application"]["source"] == "other"
+    assert payload["source_application"]["salary_min"] == 90000
+    assert payload["source_application"]["salary_max"] == 110000
+    assert payload["source_application"]["currency"] == "USD"
+    assert payload["source_application"]["location"] == "Austin, TX"
+    assert payload["source_application"]["work_mode"] == "remote"
+    assert payload["source_application"]["seniority"] == "mid"
+    assert payload["source_application"]["sponsorship"] == "not_offered"
+    assert payload["source_application"]["tech_stack"] == ["TypeScript", "React"]
+
+    with sqlite3.connect(database_path) as db:
+        source = db.execute(
+            """
+            SELECT company, role_title, source, salary_min, salary_max, currency,
+                   location, work_mode, seniority, sponsorship, tech_stack
+            FROM applications
+            WHERE id = ?
+            """,
+            ("app-merged",),
+        ).fetchone()
+        assert source == (
+            "Acme Corp",
+            "Software Engineer",
+            "other",
+            90000,
+            110000,
+            "USD",
+            "Austin, TX",
+            "remote",
+            "mid",
+            "not_offered",
+            '["TypeScript","React"]',
+        )
+
+
 def test_application_split_rejects_repositories_with_different_connections(
     tmp_path: Path,
 ) -> None:
