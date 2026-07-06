@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -503,6 +504,14 @@ describe("App", () => {
     expect(screen.getByText("Frontend API integrations")).toBeTruthy();
     expect(screen.getByText("Backend services consumed by frontend")).toBeTruthy();
 
+    const frontendApiIntegrations = screen.getByText("Frontend API integrations")
+      .parentElement;
+    expect(frontendApiIntegrations).toBeTruthy();
+    expect(frontendApiIntegrations?.textContent).toContain("GET /setup/status");
+    expect(frontendApiIntegrations?.textContent).not.toContain("GET /metrics/summary");
+    expect(frontendApiIntegrations?.textContent).not.toContain("GET /insights");
+    expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
+
     fireEvent.change(screen.getByLabelText("Search features"), {
       target: { value: "sync" },
     });
@@ -581,6 +590,21 @@ describe("App", () => {
     expect(
       screen.getAllByText("PATCH /applications/{application_id}/status").length,
     ).toBeGreaterThan(0);
+    expect(screen.queryByText("Application read API")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
+      target: { value: "POST /applications/{application_id}/split" },
+    });
+
+    expect(screen.getByText("Application manual corrections API")).toBeTruthy();
+    expect(
+      screen.getAllByText("POST /applications/{application_id}/split").length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(screen.getByText("How to use Application manual corrections API").parentElement!).getByText(
+        /Call POST \/applications\/\{application_id\}\/split/,
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText("Application read API")).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {

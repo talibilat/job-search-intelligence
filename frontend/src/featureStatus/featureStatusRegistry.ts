@@ -16,6 +16,7 @@ export interface FeatureRelationshipStep {
     | "controller"
     | "database"
     | "frontend_update"
+    | "planned_api"
     | "queue"
     | "screen"
     | "service"
@@ -137,10 +138,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     components: ["DashboardPage", "ChartPanel"],
     connectedModules: ["Future metrics API"],
     completedDate: "2026-07-05",
-    dependencies: ["Future metrics endpoints"],
+    dependencies: ["Future GET /metrics/summary", "Future GET /metrics/rates", "Future GET /metrics/funnel"],
     description:
       "Empty deterministic dashboard route with URL-backed filter placeholders and chart empty states ready for metrics integration.",
-    endpoints: ["GET /metrics/summary", "GET /metrics/rates", "GET /metrics/funnel"],
+    endpoints: [],
     files: ["frontend/src/pages/DashboardPage.tsx", "frontend/src/components/charts/ChartPanel.tsx"],
     howToUse: {
       expectedBehaviour:
@@ -166,7 +167,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     relationship: [
       { label: "Dashboard", type: "screen" },
       { label: "DashboardPage", type: "component" },
-      { label: "GET /metrics/summary", type: "api" },
+      { label: "Future GET /metrics/summary", type: "planned_api" },
       { label: "metrics router", type: "controller" },
       { label: "MetricsService", type: "service" },
       { label: "applications", type: "database" },
@@ -192,10 +193,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     components: ["Insights"],
     connectedModules: ["Future insights API", "Future deterministic application evidence"],
     completedDate: "2026-07-05",
-    dependencies: ["Future insights endpoints", "applications", "raw_emails"],
+    dependencies: ["Future GET /insights", "Future POST /insights/regenerate", "applications", "raw_emails"],
     description:
       "Phase 0 insights page shell that reserves the narrative insights route without generating LLM output or implying uncited conclusions.",
-    endpoints: ["GET /insights", "POST /insights/regenerate"],
+    endpoints: [],
     files: ["frontend/src/pages/Insights.tsx"],
     howToUse: {
       expectedBehaviour:
@@ -222,7 +223,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     relationship: [
       { label: "Insights", type: "screen" },
       { label: "Insights", type: "component" },
-      { label: "GET /insights", type: "api" },
+      { label: "Future GET /insights", type: "planned_api" },
       { label: "insights router", type: "controller" },
       { label: "InsightsService", type: "service" },
       { label: "insights", type: "database" },
@@ -249,10 +250,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     components: ["Chat"],
     connectedModules: ["Future chat API", "Future hybrid RAG agent", "Future chat history store"],
     completedDate: "2026-07-05",
-    dependencies: ["Future chat endpoint", "Future chat history endpoint", "Future semantic retrieval"],
+    dependencies: ["Future POST /chat", "Future GET /chat/history", "Future semantic retrieval"],
     description:
       "Phase 0 chat page shell that reserves the conversational route while keeping streaming, history, retrieval, and provider calls disabled until Phase 5.",
-    endpoints: ["POST /chat", "GET /chat/history"],
+    endpoints: [],
     files: ["frontend/src/pages/Chat.tsx"],
     howToUse: {
       expectedBehaviour:
@@ -279,8 +280,8 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     relationship: [
       { label: "Chat", type: "screen" },
       { label: "Chat", type: "component" },
-      { label: "POST /chat", type: "api" },
-      { label: "GET /chat/history", type: "api" },
+      { label: "Future POST /chat", type: "planned_api" },
+      { label: "Future GET /chat/history", type: "planned_api" },
       { label: "chat router", type: "controller" },
       { label: "ChatService", type: "service" },
       { label: "chat_messages", type: "database" },
@@ -856,12 +857,19 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     area: "backend",
     assignedModules: [
       "backend/app/api/applications.py",
+      "backend/app/services/application_corrections.py",
       "backend/app/services/manual_edit.py",
       "backend/app/services/manual_merge.py",
     ],
     blockers: [],
     components: ["DashboardPage"],
-    connectedModules: ["Future deterministic dashboard", "ManualApplicationEditService", "ManualApplicationMergeService", "CorrectionRepository"],
+    connectedModules: [
+      "Future deterministic dashboard",
+      "ApplicationCorrectionService",
+      "ManualApplicationEditService",
+      "ManualApplicationMergeService",
+      "CorrectionRepository",
+    ],
     completedDate: "2026-07-06",
     dependencies: ["applications", "application_events", "application_corrections", "raw_emails"],
     description:
@@ -869,10 +877,12 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     endpoints: [
       "PATCH /applications/{application_id}/status",
       "PATCH /applications/{application_id}/events/{event_id}",
+      "POST /applications/{application_id}/split",
       "POST /applications/{application_id}/merge",
     ],
     files: [
       "backend/app/api/applications.py",
+      "backend/app/services/application_corrections.py",
       "backend/app/services/manual_edit.py",
       "backend/app/services/manual_merge.py",
       "backend/app/db/repositories/corrections.py",
@@ -885,17 +895,19 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       expectedSuccessResult:
         "QA can verify the corrected application, moved timeline events, and audit correction records reconcile with the local SQLite tables.",
       navigationPath:
-        "API client -> PATCH /applications/{application_id}/status, PATCH /applications/{application_id}/events/{event_id}, or POST /applications/{application_id}/merge",
+        "API client -> PATCH /applications/{application_id}/status, PATCH /applications/{application_id}/events/{event_id}, POST /applications/{application_id}/split, or POST /applications/{application_id}/merge",
       prerequisites: ["Backend running", "SQLite database with application, event, and correction fixtures"],
       qaValidationPoints: [
         "Status edits return an updated ApplicationRecord with manual_lock=true and a status_edit correction.",
         "Event edits reject no-op changes and missing source emails with typed public API errors.",
+        "Split requests move selected events into a new manually locked application and record a split correction.",
         "Merge requests move source events into the target application, delete the source application, and record a merge correction.",
       ],
       steps: [
         "Seed at least two application records and one event timeline into local SQLite.",
         "Call PATCH /applications/{application_id}/status with a corrected current_status and optional reason.",
         "Call PATCH /applications/{application_id}/events/{event_id} with a changed event field and verify status replay.",
+        "Call POST /applications/{application_id}/split with selected_event_ids and target application fields.",
         "Call POST /applications/{application_id}/merge with source_application_id for a duplicate record.",
       ],
     },
@@ -908,8 +920,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "DashboardPage", type: "component" },
       { label: "PATCH /applications/{application_id}/status", type: "api" },
       { label: "PATCH /applications/{application_id}/events/{event_id}", type: "api" },
+      { label: "POST /applications/{application_id}/split", type: "api" },
       { label: "POST /applications/{application_id}/merge", type: "api" },
       { label: "applications router", type: "controller" },
+      { label: "ApplicationCorrectionService", type: "service" },
       { label: "ManualApplicationEditService", type: "service" },
       { label: "ManualApplicationMergeService", type: "service" },
       { label: "applications", type: "database" },
@@ -928,11 +942,13 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       exampleInputs: [
         "current_status=interview&reason=Corrected from email review",
         "event_type=rejection for an existing event ID",
+        "selected_event_ids=event-1,event-2 for a misgrouped application",
         "source_application_id=duplicate-application-id",
       ],
       expectedOutputs: [
         "ApplicationStatusEditResponse with manual_lock=true",
         "ApplicationEventEditResponse with replayed current status",
+        "ApplicationSplitResponse with a new manually locked application and split correction",
         "ApplicationMergeResponse with moved_event_count and merge correction",
       ],
       requiredSetup: ["Backend app test client", "Application, event, raw email, and correction fixtures in local SQLite"],
