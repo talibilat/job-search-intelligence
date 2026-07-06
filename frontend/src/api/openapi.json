@@ -531,6 +531,279 @@
         ],
         "type": "string"
       },
+      "ApplicationSplitNewApplication": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "minLength": 1,
+            "title": "Company",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "role_title": {
+            "minLength": 1,
+            "title": "Role Title",
+            "type": "string"
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Max"
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Min"
+          },
+          "seniority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seniority"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ApplicationSource",
+            "default": "other"
+          },
+          "sponsorship": {
+            "$ref": "#/components/schemas/SponsorshipStatus",
+            "default": "unknown"
+          },
+          "tech_stack": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tech Stack",
+            "type": "array"
+          },
+          "work_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "company",
+          "role_title"
+        ],
+        "title": "ApplicationSplitNewApplication",
+        "type": "object"
+      },
+      "ApplicationSplitRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Event Ids",
+            "type": "array"
+          },
+          "new_application": {
+            "$ref": "#/components/schemas/ApplicationSplitNewApplication"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source_application": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplicationSplitSourceApplication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "event_ids",
+          "new_application"
+        ],
+        "title": "ApplicationSplitRequest",
+        "type": "object"
+      },
+      "ApplicationSplitResponse": {
+        "properties": {
+          "correction": {
+            "$ref": "#/components/schemas/ApplicationCorrectionRecord"
+          },
+          "moved_events": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationEventRecord"
+            },
+            "title": "Moved Events",
+            "type": "array"
+          },
+          "new_application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          },
+          "source_application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          }
+        },
+        "required": [
+          "source_application",
+          "new_application",
+          "moved_events",
+          "correction"
+        ],
+        "title": "ApplicationSplitResponse",
+        "type": "object"
+      },
+      "ApplicationSplitSourceApplication": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "minLength": 1,
+            "title": "Company",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "role_title": {
+            "minLength": 1,
+            "title": "Role Title",
+            "type": "string"
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Max"
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Min"
+          },
+          "seniority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seniority"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ApplicationSource",
+            "title": "Source"
+          },
+          "sponsorship": {
+            "$ref": "#/components/schemas/SponsorshipStatus",
+            "title": "Sponsorship"
+          },
+          "tech_stack": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tech Stack",
+            "type": "array"
+          },
+          "work_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ApplicationSplitSourceApplication",
+        "type": "object"
+      },
       "ApplicationStatus": {
         "enum": [
           "applied",
@@ -2342,6 +2615,79 @@
           }
         },
         "summary": "Merge Duplicate Applications",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/applications/{application_id}/split": {
+      "post": {
+        "description": "Splits selected events out of an incorrectly grouped application into a deterministic manually locked application, locks the source application, recalculates timeline dates, derives target status from moved events, and records an audited manual correction.",
+        "operationId": "split_application_applications__application_id__split_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationSplitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationSplitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Application not found."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Application split conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Split Application",
         "tags": [
           "applications"
         ]

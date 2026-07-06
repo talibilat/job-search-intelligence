@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import (
+    get_application_correction_service,
     get_application_detail_service,
     get_application_events_service,
     get_manual_edit_service,
@@ -19,15 +20,26 @@ from app.models import (
     ApplicationMergeRequest,
     ApplicationMergeResponse,
     ApplicationRecord,
+    ApplicationSplitRequest,
+    ApplicationSplitResponse,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
 )
 from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
+from app.services.application_corrections import (
+    ApplicationCorrectionService,
+    ApplicationSplitConflictError,
+)
+from app.services.application_corrections import (
+    ApplicationNotFoundError as ApplicationSplitNotFoundError,
+)
 from app.services.applications import (
     ApplicationDetailService,
     ApplicationEventsService,
     ApplicationFilterValidationError,
-    ApplicationNotFoundError,
+)
+from app.services.applications import (
+    ApplicationNotFoundError as ApplicationReadNotFoundError,
 )
 from app.services.manual_edit import (
     ManualApplicationEditService,
@@ -112,7 +124,7 @@ def get_application_detail(
 ) -> ApplicationRecord:
     try:
         return service.get_application(id)
-    except ApplicationNotFoundError as error:
+    except ApplicationReadNotFoundError as error:
         raise ApiError(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,
@@ -136,7 +148,7 @@ def get_application_events(
 ) -> list[ApplicationEventRecord]:
     try:
         return service.list_application_events(id)
-    except ApplicationNotFoundError as error:
+    except ApplicationReadNotFoundError as error:
         raise ApiError(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,
@@ -230,6 +242,49 @@ def edit_application_event(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,
             message=message,
+        ) from error
+
+
+@router.post(
+    "/{application_id}/split",
+    response_model=ApplicationSplitResponse,
+    summary="Split Application",
+    description=(
+        "Splits selected events out of an incorrectly grouped application into a "
+        "deterministic manually locked application, locks the source application, "
+        "recalculates timeline dates, derives target status from moved events, and "
+        "records an audited manual correction."
+    ),
+    responses={
+        404: {"model": ApiErrorResponse, "description": "Application not found."},
+        409: {"model": ApiErrorResponse, "description": "Application split conflict."},
+        422: {"model": ApiErrorResponse, "description": "Request validation failed."},
+    },
+)
+async def split_application(
+    application_id: str,
+    request: ApplicationSplitRequest,
+    correction_service: Annotated[
+        ApplicationCorrectionService,
+        Depends(get_application_correction_service),
+    ],
+) -> ApplicationSplitResponse:
+    try:
+        return correction_service.split_application(
+            application_id=application_id,
+            request=request,
+        )
+    except ApplicationSplitNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message=error.public_message,
+        ) from error
+    except ApplicationSplitConflictError as error:
+        raise ApiError(
+            status_code=409,
+            code=ApiErrorCode.CONFLICT,
+            message=error.public_message,
         ) from error
 
 

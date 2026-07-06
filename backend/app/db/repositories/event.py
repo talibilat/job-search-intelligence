@@ -34,7 +34,9 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         application_id: str,
     ) -> list[ApplicationEventRecord]:
         """Return the persisted timeline for one application in event order."""
+        return self.list_for_application(application_id)
 
+    def list_for_application(self, application_id: str) -> list[ApplicationEventRecord]:
         return self.fetch_all(
             """
             SELECT
@@ -54,6 +56,38 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                 application_events.id
             """,
             (application_id,),
+        )
+
+    def list_by_ids_for_application(
+        self,
+        *,
+        application_id: str,
+        event_ids: list[str],
+    ) -> list[ApplicationEventRecord]:
+        if not event_ids:
+            return []
+
+        placeholders = ", ".join("?" for _ in event_ids)
+        return self.fetch_all(
+            f"""
+            SELECT
+                application_events.*,
+                raw_emails.sent_at AS email_sent_at,
+                email_classifications.classified_at AS classification_classified_at
+            FROM application_events
+            LEFT JOIN raw_emails
+                ON raw_emails.id = application_events.email_id
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = application_events.email_id
+            WHERE application_events.application_id = ?
+              AND application_events.id IN ({placeholders})
+            ORDER BY
+                application_events.event_at,
+                raw_emails.sent_at,
+                email_classifications.classified_at,
+                application_events.id
+            """,
+            (application_id, *event_ids),
         )
 
     def upsert_event(
@@ -223,6 +257,34 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                 WHERE application_id = ?
                 """,
                 (target_application_id, source_application_id),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount
+
+    def reassign_events(
+        self,
+        *,
+        event_ids: list[str],
+        from_application_id: str,
+        to_application_id: str,
+    ) -> int:
+        """Move existing events from one application timeline to another."""
+
+        if not event_ids:
+            return 0
+
+        placeholders = ", ".join("?" for _ in event_ids)
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                f"""
+                UPDATE application_events
+                SET application_id = ?
+                WHERE application_id = ?
+                  AND id IN ({placeholders})
+                """,
+                (to_application_id, from_application_id, *event_ids),
             )
         if should_commit:
             self.connection.commit()

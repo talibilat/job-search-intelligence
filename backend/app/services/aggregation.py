@@ -363,11 +363,35 @@ def _derive_current_status(
     group: list[_EnrichedExtraction],
     existing_events: list[ApplicationEventRecord],
 ) -> ApplicationStatus:
-    current_status: ApplicationStatus = "applied"
-    for event in sorted(
+    return derive_current_status_from_event_timeline(
         _collect_status_timeline(group, existing_events),
-        key=_status_timeline_sort_key,
-    ):
+    )
+
+
+def derive_current_status_from_events(
+    events: list[ApplicationEventRecord],
+) -> ApplicationStatus:
+    return derive_current_status_from_event_timeline(
+        [
+            _StatusTimelineEvent(
+                event_at=event.event_at,
+                email_sent_at=event.email_sent_at or event.event_at,
+                classified_at=(
+                    event.classification_classified_at or event.email_sent_at or event.event_at
+                ),
+                event_type=event.event_type,
+                extracted_status=event.extracted_status,
+            )
+            for event in events
+        ],
+    )
+
+
+def derive_current_status_from_event_timeline(
+    events: list[_StatusTimelineEvent],
+) -> ApplicationStatus:
+    current_status: ApplicationStatus = "applied"
+    for event in sorted(events, key=_status_timeline_sort_key):
         event_status = _status_for_event_type(event.event_type, event.extracted_status)
         if event_status is not None:
             current_status = event_status
