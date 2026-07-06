@@ -138,17 +138,20 @@ export interface TabItem {
 }
 
 export interface TabsProps {
+  activeItemId?: string;
   className?: string;
   defaultItemId?: string;
   items: readonly TabItem[];
   label: string;
+  onItemChange?: (itemId: string) => void;
 }
 
 /** Keyboard-operable tab set with roving focus across enabled tabs. */
-export function Tabs({ className, defaultItemId, items, label }: TabsProps) {
+export function Tabs({ activeItemId, className, defaultItemId, items, label, onItemChange }: TabsProps) {
   const baseId = useId();
   const firstEnabledItem = items.find((item) => !item.disabled) ?? items[0];
-  const [activeId, setActiveId] = useState(defaultItemId ?? firstEnabledItem?.id);
+  const [uncontrolledActiveId, setUncontrolledActiveId] = useState(defaultItemId ?? firstEnabledItem?.id);
+  const activeId = activeItemId ?? uncontrolledActiveId;
   const enabledItems = items.filter((item) => !item.disabled);
   const activeItem =
     items.find((item) => item.id === activeId && !item.disabled) ?? firstEnabledItem;
@@ -166,7 +169,8 @@ export function Tabs({ className, defaultItemId, items, label }: TabsProps) {
       return;
     }
 
-    setActiveId(item.id);
+    setUncontrolledActiveId(item.id);
+    onItemChange?.(item.id);
     requestAnimationFrame(() => document.getElementById(getTabId(item))?.focus());
   }
 

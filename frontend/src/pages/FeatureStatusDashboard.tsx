@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { FormField, Tabs, TextInput } from "../components/ui";
 import {
@@ -13,6 +13,41 @@ const areaLabels: Record<FeatureArea, string> = {
   backend: "Backend",
   frontend: "Frontend",
 };
+
+type FeatureTab = FeatureArea;
+type FeatureStatusFilter = "all" | FeatureStatus;
+type FeatureTestableFilter = "all" | "no" | "yes";
+
+const featureStatuses = new Set<string>([...Object.keys(featureStatusLabels), "all"]);
+const featureTestableFilters = new Set<string>(["all", "no", "yes"]);
+const featureTabs = new Set<string>(["frontend", "backend"]);
+
+function queryValue(searchParams: URLSearchParams, key: string) {
+  return searchParams.get(key)?.trim() ?? "";
+}
+
+function queryEnumValue<TValue extends string>(
+  searchParams: URLSearchParams,
+  key: string,
+  allowedValues: ReadonlySet<string>,
+  defaultValue: TValue,
+) {
+  const value = searchParams.get(key);
+
+  return value && allowedValues.has(value) ? (value as TValue) : defaultValue;
+}
+
+function initialFeatureQueryState() {
+  const searchParams = new URLSearchParams(window.location.search);
+
+  return {
+    keyword: queryValue(searchParams, "search"),
+    scope: queryValue(searchParams, "scope"),
+    status: queryEnumValue<FeatureStatusFilter>(searchParams, "status", featureStatuses, "all"),
+    tab: queryEnumValue<FeatureTab>(searchParams, "tab", featureTabs, "frontend"),
+    testable: queryEnumValue<FeatureTestableFilter>(searchParams, "testable", featureTestableFilters, "all"),
+  };
+}
 
 function formatList(items: readonly string[]) {
   return items.length > 0 ? items.join(", ") : "None";
@@ -336,7 +371,7 @@ function BackendTopologySummary({ features }: { features: readonly FeatureStatus
         <dd>{formatList(relationshipLabels(features, "queue"))}</dd>
       </div>
       <div>
-        <dt>External integrations</dt>
+        <dt>Dependencies</dt>
         <dd>{formatList(uniqueList(features.flatMap((feature) => feature.dependencies)))}</dd>
       </div>
       <div>
@@ -430,10 +465,41 @@ function FeatureAreaView({ area, keyword, scope, status, testable }: FeatureArea
 }
 
 export function FeatureStatusDashboard() {
-  const [keyword, setKeyword] = useState("");
-  const [status, setStatus] = useState<"all" | FeatureStatus>("all");
-  const [testable, setTestable] = useState<"all" | "no" | "yes">("all");
-  const [scope, setScope] = useState("");
+  const [initialState] = useState(initialFeatureQueryState);
+  const [keyword, setKeyword] = useState(initialState.keyword);
+  const [status, setStatus] = useState<FeatureStatusFilter>(initialState.status);
+  const [testable, setTestable] = useState<FeatureTestableFilter>(initialState.testable);
+  const [scope, setScope] = useState(initialState.scope);
+  const [activeTab, setActiveTab] = useState<FeatureTab>(initialState.tab);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams();
+
+    searchParams.set("tab", activeTab);
+
+    if (keyword) {
+      searchParams.set("search", keyword);
+    }
+
+    if (status !== "all") {
+      searchParams.set("status", status);
+    }
+
+    if (testable !== "all") {
+      searchParams.set("testable", testable);
+    }
+
+    if (scope) {
+      searchParams.set("scope", scope);
+    }
+
+    const nextSearch = searchParams.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`;
+
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+      window.history.replaceState({}, "", nextUrl);
+    }
+  }, [activeTab, keyword, scope, status, testable]);
 
   return (
     <main aria-labelledby="feature-status-title" className="app-shell feature-status-shell">
@@ -485,6 +551,7 @@ export function FeatureStatusDashboard() {
       </section>
 
       <Tabs
+        activeItemId={activeTab}
         className="feature-status-tabs"
         items={[
           {
@@ -515,6 +582,7 @@ export function FeatureStatusDashboard() {
           },
         ]}
         label="Feature status views"
+        onItemChange={(itemId) => setActiveTab(itemId as FeatureTab)}
       />
     </main>
   );

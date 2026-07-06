@@ -514,14 +514,16 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
   {
     area: "backend",
     assignedModules: ["backend/app/api/provider_config.py", "backend/app/services/provider_config.py"],
-    blockers: [],
+    blockers: [
+      "LLM health checks remain blocked until the config route is wired to a configured provider adapter.",
+    ],
     components: ["SetupPage"],
     connectedModules: ["First-run setup shell", "ProviderRegistry", "LLM provider adapters"],
     completedDate: "2026-07-05",
     dependencies: ["Provider registry", "AppSettings", "SecretStore metadata", "LLMProvider adapter"],
     description:
-      "Provider configuration API that exposes non-secret provider settings, validates provider updates, recommends classification modes, and checks configured LLM provider health.",
-    endpoints: ["GET /config/providers", "PUT /config/providers", "POST /config/providers/llm/health"],
+      "Provider configuration API that exposes non-secret provider settings, validates provider updates, and recommends classification modes.",
+    endpoints: ["GET /config/providers", "PUT /config/providers"],
     files: [
       "backend/app/api/provider_config.py",
       "backend/app/services/provider_config.py",
@@ -530,11 +532,11 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     ],
     howToUse: {
       expectedBehaviour:
-        "The API returns only public provider metadata, applies validated in-process config updates, and reports LLM health through the configured provider adapter.",
+        "The API returns only public provider metadata and applies validated in-process config updates while LLM health checks remain blocked.",
       expectedSuccessResult:
         "The setup UI can display supported providers and recommendations without exposing API keys or OAuth secrets.",
       navigationPath: "API client -> GET /config/providers",
-      prerequisites: ["Backend running", "Configured provider registry", "LLM provider settings for health checks"],
+      prerequisites: ["Backend running", "Configured provider registry"],
       qaValidationPoints: [
         "Provider responses include secret requirement refs but never secret values.",
         "Changing LLM provider updates the recommended classification mode when no explicit mode is provided.",
@@ -543,25 +545,27 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       steps: [
         "Call GET /config/providers to inspect current provider choices.",
         "Call PUT /config/providers with a valid provider or model setting update.",
-        "Call POST /config/providers/llm/health after configuring an LLM provider adapter.",
+        "Do not treat POST /config/providers/llm/health as a successful QA path until the provider adapter dependency is wired.",
       ],
     },
     id: "backend-provider-config-api",
     implementationStatus:
-      "Implemented with thin FastAPI config routes, Pydantic DTOs, registry validation, and public-safe provider health errors.",
+      "Implemented with thin FastAPI config routes, Pydantic DTOs, registry validation, and provider recommendation logic; LLM health-check success remains blocked.",
     name: "Provider configuration API",
     relationship: [
       { label: "Setup", type: "screen" },
       { label: "SetupPage", type: "component" },
       { label: "GET /config/providers", type: "api" },
       { label: "PUT /config/providers", type: "api" },
-      { label: "POST /config/providers/llm/health", type: "api" },
+      { label: "Future POST /config/providers/llm/health", type: "planned_api" },
       { label: "config router", type: "controller" },
       { label: "ProviderConfigService", type: "service" },
       { label: "AppSettings", type: "runtime_config" },
       { label: "LLM health check", type: "worker" },
     ],
-    remainingWork: [],
+    remainingWork: [
+      "Wire POST /config/providers/llm/health to a real configured LLM provider adapter before marking the health-check path completed.",
+    ],
     routes: [],
     screens: ["Setup"],
     sharedUi: [],
@@ -574,9 +578,9 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       expectedOutputs: [
         "ProviderConfigResponse",
         "recommended_classification_mode=local for Ollama",
-        "public-safe health response or typed provider configuration error",
+        "public-safe provider configuration response",
       ],
-      requiredSetup: ["Backend app test client", "Configured LLM provider adapter for health checks"],
+      requiredSetup: ["Backend app test client"],
     },
   },
   {

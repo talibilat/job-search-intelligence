@@ -538,7 +538,8 @@ describe("App", () => {
     expect(screen.getByText("Background jobs")).toBeTruthy();
     expect(screen.getByText("Workers")).toBeTruthy();
     expect(screen.getByText("Queues")).toBeTruthy();
-    expect(screen.getByText("External integrations")).toBeTruthy();
+    expect(screen.getAllByText("Dependencies").length).toBeGreaterThan(0);
+    expect(screen.queryByText("External integrations")).toBeNull();
     expect(screen.getByText("Frontend consumers")).toBeTruthy();
   });
 
@@ -590,12 +591,21 @@ describe("App", () => {
     expect(screen.getByText("How to use Local data wipe API")).toBeTruthy();
     expect(screen.getAllByText("POST /local-data/wipe").length).toBeGreaterThan(0);
 
+    const providerConfigApi = screen.getByText("Provider configuration API").closest("article");
+    expect(providerConfigApi).toBeTruthy();
+    expect(within(providerConfigApi!).getByText("Current blockers").parentElement?.textContent).toContain(
+      "LLM health checks remain blocked until the config route is wired to a configured provider adapter.",
+    );
+    expect(within(providerConfigApi!).getByText("Endpoints").parentElement?.textContent).not.toContain(
+      "POST /config/providers/llm/health",
+    );
+
     fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "POST /config/providers/llm/health" },
+      target: { value: "GET /config/providers" },
     });
 
     expect(screen.getByText("Provider configuration API")).toBeTruthy();
-    expect(screen.getAllByText("POST /config/providers/llm/health").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GET /config/providers").length).toBeGreaterThan(0);
     expect(screen.queryByText("Gmail read-only OAuth API")).toBeNull();
     expect(screen.queryByText("Manual sync API")).toBeNull();
     expect(screen.queryByText("Local data wipe API")).toBeNull();
@@ -648,5 +658,38 @@ describe("App", () => {
     expect(screen.getByText("Health check API")).toBeTruthy();
     expect(screen.getAllByText("GET /health").length).toBeGreaterThan(0);
     expect(screen.queryByText("Application manual corrections API")).toBeNull();
+  });
+
+  it("keeps feature status filters and active tab in the route query string", () => {
+    renderAtPath("/features?tab=backend&search=health&status=completed&testable=yes&scope=GET+%2Fhealth");
+
+    expect(screen.getByRole("tab", { name: "Backend", selected: true })).toBeTruthy();
+    expect(screen.getByLabelText<HTMLInputElement>("Search features").value).toBe("health");
+    expect(screen.getByLabelText<HTMLSelectElement>("Status").value).toBe("completed");
+    expect(screen.getByLabelText<HTMLSelectElement>("Testable").value).toBe("yes");
+    expect(screen.getByLabelText<HTMLInputElement>("Module, API, screen, or component").value).toBe("GET /health");
+    expect(screen.getByText("Health check API")).toBeTruthy();
+    expect(screen.queryByText("Provider configuration API")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Search features"), {
+      target: { value: "sync" },
+    });
+    fireEvent.change(screen.getByLabelText("Status"), {
+      target: { value: "all" },
+    });
+    fireEvent.change(screen.getByLabelText("Testable"), {
+      target: { value: "all" },
+    });
+    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
+      target: { value: "POST /sync" },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Frontend" }));
+
+    const queryParams = new URLSearchParams(window.location.search);
+    expect(queryParams.get("tab")).toBe("frontend");
+    expect(queryParams.get("search")).toBe("sync");
+    expect(queryParams.has("status")).toBe(false);
+    expect(queryParams.has("testable")).toBe(false);
+    expect(queryParams.get("scope")).toBe("POST /sync");
   });
 });
