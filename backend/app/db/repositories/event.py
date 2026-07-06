@@ -84,6 +84,7 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                 "event_type": event_type,
                 "event_at": event_at,
                 "extract_note": extract_note,
+                "extracted_status": extracted_status,
             }
         )
         existing = self.get_by_application_and_id(
@@ -100,6 +101,11 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         if existing is None and self._has_manual_event_edit(
             application_id=application_id,
             event_id=id,
+        ):
+            return "manual_conflict"
+        if existing is None and self._has_manual_event_edit_for_source_email(
+            application_id=application_id,
+            email_id=email_id,
         ):
             return "manual_conflict"
 
@@ -141,6 +147,7 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         event_at: str,
         email_id: str | None,
         extract_note: str | None,
+        extracted_status: str | None,
     ) -> None:
         should_commit = not self.connection.in_transaction
         with self.transaction():
@@ -151,7 +158,8 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                     email_id = ?,
                     event_type = ?,
                     event_at = ?,
-                    extract_note = ?
+                    extract_note = ?,
+                    extracted_status = ?
                 WHERE id = ?
                   AND application_id = ?
                 """,
@@ -161,6 +169,7 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                     event_type,
                     event_at,
                     extract_note,
+                    extracted_status,
                     id,
                     application_id,
                 ),
@@ -172,6 +181,30 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         row = self.execute(
             "SELECT 1 FROM raw_emails WHERE id = ? LIMIT 1",
             (email_id,),
+        ).fetchone()
+        return row is not None
+
+    def _has_manual_event_edit_for_source_email(
+        self,
+        *,
+        application_id: str,
+        email_id: str | None,
+    ) -> bool:
+        if email_id is None:
+            return False
+        row = self.execute(
+            """
+            SELECT 1
+            FROM application_corrections
+            WHERE application_id = ?
+              AND correction_type = 'event_edit'
+              AND (
+                json_extract(before_json, '$.event.email_id') = ?
+                OR json_extract(after_json, '$.event.email_id') = ?
+              )
+            LIMIT 1
+            """,
+            (application_id, email_id, email_id),
         ).fetchone()
         return row is not None
 
@@ -231,4 +264,5 @@ def _events_match(
         and existing.event_type == proposed.event_type
         and existing.event_at == proposed.event_at
         and existing.extract_note == proposed.extract_note
+        and existing.extracted_status == proposed.extracted_status
     )

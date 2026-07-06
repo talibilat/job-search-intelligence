@@ -133,6 +133,105 @@ def test_manual_event_edit_updates_timeline_audits_and_blocks_reprocessing_overw
     assert unchanged_outcome == "locked_unchanged"
 
 
+def test_manual_event_edit_blocks_third_identity_for_same_source_email(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1")
+    insert_application(connection, application_id="app-1", current_status="applied")
+    insert_event(
+        connection,
+        event_id="event-1",
+        application_id="app-1",
+        email_id="email-1",
+        event_type="applied",
+        event_at=APPLIED_AT,
+        extract_note=None,
+    )
+    connection.commit()
+
+    result = make_service(connection).edit_event(
+        application_id="app-1",
+        event_id="event-1",
+        event_type="interview_scheduled",
+        event_at=INTERVIEW_AT,
+        reason="The timeline should show the interview invite.",
+    )
+
+    outcome = EventRepository(connection).upsert_event(
+        id=make_event_id(
+            application_id="app-1",
+            email_id="email-1",
+            event_type="rejection",
+            event_at="2026-07-09T09:00:00+00:00",
+        ),
+        application_id="app-1",
+        email_id="email-1",
+        event_type="rejection",
+        event_at="2026-07-09T09:00:00+00:00",
+        extract_note="Rejected after interview.",
+    )
+
+    assert outcome == "manual_conflict"
+    events = EventRepository(connection).list_by_application_id("app-1")
+    assert [event.id for event in events] == [result.event.id]
+
+
+def test_manual_event_edit_replays_application_status(tmp_path: Path) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1")
+    insert_application(connection, application_id="app-1", current_status="applied")
+    insert_event(
+        connection,
+        event_id="event-1",
+        application_id="app-1",
+        email_id="email-1",
+        event_type="applied",
+        event_at=APPLIED_AT,
+        extract_note=None,
+    )
+    connection.commit()
+
+    result = make_service(connection).edit_event(
+        application_id="app-1",
+        event_id="event-1",
+        event_type="interview_scheduled",
+        event_at=INTERVIEW_AT,
+        reason="The event should update the canonical status.",
+    )
+
+    assert result.application.current_status == "interview"
+
+
+def test_manual_event_edit_clears_stale_extracted_status_when_event_type_changes(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1")
+    insert_application(connection, application_id="app-1", current_status="rejected")
+    insert_event(
+        connection,
+        event_id="event-1",
+        application_id="app-1",
+        email_id="email-1",
+        event_type="feedback",
+        event_at=APPLIED_AT,
+        extract_note="Rejected after feedback.",
+        extracted_status="rejected",
+    )
+    connection.commit()
+
+    result = make_service(connection).edit_event(
+        application_id="app-1",
+        event_id="event-1",
+        event_type="applied",
+        reason="This was only an application confirmation.",
+    )
+
+    assert result.event.extracted_status is None
+    assert result.application.current_status == "applied"
+
+
 def test_manual_event_edit_rejects_missing_source_email(tmp_path: Path) -> None:
     connection = migrated_connection(tmp_path)
     insert_raw_email(connection, "email-1")
@@ -276,12 +375,22 @@ def insert_event(
     event_type: str,
     event_at: str,
     extract_note: str | None,
+    extracted_status: str | None = None,
 ) -> None:
     connection.execute(
         """
         INSERT INTO application_events (
-            id, application_id, email_id, event_type, event_at, extract_note
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            id, application_id, email_id, event_type,
+            event_at, extract_note, extracted_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (event_id, application_id, email_id, event_type, event_at, extract_note),
+        (
+            event_id,
+            application_id,
+            email_id,
+            event_type,
+            event_at,
+            extract_note,
+            extracted_status,
+        ),
     )

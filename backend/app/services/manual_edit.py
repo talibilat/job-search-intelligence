@@ -20,6 +20,17 @@ from app.pipeline.aggregate import make_event_id
 type Clock = Callable[[], datetime]
 type MissingManualEditResource = Literal["application", "event"]
 
+_STATUS_BY_EVENT_TYPE: dict[ApplicationEventType, ApplicationStatus | None] = {
+    "applied": "applied",
+    "response": "in_review",
+    "assessment": "assessment",
+    "interview_scheduled": "interview",
+    "feedback": None,
+    "rejection": "rejected",
+    "offer": "offer",
+    "ghost_inferred": "ghosted",
+}
+
 
 class ManualEditNotFoundError(Exception):
     """Raised when a requested manual edit target is missing."""
@@ -145,6 +156,7 @@ class ManualApplicationEditService:
                 event_type=updated_event.event_type,
                 event_at=updated_event.event_at.isoformat(),
                 extract_note=updated_event.extract_note,
+                extracted_status=updated_event.extracted_status,
             )
             stored_event = self._load_event(
                 application_id=application_id,
@@ -156,7 +168,9 @@ class ManualApplicationEditService:
             )
             self._update_application_summary(
                 application=application,
-                current_status=application.current_status,
+                current_status=_derive_current_status(
+                    self._event_repository.list_by_application_id(application_id)
+                ),
                 last_activity_at=last_activity_at,
                 updated_at=now,
             )
@@ -259,6 +273,11 @@ def _build_updated_event(
             event_type=event_type or event.event_type,
             event_at=event_at or event.event_at,
             extract_note=extract_note if should_update_extract_note else event.extract_note,
+            extracted_status=(
+                event.extracted_status
+                if event_type is None or event_type == event.event_type
+                else None
+            ),
         )
     except ValidationError as error:
         raise ManualEditInvalidRequestError("invalid application event edit") from error
@@ -294,6 +313,22 @@ def _event_id_for_updated_event(
         event_type=updated_event.event_type,
         event_at=updated_event.event_at.isoformat(),
     )
+
+
+def _derive_current_status(events: list[ApplicationEventRecord]) -> ApplicationStatus:
+    current_status: ApplicationStatus = "applied"
+    for event in sorted(events, key=lambda item: item.event_at):
+        event_status = _status_for_event(event)
+        if event_status is not None:
+            current_status = event_status
+    return current_status
+
+
+def _status_for_event(event: ApplicationEventRecord) -> ApplicationStatus | None:
+    event_status = _STATUS_BY_EVENT_TYPE[event.event_type]
+    if event_status is not None:
+        return event_status
+    return event.extracted_status
 
 
 def _json_object(
