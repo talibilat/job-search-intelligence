@@ -534,6 +534,7 @@ describe("App", () => {
     expect(screen.getByText("Controllers")).toBeTruthy();
     expect(screen.getByText("Services")).toBeTruthy();
     expect(screen.getByText("Database models")).toBeTruthy();
+    expect(screen.getByText("DTOs and models")).toBeTruthy();
     expect(screen.getByText("Background jobs")).toBeTruthy();
     expect(screen.getByText("Workers")).toBeTruthy();
     expect(screen.getByText("Queues")).toBeTruthy();
@@ -557,6 +558,20 @@ describe("App", () => {
     expect(runtimeAndConfig?.textContent).toContain("FastAPI runtime");
     expect(runtimeAndConfig?.textContent).toContain("Settings");
     expect(runtimeAndConfig?.textContent).toContain("AppSettings");
+  });
+
+  it("separates backend DTOs from services", () => {
+    renderAtPath("/features");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
+
+    const services = screen.getByText("Services").parentElement;
+    expect(services).toBeTruthy();
+    expect(services?.textContent).not.toContain("HealthResponse");
+
+    const dtosAndModels = screen.getByText("DTOs and models").parentElement;
+    expect(dtosAndModels).toBeTruthy();
+    expect(dtosAndModels?.textContent).toContain("HealthResponse");
   });
 
   it("surfaces implemented backend APIs with testing details and API filtering", () => {

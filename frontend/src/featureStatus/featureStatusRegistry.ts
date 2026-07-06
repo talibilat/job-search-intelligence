@@ -15,6 +15,7 @@ export interface FeatureRelationshipStep {
     | "component"
     | "controller"
     | "database"
+    | "dto_model"
     | "frontend_update"
     | "planned_api"
     | "queue"
@@ -438,7 +439,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "Developer API", type: "screen" },
       { label: "GET /health", type: "api" },
       { label: "health router", type: "controller" },
-      { label: "HealthResponse", type: "service" },
+      { label: "HealthResponse", type: "dto_model" },
       { label: "FastAPI runtime", type: "runtime_config" },
     ],
     remainingWork: [],

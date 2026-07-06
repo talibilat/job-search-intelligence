@@ -316,6 +316,10 @@ function BackendTopologySummary({ features }: { features: readonly FeatureStatus
         <dd>{formatList(relationshipLabels(features, "database"))}</dd>
       </div>
       <div>
+        <dt>DTOs and models</dt>
+        <dd>{formatList(relationshipLabels(features, "dto_model"))}</dd>
+      </div>
+      <div>
         <dt>Runtime and config</dt>
         <dd>{formatList(relationshipLabels(features, "runtime_config"))}</dd>
       </div>
