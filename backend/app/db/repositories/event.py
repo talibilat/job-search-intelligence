@@ -94,6 +94,11 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
             if _events_match(existing=existing, proposed=proposed):
                 return "locked_unchanged"
             return "manual_conflict"
+        if existing is None and self._has_manual_event_edit(
+            application_id=application_id,
+            event_id=id,
+        ):
+            return "manual_conflict"
 
         should_commit = not self.connection.in_transaction
         with self.transaction():
@@ -127,6 +132,7 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         self,
         *,
         id: str,
+        new_id: str,
         application_id: str,
         event_type: str,
         event_at: str,
@@ -138,7 +144,8 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
             self.execute(
                 """
                 UPDATE application_events
-                SET email_id = ?,
+                SET id = ?,
+                    email_id = ?,
                     event_type = ?,
                     event_at = ?,
                     extract_note = ?
@@ -146,6 +153,7 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                   AND application_id = ?
                 """,
                 (
+                    new_id,
                     email_id,
                     event_type,
                     event_at,
@@ -156,6 +164,13 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
             )
         if should_commit:
             self.connection.commit()
+
+    def raw_email_exists(self, email_id: str) -> bool:
+        row = self.execute(
+            "SELECT 1 FROM raw_emails WHERE id = ? LIMIT 1",
+            (email_id,),
+        ).fetchone()
+        return row is not None
 
     def reassign_application_events(
         self,

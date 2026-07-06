@@ -9,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 from app.config import AppSettings, get_settings
 from app.main import create_app
+from app.pipeline.aggregate import make_event_id
 from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -68,13 +69,67 @@ def test_patch_application_event_edits_timeline_event_with_audit(tmp_path: Path)
 
     assert response.status_code == 200
     body = response.json()
-    assert body["event"]["id"] == "event-1"
+    assert body["event"]["id"] == make_event_id(
+        application_id="app-1",
+        email_id="email-1",
+        event_type="interview_scheduled",
+        event_at="2026-07-07T14:00:00+00:00",
+    )
     assert body["event"]["event_type"] == "interview_scheduled"
     assert body["event"]["event_at"] == "2026-07-07T14:00:00Z"
     assert body["event"]["extract_note"] == "Recruiter scheduled a phone screen."
     assert body["application"]["manual_lock"] is True
     assert body["application"]["last_activity_at"] == "2026-07-07T14:00:00Z"
     assert body["correction"]["correction_type"] == "event_edit"
+
+
+def test_patch_application_event_rejects_missing_source_email(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, "email-1")
+        insert_application(connection, application_id="app-1", current_status="applied")
+        insert_event(
+            connection,
+            event_id="event-1",
+            application_id="app-1",
+            email_id="email-1",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+
+    client = create_test_client(database_path)
+
+    response = client.patch(
+        "/applications/app-1/events/event-1",
+        json={"email_id": "missing-email"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == "Application event edit is invalid."
+
+
+def test_patch_application_event_rejects_explicit_null_event_at(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, "email-1")
+        insert_application(connection, application_id="app-1", current_status="applied")
+        insert_event(
+            connection,
+            event_id="event-1",
+            application_id="app-1",
+            email_id="email-1",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+
+    client = create_test_client(database_path)
+
+    response = client.patch(
+        "/applications/app-1/events/event-1",
+        json={"event_at": None},
+    )
+
+    assert response.status_code == 422
 
 
 def test_patch_application_event_returns_typed_not_found_error(tmp_path: Path) -> None:

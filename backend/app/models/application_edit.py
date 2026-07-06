@@ -34,6 +34,12 @@ class ApplicationEventEditRequest(BaseModel):
         if not self.model_fields_set.intersection(_EVENT_EDIT_FIELDS):
             msg = "At least one event field must be edited."
             raise ValueError(msg)
+        if "event_type" in self.model_fields_set and self.event_type is None:
+            msg = "event_type cannot be null."
+            raise ValueError(msg)
+        if "event_at" in self.model_fields_set and self.event_at is None:
+            msg = "event_at cannot be null."
+            raise ValueError(msg)
         return self
 
 

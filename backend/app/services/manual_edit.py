@@ -15,6 +15,7 @@ from app.models.application_edit import (
 from app.models.correction import JsonObject
 from app.models.event import ApplicationEventRecord, ApplicationEventType
 from app.models.records import ApplicationCorrectionRecord, ApplicationRecord
+from app.pipeline.aggregate import make_event_id
 
 type Clock = Callable[[], datetime]
 type MissingManualEditResource = Literal["application", "event"]
@@ -118,6 +119,19 @@ class ManualApplicationEditService:
                 update_email_id=update_email_id,
                 update_extract_note=update_extract_note,
             )
+            if _events_match(event, updated_event):
+                raise ManualEditInvalidRequestError("application event edit is a no-op")
+            self._validate_event_email(updated_event)
+            new_event_id = _event_id_for_updated_event(
+                original_event=event,
+                updated_event=updated_event,
+            )
+            if new_event_id != event.id and self._event_repository.get_by_application_and_id(
+                application_id=application_id,
+                event_id=new_event_id,
+            ) is not None:
+                raise ManualEditInvalidRequestError("application event already exists")
+            updated_event = updated_event.model_copy(update={"id": new_event_id})
             before_json: JsonObject = {
                 "application": _json_object(application),
                 "event": _json_object(event),
@@ -125,11 +139,16 @@ class ManualApplicationEditService:
 
             self._event_repository.update_event(
                 id=event_id,
+                new_id=updated_event.id,
                 application_id=application_id,
                 email_id=updated_event.email_id,
                 event_type=updated_event.event_type,
                 event_at=updated_event.event_at.isoformat(),
                 extract_note=updated_event.extract_note,
+            )
+            stored_event = self._load_event(
+                application_id=application_id,
+                event_id=updated_event.id,
             )
             last_activity_at = max(
                 event.event_at
@@ -142,7 +161,6 @@ class ManualApplicationEditService:
                 updated_at=now,
             )
             updated_application = self._load_application(application_id)
-            stored_event = self._load_event(application_id=application_id, event_id=event_id)
             correction = self._correction_repository.create_correction(
                 application_id=application_id,
                 correction_type="event_edit",
@@ -181,6 +199,12 @@ class ManualApplicationEditService:
         if event is None:
             raise ManualEditNotFoundError(resource="event", resource_id=event_id)
         return event
+
+    def _validate_event_email(self, event: ApplicationEventRecord) -> None:
+        if event.email_id is None:
+            return
+        if not self._event_repository.raw_email_exists(event.email_id):
+            raise ManualEditInvalidRequestError("application event email does not exist")
 
     def _update_application_summary(
         self,
@@ -238,6 +262,38 @@ def _build_updated_event(
         )
     except ValidationError as error:
         raise ManualEditInvalidRequestError("invalid application event edit") from error
+
+
+def _events_match(
+    original: ApplicationEventRecord,
+    updated: ApplicationEventRecord,
+) -> bool:
+    return (
+        original.email_id == updated.email_id
+        and original.event_type == updated.event_type
+        and original.event_at == updated.event_at
+        and original.extract_note == updated.extract_note
+    )
+
+
+def _event_id_for_updated_event(
+    *,
+    original_event: ApplicationEventRecord,
+    updated_event: ApplicationEventRecord,
+) -> str:
+    if (
+        original_event.email_id == updated_event.email_id
+        and original_event.event_type == updated_event.event_type
+        and original_event.event_at == updated_event.event_at
+    ):
+        return original_event.id
+
+    return make_event_id(
+        application_id=updated_event.application_id,
+        email_id=updated_event.email_id,
+        event_type=updated_event.event_type,
+        event_at=updated_event.event_at.isoformat(),
+    )
 
 
 def _json_object(

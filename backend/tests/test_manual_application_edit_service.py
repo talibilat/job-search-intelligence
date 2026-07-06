@@ -6,10 +6,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from app.db.repositories import ApplicationRepository, CorrectionRepository, EventRepository
-from app.services.manual_edit import ManualApplicationEditService
+from app.pipeline.aggregate import make_event_id
+from app.services.manual_edit import ManualApplicationEditService, ManualEditInvalidRequestError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 7, 6, 9, 30, tzinfo=UTC)
@@ -83,7 +85,13 @@ def test_manual_event_edit_updates_timeline_audits_and_blocks_reprocessing_overw
         reason="The timeline should show the interview invite.",
     )
 
-    assert result.event.id == "event-1"
+    expected_event_id = make_event_id(
+        application_id="app-1",
+        email_id="email-1",
+        event_type="interview_scheduled",
+        event_at=INTERVIEW_AT.isoformat(),
+    )
+    assert result.event.id == expected_event_id
     assert result.event.event_type == "interview_scheduled"
     assert result.event.event_at == INTERVIEW_AT
     assert result.event.extract_note == "Recruiter scheduled a phone screen."
@@ -107,12 +115,75 @@ def test_manual_event_edit_updates_timeline_audits_and_blocks_reprocessing_overw
     )
     stored_event = EventRepository(connection).get_by_application_and_id(
         application_id="app-1",
-        event_id="event-1",
+        event_id=expected_event_id,
     )
     assert outcome == "manual_conflict"
     assert stored_event is not None
     assert stored_event.event_type == "interview_scheduled"
     assert stored_event.event_at == INTERVIEW_AT
+
+    unchanged_outcome = EventRepository(connection).upsert_event(
+        id=expected_event_id,
+        application_id="app-1",
+        email_id="email-1",
+        event_type="interview_scheduled",
+        event_at=INTERVIEW_AT.isoformat(),
+        extract_note="Recruiter scheduled a phone screen.",
+    )
+    assert unchanged_outcome == "locked_unchanged"
+
+
+def test_manual_event_edit_rejects_missing_source_email(tmp_path: Path) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1")
+    insert_application(connection, application_id="app-1", current_status="applied")
+    insert_event(
+        connection,
+        event_id="event-1",
+        application_id="app-1",
+        email_id="email-1",
+        event_type="applied",
+        event_at=APPLIED_AT,
+        extract_note=None,
+    )
+    connection.commit()
+
+    service = make_service(connection)
+
+    with pytest.raises(ManualEditInvalidRequestError):
+        service.edit_event(
+            application_id="app-1",
+            event_id="event-1",
+            email_id="missing-email",
+            reason="Point this event at another source email.",
+            update_email_id=True,
+        )
+
+
+def test_manual_event_edit_rejects_no_op(tmp_path: Path) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1")
+    insert_application(connection, application_id="app-1", current_status="applied")
+    insert_event(
+        connection,
+        event_id="event-1",
+        application_id="app-1",
+        email_id="email-1",
+        event_type="applied",
+        event_at=APPLIED_AT,
+        extract_note=None,
+    )
+    connection.commit()
+
+    service = make_service(connection)
+
+    with pytest.raises(ManualEditInvalidRequestError):
+        service.edit_event(
+            application_id="app-1",
+            event_id="event-1",
+            event_type="applied",
+            reason="No event data changed.",
+        )
 
 
 def migrated_connection(tmp_path: Path) -> sqlite3.Connection:
