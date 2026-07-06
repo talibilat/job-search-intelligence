@@ -536,6 +536,24 @@ export interface EmailSyncStatus {
   state: EmailSyncRunState;
 }
 
+/**
+ * Public result for one ghost-inference run.
+ */
+export interface GhostInferenceRunResponse {
+  /** @minimum 0 */
+  applications_ghosted: number;
+  evaluated_at: string;
+  /** @minimum 0 */
+  ghost_retraction_count: number;
+  ghosted_application_ids: string[];
+  manual_conflict_application_ids: string[];
+  /** @minimum 0 */
+  manual_conflict_count: number;
+  retracted_application_ids: string[];
+  /** @minimum 1 */
+  threshold_days: number;
+}
+
 export type ValidationErrorCtx = { [key: string]: unknown };
 
 export interface ValidationError {
@@ -801,6 +819,48 @@ export const listApplicationsApplicationsGet = async (
     status: res.status,
     headers: res.headers,
   } as listApplicationsApplicationsGetResponse;
+};
+
+export type runGhostInferenceApplicationsGhostInferencePostResponse200 = {
+  data: GhostInferenceRunResponse;
+  status: 200;
+};
+
+export type runGhostInferenceApplicationsGhostInferencePostResponseSuccess =
+  runGhostInferenceApplicationsGhostInferencePostResponse200 & {
+    headers: Headers;
+  };
+export type runGhostInferenceApplicationsGhostInferencePostResponse =
+  runGhostInferenceApplicationsGhostInferencePostResponseSuccess;
+
+export const getRunGhostInferenceApplicationsGhostInferencePostUrl = () => {
+  return `/applications/ghost-inference`;
+};
+
+/**
+ * Marks applied applications as ghosted when their event timeline has no response after the configured silence threshold.
+ * @summary Run Ghost Inference
+ */
+export const runGhostInferenceApplicationsGhostInferencePost = async (
+  options?: RequestInit,
+): Promise<runGhostInferenceApplicationsGhostInferencePostResponse> => {
+  const res = await fetch(
+    getRunGhostInferenceApplicationsGhostInferencePostUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: runGhostInferenceApplicationsGhostInferencePostResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as runGhostInferenceApplicationsGhostInferencePostResponse;
 };
 
 export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse200 =
