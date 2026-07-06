@@ -93,6 +93,172 @@
         "title": "ApiErrorResponse",
         "type": "object"
       },
+      "ApplicationRecord": {
+        "properties": {
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "current_status": {
+            "$ref": "#/components/schemas/ApplicationStatus"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_activity_at": {
+            "format": "date-time",
+            "title": "Last Activity At",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "manual_lock": {
+            "title": "Manual Lock",
+            "type": "boolean"
+          },
+          "role_title": {
+            "title": "Role Title",
+            "type": "string"
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Max"
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Min"
+          },
+          "seniority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seniority"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ApplicationSource"
+          },
+          "sponsorship": {
+            "$ref": "#/components/schemas/SponsorshipStatus"
+          },
+          "tech_stack": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tech Stack",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "work_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "company",
+          "role_title",
+          "source",
+          "first_seen_at",
+          "current_status",
+          "currency",
+          "location",
+          "work_mode",
+          "seniority",
+          "sponsorship",
+          "tech_stack",
+          "last_activity_at",
+          "manual_lock",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ApplicationRecord",
+        "type": "object"
+      },
+      "ApplicationSource": {
+        "enum": [
+          "linkedin",
+          "company_site",
+          "indeed",
+          "referral",
+          "other"
+        ],
+        "type": "string"
+      },
+      "ApplicationStatus": {
+        "enum": [
+          "applied",
+          "in_review",
+          "assessment",
+          "interview",
+          "offer",
+          "rejected",
+          "ghosted",
+          "withdrawn"
+        ],
+        "type": "string"
+      },
       "ClassificationMode": {
         "enum": [
           "hybrid",
@@ -1392,6 +1558,14 @@
         "title": "SetupSubmitResponse",
         "type": "object"
       },
+      "SponsorshipStatus": {
+        "enum": [
+          "offered",
+          "not_offered",
+          "unknown"
+        ],
+        "type": "string"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1476,6 +1650,14 @@
         ],
         "title": "WipeDataResponse",
         "type": "object"
+      },
+      "WorkMode": {
+        "enum": [
+          "remote",
+          "hybrid",
+          "onsite"
+        ],
+        "type": "string"
       }
     }
   },
@@ -1485,6 +1667,59 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/applications/{id}": {
+      "get": {
+        "description": "Returns one canonical application row from the local SQLite source of truth.",
+        "operationId": "get_application_detail_applications__id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Application Detail",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/auth/gmail": {
       "get": {
         "operationId": "gmail_auth_url_auth_gmail_get",

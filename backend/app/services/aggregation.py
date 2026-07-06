@@ -254,7 +254,8 @@ def _upsert_events(
     for result in group:
         ext = result.extraction
         event_type = ext.event_type or "applied"
-        event_at_str = _event_at_for_result(result).isoformat()
+        event_at = ext.event_at
+        event_at_str = event_at.isoformat() if event_at is not None else _utcnow().isoformat()
         email_id = result.classification_email_id
 
         event_id = make_event_id(

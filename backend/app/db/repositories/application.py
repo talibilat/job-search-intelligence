@@ -11,6 +11,9 @@ from app.models.records import ApplicationRecord
 class ApplicationRepository(BaseRepository[ApplicationRecord]):
     """Repository seam for canonical job applications."""
 
+    def get_by_id(self, application_id: str) -> ApplicationRecord | None:
+        return self.fetch_one("SELECT * FROM applications WHERE id = ?", (application_id,))
+
     def upsert_application(
         self,
         *,
