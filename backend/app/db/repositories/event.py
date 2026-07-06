@@ -71,6 +71,9 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
 
         The deterministic ``id`` (derived from application + event identity
         signals) acts as the conflict target.
+        Events protected by a manual ``event_edit`` correction return
+        ``locked_unchanged`` when unchanged or ``manual_conflict`` when new
+        evidence disagrees, instead of overwriting the edited timeline row.
         """
 
         proposed = ApplicationEventRecord.model_validate(
