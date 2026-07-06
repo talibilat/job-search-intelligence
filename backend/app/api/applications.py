@@ -34,7 +34,7 @@ from app.services.application_corrections import (
     ApplicationSplitConflictError,
 )
 from app.services.application_corrections import (
-    ApplicationNotFoundError as ApplicationSplitNotFoundError,
+    ApplicationNotFoundError as ApplicationCorrectionNotFoundError,
 )
 from app.services.applications import (
     ApplicationDetailService,
@@ -276,7 +276,7 @@ async def reset_application_lock(
             application_id=application_id,
             reason=request.reason,
         )
-    except ApplicationSplitNotFoundError as error:
+    except ApplicationCorrectionNotFoundError as error:
         raise ApiError(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,
@@ -319,7 +319,7 @@ async def split_application(
             application_id=application_id,
             request=request,
         )
-    except ApplicationSplitNotFoundError as error:
+    except ApplicationCorrectionNotFoundError as error:
         raise ApiError(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,

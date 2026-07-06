@@ -81,11 +81,34 @@ class ApplicationCorrectionService:
                     )
 
                 now_iso = self._clock().isoformat()
-                reset = self._application_repository.set_manual_lock(
-                    application_id=application_id,
-                    manual_lock=False,
-                    updated_at=now_iso,
-                )
+                events = self._event_repository.list_for_application(application_id)
+                if events:
+                    first_seen_at, last_activity_at = _event_bounds(events)
+                    reset = self._application_repository.update_timeline_summary(
+                        application_id=application_id,
+                        first_seen_at=first_seen_at.isoformat(),
+                        current_status=_derive_current_status(events),
+                        company=before_application.company,
+                        role_title=before_application.role_title,
+                        source=before_application.source,
+                        salary_min=before_application.salary_min,
+                        salary_max=before_application.salary_max,
+                        currency=before_application.currency,
+                        location=before_application.location,
+                        work_mode=before_application.work_mode,
+                        seniority=before_application.seniority,
+                        sponsorship=before_application.sponsorship,
+                        tech_stack=before_application.tech_stack,
+                        last_activity_at=last_activity_at.isoformat(),
+                        updated_at=now_iso,
+                        manual_lock=False,
+                    )
+                else:
+                    reset = self._application_repository.set_manual_lock(
+                        application_id=application_id,
+                        manual_lock=False,
+                        updated_at=now_iso,
+                    )
                 if not reset:
                     raise ApplicationLockResetConflictError(
                         "Application lock could not be reset.",
@@ -316,7 +339,10 @@ class ApplicationCorrectionService:
             )
 
     def _validate_lock_reset_connection(self) -> None:
-        if self._application_repository.connection is not self._correction_repository.connection:
+        if (
+            self._application_repository.connection is not self._event_repository.connection
+            or self._application_repository.connection is not self._correction_repository.connection
+        ):
             raise ApplicationLockResetConflictError(
                 "Manual lock reset repositories must share one SQLite connection.",
             )
