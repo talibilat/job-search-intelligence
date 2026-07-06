@@ -8,6 +8,7 @@ from app.db.repositories.base import BaseRepository
 from app.models.records import ApplicationEventRecord
 
 type EventUpsertOutcome = Literal["upserted", "locked_unchanged", "manual_conflict"]
+type GhostEventDeleteOutcome = Literal["deleted", "manual_conflict", "not_found"]
 
 
 class EventRepository(BaseRepository[ApplicationEventRecord]):
@@ -289,6 +290,44 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         if should_commit:
             self.connection.commit()
         return cursor.rowcount
+
+    def delete_ghost_inferred_events_for_application(
+        self,
+        application_id: str,
+    ) -> GhostEventDeleteOutcome:
+        ghost_events = self.fetch_all(
+            """
+            SELECT *
+            FROM application_events
+            WHERE application_id = ?
+              AND event_type = 'ghost_inferred'
+            """,
+            (application_id,),
+        )
+        if not ghost_events:
+            return "not_found"
+        if any(
+            self._has_manual_event_edit(
+                application_id=application_id,
+                event_id=event.id,
+            )
+            for event in ghost_events
+        ):
+            return "manual_conflict"
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            self.execute(
+                """
+                DELETE FROM application_events
+                WHERE application_id = ?
+                  AND event_type = 'ghost_inferred'
+                """,
+                (application_id,),
+            )
+        if should_commit:
+            self.connection.commit()
+        return "deleted"
 
     def map_row(self, row: sqlite3.Row) -> ApplicationEventRecord:
         return ApplicationEventRecord.model_validate(row_to_dict(row))

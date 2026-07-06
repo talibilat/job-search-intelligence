@@ -83,6 +83,77 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         sql = f"{sql} ORDER BY first_seen_at DESC, id ASC"
         return self.fetch_all(sql, tuple(parameters))
 
+    def list_ghost_inference_candidates(self, *, cutoff_at: str) -> list[ApplicationRecord]:
+        """Return applied applications whose timeline has no response evidence."""
+
+        return self.fetch_all(
+            """
+            SELECT applications.*
+            FROM applications
+            WHERE EXISTS (
+                SELECT 1
+                FROM application_events
+                WHERE application_events.application_id = applications.id
+                  AND application_events.event_type = 'applied'
+              )
+              AND (
+                SELECT MAX(applied_events.event_at)
+                FROM application_events AS applied_events
+                WHERE applied_events.application_id = applications.id
+                  AND applied_events.event_type = 'applied'
+              ) <= ?
+              AND NOT EXISTS (
+                SELECT 1
+                FROM application_events
+                WHERE application_events.application_id = applications.id
+                  AND application_events.event_type IN (
+                    'ghost_inferred'
+                  )
+              )
+            ORDER BY applications.last_activity_at ASC, applications.id ASC
+            """,
+            (cutoff_at,),
+        )
+
+    def list_applications_with_ghost_inferred_events(self) -> list[ApplicationRecord]:
+        return self.fetch_all(
+            """
+            SELECT DISTINCT applications.*
+            FROM applications
+            INNER JOIN application_events
+                ON application_events.application_id = applications.id
+            WHERE application_events.event_type = 'ghost_inferred'
+            ORDER BY applications.last_activity_at ASC, applications.id ASC
+            """,
+        )
+
+    def update_timeline_status(
+        self,
+        *,
+        application_id: str,
+        current_status: str,
+        last_activity_at: str,
+        updated_at: str,
+    ) -> bool:
+        """Update only timeline-derived status fields for an unlocked application."""
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                UPDATE applications
+                SET current_status = ?,
+                    last_activity_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                  AND manual_lock = 0
+                """,
+                (current_status, last_activity_at, updated_at, application_id),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount > 0
+
     def upsert_application(
         self,
         *,

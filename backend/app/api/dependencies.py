@@ -16,6 +16,7 @@ from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
 from app.services.application_corrections import ApplicationCorrectionService
 from app.services.applications import ApplicationDetailService, ApplicationEventsService
+from app.services.ghost_inference import GhostInferenceService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.structured_extraction import StructuredExtractionService
@@ -131,6 +132,23 @@ def get_application_events_service(
         yield ApplicationEventsService(
             application_repository=ApplicationRepository(connection),
             event_repository=EventRepository(connection),
+        )
+    finally:
+        connection.close()
+
+
+def get_ghost_inference_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[GhostInferenceService]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    connection.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield GhostInferenceService(
+            application_repository=ApplicationRepository(connection),
+            event_repository=EventRepository(connection),
+            threshold_days=settings.ghost_threshold_days,
         )
     finally:
         connection.close()

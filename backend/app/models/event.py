@@ -18,6 +18,15 @@ type ApplicationEventType = Literal[
     "ghost_inferred",
 ]
 
+RESPONSE_LIKE_APPLICATION_EVENT_TYPES: tuple[ApplicationEventType, ...] = (
+    "assessment",
+    "feedback",
+    "interview_scheduled",
+    "offer",
+    "rejection",
+    "response",
+)
+
 
 class ApplicationEventRecord(BaseModel):
     id: str
