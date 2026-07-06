@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,6 @@ from app.main import create_app
 from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 
 
 def test_get_application_detail_returns_application_record(tmp_path: Path) -> None:
@@ -70,7 +68,7 @@ def test_get_application_detail_endpoint_is_documented_in_openapi() -> None:
     response = client.get("/openapi.json")
 
     assert response.status_code == 200
-    operation = response.json()["paths"]["/applications/{application_id}"]["get"]
+    operation = response.json()["paths"]["/applications/{id}"]["get"]
     success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     not_found_schema = operation["responses"]["404"]["content"]["application/json"]["schema"]
     assert success_schema["$ref"] == "#/components/schemas/ApplicationRecord"

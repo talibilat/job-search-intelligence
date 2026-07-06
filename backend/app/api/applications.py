@@ -13,21 +13,21 @@ router = APIRouter(prefix="/applications", tags=["applications"])
 
 
 @router.get(
-    "/{application_id}",
+    "/{id}",
     response_model=ApplicationRecord,
     responses={404: {"model": ApiErrorResponse}},
     summary="Get Application Detail",
     description="Returns one canonical application row from the local SQLite source of truth.",
 )
 def get_application_detail(
-    application_id: str,
+    id: str,
     service: Annotated[
         ApplicationDetailService,
         Depends(get_application_detail_service),
     ],
 ) -> ApplicationRecord:
     try:
-        return service.get_application(application_id)
+        return service.get_application(id)
     except ApplicationNotFoundError as error:
         raise ApiError(
             status_code=404,

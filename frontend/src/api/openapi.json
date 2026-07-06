@@ -1667,17 +1667,17 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/applications/{application_id}": {
+    "/applications/{id}": {
       "get": {
         "description": "Returns one canonical application row from the local SQLite source of truth.",
-        "operationId": "get_application_detail_applications__application_id__get",
+        "operationId": "get_application_detail_applications__id__get",
         "parameters": [
           {
             "in": "path",
-            "name": "application_id",
+            "name": "id",
             "required": true,
             "schema": {
-              "title": "Application Id",
+              "title": "Id",
               "type": "string"
             }
           }

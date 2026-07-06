@@ -579,67 +579,63 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
   state: string;
 };
 
-export type getApplicationDetailApplicationsApplicationIdGetResponse200 = {
+export type getApplicationDetailApplicationsIdGetResponse200 = {
   data: ApplicationRecord;
   status: 200;
 };
 
-export type getApplicationDetailApplicationsApplicationIdGetResponse404 = {
+export type getApplicationDetailApplicationsIdGetResponse404 = {
   data: ApiErrorResponse;
   status: 404;
 };
 
-export type getApplicationDetailApplicationsApplicationIdGetResponse422 = {
+export type getApplicationDetailApplicationsIdGetResponse422 = {
   data: HTTPValidationError;
   status: 422;
 };
 
-export type getApplicationDetailApplicationsApplicationIdGetResponseSuccess =
-  getApplicationDetailApplicationsApplicationIdGetResponse200 & {
+export type getApplicationDetailApplicationsIdGetResponseSuccess =
+  getApplicationDetailApplicationsIdGetResponse200 & {
     headers: Headers;
   };
-export type getApplicationDetailApplicationsApplicationIdGetResponseError = (
-  | getApplicationDetailApplicationsApplicationIdGetResponse404
-  | getApplicationDetailApplicationsApplicationIdGetResponse422
+export type getApplicationDetailApplicationsIdGetResponseError = (
+  | getApplicationDetailApplicationsIdGetResponse404
+  | getApplicationDetailApplicationsIdGetResponse422
 ) & {
   headers: Headers;
 };
 
-export type getApplicationDetailApplicationsApplicationIdGetResponse =
-  | getApplicationDetailApplicationsApplicationIdGetResponseSuccess
-  | getApplicationDetailApplicationsApplicationIdGetResponseError;
+export type getApplicationDetailApplicationsIdGetResponse =
+  | getApplicationDetailApplicationsIdGetResponseSuccess
+  | getApplicationDetailApplicationsIdGetResponseError;
 
-export const getGetApplicationDetailApplicationsApplicationIdGetUrl = (
-  applicationId: string,
-) => {
-  return `/applications/${applicationId}`;
+export const getGetApplicationDetailApplicationsIdGetUrl = (id: string) => {
+  return `/applications/${id}`;
 };
 
 /**
  * Returns one canonical application row from the local SQLite source of truth.
  * @summary Get Application Detail
  */
-export const getApplicationDetailApplicationsApplicationIdGet = async (
-  applicationId: string,
+export const getApplicationDetailApplicationsIdGet = async (
+  id: string,
   options?: RequestInit,
-): Promise<getApplicationDetailApplicationsApplicationIdGetResponse> => {
-  const res = await fetch(
-    getGetApplicationDetailApplicationsApplicationIdGetUrl(applicationId),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
+): Promise<getApplicationDetailApplicationsIdGetResponse> => {
+  const res = await fetch(getGetApplicationDetailApplicationsIdGetUrl(id), {
+    ...options,
+    method: "GET",
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getApplicationDetailApplicationsApplicationIdGetResponse["data"] =
-    body ? JSON.parse(body) : {};
+  const data: getApplicationDetailApplicationsIdGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as getApplicationDetailApplicationsApplicationIdGetResponse;
+  } as getApplicationDetailApplicationsIdGetResponse;
 };
 
 export type gmailAuthUrlAuthGmailGetResponse200 = {
