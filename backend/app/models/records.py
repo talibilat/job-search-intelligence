@@ -29,7 +29,13 @@ from app.models.filter_decision import (
     EmailFilterDecisionOutcome,
     EmailFilterDecisionRecord,
 )
-from app.models.insight import InsightRecord, InsightType
+from app.models.insight import (
+    InsightInput,
+    InsightInputEvidence,
+    InsightInputFact,
+    InsightRecord,
+    InsightType,
+)
 from app.models.raw_email import RawEmailBodyRetentionState, RawEmailRecord
 from app.models.sync_state import (
     EmailBackfillStateRecord,
@@ -60,6 +66,9 @@ __all__ = [
     "EmailFilterDecisionRecord",
     "EmailSyncStateRecord",
     "InsightRecord",
+    "InsightInput",
+    "InsightInputEvidence",
+    "InsightInputFact",
     "InsightType",
     "JobEmailCategory",
     "JsonObject",
