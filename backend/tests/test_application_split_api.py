@@ -215,6 +215,131 @@ def test_post_application_split_preserves_terminal_status_priority(
         assert target == ("rejected",)
 
 
+def test_post_application_split_replays_extracted_status_chronologically(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    source_withdrawn_at = datetime(2026, 7, 4, 10, 0, tzinfo=UTC)
+    target_applied_at = datetime(2026, 7, 1, 11, 0, tzinfo=UTC)
+    target_rejected_at = datetime(2026, 7, 3, 17, 0, tzinfo=UTC)
+    target_withdrawn_at = datetime(2026, 7, 5, 10, 0, tzinfo=UTC)
+    connection = migrated_connection(database_path)
+    try:
+        for email_id in (
+            "email-source-applied",
+            "email-source-rejected",
+            "email-source-feedback",
+            "email-target-applied",
+            "email-target-rejected",
+            "email-target-feedback",
+        ):
+            insert_raw_email(connection, email_id)
+        insert_application(
+            connection,
+            application_id="app-merged",
+            company="Acme Corp",
+            role_title="Software Engineer",
+            first_seen_at=APPLIED_AT,
+            current_status="withdrawn",
+            last_activity_at=target_withdrawn_at,
+        )
+        insert_event(
+            connection,
+            event_id="event-source-applied",
+            application_id="app-merged",
+            email_id="email-source-applied",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-source-rejected",
+            application_id="app-merged",
+            email_id="email-source-rejected",
+            event_type="rejection",
+            event_at=REJECTED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-source-feedback",
+            application_id="app-merged",
+            email_id="email-source-feedback",
+            event_type="feedback",
+            event_at=source_withdrawn_at,
+            extracted_status="withdrawn",
+        )
+        insert_event(
+            connection,
+            event_id="event-target-applied",
+            application_id="app-merged",
+            email_id="email-target-applied",
+            event_type="applied",
+            event_at=target_applied_at,
+        )
+        insert_event(
+            connection,
+            event_id="event-target-rejected",
+            application_id="app-merged",
+            email_id="email-target-rejected",
+            event_type="rejection",
+            event_at=target_rejected_at,
+        )
+        insert_event(
+            connection,
+            event_id="event-target-feedback",
+            application_id="app-merged",
+            email_id="email-target-feedback",
+            event_type="feedback",
+            event_at=target_withdrawn_at,
+            extracted_status="withdrawn",
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/applications/app-merged/split",
+        json={
+            "event_ids": [
+                "event-target-applied",
+                "event-target-rejected",
+                "event-target-feedback",
+            ],
+            "new_application": {
+                "company": "Beta Labs",
+                "role_title": "Data Engineer",
+                "source": "linkedin",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    new_application_id = payload["new_application"]["id"]
+    assert payload["source_application"]["current_status"] == "withdrawn"
+    assert payload["new_application"]["current_status"] == "withdrawn"
+
+    with sqlite3.connect(database_path) as db:
+        source = db.execute(
+            "SELECT current_status FROM applications WHERE id = ?",
+            ("app-merged",),
+        ).fetchone()
+        assert source == ("withdrawn",)
+
+        target = db.execute(
+            "SELECT current_status FROM applications WHERE id = ?",
+            (new_application_id,),
+        ).fetchone()
+        assert target == ("withdrawn",)
+
+
 def test_post_application_split_preserves_locked_source_status(
     tmp_path: Path,
 ) -> None:
@@ -788,12 +913,13 @@ def insert_event(
     event_type: str,
     event_at: datetime,
     extract_note: str | None = None,
+    extracted_status: str | None = None,
 ) -> None:
     connection.execute(
         """
         INSERT INTO application_events (
-            id, application_id, email_id, event_type, event_at, extract_note
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            id, application_id, email_id, event_type, event_at, extract_note, extracted_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             event_id,
@@ -802,5 +928,6 @@ def insert_event(
             event_type,
             event_at.isoformat(),
             extract_note,
+            extracted_status,
         ),
     )

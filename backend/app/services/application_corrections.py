@@ -13,34 +13,13 @@ from app.models.correction import (
 )
 from app.models.records import (
     ApplicationEventRecord,
-    ApplicationEventType,
     ApplicationRecord,
     ApplicationStatus,
     JsonObject,
 )
+from app.services.aggregation import derive_current_status_from_events
 
 type Clock = Callable[[], datetime]
-
-_EVENT_STATUS_BY_TYPE: dict[ApplicationEventType, ApplicationStatus] = {
-    "applied": "applied",
-    "response": "in_review",
-    "assessment": "assessment",
-    "interview_scheduled": "interview",
-    "feedback": "in_review",
-    "rejection": "rejected",
-    "offer": "offer",
-    "ghost_inferred": "ghosted",
-}
-_STATUS_PRIORITY: tuple[ApplicationStatus, ...] = (
-    "offer",
-    "rejected",
-    "ghosted",
-    "interview",
-    "assessment",
-    "in_review",
-    "applied",
-)
-
 
 class ApplicationCorrectionServiceError(Exception):
     def __init__(self, public_message: str) -> None:
@@ -252,13 +231,7 @@ def make_manual_split_application_id(
 
 
 def _derive_current_status(events: list[ApplicationEventRecord]) -> ApplicationStatus:
-    if not events:
-        return "applied"
-    seen_statuses = {_EVENT_STATUS_BY_TYPE[event.event_type] for event in events}
-    for status in _STATUS_PRIORITY:
-        if status in seen_statuses:
-            return status
-    return "applied"
+    return derive_current_status_from_events(events)
 
 
 def _event_bounds(
