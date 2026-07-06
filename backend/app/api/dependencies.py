@@ -14,7 +14,7 @@ from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
-from app.services.applications import ApplicationDetailService
+from app.services.applications import ApplicationDetailService, ApplicationEventsService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.structured_extraction import StructuredExtractionService
 
@@ -117,6 +117,21 @@ def get_application_detail_service(
     ],
 ) -> ApplicationDetailService:
     return ApplicationDetailService(application_repository)
+
+
+def get_application_events_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ApplicationEventsService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield ApplicationEventsService(
+            application_repository=ApplicationRepository(connection),
+            event_repository=EventRepository(connection),
+        )
+    finally:
+        connection.close()
 
 
 def get_readonly_email_repository(
