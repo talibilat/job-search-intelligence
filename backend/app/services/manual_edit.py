@@ -137,10 +137,14 @@ class ManualApplicationEditService:
                 original_event=event,
                 updated_event=updated_event,
             )
-            if new_event_id != event.id and self._event_repository.get_by_application_and_id(
-                application_id=application_id,
-                event_id=new_event_id,
-            ) is not None:
+            if (
+                new_event_id != event.id
+                and self._event_repository.get_by_application_and_id(
+                    application_id=application_id,
+                    event_id=new_event_id,
+                )
+                is not None
+            ):
                 raise ManualEditInvalidRequestError("application event already exists")
             updated_event = updated_event.model_copy(update={"id": new_event_id})
             before_json: JsonObject = {
