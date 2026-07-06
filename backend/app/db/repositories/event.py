@@ -18,10 +18,21 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
 
         return self.fetch_all(
             """
-            SELECT *
+            SELECT
+                application_events.*,
+                raw_emails.sent_at AS email_sent_at,
+                email_classifications.classified_at AS classification_classified_at
             FROM application_events
+            LEFT JOIN raw_emails
+                ON raw_emails.id = application_events.email_id
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = application_events.email_id
             WHERE application_id = ?
-            ORDER BY event_at, id
+            ORDER BY
+                application_events.event_at,
+                raw_emails.sent_at,
+                email_classifications.classified_at,
+                application_events.id
             """,
             (application_id,),
         )
@@ -35,6 +46,7 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         event_at: str,
         email_id: str | None = None,
         extract_note: str | None = None,
+        extracted_status: str | None = None,
     ) -> None:
         """Insert or update one application event idempotently.
 
@@ -48,12 +60,13 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                 """
                 INSERT INTO application_events (
                     id, application_id, email_id,
-                    event_type, event_at, extract_note
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    event_type, event_at, extract_note, extracted_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     event_type = excluded.event_type,
                     event_at = excluded.event_at,
-                    extract_note = excluded.extract_note
+                    extract_note = excluded.extract_note,
+                    extracted_status = excluded.extracted_status
                 """,
                 (
                     id,
@@ -62,6 +75,7 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                     event_type,
                     event_at,
                     extract_note,
+                    extracted_status,
                 ),
             )
         if should_commit:

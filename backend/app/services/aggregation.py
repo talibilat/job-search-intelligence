@@ -20,7 +20,6 @@ from app.pipeline.classify import AcceptedLLMExtraction, JobApplicationExtractio
 
 type Clock = Callable[[], datetime]
 type RunIdFactory = Callable[[], str]
-type _StatusTimelineEvent = tuple[datetime, ApplicationEventType, ApplicationStatus | None]
 
 _STATUS_BY_EVENT_TYPE: dict[ApplicationEventType, ApplicationStatus | None] = {
     "applied": "applied",
@@ -179,6 +178,16 @@ class _EnrichedExtraction(BaseModel):
     email_sent_at: datetime | None = None
 
 
+class _StatusTimelineEvent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    event_at: datetime
+    email_sent_at: datetime
+    classified_at: datetime
+    event_type: ApplicationEventType
+    extracted_status: ApplicationStatus | None
+
+
 def _filter_job_related(
     results: list[AcceptedLLMExtraction],
 ) -> list[_EnrichedExtraction]:
@@ -320,6 +329,7 @@ def _upsert_events(
             event_type=event_type,
             event_at=event_at_str,
             extract_note=ext.rejection_reason,
+            extracted_status=ext.status,
         )
 
 
@@ -342,11 +352,11 @@ def _derive_current_status(
     existing_events: list[ApplicationEventRecord],
 ) -> ApplicationStatus:
     current_status: ApplicationStatus = "applied"
-    for _, event_type, extracted_status in sorted(
+    for event in sorted(
         _collect_status_timeline(group, existing_events),
-        key=lambda event: event[0],
+        key=_status_timeline_sort_key,
     ):
-        event_status = _status_for_event_type(event_type, extracted_status)
+        event_status = _status_for_event_type(event.event_type, event.extracted_status)
         if event_status is not None:
             current_status = event_status
     return current_status
@@ -357,16 +367,35 @@ def _collect_status_timeline(
     existing_events: list[ApplicationEventRecord],
 ) -> list[_StatusTimelineEvent]:
     return [
-        *[(event.event_at, event.event_type, None) for event in existing_events],
         *[
-            (
-                _event_at_for_result(result),
-                _event_type_for_result(result),
-                result.extraction.status,
+            _StatusTimelineEvent(
+                event_at=event.event_at,
+                email_sent_at=event.email_sent_at or event.event_at,
+                classified_at=(
+                    event.classification_classified_at or event.email_sent_at or event.event_at
+                ),
+                event_type=event.event_type,
+                extracted_status=event.extracted_status,
+            )
+            for event in existing_events
+        ],
+        *[
+            _StatusTimelineEvent(
+                event_at=_event_at_for_result(result),
+                email_sent_at=result.email_sent_at or _event_at_for_result(result),
+                classified_at=result.classification_classified_at,
+                event_type=_event_type_for_result(result),
+                extracted_status=result.extraction.status,
             )
             for result in group
         ],
     ]
+
+
+def _status_timeline_sort_key(
+    event: _StatusTimelineEvent,
+) -> tuple[datetime, datetime, datetime]:
+    return event.event_at, event.email_sent_at, event.classified_at
 
 
 def _event_type_for_result(result: _EnrichedExtraction) -> ApplicationEventType:

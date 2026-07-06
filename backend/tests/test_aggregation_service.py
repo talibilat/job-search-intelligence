@@ -166,6 +166,134 @@ def test_status_derivation_includes_existing_event_history(
     assert_current_status(connection, "offer")
 
 
+def test_status_derivation_preserves_persisted_feedback_status_on_incremental_run(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    insert_raw_email(connection, "email-2", thread_id="thread-abc")
+    connection.commit()
+
+    service = make_service(connection)
+    service.run(
+        [
+            make_extraction(
+                email_id="email-1",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.FOLLOW_UP,
+                status="interview",
+                event_type="feedback",
+                event_at=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+            ),
+        ],
+    )
+    assert_current_status(connection, "interview")
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-2",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=datetime(2026, 7, 5, 10, 0, tzinfo=UTC),
+            ),
+        ],
+    )
+
+    assert_current_status(connection, "interview")
+
+
+def test_status_derivation_tiebreaks_same_event_at_by_email_sent_at(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    shared_event_at = datetime(2026, 7, 5, 9, 0, tzinfo=UTC)
+    insert_raw_email(
+        connection,
+        "email-offer",
+        thread_id="thread-abc",
+        sent_at=datetime(2026, 7, 5, 10, 0, tzinfo=UTC),
+    )
+    insert_raw_email(
+        connection,
+        "email-rejection",
+        thread_id="thread-abc",
+        sent_at=datetime(2026, 7, 5, 11, 0, tzinfo=UTC),
+    )
+    connection.commit()
+
+    make_service(connection).run(
+        [
+            make_extraction(
+                email_id="email-rejection",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.REJECTION,
+                status="rejected",
+                event_type="rejection",
+                event_at=shared_event_at,
+            ),
+            make_extraction(
+                email_id="email-offer",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.OFFER,
+                status="offer",
+                event_type="offer",
+                event_at=shared_event_at,
+            ),
+        ],
+    )
+
+    assert_current_status(connection, "rejected")
+
+
+def test_status_derivation_tiebreaks_same_event_and_sent_at_by_classified_at(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    shared_event_at = datetime(2026, 7, 5, 9, 0, tzinfo=UTC)
+    shared_sent_at = datetime(2026, 7, 5, 10, 0, tzinfo=UTC)
+    insert_raw_email(connection, "email-offer", thread_id="thread-abc", sent_at=shared_sent_at)
+    insert_raw_email(
+        connection,
+        "email-rejection",
+        thread_id="thread-abc",
+        sent_at=shared_sent_at,
+    )
+    connection.commit()
+
+    make_service(connection).run(
+        [
+            make_extraction(
+                email_id="email-rejection",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.REJECTION,
+                status="rejected",
+                event_type="rejection",
+                event_at=shared_event_at,
+                classified_at=datetime(2026, 7, 5, 12, 0, tzinfo=UTC),
+            ),
+            make_extraction(
+                email_id="email-offer",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.OFFER,
+                status="offer",
+                event_type="offer",
+                event_at=shared_event_at,
+                classified_at=datetime(2026, 7, 5, 11, 0, tzinfo=UTC),
+            ),
+        ],
+    )
+
+    assert_current_status(connection, "rejected")
+
+
 def test_manual_locked_status_is_not_automatically_overwritten(
     tmp_path: Path,
 ) -> None:
@@ -666,6 +794,7 @@ def make_extraction(
     role_title: str | None = None,
     category: JobEmailCategory = JobEmailCategory.APPLICATION_CONFIRMATION,
     confidence: float = 0.95,
+    classified_at: datetime = NOW,
     status: ApplicationStatus | None = "applied",
     event_type: ApplicationEventType | None = "applied",
     event_at: datetime | None = None,
@@ -687,7 +816,7 @@ def make_extraction(
             confidence=confidence,
             model="test-model",
             prompt_version="v1",
-            classified_at=NOW,
+            classified_at=classified_at,
         ),
         extraction=JobApplicationExtraction(
             company=company,
