@@ -337,11 +337,42 @@ describe("ApplicationDetailPage", () => {
       new_application: {
         company: "Beta Corp",
         role_title: "Backend Engineer",
-        source: "other",
-        sponsorship: "unknown",
       },
       reason: "This event belongs to a different application.",
     });
+  });
+
+  it("resets the manual correction lock from the detail screen", async () => {
+    const lockedApplication = {
+      ...applicationRecord,
+      manual_lock: true,
+    };
+    const unlockedApplication = {
+      ...applicationRecord,
+      manual_lock: false,
+    };
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": [lockedApplication, unlockedApplication],
+      "/applications/app-1/events": [[applicationEvent], [applicationEvent]],
+      "/applications/app-1/reset-lock": {
+        application: unlockedApplication,
+        correction: correctionRecord("reset_lock"),
+      },
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    expect(await screen.findByText("Manual lock enabled")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Reset reason"), {
+      target: { value: "Let automatic aggregation update this row again." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Reset manual lock" }));
+
+    expect(await screen.findByText("Manual lock reset saved")).toBeTruthy();
+    expect(requestJson(fetchMock, "/applications/app-1/reset-lock")).toEqual({
+      reason: "Let automatic aggregation update this row again.",
+    });
+    expect(await screen.findByText("Automatic updates allowed")).toBeTruthy();
   });
 
   it("selects an available event after refresh removes the previously selected event", async () => {

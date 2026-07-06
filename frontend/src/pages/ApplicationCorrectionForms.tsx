@@ -38,6 +38,13 @@ interface MergeCorrectionFormProps {
   sourceId: string;
 }
 
+interface ResetLockFormProps {
+  isSubmitting: boolean;
+  onReasonChange: (value: string) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  reason: string;
+}
+
 interface TimelineTableProps {
   events: ApplicationEventRecord[];
 }
@@ -161,6 +168,34 @@ export function MergeCorrectionForm({
         </FormField>
         <Button disabled={isSubmitting || sourceId.trim().length === 0} type="submit">
           Merge source application
+        </Button>
+      </form>
+    </article>
+  );
+}
+
+export function ResetLockForm({
+  isSubmitting,
+  onReasonChange,
+  onSubmit,
+  reason,
+}: ResetLockFormProps) {
+  return (
+    <article className="application-detail-card">
+      <div>
+        <p className="eyebrow">Reset</p>
+        <h2>Reset manual lock</h2>
+      </div>
+      <form className="application-detail-form" onSubmit={onSubmit}>
+        <FormField htmlFor="reset-reason" label="Reset reason">
+          <TextInput
+            id="reset-reason"
+            onChange={(event) => onReasonChange(event.target.value)}
+            value={reason}
+          />
+        </FormField>
+        <Button disabled={isSubmitting} type="submit" variant="secondary">
+          Reset manual lock
         </Button>
       </form>
     </article>

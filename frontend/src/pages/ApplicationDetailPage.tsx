@@ -6,6 +6,7 @@ import {
   getApplicationDetailApplicationsIdGet,
   getApplicationEventsApplicationsIdEventsGet,
   mergeApplicationApplicationsApplicationIdMergePost,
+  resetApplicationLockApplicationsApplicationIdResetLockPost,
   splitApplicationApplicationsApplicationIdSplitPost,
   type ApiErrorResponse,
   type ApplicationEventRecord,
@@ -17,6 +18,7 @@ import {
   ApplicationSummary,
   EventCorrectionForm,
   MergeCorrectionForm,
+  ResetLockForm,
   SplitCorrectionForm,
   StatusCorrectionForm,
   TimelineTable,
@@ -70,6 +72,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   );
   const [mergeSourceId, setMergeSourceId] = useState("");
   const [mergeReason, setMergeReason] = useState("");
+  const [resetReason, setResetReason] = useState("");
   const [splitEventIds, setSplitEventIds] = useState<string[]>([]);
   const [splitCompany, setSplitCompany] = useState("");
   const [splitRole, setSplitRole] = useState("");
@@ -268,6 +271,36 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     setSuccessMessage("Merge correction saved");
   }
 
+  async function handleResetSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    let response: Awaited<ReturnType<typeof resetApplicationLockApplicationsApplicationIdResetLockPost>>;
+
+    try {
+      response = await resetApplicationLockApplicationsApplicationIdResetLockPost(applicationId, {
+        reason: resetReason.trim() || null,
+      });
+    } catch {
+      setIsSubmitting(false);
+      setErrorMessage("Manual lock reset failed.");
+      return;
+    }
+
+    setIsSubmitting(false);
+
+    if (response.status !== 200) {
+      setErrorMessage(publicError(response.data, "Manual lock reset failed."));
+      return;
+    }
+
+    setApplication(response.data.application);
+    setResetReason("");
+    setSuccessMessage("Manual lock reset saved");
+  }
+
   async function handleSplitSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
@@ -282,8 +315,6 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         new_application: {
           company: splitCompany.trim(),
           role_title: splitRole.trim(),
-          source: application?.source ?? "other",
-          sponsorship: application?.sponsorship ?? "unknown",
         },
         reason: splitReason.trim() || null,
       });
@@ -390,6 +421,15 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
           }}
           reason={mergeReason}
           sourceId={mergeSourceId}
+        />
+
+        <ResetLockForm
+          isSubmitting={isSubmitting}
+          onReasonChange={setResetReason}
+          onSubmit={(event) => {
+            void handleResetSubmit(event);
+          }}
+          reason={resetReason}
         />
 
         <TimelineTable events={events} />
