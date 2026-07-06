@@ -532,6 +532,102 @@ h3 {
   letter-spacing: -0.06em;
 }
 
+.application-detail-shell {
+  display: grid;
+  gap: 24px;
+}
+
+.application-detail-hero {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+  padding: 36px;
+  border: 1px solid #d8d0bf;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top right, rgb(63 107 82 / 20%), transparent 34%),
+    #fffaf0;
+  box-shadow: 0 24px 70px rgb(36 50 38 / 10%);
+}
+
+.application-detail-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.application-detail-summary span {
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #203f2c;
+  color: #fffaf0;
+  font-size: 0.84rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.application-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  min-width: 0;
+}
+
+.application-detail-card {
+  display: grid;
+  align-content: start;
+  gap: 20px;
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid #d8d0bf;
+  border-radius: 28px;
+  background: #fffdf7;
+  box-shadow: 0 18px 50px rgb(36 50 38 / 8%);
+}
+
+.application-detail-card--wide {
+  grid-column: 1 / -1;
+}
+
+.application-detail-form {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.application-detail-fieldset {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #d8d0bf;
+  border-radius: 18px;
+}
+
+.application-detail-fieldset legend {
+  padding: 0 6px;
+  color: #203f2c;
+  font-weight: 900;
+}
+
+.application-detail-fieldset p {
+  margin-bottom: 0;
+  color: #4e5e53;
+}
+
+.application-detail-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #203f2c;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 720px) {
   .app-nav {
     align-items: flex-start;
@@ -582,11 +678,14 @@ h3 {
 
   .dashboard-hero,
   .dashboard-filter-panel,
-  .dashboard-card {
+  .dashboard-card,
+  .application-detail-hero,
+  .application-detail-card {
     padding: 24px;
   }
 
   .dashboard-layout,
+  .application-detail-grid,
   .filter-placeholder-list,
   .dashboard-metric-grid,
   .sync-panel__metrics,
