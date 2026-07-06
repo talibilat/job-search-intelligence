@@ -18,7 +18,10 @@ type FeatureTab = FeatureArea;
 type FeatureStatusFilter = "all" | FeatureStatus;
 type FeatureTestableFilter = "all" | "no" | "yes";
 
-const featureStatuses = new Set<string>([...Object.keys(featureStatusLabels), "all"]);
+const featureStatuses = new Set<string>([
+  ...Object.keys(featureStatusLabels),
+  "all",
+]);
 const featureTestableFilters = new Set<string>(["all", "no", "yes"]);
 const featureTabs = new Set<string>(["frontend", "backend"]);
 
@@ -43,9 +46,24 @@ function initialFeatureQueryState() {
   return {
     keyword: queryValue(searchParams, "search"),
     scope: queryValue(searchParams, "scope"),
-    status: queryEnumValue<FeatureStatusFilter>(searchParams, "status", featureStatuses, "all"),
-    tab: queryEnumValue<FeatureTab>(searchParams, "tab", featureTabs, "frontend"),
-    testable: queryEnumValue<FeatureTestableFilter>(searchParams, "testable", featureTestableFilters, "all"),
+    status: queryEnumValue<FeatureStatusFilter>(
+      searchParams,
+      "status",
+      featureStatuses,
+      "all",
+    ),
+    tab: queryEnumValue<FeatureTab>(
+      searchParams,
+      "tab",
+      featureTabs,
+      "frontend",
+    ),
+    testable: queryEnumValue<FeatureTestableFilter>(
+      searchParams,
+      "testable",
+      featureTestableFilters,
+      "all",
+    ),
   };
 }
 
@@ -63,7 +81,9 @@ function relationshipLabels(
 ) {
   return uniqueList(
     features.flatMap((feature) =>
-      feature.relationship.filter((step) => step.type === type).map((step) => step.label),
+      feature.relationship
+        .filter((step) => step.type === type)
+        .map((step) => step.label),
     ),
   );
 }
@@ -181,7 +201,10 @@ function FeatureMetaGrid({ feature }: { feature: FeatureStatusRecord }) {
 
 function RelationshipMap({ feature }: { feature: FeatureStatusRecord }) {
   return (
-    <ol className="feature-relationship-map" aria-label={`${feature.name} relationship map`}>
+    <ol
+      className="feature-relationship-map"
+      aria-label={`${feature.name} relationship map`}
+    >
       {feature.relationship.map((step) => (
         <li key={`${feature.id}-${step.type}-${step.label}`}>
           <span>{step.type.replace("_", " ")}</span>
@@ -224,7 +247,8 @@ function HowToUseDetails({ feature }: { feature: FeatureStatusRecord }) {
       <summary>How to use {feature.name}</summary>
       <div className="feature-how-to__body">
         <p>
-          <strong>Prerequisites:</strong> {formatList(feature.howToUse.prerequisites)}
+          <strong>Prerequisites:</strong>{" "}
+          {formatList(feature.howToUse.prerequisites)}
         </p>
         <p>
           <strong>Navigation path:</strong> {feature.howToUse.navigationPath}
@@ -238,10 +262,12 @@ function HowToUseDetails({ feature }: { feature: FeatureStatusRecord }) {
           </ol>
         </div>
         <p>
-          <strong>Expected behaviour:</strong> {feature.howToUse.expectedBehaviour}
+          <strong>Expected behaviour:</strong>{" "}
+          {feature.howToUse.expectedBehaviour}
         </p>
         <p>
-          <strong>Expected success result:</strong> {feature.howToUse.expectedSuccessResult}
+          <strong>Expected success result:</strong>{" "}
+          {feature.howToUse.expectedSuccessResult}
         </p>
         <div>
           <strong>Common QA validation points:</strong>
@@ -269,7 +295,9 @@ function FeatureCard({ feature }: { feature: FeatureStatusRecord }) {
       <p className="feature-card__description">{feature.description}</p>
       <p className="feature-card__status">{feature.implementationStatus}</p>
       {feature.percentComplete == null ? null : (
-        <p className="feature-card__progress">{feature.percentComplete}% complete</p>
+        <p className="feature-card__progress">
+          {feature.percentComplete}% complete
+        </p>
       )}
       <FeatureMetaGrid feature={feature} />
       <TestingDetails feature={feature} />
@@ -296,47 +324,87 @@ function FeatureCard({ feature }: { feature: FeatureStatusRecord }) {
   );
 }
 
-function FrontendTopologySummary({ features }: { features: readonly FeatureStatusRecord[] }) {
+function FrontendTopologySummary({
+  features,
+}: {
+  features: readonly FeatureStatusRecord[];
+}) {
   return (
     <dl className="feature-summary-grid">
       <div>
         <dt>Frontend screens</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.screens)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.screens)),
+          )}
+        </dd>
       </div>
       <div>
         <dt>Frontend routes</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.routes)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.routes)),
+          )}
+        </dd>
       </div>
       <div>
         <dt>Frontend components</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.components)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.components)),
+          )}
+        </dd>
       </div>
       <div>
         <dt>Frontend shared UI elements</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.sharedUi)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.sharedUi)),
+          )}
+        </dd>
       </div>
       <div>
         <dt>Frontend state management connections</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.stateConnections)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.stateConnections)),
+          )}
+        </dd>
       </div>
       <div>
         <dt>Frontend API integrations</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.endpoints)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.endpoints)),
+          )}
+        </dd>
       </div>
       <div>
         <dt>Backend services consumed by frontend</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.connectedModules)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.connectedModules)),
+          )}
+        </dd>
       </div>
     </dl>
   );
 }
 
-function BackendTopologySummary({ features }: { features: readonly FeatureStatusRecord[] }) {
+function BackendTopologySummary({
+  features,
+}: {
+  features: readonly FeatureStatusRecord[];
+}) {
   return (
     <dl className="feature-summary-grid">
       <div>
         <dt>APIs</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.endpoints)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.endpoints)),
+          )}
+        </dd>
       </div>
       <div>
         <dt>Controllers</dt>
@@ -372,11 +440,19 @@ function BackendTopologySummary({ features }: { features: readonly FeatureStatus
       </div>
       <div>
         <dt>Dependencies</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.dependencies)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.dependencies)),
+          )}
+        </dd>
       </div>
       <div>
         <dt>Frontend consumers</dt>
-        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.screens)))}</dd>
+        <dd>
+          {formatList(
+            uniqueList(features.flatMap((feature) => feature.screens)),
+          )}
+        </dd>
       </div>
     </dl>
   );
@@ -389,7 +465,12 @@ interface FeatureSectionProps {
   title: string;
 }
 
-function FeatureSection({ emptyMessage, features, sectionId, title }: FeatureSectionProps) {
+function FeatureSection({
+  emptyMessage,
+  features,
+  sectionId,
+  title,
+}: FeatureSectionProps) {
   return (
     <section className="feature-section" aria-labelledby={`${sectionId}-title`}>
       <div className="feature-section__header">
@@ -417,7 +498,13 @@ interface FeatureAreaViewProps {
   testable: "all" | "no" | "yes";
 }
 
-function FeatureAreaView({ area, keyword, scope, status, testable }: FeatureAreaViewProps) {
+function FeatureAreaView({
+  area,
+  keyword,
+  scope,
+  status,
+  testable,
+}: FeatureAreaViewProps) {
   const visibleFeatures = featureStatusRegistry.filter((feature) => {
     const statusMatches = status === "all" || feature.status === status;
     const testableMatches =
@@ -431,12 +518,19 @@ function FeatureAreaView({ area, keyword, scope, status, testable }: FeatureArea
       featureMatchesScope(feature, scope)
     );
   });
-  const completedFeatures = visibleFeatures.filter((feature) => feature.status === "completed");
-  const inProgressFeatures = visibleFeatures.filter((feature) => feature.status !== "completed");
+  const completedFeatures = visibleFeatures.filter(
+    (feature) => feature.status === "completed",
+  );
+  const inProgressFeatures = visibleFeatures.filter(
+    (feature) => feature.status !== "completed",
+  );
 
   return (
     <div className="feature-area-view">
-      <section className="feature-view-summary" aria-label={`${areaLabels[area]} feature inventory`}>
+      <section
+        className="feature-view-summary"
+        aria-label={`${areaLabels[area]} feature inventory`}
+      >
         <div>
           <p className="eyebrow">{areaLabels[area]} map</p>
           <h2>{areaLabels[area]} implementation overview</h2>
@@ -467,8 +561,12 @@ function FeatureAreaView({ area, keyword, scope, status, testable }: FeatureArea
 export function FeatureStatusDashboard() {
   const [initialState] = useState(initialFeatureQueryState);
   const [keyword, setKeyword] = useState(initialState.keyword);
-  const [status, setStatus] = useState<FeatureStatusFilter>(initialState.status);
-  const [testable, setTestable] = useState<FeatureTestableFilter>(initialState.testable);
+  const [status, setStatus] = useState<FeatureStatusFilter>(
+    initialState.status,
+  );
+  const [testable, setTestable] = useState<FeatureTestableFilter>(
+    initialState.testable,
+  );
   const [scope, setScope] = useState(initialState.scope);
   const [activeTab, setActiveTab] = useState<FeatureTab>(initialState.tab);
 
@@ -502,13 +600,20 @@ export function FeatureStatusDashboard() {
   }, [activeTab, keyword, scope, status, testable]);
 
   return (
-    <main aria-labelledby="feature-status-title" className="app-shell feature-status-shell">
-      <section className="feature-status-hero" aria-labelledby="feature-status-title">
+    <main
+      aria-labelledby="feature-status-title"
+      className="app-shell feature-status-shell"
+    >
+      <section
+        className="feature-status-hero"
+        aria-labelledby="feature-status-title"
+      >
         <p className="eyebrow">Developer inventory</p>
         <h1 id="feature-status-title">Feature Status Dashboard</h1>
         <p className="hero-copy">
-          A registry-backed map of completed and in-progress frontend and backend
-          features, their test entry points, and the modules that connect them.
+          A registry-backed map of completed and in-progress frontend and
+          backend features, their test entry points, and the modules that
+          connect them.
         </p>
       </section>
 
@@ -523,7 +628,12 @@ export function FeatureStatusDashboard() {
         </FormField>
         <label className="feature-select-field">
           <span>Status</span>
-          <select value={status} onChange={(event) => setStatus(event.target.value as FeatureStatus | "all")}>
+          <select
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value as FeatureStatus | "all")
+            }
+          >
             <option value="all">All statuses</option>
             {Object.entries(featureStatusLabels).map(([value, label]) => (
               <option key={value} value={value}>
@@ -534,13 +644,21 @@ export function FeatureStatusDashboard() {
         </label>
         <label className="feature-select-field">
           <span>Testable</span>
-          <select value={testable} onChange={(event) => setTestable(event.target.value as "all" | "no" | "yes")}>
+          <select
+            value={testable}
+            onChange={(event) =>
+              setTestable(event.target.value as "all" | "no" | "yes")
+            }
+          >
             <option value="all">All</option>
             <option value="yes">Can test now</option>
             <option value="no">Not testable yet</option>
           </select>
         </label>
-        <FormField htmlFor="feature-scope" label="Module, API, screen, or component">
+        <FormField
+          htmlFor="feature-scope"
+          label="Module, API, screen, or component"
+        >
           <TextInput
             id="feature-scope"
             onChange={(event) => setScope(event.target.value)}

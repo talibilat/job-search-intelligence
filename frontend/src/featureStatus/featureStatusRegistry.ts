@@ -1,11 +1,7 @@
 export type FeatureArea = "frontend" | "backend";
 
 export type FeatureStatus =
-  | "blocked"
-  | "completed"
-  | "in_progress"
-  | "not_started"
-  | "planned";
+  "blocked" | "completed" | "in_progress" | "not_started" | "planned";
 
 export interface FeatureRelationshipStep {
   label: string;
@@ -80,7 +76,10 @@ export const featureStatusLabels: Record<FeatureStatus, string> = {
 export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
   {
     area: "frontend",
-    assignedModules: ["frontend/src/pages/SetupPage.tsx", "frontend/src/setupWizardCopy.ts"],
+    assignedModules: [
+      "frontend/src/pages/SetupPage.tsx",
+      "frontend/src/setupWizardCopy.ts",
+    ],
     blockers: [],
     components: ["SetupPage", "Button", "Alert", "FormField", "TextInput"],
     connectedModules: ["Setup status API", "Gmail OAuth start API"],
@@ -89,14 +88,20 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     description:
       "Local-first first-run setup shell that guides provider choice, classification mode selection, and Gmail read-only OAuth start.",
     endpoints: ["GET /setup/status", "GET /auth/gmail"],
-    files: ["frontend/src/pages/SetupPage.tsx", "frontend/src/setupWizardCopy.ts"],
+    files: [
+      "frontend/src/pages/SetupPage.tsx",
+      "frontend/src/setupWizardCopy.ts",
+    ],
     howToUse: {
       expectedBehaviour:
         "The page loads provider defaults, recommends a classification mode, and exposes a Google authorization link when OAuth starts.",
       expectedSuccessResult:
         "The Gmail section reports connected after the callback status says Gmail is connected.",
       navigationPath: "Primary navigation -> Setup",
-      prerequisites: ["Backend running locally", "Google OAuth client configured by the user"],
+      prerequisites: [
+        "Backend running locally",
+        "Google OAuth client configured by the user",
+      ],
       qaValidationPoints: [
         "The requested Gmail scope is gmail.readonly.",
         "No client secret or token appears in the UI.",
@@ -110,7 +115,8 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       ],
     },
     id: "frontend-setup-shell",
-    implementationStatus: "Implemented in the Phase 0 frontend shell and covered by route tests.",
+    implementationStatus:
+      "Implemented in the Phase 0 frontend shell and covered by route tests.",
     name: "First-run setup shell",
     relationship: [
       { label: "Setup", type: "screen" },
@@ -130,22 +136,35 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       canTestNow: true,
       entryPoint: "/setup",
       exampleInputs: ["LLM provider: Ollama", "Classification mode: local"],
-      expectedOutputs: ["Setup checklist renders", "Gmail OAuth link exposes gmail.readonly scope"],
+      expectedOutputs: [
+        "Setup checklist renders",
+        "Gmail OAuth link exposes gmail.readonly scope",
+      ],
       requiredSetup: ["Mock or running backend setup endpoints"],
     },
   },
   {
     area: "frontend",
-    assignedModules: ["frontend/src/pages/DashboardPage.tsx", "frontend/src/components/charts"],
+    assignedModules: [
+      "frontend/src/pages/DashboardPage.tsx",
+      "frontend/src/components/charts",
+    ],
     blockers: [],
     components: ["DashboardPage", "ChartPanel"],
     connectedModules: ["Future metrics API"],
     completedDate: "2026-07-05",
-    dependencies: ["Future GET /metrics/summary", "Future GET /metrics/rates", "Future GET /metrics/funnel"],
+    dependencies: [
+      "Future GET /metrics/summary",
+      "Future GET /metrics/rates",
+      "Future GET /metrics/funnel",
+    ],
     description:
       "Empty deterministic dashboard route with URL-backed filter placeholders and chart empty states ready for metrics integration.",
     endpoints: [],
-    files: ["frontend/src/pages/DashboardPage.tsx", "frontend/src/components/charts/ChartPanel.tsx"],
+    files: [
+      "frontend/src/pages/DashboardPage.tsx",
+      "frontend/src/components/charts/ChartPanel.tsx",
+    ],
     howToUse: {
       expectedBehaviour:
         "The dashboard renders placeholders only and does not imply real metrics before deterministic endpoints exist.",
@@ -165,7 +184,8 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       ],
     },
     id: "frontend-dashboard-shell",
-    implementationStatus: "Implemented as a Phase 0 shell with no fabricated metrics.",
+    implementationStatus:
+      "Implemented as a Phase 0 shell with no fabricated metrics.",
     name: "Dashboard route shell",
     relationship: [
       { label: "Dashboard", type: "screen" },
@@ -185,7 +205,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       canTestNow: true,
       entryPoint: "/dashboard",
       exampleInputs: ["No application data required"],
-      expectedOutputs: ["Dashboard shell renders", "Metric values remain Pending"],
+      expectedOutputs: [
+        "Dashboard shell renders",
+        "Metric values remain Pending",
+      ],
       requiredSetup: ["Frontend dev server"],
     },
   },
@@ -194,9 +217,17 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     assignedModules: ["frontend/src/pages/Insights.tsx"],
     blockers: [],
     components: ["Insights"],
-    connectedModules: ["Future insights API", "Future deterministic application evidence"],
+    connectedModules: [
+      "Future insights API",
+      "Future deterministic application evidence",
+    ],
     completedDate: "2026-07-05",
-    dependencies: ["Future GET /insights", "Future POST /insights/regenerate", "applications", "raw_emails"],
+    dependencies: [
+      "Future GET /insights",
+      "Future POST /insights/regenerate",
+      "applications",
+      "raw_emails",
+    ],
     description:
       "Phase 0 insights page shell that reserves the narrative insights route without generating LLM output or implying uncited conclusions.",
     endpoints: [],
@@ -242,7 +273,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       canTestNow: true,
       entryPoint: "/insights",
       exampleInputs: ["No application data required"],
-      expectedOutputs: ["Insights shell renders", "Generated insight content remains absent"],
+      expectedOutputs: [
+        "Insights shell renders",
+        "Generated insight content remains absent",
+      ],
       requiredSetup: ["Frontend dev server"],
     },
   },
@@ -251,9 +285,17 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     assignedModules: ["frontend/src/pages/Chat.tsx"],
     blockers: [],
     components: ["Chat"],
-    connectedModules: ["Future chat API", "Future hybrid RAG agent", "Future chat history store"],
+    connectedModules: [
+      "Future chat API",
+      "Future hybrid RAG agent",
+      "Future chat history store",
+    ],
     completedDate: "2026-07-05",
-    dependencies: ["Future POST /chat", "Future GET /chat/history", "Future semantic retrieval"],
+    dependencies: [
+      "Future POST /chat",
+      "Future GET /chat/history",
+      "Future semantic retrieval",
+    ],
     description:
       "Phase 0 chat page shell that reserves the conversational route while keeping streaming, history, retrieval, and provider calls disabled until Phase 5.",
     endpoints: [],
@@ -294,13 +336,20 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     routes: ["/chat"],
     screens: ["Chat"],
     sharedUi: [],
-    stateConnections: ["Disabled local composer state", "Future streamed response state"],
+    stateConnections: [
+      "Disabled local composer state",
+      "Future streamed response state",
+    ],
     status: "completed",
     testing: {
       canTestNow: true,
       entryPoint: "/chat",
       exampleInputs: ["No message input accepted while disabled"],
-      expectedOutputs: ["Chat shell renders", "Message textarea is disabled", "No chat response is generated"],
+      expectedOutputs: [
+        "Chat shell renders",
+        "Message textarea is disabled",
+        "No chat response is generated",
+      ],
       requiredSetup: ["Frontend dev server"],
     },
   },
@@ -312,7 +361,11 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     ],
     blockers: [],
     components: ["FeatureStatusDashboard", "Tabs", "FormField", "TextInput"],
-    connectedModules: ["Feature status registry", "Frontend topology summary", "Backend topology summary"],
+    connectedModules: [
+      "Feature status registry",
+      "Frontend topology summary",
+      "Backend topology summary",
+    ],
     completedDate: "2026-07-06",
     dependencies: ["Feature status registry", "Route query strings"],
     description:
@@ -369,7 +422,11 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     testing: {
       canTestNow: true,
       entryPoint: "/features",
-      exampleInputs: ["search=feature status", "scope=/features", "tab=backend"],
+      exampleInputs: [
+        "search=feature status",
+        "scope=/features",
+        "tab=backend",
+      ],
       expectedOutputs: [
         "Feature status dashboard renders",
         "FeatureStatusDashboard appears in the registry cards",
@@ -426,19 +483,35 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     routes: ["/"],
     screens: ["Overview"],
     sharedUi: ["Button", "Alert"],
-    stateConnections: ["Fetched sync status", "Manual sync request state", "Polling timer"],
+    stateConnections: [
+      "Fetched sync status",
+      "Manual sync request state",
+      "Polling timer",
+    ],
     status: "completed",
     testing: {
       canTestNow: true,
       entryPoint: "/",
-      exampleInputs: ["Click Sync now", "Mock GET /sync/status running then succeeded"],
-      expectedOutputs: ["Sync is running", "Last sync succeeded", "Formatted counts"],
-      requiredSetup: ["Configured Gmail connection for live testing or mocked sync API"],
+      exampleInputs: [
+        "Click Sync now",
+        "Mock GET /sync/status running then succeeded",
+      ],
+      expectedOutputs: [
+        "Sync is running",
+        "Last sync succeeded",
+        "Formatted counts",
+      ],
+      requiredSetup: [
+        "Configured Gmail connection for live testing or mocked sync API",
+      ],
     },
   },
   {
     area: "frontend",
-    assignedModules: ["frontend/src/components/SyncStatusPanel.tsx", "backend/app/services/sync_service.py"],
+    assignedModules: [
+      "frontend/src/components/SyncStatusPanel.tsx",
+      "backend/app/services/sync_service.py",
+    ],
     blockers: ["Live Gmail test data is not available in this worktree"],
     components: ["SyncStatusPanel"],
     connectedModules: ["Sync runtime", "Gmail provider adapter"],
@@ -446,9 +519,13 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     description:
       "Polish pass for live manual sync behaviour once real Gmail credentials and a populated local database are available.",
     endpoints: ["POST /sync", "GET /sync/status"],
-    files: ["frontend/src/components/SyncStatusPanel.tsx", "backend/app/services/sync_service.py"],
+    files: [
+      "frontend/src/components/SyncStatusPanel.tsx",
+      "backend/app/services/sync_service.py",
+    ],
     id: "frontend-sync-live-hardening",
-    implementationStatus: "In progress: mocked behaviour is covered; live mailbox QA remains.",
+    implementationStatus:
+      "In progress: mocked behaviour is covered; live mailbox QA remains.",
     name: "Sync orchestration UI hardening",
     percentComplete: 70,
     relationship: [
@@ -471,14 +548,26 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     testing: {
       canTestNow: true,
       entryPoint: "/",
-      exampleInputs: ["Mocked running sync response", "Mocked completed sync response"],
-      expectedOutputs: ["Button disables while running", "Counts refresh after completion"],
-      requiredSetup: ["Mock API responses for automated tests", "Gmail credentials for live QA"],
+      exampleInputs: [
+        "Mocked running sync response",
+        "Mocked completed sync response",
+      ],
+      expectedOutputs: [
+        "Button disables while running",
+        "Counts refresh after completion",
+      ],
+      requiredSetup: [
+        "Mock API responses for automated tests",
+        "Gmail credentials for live QA",
+      ],
     },
   },
   {
     area: "backend",
-    assignedModules: ["backend/app/api/health.py", "backend/app/models/health.py"],
+    assignedModules: [
+      "backend/app/api/health.py",
+      "backend/app/models/health.py",
+    ],
     blockers: [],
     components: [],
     connectedModules: ["FastAPI app shell", "Frontend OpenAPI generation"],
@@ -487,7 +576,11 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     description:
       "Minimal liveness endpoint that confirms the local FastAPI backend process is reachable without touching secrets, email data, or the database.",
     endpoints: ["GET /health"],
-    files: ["backend/app/api/health.py", "backend/app/models/health.py", "backend/app/api/router.py"],
+    files: [
+      "backend/app/api/health.py",
+      "backend/app/models/health.py",
+      "backend/app/api/router.py",
+    ],
     howToUse: {
       expectedBehaviour:
         "The route returns a typed status=ok response when the backend process is running and routable.",
@@ -533,7 +626,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
   },
   {
     area: "backend",
-    assignedModules: ["backend/app/api/setup.py", "backend/app/services/setup_status.py"],
+    assignedModules: [
+      "backend/app/api/setup.py",
+      "backend/app/services/setup_status.py",
+    ],
     blockers: [],
     components: [],
     connectedModules: ["SetupPage"],
@@ -542,7 +638,11 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     description:
       "Typed setup status and setup submission routes for first-run provider and classification-mode configuration.",
     endpoints: ["GET /setup/status", "POST /setup"],
-    files: ["backend/app/api/setup.py", "backend/app/services/setup_status.py", "backend/app/models/setup.py"],
+    files: [
+      "backend/app/api/setup.py",
+      "backend/app/services/setup_status.py",
+      "backend/app/models/setup.py",
+    ],
     howToUse: {
       expectedBehaviour:
         "The backend returns non-secret setup state and validates setup submissions without persisting secrets.",
@@ -562,7 +662,8 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       ],
     },
     id: "backend-setup-api",
-    implementationStatus: "Implemented with Pydantic DTOs and thin FastAPI routes.",
+    implementationStatus:
+      "Implemented with Pydantic DTOs and thin FastAPI routes.",
     name: "Setup wizard API",
     relationship: [
       { label: "Setup", type: "screen" },
@@ -582,20 +683,35 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       canTestNow: true,
       entryPoint: "GET /setup/status",
       exampleInputs: ["llm_provider=ollama", "classification_mode omitted"],
-      expectedOutputs: ["recommended_classification_mode=local", "setup_complete flag"],
+      expectedOutputs: [
+        "recommended_classification_mode=local",
+        "setup_complete flag",
+      ],
       requiredSetup: ["Backend app test client"],
     },
   },
   {
     area: "backend",
-    assignedModules: ["backend/app/api/provider_config.py", "backend/app/services/provider_config.py"],
+    assignedModules: [
+      "backend/app/api/provider_config.py",
+      "backend/app/services/provider_config.py",
+    ],
     blockers: [
       "LLM health checks remain blocked until the config route is wired to a configured provider adapter.",
     ],
     components: ["SetupPage"],
-    connectedModules: ["First-run setup shell", "ProviderRegistry", "LLM provider adapters"],
+    connectedModules: [
+      "First-run setup shell",
+      "ProviderRegistry",
+      "LLM provider adapters",
+    ],
     completedDate: "2026-07-05",
-    dependencies: ["Provider registry", "AppSettings", "SecretStore metadata", "LLMProvider adapter"],
+    dependencies: [
+      "Provider registry",
+      "AppSettings",
+      "SecretStore metadata",
+      "LLMProvider adapter",
+    ],
     description:
       "Provider configuration API that exposes non-secret provider settings, validates provider updates, and recommends classification modes.",
     endpoints: ["GET /config/providers", "PUT /config/providers"],
@@ -632,7 +748,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "SetupPage", type: "component" },
       { label: "GET /config/providers", type: "api" },
       { label: "PUT /config/providers", type: "api" },
-      { label: "Future POST /config/providers/llm/health", type: "planned_api" },
+      {
+        label: "Future POST /config/providers/llm/health",
+        type: "planned_api",
+      },
       { label: "config router", type: "controller" },
       { label: "ProviderConfigService", type: "service" },
       { label: "AppSettings", type: "runtime_config" },
@@ -649,7 +768,11 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     testing: {
       canTestNow: true,
       entryPoint: "GET /config/providers",
-      exampleInputs: ["llm_provider=ollama", "ollama_chat_model=llama3.1", "classification_mode omitted"],
+      exampleInputs: [
+        "llm_provider=ollama",
+        "ollama_chat_model=llama3.1",
+        "classification_mode omitted",
+      ],
       expectedOutputs: [
         "ProviderConfigResponse",
         "recommended_classification_mode=local for Ollama",
@@ -660,23 +783,39 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
   },
   {
     area: "backend",
-    assignedModules: ["backend/app/api/auth.py", "backend/app/services/gmail_auth.py"],
+    assignedModules: [
+      "backend/app/api/auth.py",
+      "backend/app/services/gmail_auth.py",
+    ],
     blockers: [],
     components: ["SetupPage"],
-    connectedModules: ["First-run setup shell", "GmailEmailProvider", "SecretStore"],
+    connectedModules: [
+      "First-run setup shell",
+      "GmailEmailProvider",
+      "SecretStore",
+    ],
     completedDate: "2026-07-05",
     dependencies: ["Gmail OAuth", "SecretStore", "EmailConnectionRepository"],
     description:
       "Gmail read-only OAuth start and callback API that issues provider authorization URLs, validates state, stores token material through the configured secret store, and persists only non-secret connection metadata.",
     endpoints: ["GET /auth/gmail", "GET /auth/gmail/callback"],
-    files: ["backend/app/api/auth.py", "backend/app/services/gmail_auth.py", "backend/app/providers/email/gmail.py"],
+    files: [
+      "backend/app/api/auth.py",
+      "backend/app/services/gmail_auth.py",
+      "backend/app/providers/email/gmail.py",
+    ],
     howToUse: {
       expectedBehaviour:
         "The start endpoint returns a Google authorization URL with gmail.readonly, and the callback exchanges the code only after state validation.",
       expectedSuccessResult:
         "A successful callback returns an EmailConnection DTO without exposing OAuth tokens or client secrets.",
-      navigationPath: "API client -> GET /auth/gmail -> GET /auth/gmail/callback",
-      prerequisites: ["Backend running", "User-owned Google OAuth client configured", "Secret store configured"],
+      navigationPath:
+        "API client -> GET /auth/gmail -> GET /auth/gmail/callback",
+      prerequisites: [
+        "Backend running",
+        "User-owned Google OAuth client configured",
+        "Secret store configured",
+      ],
       qaValidationPoints: [
         "Authorization start returns only the read-only Gmail scope.",
         "Invalid OAuth state returns a typed public-safe 400 error.",
@@ -710,9 +849,20 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     testing: {
       canTestNow: true,
       entryPoint: "GET /auth/gmail",
-      exampleInputs: ["Configured Gmail client id", "Valid OAuth state", "Callback code from Google"],
-      expectedOutputs: ["Authorization URL", "gmail.readonly scope", "EmailConnection metadata"],
-      requiredSetup: ["Backend app test client or configured local backend", "User-owned Google OAuth client"],
+      exampleInputs: [
+        "Configured Gmail client id",
+        "Valid OAuth state",
+        "Callback code from Google",
+      ],
+      expectedOutputs: [
+        "Authorization URL",
+        "gmail.readonly scope",
+        "EmailConnection metadata",
+      ],
+      requiredSetup: [
+        "Backend app test client or configured local backend",
+        "User-owned Google OAuth client",
+      ],
     },
   },
   {
@@ -725,12 +875,26 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     ],
     blockers: [],
     components: [],
-    connectedModules: ["ClassificationService", "StructuredExtractionService", "EmailRepository", "ClassificationRunRepository"],
+    connectedModules: [
+      "ClassificationService",
+      "StructuredExtractionService",
+      "EmailRepository",
+      "ClassificationRunRepository",
+    ],
     completedDate: "2026-07-05",
-    dependencies: ["retained raw_emails", "email_classifications", "classification_runs", "LLMProvider adapter"],
+    dependencies: [
+      "retained raw_emails",
+      "email_classifications",
+      "classification_runs",
+      "LLMProvider adapter",
+    ],
     description:
       "Classification control API that estimates candidate volume and cost, reports deterministic reprocessing buckets, and runs retained-email classification batches with accounting.",
-    endpoints: ["GET /classification/estimate", "GET /classification/reprocessing-plan", "POST /classification/run"],
+    endpoints: [
+      "GET /classification/estimate",
+      "GET /classification/reprocessing-plan",
+      "POST /classification/run",
+    ],
     files: [
       "backend/app/api/classification.py",
       "backend/app/services/classification_estimate.py",
@@ -743,8 +907,13 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "The estimate and reprocessing-plan endpoints read local metadata without calling an LLM, while the run endpoint classifies retained candidates through the configured provider and stores accepted results plus run accounting.",
       expectedSuccessResult:
         "QA can confirm candidate counts, prompt/model version buckets, malformed counts, and token accounting reconcile with local repository data.",
-      navigationPath: "API client -> GET /classification/estimate -> GET /classification/reprocessing-plan -> POST /classification/run",
-      prerequisites: ["Backend running", "Retained candidate emails in local SQLite", "Configured LLM provider for POST /classification/run"],
+      navigationPath:
+        "API client -> GET /classification/estimate -> GET /classification/reprocessing-plan -> POST /classification/run",
+      prerequisites: [
+        "Backend running",
+        "Retained candidate emails in local SQLite",
+        "Configured LLM provider for POST /classification/run",
+      ],
       qaValidationPoints: [
         "GET /classification/estimate does not expose email content or call the LLM provider.",
         "GET /classification/reprocessing-plan separates unclassified, stale-model, stale-prompt-version, and up-to-date buckets deterministically.",
@@ -784,23 +953,44 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     testing: {
       canTestNow: true,
       entryPoint: "GET /classification/estimate",
-      exampleInputs: ["Retained candidate rows", "classification_model=llama3.1", "classification_prompt_version=current"],
+      exampleInputs: [
+        "Retained candidate rows",
+        "classification_model=llama3.1",
+        "classification_prompt_version=current",
+      ],
       expectedOutputs: [
         "ClassificationPreRunEstimate",
         "ClassificationReprocessingPlan",
         "ClassificationRunResponse with token totals and malformed count",
       ],
-      requiredSetup: ["Backend app test client", "Retained candidate fixtures", "Configured or mocked LLM provider for POST /classification/run"],
+      requiredSetup: [
+        "Backend app test client",
+        "Retained candidate fixtures",
+        "Configured or mocked LLM provider for POST /classification/run",
+      ],
     },
   },
   {
     area: "backend",
-    assignedModules: ["backend/app/api/sync.py", "backend/app/services/sync_service.py"],
+    assignedModules: [
+      "backend/app/api/sync.py",
+      "backend/app/services/sync_service.py",
+    ],
     blockers: [],
     components: ["SyncStatusPanel"],
-    connectedModules: ["Overview page", "GmailEmailProvider", "Email repositories", "Sync state repositories"],
+    connectedModules: [
+      "Overview page",
+      "GmailEmailProvider",
+      "Email repositories",
+      "Sync state repositories",
+    ],
     completedDate: "2026-07-05",
-    dependencies: ["Gmail OAuth", "raw_emails", "email_sync_state", "email_backfill_state"],
+    dependencies: [
+      "Gmail OAuth",
+      "raw_emails",
+      "email_sync_state",
+      "email_backfill_state",
+    ],
     description:
       "Manual email sync API that resolves the configured Gmail connection, runs full backfill or incremental sync as needed, reports progress, prevents concurrent runs, and keeps sync state public-safe.",
     endpoints: ["POST /sync", "GET /sync/status"],
@@ -816,7 +1006,11 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       expectedSuccessResult:
         "A successful run records metadata, retained candidate bodies, filter decisions, page counts, message counts, and cursor progress.",
       navigationPath: "API client -> POST /sync and GET /sync/status",
-      prerequisites: ["Backend running", "Gmail connected", "Writable local SQLite database"],
+      prerequisites: [
+        "Backend running",
+        "Gmail connected",
+        "Writable local SQLite database",
+      ],
       qaValidationPoints: [
         "A second concurrent POST /sync returns a typed 409 error.",
         "No raw email body or OAuth token appears in status output.",
@@ -855,22 +1049,44 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     testing: {
       canTestNow: true,
       entryPoint: "POST /sync",
-      exampleInputs: ["Connected Gmail account", "Existing expired cursor", "Fresh metadata page"],
-      expectedOutputs: ["EmailSyncStatus response", "Public-safe sync errors", "Updated raw_emails and sync cursors"],
-      requiredSetup: ["Backend app test client with mocked provider", "Gmail credentials for live QA"],
+      exampleInputs: [
+        "Connected Gmail account",
+        "Existing expired cursor",
+        "Fresh metadata page",
+      ],
+      expectedOutputs: [
+        "EmailSyncStatus response",
+        "Public-safe sync errors",
+        "Updated raw_emails and sync cursors",
+      ],
+      requiredSetup: [
+        "Backend app test client with mocked provider",
+        "Gmail credentials for live QA",
+      ],
     },
   },
   {
     area: "backend",
-    assignedModules: ["backend/app/api/applications.py", "backend/app/services/applications.py"],
+    assignedModules: [
+      "backend/app/api/applications.py",
+      "backend/app/services/applications.py",
+    ],
     blockers: [],
     components: ["DashboardPage"],
-    connectedModules: ["Future deterministic dashboard", "ApplicationRepository", "ApplicationEventsService"],
+    connectedModules: [
+      "Future deterministic dashboard",
+      "ApplicationRepository",
+      "ApplicationEventsService",
+    ],
     completedDate: "2026-07-06",
     dependencies: ["applications", "application_events", "raw_emails"],
     description:
       "Application read API that lists canonical application records, returns one application detail row, and exposes the ordered event timeline from the local SQLite source of truth.",
-    endpoints: ["GET /applications", "GET /applications/{id}", "GET /applications/{id}/events"],
+    endpoints: [
+      "GET /applications",
+      "GET /applications/{id}",
+      "GET /applications/{id}/events",
+    ],
     files: [
       "backend/app/api/applications.py",
       "backend/app/services/applications.py",
@@ -882,8 +1098,12 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "The API returns deterministic application rows with composable filters, typed 404s for missing detail records, and ordered timeline events for existing applications.",
       expectedSuccessResult:
         "Dashboard and QA clients can inspect application status, source, sponsorship, work mode, salary, and event history without LLM-generated facts.",
-      navigationPath: "API client -> GET /applications -> GET /applications/{id} -> GET /applications/{id}/events",
-      prerequisites: ["Backend running", "SQLite database with aggregated applications and events"],
+      navigationPath:
+        "API client -> GET /applications -> GET /applications/{id} -> GET /applications/{id}/events",
+      prerequisites: [
+        "Backend running",
+        "SQLite database with aggregated applications and events",
+      ],
       qaValidationPoints: [
         "List filters compose across status, source, sponsorship, date range, role, salary band, and work mode.",
         "Missing application IDs return the standard typed 404 error.",
@@ -931,7 +1151,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "ApplicationRecord detail response",
         "Ordered ApplicationEventRecord timeline or typed 404",
       ],
-      requiredSetup: ["Backend app test client", "Application and event fixtures in local SQLite"],
+      requiredSetup: [
+        "Backend app test client",
+        "Application and event fixtures in local SQLite",
+      ],
     },
   },
   {
@@ -952,7 +1175,12 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       "CorrectionRepository",
     ],
     completedDate: "2026-07-06",
-    dependencies: ["applications", "application_events", "application_corrections", "raw_emails"],
+    dependencies: [
+      "applications",
+      "application_events",
+      "application_corrections",
+      "raw_emails",
+    ],
     description:
       "Manual correction API that audits user status edits, timeline event edits, and duplicate-application merges while locking corrected records from automatic overwrite.",
     endpoints: [
@@ -977,7 +1205,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "QA can verify the corrected application, moved timeline events, and audit correction records reconcile with the local SQLite tables.",
       navigationPath:
         "API client -> PATCH /applications/{application_id}/status, PATCH /applications/{application_id}/events/{event_id}, POST /applications/{application_id}/split, or POST /applications/{application_id}/merge",
-      prerequisites: ["Backend running", "SQLite database with application, event, and correction fixtures"],
+      prerequisites: [
+        "Backend running",
+        "SQLite database with application, event, and correction fixtures",
+      ],
       qaValidationPoints: [
         "Status edits return an updated ApplicationRecord with manual_lock=true and a status_edit correction.",
         "Event edits reject no-op changes and missing source emails with typed public API errors.",
@@ -1000,7 +1231,10 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "Dashboard", type: "screen" },
       { label: "DashboardPage", type: "component" },
       { label: "PATCH /applications/{application_id}/status", type: "api" },
-      { label: "PATCH /applications/{application_id}/events/{event_id}", type: "api" },
+      {
+        label: "PATCH /applications/{application_id}/events/{event_id}",
+        type: "api",
+      },
       { label: "POST /applications/{application_id}/split", type: "api" },
       { label: "POST /applications/{application_id}/merge", type: "api" },
       { label: "applications router", type: "controller" },
@@ -1032,28 +1266,45 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "ApplicationSplitResponse with a new manually locked application and split correction",
         "ApplicationMergeResponse with moved_event_count and merge correction",
       ],
-      requiredSetup: ["Backend app test client", "Application, event, raw email, and correction fixtures in local SQLite"],
+      requiredSetup: [
+        "Backend app test client",
+        "Application, event, raw email, and correction fixtures in local SQLite",
+      ],
     },
   },
   {
     area: "backend",
-    assignedModules: ["backend/app/api/wipe_data.py", "backend/app/services/wipe_data.py"],
+    assignedModules: [
+      "backend/app/api/wipe_data.py",
+      "backend/app/services/wipe_data.py",
+    ],
     blockers: [],
     components: [],
-    connectedModules: ["Local data settings", "SQLite data directory", "Derived artifact cleanup"],
+    connectedModules: [
+      "Local data settings",
+      "SQLite data directory",
+      "Derived artifact cleanup",
+    ],
     completedDate: "2026-07-05",
     dependencies: ["AppSettings", "Configured local data paths"],
     description:
       "Safety-checked local data deletion endpoint that requires the exact confirmation phrase, preflights configured filesystem targets, and removes local database and derived artifacts without touching unsafe paths.",
     endpoints: ["POST /local-data/wipe"],
-    files: ["backend/app/api/wipe_data.py", "backend/app/services/wipe_data.py", "backend/app/models/wipe_data.py"],
+    files: [
+      "backend/app/api/wipe_data.py",
+      "backend/app/services/wipe_data.py",
+      "backend/app/models/wipe_data.py",
+    ],
     howToUse: {
       expectedBehaviour:
         "The route validates the confirmation phrase and refuses unsafe configured targets before any deletion happens.",
       expectedSuccessResult:
         "The response reports status=wiped plus deleted and missing local paths, with no secrets or private email content in the body.",
       navigationPath: "API client -> POST /local-data/wipe",
-      prerequisites: ["Backend running", "Disposable local app data or isolated test directory"],
+      prerequisites: [
+        "Backend running",
+        "Disposable local app data or isolated test directory",
+      ],
       qaValidationPoints: [
         "Missing or incorrect confirmation phrase is rejected by request validation.",
         "Unsafe configured targets return a typed 400 error and delete nothing.",
@@ -1086,9 +1337,19 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     testing: {
       canTestNow: true,
       entryPoint: "POST /local-data/wipe",
-      exampleInputs: ["confirmation_phrase=wipe-local-data", "Isolated SQLite test path"],
-      expectedOutputs: ["status=wiped", "deleted_paths list", "missing_paths list"],
-      requiredSetup: ["Backend app test client", "Disposable local data directory"],
+      exampleInputs: [
+        "confirmation_phrase=wipe-local-data",
+        "Isolated SQLite test path",
+      ],
+      expectedOutputs: [
+        "status=wiped",
+        "deleted_paths list",
+        "missing_paths list",
+      ],
+      requiredSetup: [
+        "Backend app test client",
+        "Disposable local data directory",
+      ],
     },
   },
 ];

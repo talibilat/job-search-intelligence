@@ -26,7 +26,12 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /** Shared app button with a safe default `type` and visual variants. */
-export function Button({ className, type = "button", variant = "primary", ...props }: ButtonProps) {
+export function Button({
+  className,
+  type = "button",
+  variant = "primary",
+  ...props
+}: ButtonProps) {
   return (
     <button
       className={cx("ui-button", `ui-button--${variant}`, className)}
@@ -72,22 +77,29 @@ export interface FormFieldProps {
 
 function mergeIds(...ids: (string | undefined)[]) {
   const merged = Array.from(
-    new Set(
-      ids.flatMap((id) => id?.split(" ").filter(Boolean) ?? []),
-    ),
+    new Set(ids.flatMap((id) => id?.split(" ").filter(Boolean) ?? [])),
   ).join(" ");
 
   return merged.length > 0 ? merged : undefined;
 }
 
 /** Labelled control wrapper that wires hint and error text through `aria-describedby`. */
-export function FormField({ children, error, hint, htmlFor, label }: FormFieldProps) {
+export function FormField({
+  children,
+  error,
+  hint,
+  htmlFor,
+  label,
+}: FormFieldProps) {
   const hintId = hint ? `${htmlFor}-hint` : undefined;
   const errorId = error ? `${htmlFor}-error` : undefined;
   const describedBy = mergeIds(hintId, errorId);
   const control = isValidElement<DescribedControlProps>(children)
     ? cloneElement(children, {
-        "aria-describedby": mergeIds(children.props["aria-describedby"], describedBy),
+        "aria-describedby": mergeIds(
+          children.props["aria-describedby"],
+          describedBy,
+        ),
         "aria-invalid": error ? true : children.props["aria-invalid"],
         id: htmlFor,
       })
@@ -113,17 +125,31 @@ export function FormField({ children, error, hint, htmlFor, label }: FormFieldPr
   );
 }
 
-export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+export interface AlertProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "title"
+> {
   title?: ReactNode;
   tone?: "danger" | "info" | "success" | "warning";
 }
 
 /** Static alert box; danger defaults to `role="alert"`, while callers opt into `status`. */
-export function Alert({ children, className, role, title, tone = "info", ...props }: AlertProps) {
+export function Alert({
+  children,
+  className,
+  role,
+  title,
+  tone = "info",
+  ...props
+}: AlertProps) {
   const computedRole = role ?? (tone === "danger" ? "alert" : undefined);
 
   return (
-    <div className={cx("ui-alert", `ui-alert--${tone}`, className)} role={computedRole} {...props}>
+    <div
+      className={cx("ui-alert", `ui-alert--${tone}`, className)}
+      role={computedRole}
+      {...props}
+    >
       {title ? <p className="ui-alert-title">{title}</p> : null}
       <div className="ui-alert-content">{children}</div>
     </div>
@@ -147,14 +173,24 @@ export interface TabsProps {
 }
 
 /** Keyboard-operable tab set with roving focus across enabled tabs. */
-export function Tabs({ activeItemId, className, defaultItemId, items, label, onItemChange }: TabsProps) {
+export function Tabs({
+  activeItemId,
+  className,
+  defaultItemId,
+  items,
+  label,
+  onItemChange,
+}: TabsProps) {
   const baseId = useId();
   const firstEnabledItem = items.find((item) => !item.disabled) ?? items[0];
-  const [uncontrolledActiveId, setUncontrolledActiveId] = useState(defaultItemId ?? firstEnabledItem?.id);
+  const [uncontrolledActiveId, setUncontrolledActiveId] = useState(
+    defaultItemId ?? firstEnabledItem?.id,
+  );
   const activeId = activeItemId ?? uncontrolledActiveId;
   const enabledItems = items.filter((item) => !item.disabled);
   const activeItem =
-    items.find((item) => item.id === activeId && !item.disabled) ?? firstEnabledItem;
+    items.find((item) => item.id === activeId && !item.disabled) ??
+    firstEnabledItem;
 
   function getTabId(item: TabItem) {
     return `${baseId}-${item.id}-tab`;
@@ -171,7 +207,9 @@ export function Tabs({ activeItemId, className, defaultItemId, items, label, onI
 
     setUncontrolledActiveId(item.id);
     onItemChange?.(item.id);
-    requestAnimationFrame(() => document.getElementById(getTabId(item))?.focus());
+    requestAnimationFrame(() =>
+      document.getElementById(getTabId(item))?.focus(),
+    );
   }
 
   function activateByOffset(offset: number) {
@@ -179,8 +217,11 @@ export function Tabs({ activeItemId, className, defaultItemId, items, label, onI
       return;
     }
 
-    const activeIndex = enabledItems.findIndex((item) => item.id === activeItem.id);
-    const nextIndex = (activeIndex + offset + enabledItems.length) % enabledItems.length;
+    const activeIndex = enabledItems.findIndex(
+      (item) => item.id === activeItem.id,
+    );
+    const nextIndex =
+      (activeIndex + offset + enabledItems.length) % enabledItems.length;
     activateItem(enabledItems[nextIndex]);
   }
 
@@ -289,7 +330,10 @@ export interface DataTableProps<TRow extends object> {
   rows: readonly TRow[];
 }
 
-function renderCellValue<TRow extends object>(row: TRow, column: ResolvedDataTableColumn<TRow>) {
+function renderCellValue<TRow extends object>(
+  row: TRow,
+  column: ResolvedDataTableColumn<TRow>,
+) {
   if (column.render) {
     return column.render(row);
   }
@@ -304,7 +348,9 @@ function renderCellValue<TRow extends object>(row: TRow, column: ResolvedDataTab
     return "";
   }
 
-  throw new Error("DataTable columns for non-scalar values must define render.");
+  throw new Error(
+    "DataTable columns for non-scalar values must define render.",
+  );
 }
 
 /** Captioned data table; non-scalar columns must provide `render`. */
@@ -322,7 +368,10 @@ export function DataTable<TRow extends object>({
         <thead>
           <tr>
             {columns.map((column) => (
-              <th className={cx(column.align === "right" && "ui-cell--right")} key={column.key}>
+              <th
+                className={cx(column.align === "right" && "ui-cell--right")}
+                key={column.key}
+              >
                 {column.header}
               </th>
             ))}
@@ -333,7 +382,10 @@ export function DataTable<TRow extends object>({
             rows.map((row) => (
               <tr key={rowKey(row)}>
                 {columns.map((column) => (
-                  <td className={cx(column.align === "right" && "ui-cell--right")} key={column.key}>
+                  <td
+                    className={cx(column.align === "right" && "ui-cell--right")}
+                    key={column.key}
+                  >
                     {renderCellValue(row, column)}
                   </td>
                 ))}

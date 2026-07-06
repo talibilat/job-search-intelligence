@@ -497,21 +497,30 @@ describe("App", () => {
     expect(screen.getByText("Chat route shell")).toBeTruthy();
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();
-    expect(screen.getByText("How to use Feature Status Dashboard inventory")).toBeTruthy();
+    expect(
+      screen.getByText("How to use Feature Status Dashboard inventory"),
+    ).toBeTruthy();
     expect(screen.getByText("How to use First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Setup wizard API")).toBeTruthy();
     expect(screen.getByText("Frontend routes")).toBeTruthy();
     expect(screen.getByText("Frontend shared UI elements")).toBeTruthy();
-    expect(screen.getByText("Frontend state management connections")).toBeTruthy();
+    expect(
+      screen.getByText("Frontend state management connections"),
+    ).toBeTruthy();
     expect(screen.getByText("Frontend API integrations")).toBeTruthy();
-    expect(screen.getByText("Backend services consumed by frontend")).toBeTruthy();
+    expect(
+      screen.getByText("Backend services consumed by frontend"),
+    ).toBeTruthy();
 
-    const frontendApiIntegrations = screen.getByText("Frontend API integrations")
-      .parentElement;
+    const frontendApiIntegrations = screen.getByText(
+      "Frontend API integrations",
+    ).parentElement;
     expect(frontendApiIntegrations).toBeTruthy();
     expect(frontendApiIntegrations?.textContent).toContain("GET /setup/status");
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
-    expect(frontendApiIntegrations?.textContent).not.toContain("GET /metrics/summary");
+    expect(frontendApiIntegrations?.textContent).not.toContain(
+      "GET /metrics/summary",
+    );
     expect(frontendApiIntegrations?.textContent).not.toContain("GET /insights");
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
 
@@ -541,9 +550,12 @@ describe("App", () => {
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("FeatureStatusDashboard")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "/features" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "/features" },
+      },
+    );
 
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
 
@@ -572,7 +584,8 @@ describe("App", () => {
     expect(databaseModels?.textContent).not.toContain("Settings");
     expect(databaseModels?.textContent).not.toContain("AppSettings");
 
-    const runtimeAndConfig = screen.getByText("Runtime and config").parentElement;
+    const runtimeAndConfig =
+      screen.getByText("Runtime and config").parentElement;
     expect(runtimeAndConfig).toBeTruthy();
     expect(runtimeAndConfig?.textContent).toContain("FastAPI runtime");
     expect(runtimeAndConfig?.textContent).toContain("Settings");
@@ -607,46 +620,72 @@ describe("App", () => {
     expect(screen.getByText("Application manual corrections API")).toBeTruthy();
     expect(screen.getByText("Health check API")).toBeTruthy();
     expect(screen.getByText("How to use Local data wipe API")).toBeTruthy();
-    expect(screen.getAllByText("POST /local-data/wipe").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("POST /local-data/wipe").length).toBeGreaterThan(
+      0,
+    );
 
-    const providerConfigApi = screen.getByText("Provider configuration API").closest("article");
+    const providerConfigApi = screen
+      .getByText("Provider configuration API")
+      .closest("article");
     expect(providerConfigApi).toBeTruthy();
-    expect(within(providerConfigApi!).getByText("Current blockers").parentElement?.textContent).toContain(
+    expect(
+      within(providerConfigApi!).getByText("Current blockers").parentElement
+        ?.textContent,
+    ).toContain(
       "LLM health checks remain blocked until the config route is wired to a configured provider adapter.",
     );
-    expect(within(providerConfigApi!).getByText("Endpoints").parentElement?.textContent).not.toContain(
-      "POST /config/providers/llm/health",
+    expect(
+      within(providerConfigApi!).getByText("Endpoints").parentElement
+        ?.textContent,
+    ).not.toContain("POST /config/providers/llm/health");
+
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "GET /config/providers" },
+      },
     );
 
-    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "GET /config/providers" },
-    });
-
     expect(screen.getByText("Provider configuration API")).toBeTruthy();
-    expect(screen.getAllByText("GET /config/providers").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GET /config/providers").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.queryByText("Gmail read-only OAuth API")).toBeNull();
     expect(screen.queryByText("Manual sync API")).toBeNull();
     expect(screen.queryByText("Local data wipe API")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "GET /classification/estimate" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "GET /classification/estimate" },
+      },
+    );
 
     expect(screen.getByText("Classification control API")).toBeTruthy();
-    expect(screen.getAllByText("GET /classification/estimate").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("GET /classification/estimate").length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("Provider configuration API")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "GET /applications/{id}/events" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "GET /applications/{id}/events" },
+      },
+    );
 
     expect(screen.getByText("Application read API")).toBeTruthy();
-    expect(screen.getAllByText("GET /applications/{id}/events").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("GET /applications/{id}/events").length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("Classification control API")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "PATCH /applications/{application_id}/status" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "PATCH /applications/{application_id}/status" },
+      },
+    );
 
     expect(screen.getByText("Application manual corrections API")).toBeTruthy();
     expect(
@@ -654,24 +693,31 @@ describe("App", () => {
     ).toBeGreaterThan(0);
     expect(screen.queryByText("Application read API")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "POST /applications/{application_id}/split" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "POST /applications/{application_id}/split" },
+      },
+    );
 
     expect(screen.getByText("Application manual corrections API")).toBeTruthy();
     expect(
       screen.getAllByText("POST /applications/{application_id}/split").length,
     ).toBeGreaterThan(0);
     expect(
-      within(screen.getByText("How to use Application manual corrections API").parentElement!).getByText(
-        /Call POST \/applications\/\{application_id\}\/split/,
-      ),
+      within(
+        screen.getByText("How to use Application manual corrections API")
+          .parentElement!,
+      ).getByText(/Call POST \/applications\/\{application_id\}\/split/),
     ).toBeTruthy();
     expect(screen.queryByText("Application read API")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "GET /health" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "GET /health" },
+      },
+    );
 
     expect(screen.getByText("Health check API")).toBeTruthy();
     expect(screen.getAllByText("GET /health").length).toBeGreaterThan(0);
@@ -679,13 +725,27 @@ describe("App", () => {
   });
 
   it("keeps feature status filters and active tab in the route query string", () => {
-    renderAtPath("/features?tab=backend&search=health&status=completed&testable=yes&scope=GET+%2Fhealth");
+    renderAtPath(
+      "/features?tab=backend&search=health&status=completed&testable=yes&scope=GET+%2Fhealth",
+    );
 
-    expect(screen.getByRole("tab", { name: "Backend", selected: true })).toBeTruthy();
-    expect(screen.getByLabelText<HTMLInputElement>("Search features").value).toBe("health");
-    expect(screen.getByLabelText<HTMLSelectElement>("Status").value).toBe("completed");
-    expect(screen.getByLabelText<HTMLSelectElement>("Testable").value).toBe("yes");
-    expect(screen.getByLabelText<HTMLInputElement>("Module, API, screen, or component").value).toBe("GET /health");
+    expect(
+      screen.getByRole("tab", { name: "Backend", selected: true }),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText<HTMLInputElement>("Search features").value,
+    ).toBe("health");
+    expect(screen.getByLabelText<HTMLSelectElement>("Status").value).toBe(
+      "completed",
+    );
+    expect(screen.getByLabelText<HTMLSelectElement>("Testable").value).toBe(
+      "yes",
+    );
+    expect(
+      screen.getByLabelText<HTMLInputElement>(
+        "Module, API, screen, or component",
+      ).value,
+    ).toBe("GET /health");
     expect(screen.getByText("Health check API")).toBeTruthy();
     expect(screen.queryByText("Provider configuration API")).toBeNull();
 
@@ -698,9 +758,12 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("Testable"), {
       target: { value: "all" },
     });
-    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
-      target: { value: "POST /sync" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "POST /sync" },
+      },
+    );
     fireEvent.click(screen.getByRole("tab", { name: "Frontend" }));
 
     const queryParams = new URLSearchParams(window.location.search);
