@@ -20,10 +20,14 @@ from app.models import (
 from app.services.application_corrections import (
     ApplicationCorrectionService,
     ApplicationSplitConflictError,
+)
+from app.services.application_corrections import (
     ApplicationNotFoundError as ApplicationSplitNotFoundError,
 )
 from app.services.applications import (
     ApplicationDetailService,
+)
+from app.services.applications import (
     ApplicationNotFoundError as ApplicationDetailNotFoundError,
 )
 from app.services.manual_merge import (

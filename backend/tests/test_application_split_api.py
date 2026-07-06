@@ -88,10 +88,12 @@ def test_post_application_split_moves_events_and_records_audit(
     assert new_application_id.startswith("manual-split-")
     assert payload["source_application"]["id"] == "app-merged"
     assert payload["source_application"]["current_status"] == "applied"
+    assert payload["source_application"]["manual_lock"] is True
     assert payload["new_application"]["company"] == "Beta Labs"
     assert payload["new_application"]["role_title"] == "Data Engineer"
     assert payload["new_application"]["source"] == "linkedin"
     assert payload["new_application"]["current_status"] == "rejected"
+    assert payload["new_application"]["manual_lock"] is True
     assert payload["new_application"]["tech_stack"] == []
     assert payload["moved_events"][0]["id"] == "event-rejected"
     assert payload["moved_events"][0]["application_id"] == new_application_id
@@ -103,16 +105,24 @@ def test_post_application_split_moves_events_and_records_audit(
 
     with sqlite3.connect(database_path) as db:
         source = db.execute(
-            "SELECT current_status, first_seen_at, last_activity_at FROM applications WHERE id = ?",
+            """
+            SELECT current_status, first_seen_at, last_activity_at, manual_lock
+            FROM applications
+            WHERE id = ?
+            """,
             ("app-merged",),
         ).fetchone()
-        assert source == ("applied", APPLIED_AT.isoformat(), APPLIED_AT.isoformat())
+        assert source == ("applied", APPLIED_AT.isoformat(), APPLIED_AT.isoformat(), 1)
 
         target = db.execute(
-            "SELECT company, role_title, current_status FROM applications WHERE id = ?",
+            """
+            SELECT company, role_title, current_status, manual_lock
+            FROM applications
+            WHERE id = ?
+            """,
             (new_application_id,),
         ).fetchone()
-        assert target == ("Beta Labs", "Data Engineer", "rejected")
+        assert target == ("Beta Labs", "Data Engineer", "rejected", 1)
 
         reassigned_event = db.execute(
             "SELECT application_id FROM application_events WHERE id = ?",
