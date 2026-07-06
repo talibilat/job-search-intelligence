@@ -290,6 +290,21 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
             self.connection.commit()
         return cursor.rowcount
 
+    def delete_ghost_inferred_events_for_application(self, application_id: str) -> int:
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                DELETE FROM application_events
+                WHERE application_id = ?
+                  AND event_type = 'ghost_inferred'
+                """,
+                (application_id,),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount
+
     def map_row(self, row: sqlite3.Row) -> ApplicationEventRecord:
         return ApplicationEventRecord.model_validate(row_to_dict(row))
 

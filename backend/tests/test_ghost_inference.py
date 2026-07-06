@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from alembic import command
 from alembic.config import Config
 from app.config import AppSettings, get_settings
 from app.main import create_app
+from app.pipeline.aggregate import make_event_id
 from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -121,6 +123,199 @@ def test_post_ghost_inference_surfaces_manual_lock_conflict(tmp_path: Path) -> N
     assert ghost_event_count == 0
 
 
+def test_post_ghost_inference_removes_stale_ghost_when_response_predates_threshold(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, email_id="email-applied")
+        insert_raw_email(
+            connection,
+            email_id="email-response",
+            sent_at="2026-05-15T09:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="app-stale",
+            current_status="ghosted",
+            first_seen_at="2026-05-01T09:00:00+00:00",
+            last_activity_at="2026-05-31T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-stale",
+            email_id="email-applied",
+            event_type="applied",
+            event_at="2026-05-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-response",
+            application_id="app-stale",
+            email_id="email-response",
+            event_type="response",
+            event_at="2026-05-15T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-ghost",
+            application_id="app-stale",
+            email_id=None,
+            event_type="ghost_inferred",
+            event_at="2026-05-31T09:00:00+00:00",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.post("/applications/ghost-inference")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["applications_ghosted"] == 0
+    assert body["ghost_events_retracted"] == 1
+    assert body["retracted_application_ids"] == ["app-stale"]
+
+    with sqlite3.connect(database_path) as connection:
+        application_rows = connection.execute(
+            "SELECT current_status, last_activity_at FROM applications WHERE id = ?",
+            ("app-stale",),
+        ).fetchall()
+        ghost_event_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM application_events
+            WHERE application_id = ? AND event_type = 'ghost_inferred'
+            """,
+            ("app-stale",),
+        ).fetchone()[0]
+
+    assert application_rows == [("in_review", "2026-05-15T09:00:00+00:00")]
+    assert ghost_event_count == 0
+
+
+def test_post_ghost_inference_recomputes_existing_ghost_when_threshold_changes(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, email_id="email-applied")
+        insert_application(
+            connection,
+            application_id="app-threshold",
+            current_status="ghosted",
+            first_seen_at="2026-05-01T09:00:00+00:00",
+            last_activity_at="2026-05-31T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-threshold",
+            email_id="email-applied",
+            event_type="applied",
+            event_at="2026-05-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-ghost-old",
+            application_id="app-threshold",
+            email_id=None,
+            event_type="ghost_inferred",
+            event_at="2026-05-31T09:00:00+00:00",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=45)
+
+    response = client.post("/applications/ghost-inference")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["applications_ghosted"] == 1
+    assert body["ghosted_application_ids"] == ["app-threshold"]
+    assert body["ghost_events_retracted"] == 1
+    assert body["retracted_application_ids"] == ["app-threshold"]
+
+    with sqlite3.connect(database_path) as connection:
+        application_rows = connection.execute(
+            "SELECT current_status, last_activity_at FROM applications WHERE id = ?",
+            ("app-threshold",),
+        ).fetchall()
+        ghost_events = connection.execute(
+            """
+            SELECT event_at
+            FROM application_events
+            WHERE application_id = ? AND event_type = 'ghost_inferred'
+            """,
+            ("app-threshold",),
+        ).fetchall()
+
+    assert application_rows == [("ghosted", "2026-06-15T09:00:00+00:00")]
+    assert ghost_events == [("2026-06-15T09:00:00+00:00",)]
+
+
+def test_post_ghost_inference_reports_protected_ghost_event_conflict(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    ghosted_at = "2026-05-31T09:00:00+00:00"
+    ghost_event_id = make_event_id(
+        application_id="app-protected",
+        email_id=None,
+        event_type="ghost_inferred",
+        event_at=ghosted_at,
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, email_id="email-applied")
+        insert_application(
+            connection,
+            application_id="app-protected",
+            current_status="applied",
+            first_seen_at="2026-05-01T09:00:00+00:00",
+            last_activity_at="2026-05-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-protected",
+            email_id="email-applied",
+            event_type="applied",
+            event_at="2026-05-01T09:00:00+00:00",
+        )
+        insert_event_edit_correction(
+            connection,
+            application_id="app-protected",
+            event_id=ghost_event_id,
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.post("/applications/ghost-inference")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["applications_ghosted"] == 0
+    assert body["ghosted_application_ids"] == []
+    assert body["manual_conflict_count"] == 1
+    assert body["manual_conflict_application_ids"] == ["app-protected"]
+
+    with sqlite3.connect(database_path) as connection:
+        application_rows = connection.execute(
+            "SELECT current_status, last_activity_at FROM applications WHERE id = ?",
+            ("app-protected",),
+        ).fetchall()
+        ghost_event_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM application_events
+            WHERE application_id = ? AND event_type = 'ghost_inferred'
+            """,
+            ("app-protected",),
+        ).fetchone()[0]
+
+    assert application_rows == [("applied", "2026-05-01T09:00:00+00:00")]
+    assert ghost_event_count == 0
+
+
 def create_test_client(database_path: Path, *, ghost_threshold_days: int) -> TestClient:
     settings = AppSettings(
         _env_file=None,
@@ -183,7 +378,12 @@ def insert_application(
     connection.commit()
 
 
-def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
+def insert_raw_email(
+    connection: sqlite3.Connection,
+    *,
+    email_id: str,
+    sent_at: str = "2026-05-01T09:00:00+00:00",
+) -> None:
     connection.execute(
         """
         INSERT INTO raw_emails (
@@ -197,7 +397,7 @@ def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
             "jobs@example.test",
             "applicant@example.test",
             "Application received",
-            "2026-05-01T09:00:00+00:00",
+            sent_at,
             "Synthetic retained body.",
             "retained",
             "[]",
@@ -225,5 +425,31 @@ def insert_event(
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (event_id, application_id, email_id, event_type, event_at, None, None),
+    )
+    connection.commit()
+
+
+def insert_event_edit_correction(
+    connection: sqlite3.Connection,
+    *,
+    application_id: str,
+    event_id: str,
+) -> None:
+    event_snapshot = {"event": {"id": event_id}}
+    connection.execute(
+        """
+        INSERT INTO application_corrections (
+            application_id, correction_type, before_json, after_json, reason,
+            created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            application_id,
+            "event_edit",
+            json.dumps(event_snapshot),
+            json.dumps(event_snapshot),
+            "Protect manually edited ghost event identity.",
+            "2026-05-02T09:00:00+00:00",
+        ),
     )
     connection.commit()

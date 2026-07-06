@@ -117,6 +117,33 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
             (cutoff_at,),
         )
 
+    def update_timeline_status(
+        self,
+        *,
+        application_id: str,
+        current_status: str,
+        last_activity_at: str,
+        updated_at: str,
+    ) -> bool:
+        """Update only timeline-derived status fields for an unlocked application."""
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                UPDATE applications
+                SET current_status = ?,
+                    last_activity_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                  AND manual_lock = 0
+                """,
+                (current_status, last_activity_at, updated_at, application_id),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount > 0
+
     def upsert_application(
         self,
         *,
