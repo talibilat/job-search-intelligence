@@ -501,6 +501,21 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         thread_id = row["thread_id"]
         return str(thread_id) if thread_id is not None else None
 
+    def get_sent_at(self, email_id: str) -> datetime | None:
+        """Return the sent_at timestamp for a raw email, or None if not found."""
+        row = self.execute(
+            "SELECT sent_at FROM raw_emails WHERE id = ?",
+            (email_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        sent_at = row["sent_at"]
+        if sent_at is None:
+            return None
+        if isinstance(sent_at, datetime):
+            return sent_at
+        return datetime.fromisoformat(str(sent_at))
+
     def _table_exists(self, table_name: str) -> bool:
         row = self.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",

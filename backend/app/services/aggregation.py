@@ -81,7 +81,7 @@ class AggregationService:
                 skipped_not_job_related=skipped_not_job_related,
             )
 
-        _enrich_extractions_with_thread_ids(
+        _enrich_extractions_with_email_context(
             email_repository=self._email_repository,
             results=job_related_results,
         )
@@ -126,8 +126,10 @@ class _EnrichedExtraction(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     classification_email_id: str = Field(min_length=1)
+    classification_classified_at: datetime
     extraction: JobApplicationExtraction
     thread_id: str | None = None
+    email_sent_at: datetime | None = None
 
 
 def _filter_job_related(
@@ -136,6 +138,7 @@ def _filter_job_related(
     return [
         _EnrichedExtraction(
             classification_email_id=result.classification.email_id,
+            classification_classified_at=result.classification.classified_at,
             extraction=result.extraction,
         )
         for result in results
@@ -143,14 +146,16 @@ def _filter_job_related(
     ]
 
 
-def _enrich_extractions_with_thread_ids(
+def _enrich_extractions_with_email_context(
     *,
     email_repository: EmailRepository,
     results: list[_EnrichedExtraction],
 ) -> None:
     for result in results:
         thread_id = email_repository.get_thread_id(result.classification_email_id)
+        email_sent_at = email_repository.get_sent_at(result.classification_email_id)
         object.__setattr__(result, "thread_id", thread_id)
+        object.__setattr__(result, "email_sent_at", email_sent_at)
 
 
 def _group_by_key(
@@ -200,13 +205,9 @@ def _upsert_application(
 
     for result in group:
         ext = result.extraction
-        if ext.salary_min is not None and (
-            salary_min is None or ext.salary_min < salary_min
-        ):
+        if ext.salary_min is not None and (salary_min is None or ext.salary_min < salary_min):
             salary_min = ext.salary_min
-        if ext.salary_max is not None and (
-            salary_max is None or ext.salary_max > salary_max
-        ):
+        if ext.salary_max is not None and (salary_max is None or ext.salary_max > salary_max):
             salary_max = ext.salary_max
         if ext.currency is not None and currency is None:
             currency = ext.currency
@@ -218,9 +219,7 @@ def _upsert_application(
             seniority = ext.seniority
         if ext.sponsorship != "unknown" and sponsorship == "unknown":
             sponsorship = ext.sponsorship
-        tech_stack.extend(
-            t for t in ext.tech_stack if t not in tech_stack
-        )
+        tech_stack.extend(t for t in ext.tech_stack if t not in tech_stack)
 
     company = best_result.extraction.company or ""
     role_title = best_result.extraction.role_title or ""
@@ -255,10 +254,7 @@ def _upsert_events(
     for result in group:
         ext = result.extraction
         event_type = ext.event_type or "applied"
-        event_at = ext.event_at
-        event_at_str = (
-            event_at.isoformat() if event_at is not None else _utcnow().isoformat()
-        )
+        event_at_str = _event_at_for_result(result).isoformat()
         email_id = result.classification_email_id
 
         event_id = make_event_id(
@@ -276,6 +272,10 @@ def _upsert_events(
             event_at=event_at_str,
             extract_note=ext.rejection_reason,
         )
+
+
+def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
+    return result.extraction.event_at or result.email_sent_at or result.classification_classified_at
 
 
 def _collect_timestamps(
