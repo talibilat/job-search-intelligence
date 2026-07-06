@@ -233,10 +233,8 @@ class ApplicationCorrectionService:
 
     def _validate_shared_connection(self) -> None:
         if (
-            self._application_repository.connection
-            is not self._event_repository.connection
-            or self._application_repository.connection
-            is not self._correction_repository.connection
+            self._application_repository.connection is not self._event_repository.connection
+            or self._application_repository.connection is not self._correction_repository.connection
         ):
             raise ApplicationSplitConflictError(
                 "Manual split repositories must share one SQLite connection.",
