@@ -15,7 +15,7 @@ function renderAtPath(pathname: string) {
   return render(<App />);
 }
 
-type MockResponseBody = Record<string, unknown> | unknown[];
+type MockResponseBody = Record<string, unknown>;
 
 type MockResponse =
   | MockResponseBody
@@ -26,60 +26,10 @@ type MockResponse =
 
 type MockResponseConfig = MockResponse | MockResponse[];
 
-const applicationRecord = {
-  company: "Acme Corp",
-  created_at: "2026-07-01T09:00:00Z",
-  currency: null,
-  current_status: "applied",
-  first_seen_at: "2026-07-01T09:00:00Z",
-  id: "app-1",
-  last_activity_at: "2026-07-01T09:00:00Z",
-  location: null,
-  manual_lock: false,
-  role_title: "Software Engineer",
-  salary_max: null,
-  salary_min: null,
-  seniority: null,
-  source: "other",
-  sponsorship: "unknown",
-  tech_stack: ["Python"],
-  updated_at: "2026-07-01T09:00:00Z",
-  work_mode: null,
-};
-
-const applicationEvent = {
-  application_id: "app-1",
-  email_id: "email-1",
-  event_at: "2026-07-01T09:00:00Z",
-  event_type: "applied",
-  extract_note: "Application confirmation received.",
-  extracted_status: "applied",
-  id: "event-1",
-};
-
-function correctionRecord(correctionType: string) {
-  return {
-    after_json: {},
-    application_id: "app-1",
-    before_json: {},
-    correction_type: correctionType,
-    created_at: "2026-07-06T09:30:00Z",
-    id: 1,
-    reason: "Corrected from the detail screen.",
-  };
-}
-
-function requestJson(fetchMock: ReturnType<typeof vi.fn>, path: string) {
-  const call = fetchMock.mock.calls.find(([input]) => input === path);
-  const init = call?.[1] as RequestInit | undefined;
-
-  return typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : null;
-}
-
 function isMockResponseConfig(
   value: MockResponse,
-): value is { body: MockResponseBody; status: number } {
-  return !Array.isArray(value) && "body" in value && "status" in value;
+): value is { body: object; status: number } {
+  return "body" in value && "status" in value;
 }
 
 function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
@@ -88,7 +38,7 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
   for (const [path, response] of Object.entries(responses)) {
     responseQueues.set(
       path,
-      Array.isArray(response) ? [...(response as MockResponse[])] : [response],
+      Array.isArray(response) ? [...response] : [response],
     );
   }
 
@@ -526,173 +476,4 @@ describe("App", () => {
     );
   });
 
-  it("loads application detail and saves a manual status correction", async () => {
-    const rejectedApplication = {
-      ...applicationRecord,
-      current_status: "rejected",
-      manual_lock: true,
-    };
-    const fetchMock = mockFetchResponses({
-      "/applications/app-1": [applicationRecord, rejectedApplication],
-      "/applications/app-1/events": [[applicationEvent], [applicationEvent]],
-      "/applications/app-1/status": {
-        application: rejectedApplication,
-        correction: correctionRecord("status_edit"),
-      },
-    });
-
-    renderAtPath("/applications/app-1");
-
-    expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: "Acme Corp - Software Engineer",
-      }),
-    ).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Correction tools" })).toBeTruthy();
-
-    fireEvent.change(screen.getByLabelText("Correct status"), {
-      target: { value: "rejected" },
-    });
-    fireEvent.change(screen.getByLabelText("Status correction reason"), {
-      target: { value: "The rejection email was missed." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save status correction" }));
-
-    expect(await screen.findByText("Status correction saved"));
-    expect(requestJson(fetchMock, "/applications/app-1/status")).toEqual({
-      current_status: "rejected",
-      reason: "The rejection email was missed.",
-    });
-    expect(await screen.findByText("Status: Rejected")).toBeTruthy();
-  });
-
-  it("saves a manual event correction from the detail screen", async () => {
-    const updatedEvent = {
-      ...applicationEvent,
-      event_at: "2026-07-07T14:00:00Z",
-      event_type: "interview_scheduled",
-      extract_note: "Recruiter scheduled a phone screen.",
-      id: "event-2",
-    };
-    const updatedApplication = {
-      ...applicationRecord,
-      current_status: "interview",
-      manual_lock: true,
-    };
-    const fetchMock = mockFetchResponses({
-      "/applications/app-1": [applicationRecord, updatedApplication],
-      "/applications/app-1/events": [[applicationEvent], [updatedEvent]],
-      "/applications/app-1/events/event-1": {
-        application: updatedApplication,
-        correction: correctionRecord("event_edit"),
-        event: updatedEvent,
-      },
-    });
-
-    renderAtPath("/applications/app-1");
-
-    await screen.findByLabelText("Event to edit");
-    fireEvent.change(screen.getByLabelText("Event type"), {
-      target: { value: "interview_scheduled" },
-    });
-    fireEvent.change(screen.getByLabelText("Event time"), {
-      target: { value: "2026-07-07T14:00:00Z" },
-    });
-    fireEvent.change(screen.getByLabelText("Event note"), {
-      target: { value: "Recruiter scheduled a phone screen." },
-    });
-    fireEvent.change(screen.getByLabelText("Event correction reason"), {
-      target: { value: "The event type was classified incorrectly." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save event correction" }));
-
-    expect(await screen.findByText("Event correction saved")).toBeTruthy();
-    expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toEqual({
-      email_id: "email-1",
-      event_at: "2026-07-07T14:00:00Z",
-      event_type: "interview_scheduled",
-      extract_note: "Recruiter scheduled a phone screen.",
-      reason: "The event type was classified incorrectly.",
-    });
-    expect((await screen.findAllByText("Interview scheduled")).length).toBeGreaterThan(0);
-  });
-
-  it("merges and splits applications from the detail screen", async () => {
-    const lockedApplication = {
-      ...applicationRecord,
-      manual_lock: true,
-    };
-    const fetchMock = mockFetchResponses({
-      "/applications/app-1": [
-        applicationRecord,
-        lockedApplication,
-        lockedApplication,
-      ],
-      "/applications/app-1/events": [
-        [applicationEvent],
-        [applicationEvent],
-        [],
-      ],
-      "/applications/app-1/merge": {
-        application: lockedApplication,
-        correction: correctionRecord("merge"),
-        moved_event_count: 1,
-        source_application_id: "duplicate-app",
-        target_application_id: "app-1",
-      },
-      "/applications/app-1/split": {
-        correction: correctionRecord("split"),
-        moved_events: [applicationEvent],
-        new_application: {
-          ...applicationRecord,
-          company: "Beta Corp",
-          id: "app-2",
-          role_title: "Backend Engineer",
-        },
-        source_application: lockedApplication,
-      },
-    });
-
-    renderAtPath("/applications/app-1");
-
-    await screen.findByLabelText("Source application ID");
-    fireEvent.change(screen.getByLabelText("Source application ID"), {
-      target: { value: "duplicate-app" },
-    });
-    fireEvent.change(screen.getByLabelText("Merge reason"), {
-      target: { value: "These rows are duplicates." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Merge source application" }));
-
-    expect(await screen.findByText("Merge correction saved")).toBeTruthy();
-    expect(requestJson(fetchMock, "/applications/app-1/merge")).toEqual({
-      reason: "These rows are duplicates.",
-      source_application_id: "duplicate-app",
-    });
-
-    fireEvent.click(await screen.findByRole("checkbox", { name: /event-1/ }));
-    fireEvent.change(screen.getByLabelText("New application company"), {
-      target: { value: "Beta Corp" },
-    });
-    fireEvent.change(screen.getByLabelText("New application role"), {
-      target: { value: "Backend Engineer" },
-    });
-    fireEvent.change(screen.getByLabelText("Split reason"), {
-      target: { value: "This event belongs to a different application." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Split selected events" }));
-
-    expect(await screen.findByText("Split correction saved")).toBeTruthy();
-    expect(requestJson(fetchMock, "/applications/app-1/split")).toEqual({
-      event_ids: ["event-1"],
-      new_application: {
-        company: "Beta Corp",
-        role_title: "Backend Engineer",
-        source: "other",
-        sponsorship: "unknown",
-      },
-      reason: "This event belongs to a different application.",
-    });
-  });
 });

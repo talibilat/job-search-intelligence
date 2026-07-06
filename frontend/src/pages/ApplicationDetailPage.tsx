@@ -1,8 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import {
-  ApplicationEventType,
-  ApplicationStatus,
   editApplicationEventApplicationsApplicationIdEventsEventIdPatch,
   editApplicationStatusApplicationsApplicationIdStatusPatch,
   getApplicationDetailApplicationsIdGet,
@@ -11,34 +9,25 @@ import {
   splitApplicationApplicationsApplicationIdSplitPost,
   type ApiErrorResponse,
   type ApplicationEventRecord,
-  type ApplicationEventType as ApplicationEventTypeValue,
   type ApplicationRecord,
   type ApplicationStatus as ApplicationStatusValue,
 } from "../api";
-import { Alert, Button, DataTable, FormField, TextInput } from "../components/ui";
+import { Alert } from "../components/ui";
+import {
+  ApplicationSummary,
+  EventCorrectionForm,
+  MergeCorrectionForm,
+  SplitCorrectionForm,
+  StatusCorrectionForm,
+  TimelineTable,
+  type EventEditFormState,
+} from "./ApplicationCorrectionForms";
 
 interface ApplicationDetailPageProps {
   applicationId: string;
 }
 
 type LoadState = "loading" | "loaded" | "error";
-
-interface EventEditFormState {
-  emailId: string;
-  eventAt: string;
-  eventType: ApplicationEventTypeValue;
-  extractNote: string;
-  reason: string;
-}
-
-const statusOptions = Object.values(ApplicationStatus) as ApplicationStatusValue[];
-const eventTypeOptions = Object.values(ApplicationEventType) as ApplicationEventTypeValue[];
-
-function toTitle(value: string) {
-  const label = value.replaceAll("_", " ");
-
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
 
 function publicError(data: unknown, fallback: string) {
   if (
@@ -146,11 +135,16 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
     if (eventsResponse.status === 200) {
       const nextEvents = sortEvents(eventsResponse.data);
+      const nextSelectedEventId = nextEvents.some((event) => event.id === selectedEventId)
+        ? selectedEventId
+        : nextEvents[0]?.id ?? "";
+      const nextSelectedEvent = nextEvents.find(
+        (event) => event.id === nextSelectedEventId,
+      );
+
       setEvents(nextEvents);
-      if (nextEvents.length === 0) {
-        setSelectedEventId("");
-        setEventForm(eventFormFromEvent(undefined));
-      }
+      setSelectedEventId(nextSelectedEventId);
+      setEventForm(eventFormFromEvent(nextSelectedEvent));
     }
   }
 
@@ -160,13 +154,21 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const response = await editApplicationStatusApplicationsApplicationIdStatusPatch(
-      applicationId,
-      {
-        current_status: statusValue,
-        reason: statusReason.trim() || null,
-      },
-    );
+    let response: Awaited<ReturnType<typeof editApplicationStatusApplicationsApplicationIdStatusPatch>>;
+
+    try {
+      response = await editApplicationStatusApplicationsApplicationIdStatusPatch(
+        applicationId,
+        {
+          current_status: statusValue,
+          reason: statusReason.trim() || null,
+        },
+      );
+    } catch {
+      setIsSubmitting(false);
+      setErrorMessage("Status correction failed.");
+      return;
+    }
 
     setIsSubmitting(false);
 
@@ -193,17 +195,25 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const response = await editApplicationEventApplicationsApplicationIdEventsEventIdPatch(
-      applicationId,
-      selectedEventId,
-      {
-        email_id: eventForm.emailId.trim() || null,
-        event_at: eventForm.eventAt,
-        event_type: eventForm.eventType,
-        extract_note: eventForm.extractNote.trim() || null,
-        reason: eventForm.reason.trim() || null,
-      },
-    );
+    let response: Awaited<ReturnType<typeof editApplicationEventApplicationsApplicationIdEventsEventIdPatch>>;
+
+    try {
+      response = await editApplicationEventApplicationsApplicationIdEventsEventIdPatch(
+        applicationId,
+        selectedEventId,
+        {
+          email_id: eventForm.emailId.trim() || null,
+          event_at: eventForm.eventAt,
+          event_type: eventForm.eventType,
+          extract_note: eventForm.extractNote.trim() || null,
+          reason: eventForm.reason.trim() || null,
+        },
+      );
+    } catch {
+      setIsSubmitting(false);
+      setErrorMessage("Event correction failed.");
+      return;
+    }
 
     setIsSubmitting(false);
 
@@ -231,10 +241,18 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const response = await mergeApplicationApplicationsApplicationIdMergePost(applicationId, {
-      reason: mergeReason.trim() || null,
-      source_application_id: mergeSourceId.trim(),
-    });
+    let response: Awaited<ReturnType<typeof mergeApplicationApplicationsApplicationIdMergePost>>;
+
+    try {
+      response = await mergeApplicationApplicationsApplicationIdMergePost(applicationId, {
+        reason: mergeReason.trim() || null,
+        source_application_id: mergeSourceId.trim(),
+      });
+    } catch {
+      setIsSubmitting(false);
+      setErrorMessage("Merge correction failed.");
+      return;
+    }
 
     setIsSubmitting(false);
 
@@ -256,16 +274,24 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const response = await splitApplicationApplicationsApplicationIdSplitPost(applicationId, {
-      event_ids: splitEventIds,
-      new_application: {
-        company: splitCompany.trim(),
-        role_title: splitRole.trim(),
-        source: application?.source ?? "other",
-        sponsorship: application?.sponsorship ?? "unknown",
-      },
-      reason: splitReason.trim() || null,
-    });
+    let response: Awaited<ReturnType<typeof splitApplicationApplicationsApplicationIdSplitPost>>;
+
+    try {
+      response = await splitApplicationApplicationsApplicationIdSplitPost(applicationId, {
+        event_ids: splitEventIds,
+        new_application: {
+          company: splitCompany.trim(),
+          role_title: splitRole.trim(),
+          source: application?.source ?? "other",
+          sponsorship: application?.sponsorship ?? "unknown",
+        },
+        reason: splitReason.trim() || null,
+      });
+    } catch {
+      setIsSubmitting(false);
+      setErrorMessage("Split correction failed.");
+      return;
+    }
 
     setIsSubmitting(false);
 
@@ -329,11 +355,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         <h1 id="application-detail-title">
           {application.company} - {application.role_title}
         </h1>
-        <div className="application-detail-summary" aria-label="Application summary">
-          <span>Status: {toTitle(application.current_status)}</span>
-          <span>{application.manual_lock ? "Manual lock enabled" : "Automatic updates allowed"}</span>
-          <span>{toTitle(application.source)}</span>
-        </div>
+        <ApplicationSummary application={application} />
       </section>
 
       {successMessage ? (
@@ -348,253 +370,57 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
       ) : null}
 
       <section className="application-detail-grid" aria-label="Correction tools">
-        <article className="application-detail-card">
-          <div>
-            <p className="eyebrow">Status</p>
-            <h2>Edit current status</h2>
-          </div>
-          <form
-            className="application-detail-form"
-            onSubmit={(event) => {
-              void handleStatusSubmit(event);
-            }}
-          >
-            <FormField htmlFor="status-value" label="Correct status">
-              <select
-                className="ui-input"
-                id="status-value"
-                onChange={(event) => setStatusValue(event.target.value as ApplicationStatusValue)}
-                value={statusValue}
-              >
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {toTitle(status)}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField htmlFor="status-reason" label="Status correction reason">
-              <TextInput
-                id="status-reason"
-                onChange={(event) => setStatusReason(event.target.value)}
-                value={statusReason}
-              />
-            </FormField>
-            <Button disabled={isSubmitting} type="submit">
-              Save status correction
-            </Button>
-          </form>
-        </article>
+        <StatusCorrectionForm
+          isSubmitting={isSubmitting}
+          onReasonChange={setStatusReason}
+          onStatusChange={setStatusValue}
+          onSubmit={(event) => {
+            void handleStatusSubmit(event);
+          }}
+          reason={statusReason}
+          statusValue={statusValue}
+        />
 
-        <article className="application-detail-card">
-          <div>
-            <p className="eyebrow">Merge</p>
-            <h2>Merge duplicate application</h2>
-          </div>
-          <form
-            className="application-detail-form"
-            onSubmit={(event) => {
-              void handleMergeSubmit(event);
-            }}
-          >
-            <FormField htmlFor="merge-source-id" label="Source application ID">
-              <TextInput
-                id="merge-source-id"
-                onChange={(event) => setMergeSourceId(event.target.value)}
-                required
-                value={mergeSourceId}
-              />
-            </FormField>
-            <FormField htmlFor="merge-reason" label="Merge reason">
-              <TextInput
-                id="merge-reason"
-                onChange={(event) => setMergeReason(event.target.value)}
-                value={mergeReason}
-              />
-            </FormField>
-            <Button disabled={isSubmitting || mergeSourceId.trim().length === 0} type="submit">
-              Merge source application
-            </Button>
-          </form>
-        </article>
+        <MergeCorrectionForm
+          isSubmitting={isSubmitting}
+          onReasonChange={setMergeReason}
+          onSourceIdChange={setMergeSourceId}
+          onSubmit={(event) => {
+            void handleMergeSubmit(event);
+          }}
+          reason={mergeReason}
+          sourceId={mergeSourceId}
+        />
 
-        <article className="application-detail-card application-detail-card--wide">
-          <div>
-            <p className="eyebrow">Timeline</p>
-            <h2>Event timeline</h2>
-          </div>
-          <DataTable
-            caption="Application event timeline"
-            columns={[
-              { key: "event_type", header: "Event", render: (row) => toTitle(row.event_type) },
-              { key: "event_at", header: "When" },
-              { key: "email_id", header: "Source email" },
-              { key: "extract_note", header: "Note" },
-            ]}
-            emptyMessage="No events recorded for this application."
-            rowKey={(row) => row.id}
-            rows={events}
-          />
-        </article>
+        <TimelineTable events={events} />
 
-        <article className="application-detail-card">
-          <div>
-            <p className="eyebrow">Event edit</p>
-            <h2>Edit timeline event</h2>
-          </div>
-          <form
-            className="application-detail-form"
-            onSubmit={(event) => {
-              void handleEventSubmit(event);
-            }}
-          >
-            <FormField htmlFor="event-id" label="Event to edit">
-              <select
-                className="ui-input"
-                disabled={events.length === 0}
-                id="event-id"
-                onChange={(event) => handleSelectEvent(event.target.value)}
-                value={selectedEventId}
-              >
-                {events.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.id}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField htmlFor="event-type" label="Event type">
-              <select
-                className="ui-input"
-                disabled={!selectedEventId}
-                id="event-type"
-                onChange={(event) =>
-                  setEventForm((current) => ({
-                    ...current,
-                    eventType: event.target.value as ApplicationEventTypeValue,
-                  }))
-                }
-                value={eventForm.eventType}
-              >
-                {eventTypeOptions.map((eventType) => (
-                  <option key={eventType} value={eventType}>
-                    {toTitle(eventType)}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField htmlFor="event-time" label="Event time">
-              <TextInput
-                disabled={!selectedEventId}
-                id="event-time"
-                onChange={(event) =>
-                  setEventForm((current) => ({ ...current, eventAt: event.target.value }))
-                }
-                value={eventForm.eventAt}
-              />
-            </FormField>
-            <FormField htmlFor="event-email" label="Source email">
-              <TextInput
-                disabled={!selectedEventId}
-                id="event-email"
-                onChange={(event) =>
-                  setEventForm((current) => ({ ...current, emailId: event.target.value }))
-                }
-                value={eventForm.emailId}
-              />
-            </FormField>
-            <FormField htmlFor="event-note" label="Event note">
-              <TextInput
-                disabled={!selectedEventId}
-                id="event-note"
-                onChange={(event) =>
-                  setEventForm((current) => ({ ...current, extractNote: event.target.value }))
-                }
-                value={eventForm.extractNote}
-              />
-            </FormField>
-            <FormField htmlFor="event-reason" label="Event correction reason">
-              <TextInput
-                disabled={!selectedEventId}
-                id="event-reason"
-                onChange={(event) =>
-                  setEventForm((current) => ({ ...current, reason: event.target.value }))
-                }
-                value={eventForm.reason}
-              />
-            </FormField>
-            <Button disabled={isSubmitting || !selectedEventId} type="submit">
-              Save event correction
-            </Button>
-          </form>
-        </article>
+        <EventCorrectionForm
+          eventForm={eventForm}
+          events={events}
+          isSubmitting={isSubmitting}
+          onEventFormChange={setEventForm}
+          onSelectEvent={handleSelectEvent}
+          onSubmit={(event) => {
+            void handleEventSubmit(event);
+          }}
+          selectedEventId={selectedEventId}
+        />
 
-        <article className="application-detail-card">
-          <div>
-            <p className="eyebrow">Split</p>
-            <h2>Split selected events</h2>
-          </div>
-          <form
-            className="application-detail-form"
-            onSubmit={(event) => {
-              void handleSplitSubmit(event);
-            }}
-          >
-            <fieldset className="application-detail-fieldset">
-              <legend>Events to move</legend>
-              {events.length > 0 ? (
-                events.map((event) => (
-                  <label className="application-detail-checkbox" key={event.id}>
-                    <input
-                      checked={splitEventIds.includes(event.id)}
-                      onChange={(inputEvent) =>
-                        toggleSplitEvent(event.id, inputEvent.target.checked)
-                      }
-                      type="checkbox"
-                    />
-                    <span>{event.id}</span>
-                  </label>
-                ))
-              ) : (
-                <p>No events are available to split.</p>
-              )}
-            </fieldset>
-            <FormField htmlFor="split-company" label="New application company">
-              <TextInput
-                id="split-company"
-                onChange={(event) => setSplitCompany(event.target.value)}
-                required
-                value={splitCompany}
-              />
-            </FormField>
-            <FormField htmlFor="split-role" label="New application role">
-              <TextInput
-                id="split-role"
-                onChange={(event) => setSplitRole(event.target.value)}
-                required
-                value={splitRole}
-              />
-            </FormField>
-            <FormField htmlFor="split-reason" label="Split reason">
-              <TextInput
-                id="split-reason"
-                onChange={(event) => setSplitReason(event.target.value)}
-                value={splitReason}
-              />
-            </FormField>
-            <Button
-              disabled={
-                isSubmitting ||
-                splitEventIds.length === 0 ||
-                splitCompany.trim().length === 0 ||
-                splitRole.trim().length === 0
-              }
-              type="submit"
-            >
-              Split selected events
-            </Button>
-          </form>
-        </article>
+        <SplitCorrectionForm
+          company={splitCompany}
+          events={events}
+          isSubmitting={isSubmitting}
+          onCompanyChange={setSplitCompany}
+          onReasonChange={setSplitReason}
+          onRoleChange={setSplitRole}
+          onSubmit={(event) => {
+            void handleSplitSubmit(event);
+          }}
+          onToggleEvent={toggleSplitEvent}
+          reason={splitReason}
+          role={splitRole}
+          selectedEventIds={splitEventIds}
+        />
       </section>
     </main>
   );
