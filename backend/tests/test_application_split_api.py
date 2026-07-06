@@ -277,6 +277,104 @@ def test_post_application_split_preserves_locked_source_status(
         )
 
 
+def test_post_application_split_preserves_target_segmentation_fields(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    connection = migrated_connection(database_path)
+    try:
+        insert_raw_email(connection, "email-applied")
+        insert_raw_email(connection, "email-rejected")
+        insert_application(
+            connection,
+            application_id="app-merged",
+            company="Acme Corp",
+            role_title="Software Engineer",
+            first_seen_at=APPLIED_AT,
+            current_status="rejected",
+            last_activity_at=REJECTED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-merged",
+            email_id="email-applied",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-rejected",
+            application_id="app-merged",
+            email_id="email-rejected",
+            event_type="rejection",
+            event_at=REJECTED_AT,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/applications/app-merged/split",
+        json={
+            "event_ids": ["event-rejected"],
+            "new_application": {
+                "company": "Beta Labs",
+                "role_title": "Data Engineer",
+                "source": "linkedin",
+                "salary_min": 120000,
+                "salary_max": 150000,
+                "currency": "USD",
+                "location": "New York, NY",
+                "work_mode": "hybrid",
+                "seniority": "senior",
+                "sponsorship": "offered",
+                "tech_stack": ["Python", "FastAPI"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    new_application_id = payload["new_application"]["id"]
+    assert payload["new_application"]["salary_min"] == 120000
+    assert payload["new_application"]["salary_max"] == 150000
+    assert payload["new_application"]["currency"] == "USD"
+    assert payload["new_application"]["location"] == "New York, NY"
+    assert payload["new_application"]["work_mode"] == "hybrid"
+    assert payload["new_application"]["seniority"] == "senior"
+    assert payload["new_application"]["sponsorship"] == "offered"
+    assert payload["new_application"]["tech_stack"] == ["Python", "FastAPI"]
+
+    with sqlite3.connect(database_path) as db:
+        target = db.execute(
+            """
+            SELECT salary_min, salary_max, currency, location, work_mode,
+                   seniority, sponsorship, tech_stack
+            FROM applications
+            WHERE id = ?
+            """,
+            (new_application_id,),
+        ).fetchone()
+        assert target == (
+            120000,
+            150000,
+            "USD",
+            "New York, NY",
+            "hybrid",
+            "senior",
+            "offered",
+            '["Python","FastAPI"]',
+        )
+
+
 def migrated_connection(database_path: Path) -> sqlite3.Connection:
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")

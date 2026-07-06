@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models._json import parse_json_column
-from app.models.application import ApplicationRecord, ApplicationSource
+from app.models.application import (
+    ApplicationRecord,
+    ApplicationSource,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.event import ApplicationEventRecord
 
 type CorrectionType = Literal[
@@ -41,6 +46,25 @@ class ApplicationSplitNewApplication(BaseModel):
     company: str = Field(min_length=1)
     role_title: str = Field(min_length=1)
     source: ApplicationSource = "other"
+    salary_min: int | None = Field(default=None, ge=0)
+    salary_max: int | None = Field(default=None, ge=0)
+    currency: str | None = None
+    location: str | None = None
+    work_mode: WorkMode | None = None
+    seniority: str | None = None
+    sponsorship: SponsorshipStatus = "unknown"
+    tech_stack: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_salary_range(self) -> Self:
+        if (
+            self.salary_min is not None
+            and self.salary_max is not None
+            and self.salary_min > self.salary_max
+        ):
+            msg = "salary_min must be less than or equal to salary_max"
+            raise ValueError(msg)
+        return self
 
 
 class ApplicationSplitRequest(BaseModel):
