@@ -49,7 +49,22 @@ class GhostInferenceService:
                     manual_conflict_application_ids.append(application.id)
                     continue
 
-                ghosted_at = application.last_activity_at + timedelta(days=self._threshold_days)
+                events = self._event_repository.list_by_application_id(application.id)
+                non_ghost_events = [
+                    event for event in events if event.event_type != "ghost_inferred"
+                ]
+                latest_applied = _latest_event(non_ghost_events, event_type="applied")
+                if latest_applied is None or _has_response_after_latest_applied(
+                    non_ghost_events,
+                    latest_applied=latest_applied,
+                ):
+                    continue
+
+                latest_non_ghost = _latest_event(non_ghost_events)
+                if latest_non_ghost is None:
+                    continue
+
+                ghosted_at = latest_non_ghost.event_at + timedelta(days=self._threshold_days)
                 ghosted_at_str = ghosted_at.isoformat()
                 outcome = self._event_repository.upsert_event(
                     id=make_event_id(
@@ -112,27 +127,25 @@ class GhostInferenceService:
                 continue
 
             non_ghost_events = [event for event in events if event.event_type != "ghost_inferred"]
-            if not non_ghost_events:
-                continue
-
-            latest_applied_at = _latest_event_at(non_ghost_events, event_type="applied")
-            if latest_applied_at is None:
-                continue
-            latest_non_ghost_at = _last_event_at(
-                non_ghost_events,
-                fallback=application.last_activity_at,
-            )
+            latest_applied = _latest_event(non_ghost_events, event_type="applied")
+            latest_non_ghost = _latest_event(non_ghost_events)
+            if latest_non_ghost is None:
+                latest_non_ghost_at = application.last_activity_at
+            else:
+                latest_non_ghost_at = latest_non_ghost.event_at
             expected_ghosted_at = latest_non_ghost_at + timedelta(days=self._threshold_days)
-            has_response_after_latest_applied = any(
-                event.event_type in RESPONSE_LIKE_APPLICATION_EVENT_TYPES
-                and event.event_at > latest_applied_at
-                for event in non_ghost_events
+            has_response_after_latest_applied = latest_applied is not None and (
+                _has_response_after_latest_applied(
+                    non_ghost_events,
+                    latest_applied=latest_applied,
+                )
             )
             ghost_dates_are_current = (
                 len(ghost_events) == 1 and ghost_events[0].event_at == expected_ghosted_at
             )
             should_retract = (
-                has_response_after_latest_applied
+                latest_applied is None
+                or has_response_after_latest_applied
                 or expected_ghosted_at > evaluated_at
                 or not ghost_dates_are_current
             )
@@ -184,15 +197,38 @@ def _last_event_at(
     return max(event.event_at for event in events)
 
 
-def _latest_event_at(
+def _latest_event(
     events: list[ApplicationEventRecord],
     *,
-    event_type: ApplicationEventType,
-) -> datetime | None:
-    matching_events = [event.event_at for event in events if event.event_type == event_type]
+    event_type: ApplicationEventType | None = None,
+) -> ApplicationEventRecord | None:
+    matching_events = [
+        event for event in events if event_type is None or event.event_type == event_type
+    ]
     if not matching_events:
         return None
-    return max(matching_events)
+    return max(matching_events, key=_event_ordering_key)
+
+
+def _has_response_after_latest_applied(
+    events: list[ApplicationEventRecord],
+    *,
+    latest_applied: ApplicationEventRecord,
+) -> bool:
+    latest_applied_key = _event_ordering_key(latest_applied)
+    return any(
+        event.event_type in RESPONSE_LIKE_APPLICATION_EVENT_TYPES
+        and _event_ordering_key(event) > latest_applied_key
+        for event in events
+    )
+
+
+def _event_ordering_key(
+    event: ApplicationEventRecord,
+) -> tuple[datetime, datetime, datetime, str]:
+    email_sent_at = event.email_sent_at or event.event_at
+    classified_at = event.classification_classified_at or email_sent_at
+    return event.event_at, email_sent_at, classified_at, event.id
 
 
 def _utcnow() -> datetime:

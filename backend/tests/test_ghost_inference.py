@@ -587,6 +587,120 @@ def test_post_ghost_inference_keeps_ghost_when_response_precedes_latest_applied(
     assert ghost_event_count == 1
 
 
+def test_post_ghost_inference_retracts_same_event_at_response_after_applied(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, email_id="email-applied", sent_at="2026-06-01T09:00:00+00:00")
+        insert_raw_email(connection, email_id="email-response", sent_at="2026-06-01T10:00:00+00:00")
+        insert_application(
+            connection,
+            application_id="app-tiebreak",
+            current_status="ghosted",
+            first_seen_at="2026-06-01T09:00:00+00:00",
+            last_activity_at="2026-07-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-tiebreak",
+            email_id="email-applied",
+            event_type="applied",
+            event_at="2026-06-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-response",
+            application_id="app-tiebreak",
+            email_id="email-response",
+            event_type="response",
+            event_at="2026-06-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-ghost",
+            application_id="app-tiebreak",
+            email_id=None,
+            event_type="ghost_inferred",
+            event_at="2026-07-01T09:00:00+00:00",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.post("/applications/ghost-inference")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ghost_retraction_count"] == 1
+    assert body["retracted_application_ids"] == ["app-tiebreak"]
+
+    with sqlite3.connect(database_path) as connection:
+        application_rows = connection.execute(
+            "SELECT current_status, last_activity_at FROM applications WHERE id = ?",
+            ("app-tiebreak",),
+        ).fetchall()
+        ghost_event_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM application_events
+            WHERE application_id = ? AND event_type = 'ghost_inferred'
+            """,
+            ("app-tiebreak",),
+        ).fetchone()[0]
+
+    assert application_rows == [("in_review", "2026-06-01T09:00:00+00:00")]
+    assert ghost_event_count == 0
+
+
+def test_post_ghost_inference_retracts_ghost_without_applied_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-no-applied",
+            current_status="ghosted",
+            first_seen_at="2026-05-01T09:00:00+00:00",
+            last_activity_at="2026-05-31T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-ghost",
+            application_id="app-no-applied",
+            email_id=None,
+            event_type="ghost_inferred",
+            event_at="2026-05-31T09:00:00+00:00",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.post("/applications/ghost-inference")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ghost_retraction_count"] == 1
+    assert body["retracted_application_ids"] == ["app-no-applied"]
+
+    with sqlite3.connect(database_path) as connection:
+        application_rows = connection.execute(
+            "SELECT current_status, last_activity_at FROM applications WHERE id = ?",
+            ("app-no-applied",),
+        ).fetchall()
+        ghost_event_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM application_events
+            WHERE application_id = ? AND event_type = 'ghost_inferred'
+            """,
+            ("app-no-applied",),
+        ).fetchone()[0]
+
+    assert application_rows == [("applied", "2026-05-31T09:00:00+00:00")]
+    assert ghost_event_count == 0
+
+
 def create_test_client(database_path: Path, *, ghost_threshold_days: int) -> TestClient:
     settings = AppSettings(
         _env_file=None,
