@@ -21,6 +21,7 @@ from app.services.aggregation import derive_current_status_from_events
 
 type Clock = Callable[[], datetime]
 
+
 class ApplicationCorrectionServiceError(Exception):
     def __init__(self, public_message: str) -> None:
         self.public_message = public_message
@@ -101,7 +102,7 @@ class ApplicationCorrectionService:
 
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
-            self._application_repository.upsert_application(
+            target_upsert_outcome = self._application_repository.upsert_application(
                 id=new_application_id,
                 company=request.new_application.company,
                 role_title=request.new_application.role_title,
@@ -121,6 +122,10 @@ class ApplicationCorrectionService:
                 updated_at=now_iso,
                 manual_lock=True,
             )
+            if target_upsert_outcome != "upserted":
+                raise ApplicationSplitConflictError(
+                    "Split target application could not be created.",
+                )
             moved_count = self._event_repository.reassign_events(
                 event_ids=request.event_ids,
                 from_application_id=application_id,

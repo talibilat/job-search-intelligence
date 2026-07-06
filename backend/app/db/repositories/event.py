@@ -70,11 +70,22 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
         placeholders = ", ".join("?" for _ in event_ids)
         return self.fetch_all(
             f"""
-            SELECT *
+            SELECT
+                application_events.*,
+                raw_emails.sent_at AS email_sent_at,
+                email_classifications.classified_at AS classification_classified_at
             FROM application_events
-            WHERE application_id = ?
-              AND id IN ({placeholders})
-            ORDER BY event_at, id
+            LEFT JOIN raw_emails
+                ON raw_emails.id = application_events.email_id
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = application_events.email_id
+            WHERE application_events.application_id = ?
+              AND application_events.id IN ({placeholders})
+            ORDER BY
+                application_events.event_at,
+                raw_emails.sent_at,
+                email_classifications.classified_at,
+                application_events.id
             """,
             (application_id, *event_ids),
         )
