@@ -15,7 +15,8 @@ from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
 from app.services.application_corrections import ApplicationCorrectionService
-from app.services.applications import ApplicationDetailService
+from app.services.applications import ApplicationDetailService, ApplicationEventsService
+from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.structured_extraction import StructuredExtractionService
 
@@ -120,6 +121,21 @@ def get_application_detail_service(
     return ApplicationDetailService(application_repository)
 
 
+def get_application_events_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ApplicationEventsService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield ApplicationEventsService(
+            application_repository=ApplicationRepository(connection),
+            event_repository=EventRepository(connection),
+        )
+    finally:
+        connection.close()
+
+
 def get_readonly_email_repository(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> Iterator[EmailRepository]:
@@ -141,6 +157,22 @@ def get_manual_merge_service(
     connection.execute("PRAGMA foreign_keys = ON")
     try:
         yield ManualApplicationMergeService(
+            application_repository=ApplicationRepository(connection),
+            event_repository=EventRepository(connection),
+            correction_repository=CorrectionRepository(connection),
+        )
+    finally:
+        connection.close()
+
+
+def get_manual_edit_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ManualApplicationEditService]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    try:
+        yield ManualApplicationEditService(
             application_repository=ApplicationRepository(connection),
             event_repository=EventRepository(connection),
             correction_repository=CorrectionRepository(connection),

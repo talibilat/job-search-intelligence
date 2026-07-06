@@ -139,6 +139,7 @@ job-search-intelligence/
 - **`applications`** - `id`, `company`, `role_title`, `source` (`linkedin | company_site | indeed | referral | other`), `first_seen_at`, `current_status` (`applied | in_review | assessment | interview | offer | rejected | ghosted | withdrawn`), `salary_min`, `salary_max`, `currency`, `location`, `work_mode` (`remote | hybrid | onsite`), `seniority`, `sponsorship` (`offered | not_offered | unknown`), `tech_stack` (JSON list), `last_activity_at`, `manual_lock`, `created_at`, `updated_at`.
 - **`application_events`** - `id`, `application_id` (FK), `email_id` (FK), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
   [JT-020 2026-07-05 v2] - **`application_events`** - `id`, `application_id` (FK), nullable `email_id` (FK; null for inferred events such as `ghost_inferred`), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
+  [JT-107 2026-07-06] - **`application_events`** also stores nullable `extracted_status` using the same status enum as `applications.current_status` so status replay can preserve extraction-provided status on status-neutral event types.
 - **`application_corrections`** - `id`, `application_id` (FK to `applications.id` with cascade delete), `correction_type` (`merge | split | status_edit | event_edit | reset_lock`), valid JSON `before_json`, valid JSON `after_json`, `reason`, `created_at`.
 - **`insights`** - `id`, `type` (`why_rejected | skill_gaps | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
 - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, `embedding`.
@@ -156,10 +157,15 @@ job-search-intelligence/
 An **application** is reconstructed from _many_ emails: a confirmation + later a rejection = **one** application whose `current_status` = `rejected`, with two `application_events`.
 `ApplicationGroupingKey` is `(normalized_company, normalized_role, thread_id, time_window_start, time_window_days)`.
 It always uses normalized company and role values, trims opaque provider thread IDs without case-folding them, prefers a present thread signal over date bucketing, and falls back to a UTC date-window bucket when the thread signal is missing.
+When extraction omits `event_at`, aggregation uses raw email `sent_at` before the classification timestamp for event identity, event timeline ordering, and no-thread grouping-key date windows.
 The default grouping window is 30 days.
+`current_status` is derived by replaying already-persisted `application_events` plus the current aggregation batch in event-time order.
+Status-bearing event types map to application statuses: `applied -> applied`, `response -> in_review`, `assessment -> assessment`, `interview_scheduled -> interview`, `rejection -> rejected`, `offer -> offer`, and `ghost_inferred -> ghosted`.
+`feedback` keeps the prior status unless the event carries `extracted_status`.
 `ghosted` is **inferred** when an application has an `applied` event but no response after your personal ghost-threshold (default 30 days, tunable).
 Aggregation must be **idempotent** - re-runs never duplicate.
 Manual corrections are audited, lock affected grouping/status from automatic overwrite by default, and surface conflicts when new evidence disagrees.
+Manual event edits also protect the edited event identity and source email, so aggregation reruns must return a manual conflict instead of creating a competing timeline row for the same edited source evidence.
 
 ---
 
@@ -210,10 +216,13 @@ EmailProvider -> metadata-only raw_emails
         `classification_runs` accounting row per attempted batch
                  │
                  ▼
-   3. aggregate.py  emails -> applications + application_events (dedup)
-      - `build_application_grouping_key()` returns a frozen `ApplicationGroupingKey`
-        from normalized company, normalized role, trimmed opaque provider thread ID,
-        and a UTC date-window fallback when no thread signal is available
+    3. aggregate.py  emails -> applications + application_events (dedup)
+       - `build_application_grouping_key()` returns a frozen `ApplicationGroupingKey`
+         from normalized company, normalized role, trimmed opaque provider thread ID,
+         and a UTC date-window fallback when no thread signal is available
+       - `AggregationService` derives `applications.current_status` by replaying
+         persisted plus current events in event-time order, using `raw_emails.sent_at`
+         as the timestamp fallback when extraction omits `event_at`
                  │
                  ▼
          applications  (single source of truth)
@@ -266,8 +275,10 @@ Show a **pre-run cost estimate** and track tokens per run.
   Raw-email retained and debugging body persistence is insert-or-update, so explicit body fetches are not dropped if they arrive before metadata.
 - **Classification:** `GET /classification/estimate` returns retained candidate counts, estimated prompt and completion tokens, total estimated tokens, model and prompt version, token-estimate method, and cost availability before a bulk classification pass without calling an LLM or returning email content; `GET /classification/reprocessing-plan` returns read-only retained-candidate buckets for up-to-date, unclassified, stale-model, stale-prompt-version, and missing-target-model rows so prompt/model reruns are deterministic before a later runner executes them.
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit.
-  [JT-116 2026-07-06] The backend now implements the read-only detail slice, `GET /applications/{id}`, returning one `ApplicationRecord` from local SQLite and a typed `404` error when no application row matches; list, event, status-edit, and event-edit routes remain later slices.
-  [JT-112 2026-07-06] The backend now implements the manual split slice, `POST /applications/{application_id}/split`, moving selected events into a deterministic new manually locked application, recalculating source and target timeline summaries, preserving corrected segmentation fields for deterministic dashboard breakdowns, writing one audited `split` correction row, and returning typed `404` or `409` errors for missing source applications and split conflicts.
+  [JT-116 2026-07-06] The backend now implements the read-only detail slice, `GET /applications/{id}`, returning one `ApplicationRecord` from local SQLite and a typed `404` error when no application row matches.
+  [JT-117 2026-07-06] The backend now implements the read-only event timeline slice, `GET /applications/{id}/events`, returning ordered `ApplicationEventRecord` rows from local SQLite, an empty list for applications without events, and a typed `404` error when no parent application row matches.
+  [JT-113 2026-07-06] The backend now implements `PATCH /applications/{application_id}/status` and `PATCH /applications/{application_id}/events/{event_id}` for audited manual status and timeline-event corrections; event edits require at least one changed event field, validate source emails, replay application status from the edited timeline, and protect edited event/source-email evidence from conflicting aggregation reruns; list, split, and reset-lock routes remain later slices.
+  [JT-112 2026-07-06] The backend now implements the manual split slice, `POST /applications/{application_id}/split`, moving selected events into a deterministic new manually locked application, locking the source application, recalculating source and target timeline dates, deriving target status from moved events, preserving an already locked source status, preserving corrected segmentation fields for deterministic dashboard breakdowns, writing one audited `split` correction row, and returning typed `404` or `409` errors for missing source applications and split conflicts.
 - **Metrics (deterministic):** `GET /metrics/summary`, `/metrics/rates`, `/metrics/funnel`, `/metrics/timeseries`, `/metrics/breakdown?dimension=role|source|salary|tech|sponsorship|seniority|work_mode`, `/metrics/diagnostics`
 - **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
@@ -397,3 +408,4 @@ The approved ticket plan is recorded in `docs/github-backlog-plan.md`.
 [JT-103 2026-07-05 v1] Aggregation `normalized_role` uses `normalize_role_title()` to fold casing, punctuation, seniority labels, title levels, role abbreviations, common location tokens, and work-arrangement notes while preserving meaningful descriptors such as `back end`, `front end`, `growth`, and `machine learning`.
 [JT-104 2026-07-06] Aggregation grouping-key assembly now lives in `backend/app/pipeline/aggregate.py` as a frozen `ApplicationGroupingKey` built by `build_application_grouping_key()`.
 [JT-104 2026-07-06] The key combines `normalize_company_name()`, `normalize_role_title()`, a trimmed opaque provider thread ID when present, and a 30-day UTC time-window fallback when the thread signal is missing, without adding database writes or API behavior.
+[JT-107 2026-07-06] Aggregation now stores `application_events.extracted_status`, combines persisted and current events for status replay, and derives `applications.current_status` chronologically instead of from an unordered priority set.

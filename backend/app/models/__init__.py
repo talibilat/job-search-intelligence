@@ -1,5 +1,11 @@
 """Pydantic DTOs used at application boundaries."""
 
+from .application_edit import (
+    ApplicationEventEditRequest,
+    ApplicationEventEditResponse,
+    ApplicationStatusEditRequest,
+    ApplicationStatusEditResponse,
+)
 from .application_merge import ApplicationMergeRequest, ApplicationMergeResponse
 from .classification import (
     ClassificationCandidateStats,
@@ -80,8 +86,12 @@ __all__ = [
     "ProviderSecretRequirementResponse",
     "ProviderSelection",
     "ApplicationCorrectionRecord",
+    "ApplicationEventEditRequest",
+    "ApplicationEventEditResponse",
     "ApplicationEventRecord",
     "ApplicationRecord",
+    "ApplicationStatusEditRequest",
+    "ApplicationStatusEditResponse",
     "ApplicationSplitNewApplication",
     "ApplicationSplitRequest",
     "ApplicationSplitResponse",

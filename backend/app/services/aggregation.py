@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.repositories import ApplicationRepository, EmailRepository, EventRepository
 from app.db.repositories.application import ApplicationUpsertOutcome
+from app.models.application import ApplicationStatus
+from app.models.event import ApplicationEventRecord, ApplicationEventType
 from app.pipeline.aggregate import (
     ApplicationGroupingKey,
     build_application_grouping_key,
@@ -18,6 +20,26 @@ from app.pipeline.classify import AcceptedLLMExtraction, JobApplicationExtractio
 
 type Clock = Callable[[], datetime]
 type RunIdFactory = Callable[[], str]
+
+_STATUS_BY_EVENT_TYPE: dict[ApplicationEventType, ApplicationStatus | None] = {
+    "applied": "applied",
+    "response": "in_review",
+    "assessment": "assessment",
+    "interview_scheduled": "interview",
+    "feedback": None,
+    "rejection": "rejected",
+    "offer": "offer",
+    "ghost_inferred": "ghosted",
+}
+
+_EVENT_TYPE_BY_STATUS: dict[ApplicationStatus, ApplicationEventType] = {
+    "applied": "applied",
+    "in_review": "response",
+    "assessment": "assessment",
+    "interview": "interview_scheduled",
+    "offer": "offer",
+    "rejected": "rejection",
+}
 
 
 class AggregationRunResult(BaseModel):
@@ -103,6 +125,7 @@ class AggregationService:
             for key, group in groups.items():
                 application_upsert_outcome = _upsert_application(
                     application_repository=self._application_repository,
+                    event_repository=self._event_repository,
                     key=key,
                     group=group,
                     now=now,
@@ -119,12 +142,17 @@ class AggregationService:
                 if application_upsert_outcome == "upserted":
                     applications_upserted += 1
 
-                _upsert_events(
+                events_upserted_for_group, event_manual_conflict = _upsert_events(
                     event_repository=self._event_repository,
                     application_id=make_application_id(key),
                     group=group,
                 )
-                events_upserted += len(group)
+                events_upserted += events_upserted_for_group
+                if event_manual_conflict:
+                    manual_conflict_count += 1
+                    application_id = make_application_id(key)
+                    if application_id not in manual_conflict_application_ids:
+                        manual_conflict_application_ids.append(application_id)
 
         if should_commit:
             self._application_repository.connection.commit()
@@ -153,6 +181,16 @@ class _EnrichedExtraction(BaseModel):
     extraction: JobApplicationExtraction
     thread_id: str | None = None
     email_sent_at: datetime | None = None
+
+
+class _StatusTimelineEvent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    event_at: datetime
+    email_sent_at: datetime
+    classified_at: datetime
+    event_type: ApplicationEventType
+    extracted_status: ApplicationStatus | None
 
 
 def _filter_job_related(
@@ -202,12 +240,14 @@ def _group_by_key(
 def _upsert_application(
     *,
     application_repository: ApplicationRepository,
+    event_repository: EventRepository,
     key: ApplicationGroupingKey,
     group: list[_EnrichedExtraction],
     now: datetime,
 ) -> ApplicationUpsertOutcome:
     application_id = make_application_id(key)
-    timestamps = _collect_timestamps(group)
+    existing_events = event_repository.list_by_application_id(application_id)
+    timestamps = _collect_timestamps(group, existing_events)
     # Prefer the extraction with company/role data for display fields
     best_result = _pick_best_extraction(group)
 
@@ -253,7 +293,7 @@ def _upsert_application(
         role_title=role_title,
         source=source,
         first_seen_at=first_seen_at,
-        current_status=_derive_current_status(group),
+        current_status=_derive_current_status(group, existing_events),
         last_activity_at=last_activity_at,
         created_at=created_at,
         updated_at=updated_at,
@@ -273,10 +313,12 @@ def _upsert_events(
     event_repository: EventRepository,
     application_id: str,
     group: list[_EnrichedExtraction],
-) -> None:
+) -> tuple[int, bool]:
+    events_upserted = 0
+    manual_conflict = False
     for result in group:
         ext = result.extraction
-        event_type = ext.event_type or "applied"
+        event_type = _event_type_for_result(result)
         event_at_str = _event_at_for_result(result).isoformat()
         email_id = result.classification_email_id
 
@@ -287,14 +329,20 @@ def _upsert_events(
             event_at=event_at_str,
         )
 
-        event_repository.upsert_event(
+        outcome = event_repository.upsert_event(
             id=event_id,
             application_id=application_id,
             email_id=email_id,
             event_type=event_type,
             event_at=event_at_str,
             extract_note=ext.rejection_reason,
+            extracted_status=ext.status,
         )
+        if outcome == "manual_conflict":
+            manual_conflict = True
+            continue
+        events_upserted += 1
+    return events_upserted, manual_conflict
 
 
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
@@ -303,34 +351,105 @@ def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
 
 def _collect_timestamps(
     group: list[_EnrichedExtraction],
+    existing_events: list[ApplicationEventRecord],
 ) -> list[datetime]:
-    timestamps: list[datetime] = []
-    for result in group:
-        timestamps.append(_event_at_for_result(result))
-    timestamps.sort()
-    return timestamps
+    return sorted(
+        [event.event_at for event in existing_events]
+        + [_event_at_for_result(result) for result in group],
+    )
 
 
 def _derive_current_status(
     group: list[_EnrichedExtraction],
-) -> str:
-    status_priority = [
-        "offer",
-        "rejected",
-        "interview",
-        "assessment",
-        "in_review",
-        "applied",
-    ]
-    seen_statuses: set[str] = set()
-    for result in group:
-        if result.extraction.status is not None:
-            seen_statuses.add(result.extraction.status)
+    existing_events: list[ApplicationEventRecord],
+) -> ApplicationStatus:
+    return derive_current_status_from_event_timeline(
+        _collect_status_timeline(group, existing_events),
+    )
 
-    for status in status_priority:
-        if status in seen_statuses:
-            return status
+
+def derive_current_status_from_events(
+    events: list[ApplicationEventRecord],
+) -> ApplicationStatus:
+    return derive_current_status_from_event_timeline(
+        [
+            _StatusTimelineEvent(
+                event_at=event.event_at,
+                email_sent_at=event.email_sent_at or event.event_at,
+                classified_at=(
+                    event.classification_classified_at or event.email_sent_at or event.event_at
+                ),
+                event_type=event.event_type,
+                extracted_status=event.extracted_status,
+            )
+            for event in events
+        ],
+    )
+
+
+def derive_current_status_from_event_timeline(
+    events: list[_StatusTimelineEvent],
+) -> ApplicationStatus:
+    current_status: ApplicationStatus = "applied"
+    for event in sorted(events, key=_status_timeline_sort_key):
+        event_status = _status_for_event_type(event.event_type, event.extracted_status)
+        if event_status is not None:
+            current_status = event_status
+    return current_status
+
+
+def _collect_status_timeline(
+    group: list[_EnrichedExtraction],
+    existing_events: list[ApplicationEventRecord],
+) -> list[_StatusTimelineEvent]:
+    return [
+        *[
+            _StatusTimelineEvent(
+                event_at=event.event_at,
+                email_sent_at=event.email_sent_at or event.event_at,
+                classified_at=(
+                    event.classification_classified_at or event.email_sent_at or event.event_at
+                ),
+                event_type=event.event_type,
+                extracted_status=event.extracted_status,
+            )
+            for event in existing_events
+        ],
+        *[
+            _StatusTimelineEvent(
+                event_at=_event_at_for_result(result),
+                email_sent_at=result.email_sent_at or _event_at_for_result(result),
+                classified_at=result.classification_classified_at,
+                event_type=_event_type_for_result(result),
+                extracted_status=result.extraction.status,
+            )
+            for result in group
+        ],
+    ]
+
+
+def _status_timeline_sort_key(
+    event: _StatusTimelineEvent,
+) -> tuple[datetime, datetime, datetime]:
+    return event.event_at, event.email_sent_at, event.classified_at
+
+
+def _event_type_for_result(result: _EnrichedExtraction) -> ApplicationEventType:
+    if result.extraction.event_type is not None:
+        return result.extraction.event_type
+    if result.extraction.status is not None:
+        return _EVENT_TYPE_BY_STATUS.get(result.extraction.status, "applied")
     return "applied"
+
+
+def _status_for_event_type(
+    event_type: ApplicationEventType,
+    extracted_status: ApplicationStatus | None,
+) -> ApplicationStatus | None:
+    event_status = _STATUS_BY_EVENT_TYPE[event_type]
+    if event_status is not None:
+        return event_status
+    return extracted_status
 
 
 def _pick_best_extraction(

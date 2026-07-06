@@ -85,19 +85,12 @@ export const ApplicationEventType = {
   ghost_inferred: "ghost_inferred",
 } as const;
 
-export interface ApplicationEventRecord {
-  application_id: string;
-  email_id: string | null;
-  event_at: string;
-  event_type: ApplicationEventType;
-  extract_note: string | null;
-  id: string;
-}
-
-export interface ApplicationMergeRequest {
+export interface ApplicationEventEditRequest {
+  email_id?: string | null;
+  event_at?: string | null;
+  event_type?: ApplicationEventType | null;
+  extract_note?: string | null;
   reason?: string | null;
-  /** @minLength 1 */
-  source_application_id: string;
 }
 
 export type ApplicationStatus =
@@ -163,6 +156,30 @@ export interface ApplicationRecord {
   work_mode: WorkMode | null;
 }
 
+export interface ApplicationEventRecord {
+  application_id: string;
+  classification_classified_at?: string | null;
+  email_id: string | null;
+  email_sent_at?: string | null;
+  event_at: string;
+  event_type: ApplicationEventType;
+  extract_note: string | null;
+  extracted_status?: ApplicationStatus | null;
+  id: string;
+}
+
+export interface ApplicationEventEditResponse {
+  application: ApplicationRecord;
+  correction: ApplicationCorrectionRecord;
+  event: ApplicationEventRecord;
+}
+
+export interface ApplicationMergeRequest {
+  reason?: string | null;
+  /** @minLength 1 */
+  source_application_id: string;
+}
+
 export interface ApplicationMergeResponse {
   application: ApplicationRecord;
   correction: ApplicationCorrectionRecord;
@@ -217,6 +234,16 @@ export interface ApplicationSplitResponse {
   moved_events: ApplicationEventRecord[];
   new_application: ApplicationRecord;
   source_application: ApplicationRecord;
+}
+
+export interface ApplicationStatusEditRequest {
+  current_status: ApplicationStatus;
+  reason?: string | null;
+}
+
+export interface ApplicationStatusEditResponse {
+  application: ApplicationRecord;
+  correction: ApplicationCorrectionRecord;
 }
 
 export type ClassificationMode =
@@ -678,6 +705,18 @@ export interface WipeDataResponse {
   status: "wiped";
 }
 
+export type ListApplicationsApplicationsGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
 export type GmailAuthCallbackAuthGmailCallbackGetParams = {
   /**
    * @minLength 1
@@ -688,6 +727,153 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
    */
   state: string;
 };
+
+export type listApplicationsApplicationsGetResponse200 = {
+  data: ApplicationRecord[];
+  status: 200;
+};
+
+export type listApplicationsApplicationsGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type listApplicationsApplicationsGetResponseSuccess =
+  listApplicationsApplicationsGetResponse200 & {
+    headers: Headers;
+  };
+export type listApplicationsApplicationsGetResponseError =
+  listApplicationsApplicationsGetResponse422 & {
+    headers: Headers;
+  };
+
+export type listApplicationsApplicationsGetResponse =
+  | listApplicationsApplicationsGetResponseSuccess
+  | listApplicationsApplicationsGetResponseError;
+
+export const getListApplicationsApplicationsGetUrl = (
+  params?: ListApplicationsApplicationsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/applications?${stringifiedParams}`
+    : `/applications`;
+};
+
+/**
+ * Returns canonical application rows from the local SQLite source of truth, optionally filtered by status, source, sponsorship, first-seen date range, role title, salary band, and work mode.
+ * @summary List Applications
+ */
+export const listApplicationsApplicationsGet = async (
+  params?: ListApplicationsApplicationsGetParams,
+  options?: RequestInit,
+): Promise<listApplicationsApplicationsGetResponse> => {
+  const res = await fetch(getListApplicationsApplicationsGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listApplicationsApplicationsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listApplicationsApplicationsGetResponse;
+};
+
+export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse200 =
+  {
+    data: ApplicationEventEditResponse;
+    status: 200;
+  };
+
+export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse400 =
+  {
+    data: ApiErrorResponse;
+    status: 400;
+  };
+
+export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse404 =
+  {
+    data: ApiErrorResponse;
+    status: 404;
+  };
+
+export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse422 =
+  {
+    data: ApiErrorResponse;
+    status: 422;
+  };
+
+export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponseSuccess =
+  editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse200 & {
+    headers: Headers;
+  };
+export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponseError =
+  (
+    | editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse400
+    | editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse404
+    | editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse422
+  ) & {
+    headers: Headers;
+  };
+
+export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse =
+  | editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponseSuccess
+  | editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponseError;
+
+export const getEditApplicationEventApplicationsApplicationIdEventsEventIdPatchUrl =
+  (applicationId: string, eventId: string) => {
+    return `/applications/${applicationId}/events/${eventId}`;
+  };
+
+/**
+ * Manually corrects one timeline event, locks the application from automatic overwrite, and records an audited event_edit correction.
+ * @summary Edit Application Event
+ */
+export const editApplicationEventApplicationsApplicationIdEventsEventIdPatch =
+  async (
+    applicationId: string,
+    eventId: string,
+    applicationEventEditRequest: ApplicationEventEditRequest,
+    options?: RequestInit,
+  ): Promise<editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse> => {
+    const res = await fetch(
+      getEditApplicationEventApplicationsApplicationIdEventsEventIdPatchUrl(
+        applicationId,
+        eventId,
+      ),
+      {
+        ...options,
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...options?.headers },
+        body: JSON.stringify(applicationEventEditRequest),
+      },
+    );
+
+    const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+    const data: editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse["data"] =
+      body ? JSON.parse(body) : {};
+    return {
+      data,
+      status: res.status,
+      headers: res.headers,
+    } as editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse;
+  };
 
 export type mergeApplicationApplicationsApplicationIdMergePostResponse200 = {
   data: ApplicationMergeResponse;
@@ -777,7 +963,7 @@ export type splitApplicationApplicationsApplicationIdSplitPostResponse409 = {
 };
 
 export type splitApplicationApplicationsApplicationIdSplitPostResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 
@@ -804,7 +990,7 @@ export const getSplitApplicationApplicationsApplicationIdSplitPostUrl = (
 };
 
 /**
- * Splits selected events out of an incorrectly grouped application into a new application and records an audited manual correction.
+ * Splits selected events out of an incorrectly grouped application into a deterministic manually locked application, locks the source application, recalculates timeline dates, derives target status from moved events, and records an audited manual correction.
  * @summary Split Application
  */
 export const splitApplicationApplicationsApplicationIdSplitPost = async (
@@ -831,6 +1017,78 @@ export const splitApplicationApplicationsApplicationIdSplitPost = async (
     status: res.status,
     headers: res.headers,
   } as splitApplicationApplicationsApplicationIdSplitPostResponse;
+};
+
+export type editApplicationStatusApplicationsApplicationIdStatusPatchResponse200 =
+  {
+    data: ApplicationStatusEditResponse;
+    status: 200;
+  };
+
+export type editApplicationStatusApplicationsApplicationIdStatusPatchResponse404 =
+  {
+    data: ApiErrorResponse;
+    status: 404;
+  };
+
+export type editApplicationStatusApplicationsApplicationIdStatusPatchResponse422 =
+  {
+    data: ApiErrorResponse;
+    status: 422;
+  };
+
+export type editApplicationStatusApplicationsApplicationIdStatusPatchResponseSuccess =
+  editApplicationStatusApplicationsApplicationIdStatusPatchResponse200 & {
+    headers: Headers;
+  };
+export type editApplicationStatusApplicationsApplicationIdStatusPatchResponseError =
+  (
+    | editApplicationStatusApplicationsApplicationIdStatusPatchResponse404
+    | editApplicationStatusApplicationsApplicationIdStatusPatchResponse422
+  ) & {
+    headers: Headers;
+  };
+
+export type editApplicationStatusApplicationsApplicationIdStatusPatchResponse =
+  | editApplicationStatusApplicationsApplicationIdStatusPatchResponseSuccess
+  | editApplicationStatusApplicationsApplicationIdStatusPatchResponseError;
+
+export const getEditApplicationStatusApplicationsApplicationIdStatusPatchUrl = (
+  applicationId: string,
+) => {
+  return `/applications/${applicationId}/status`;
+};
+
+/**
+ * Manually corrects one application's current status, locks it from automatic overwrite, and records an audited status_edit correction.
+ * @summary Edit Application Status
+ */
+export const editApplicationStatusApplicationsApplicationIdStatusPatch = async (
+  applicationId: string,
+  applicationStatusEditRequest: ApplicationStatusEditRequest,
+  options?: RequestInit,
+): Promise<editApplicationStatusApplicationsApplicationIdStatusPatchResponse> => {
+  const res = await fetch(
+    getEditApplicationStatusApplicationsApplicationIdStatusPatchUrl(
+      applicationId,
+    ),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(applicationStatusEditRequest),
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: editApplicationStatusApplicationsApplicationIdStatusPatchResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as editApplicationStatusApplicationsApplicationIdStatusPatchResponse;
 };
 
 export type getApplicationDetailApplicationsIdGetResponse200 = {
@@ -890,6 +1148,70 @@ export const getApplicationDetailApplicationsIdGet = async (
     status: res.status,
     headers: res.headers,
   } as getApplicationDetailApplicationsIdGetResponse;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponse200 = {
+  data: ApplicationEventRecord[];
+  status: 200;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponse404 = {
+  data: ApiErrorResponse;
+  status: 404;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponseSuccess =
+  getApplicationEventsApplicationsIdEventsGetResponse200 & {
+    headers: Headers;
+  };
+export type getApplicationEventsApplicationsIdEventsGetResponseError = (
+  | getApplicationEventsApplicationsIdEventsGetResponse404
+  | getApplicationEventsApplicationsIdEventsGetResponse422
+) & {
+  headers: Headers;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponse =
+  | getApplicationEventsApplicationsIdEventsGetResponseSuccess
+  | getApplicationEventsApplicationsIdEventsGetResponseError;
+
+export const getGetApplicationEventsApplicationsIdEventsGetUrl = (
+  id: string,
+) => {
+  return `/applications/${id}/events`;
+};
+
+/**
+ * Returns the canonical event timeline for one application from local SQLite.
+ * @summary List Application Events
+ */
+export const getApplicationEventsApplicationsIdEventsGet = async (
+  id: string,
+  options?: RequestInit,
+): Promise<getApplicationEventsApplicationsIdEventsGetResponse> => {
+  const res = await fetch(
+    getGetApplicationEventsApplicationsIdEventsGetUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getApplicationEventsApplicationsIdEventsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getApplicationEventsApplicationsIdEventsGetResponse;
 };
 
 export type gmailAuthUrlAuthGmailGetResponse200 = {

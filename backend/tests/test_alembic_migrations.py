@@ -238,6 +238,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "event_type",
             "event_at",
             "extract_note",
+            "extracted_status",
         ]
         assert sqlite_column_names(connection, "application_corrections") == [
             "id",

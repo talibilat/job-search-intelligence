@@ -45,12 +45,14 @@ Baseline coding standards for every agent and contributor.
 - Raw email retained and debugging body writes must insert a minimal `raw_emails` row when metadata is not present yet, then allow later metadata-only replays to fill metadata without downgrading the retained body state.
 - Downstream pipeline code should use `RawEmailRecord.has_retained_body` to test body availability instead of re-checking retention enum values directly.
 - [JT-020 2026-07-05 v1] Application event DTOs and schema constraints allow a null `email_id` only for `ghost_inferred` events; evidence-backed events must keep a source email reference.
+- Manual event edit code must validate changed source-email references against `raw_emails`, reject no-op edits, recompute deterministic event IDs when identity fields change, clear stale `extracted_status` when changing event type, and protect edited event/source-email evidence from aggregation overwrite.
 - Gmail OAuth connection records must persist non-secret metadata separately from `SecretStore` token material.
 - Secret storage goes through the `SecretStore` protocol with `SecretRef` identifiers and `SecretStr` values; the default adapter is OS keyring, and adapters own encrypted-at-rest storage.
 - Alembic migrations run in SQLite batch mode; sqlite-vec and other virtual or vector tables are excluded from autogenerate and must be managed by hand-written revisions.
 - Pipeline stages for `ingest -> filter -> classify -> aggregate`, each passing DTOs.
 - Classification pipeline code must parse provider-neutral `LLMGenerationResponse` values before storage side effects, accept only clean finish reasons and strict structured JSON, and keep rejected provider output out of `email_classifications`, `applications`, and `application_events`.
 - Aggregation grouping-key assembly belongs in `app.pipeline.aggregate.build_application_grouping_key`: use normalized company and role values, trim provider thread IDs without case-folding them, prefer a present thread signal, and use the UTC date-window bucket only when the thread signal is missing.
+- Aggregation status derivation belongs in the aggregate service: combine already-persisted `application_events` with the current batch, order them by event timestamp, raw email `sent_at`, and classification timestamp, then derive `applications.current_status` from status-bearing event types without overwriting manual-lock conflicts.
 - Service layer holds business logic; FastAPI route handlers stay thin.
 - FastAPI dependency injection supplies repositories, providers, and config.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
@@ -88,6 +90,7 @@ Baseline coding standards for every agent and contributor.
 - Classification changes to prompts, models, categories, extraction schemas, or parser behavior: run `uv run python -m evals.run_eval` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
 - Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 - Aggregation changes: verify idempotency and no duplicate applications.
+- Status-derivation aggregation changes: verify incremental out-of-order evidence, manual-lock preservation, event-type-only derivation, and missing-`event_at` idempotency.
 - Grouping-key-only aggregation changes: run the focused grouping-key tests plus the company and role normalization tests that feed the key.
 - Never claim work is complete without fresh verification evidence.
 
