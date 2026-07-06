@@ -71,12 +71,6 @@ export interface ApplicationCorrectionRecord {
   reason: string | null;
 }
 
-export interface ApplicationMergeRequest {
-  reason?: string | null;
-  /** @minLength 1 */
-  source_application_id: string;
-}
-
 export type ApplicationEventType =
   (typeof ApplicationEventType)[keyof typeof ApplicationEventType];
 
@@ -98,6 +92,12 @@ export interface ApplicationEventRecord {
   event_type: ApplicationEventType;
   extract_note: string | null;
   id: string;
+}
+
+export interface ApplicationMergeRequest {
+  reason?: string | null;
+  /** @minLength 1 */
+  source_application_id: string;
 }
 
 export type ApplicationStatus =
