@@ -687,7 +687,7 @@ export type listApplicationsApplicationsGetResponse200 = {
 };
 
 export type listApplicationsApplicationsGetResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 
