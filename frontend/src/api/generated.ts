@@ -46,6 +46,37 @@ export interface ApiErrorResponse {
   error: ApiErrorBody;
 }
 
+export interface JsonObject {
+  [key: string]: unknown;
+}
+
+export type CorrectionType =
+  (typeof CorrectionType)[keyof typeof CorrectionType];
+
+export const CorrectionType = {
+  merge: "merge",
+  split: "split",
+  status_edit: "status_edit",
+  event_edit: "event_edit",
+  reset_lock: "reset_lock",
+} as const;
+
+export interface ApplicationCorrectionRecord {
+  after_json: JsonObject;
+  application_id: string;
+  before_json: JsonObject;
+  correction_type: CorrectionType;
+  created_at: string;
+  id: number;
+  reason: string | null;
+}
+
+export interface ApplicationMergeRequest {
+  reason?: string | null;
+  /** @minLength 1 */
+  source_application_id: string;
+}
+
 export type ApplicationStatus =
   (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
 
@@ -107,6 +138,15 @@ export interface ApplicationRecord {
   tech_stack: string[];
   updated_at: string;
   work_mode: WorkMode | null;
+}
+
+export interface ApplicationMergeResponse {
+  application: ApplicationRecord;
+  correction: ApplicationCorrectionRecord;
+  /** @minimum 0 */
+  moved_event_count: number;
+  source_application_id: string;
+  target_application_id: string;
 }
 
 export type ClassificationMode =
@@ -577,6 +617,78 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
    * @minLength 1
    */
   state: string;
+};
+
+export type mergeApplicationApplicationsApplicationIdMergePostResponse200 = {
+  data: ApplicationMergeResponse;
+  status: 200;
+};
+
+export type mergeApplicationApplicationsApplicationIdMergePostResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
+export type mergeApplicationApplicationsApplicationIdMergePostResponse404 = {
+  data: ApiErrorResponse;
+  status: 404;
+};
+
+export type mergeApplicationApplicationsApplicationIdMergePostResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type mergeApplicationApplicationsApplicationIdMergePostResponseSuccess =
+  mergeApplicationApplicationsApplicationIdMergePostResponse200 & {
+    headers: Headers;
+  };
+export type mergeApplicationApplicationsApplicationIdMergePostResponseError = (
+  | mergeApplicationApplicationsApplicationIdMergePostResponse400
+  | mergeApplicationApplicationsApplicationIdMergePostResponse404
+  | mergeApplicationApplicationsApplicationIdMergePostResponse422
+) & {
+  headers: Headers;
+};
+
+export type mergeApplicationApplicationsApplicationIdMergePostResponse =
+  | mergeApplicationApplicationsApplicationIdMergePostResponseSuccess
+  | mergeApplicationApplicationsApplicationIdMergePostResponseError;
+
+export const getMergeApplicationApplicationsApplicationIdMergePostUrl = (
+  applicationId: string,
+) => {
+  return `/applications/${applicationId}/merge`;
+};
+
+/**
+ * Moves events from a duplicate source application into the target application, deletes the source application, and records an audited merge correction.
+ * @summary Merge Duplicate Applications
+ */
+export const mergeApplicationApplicationsApplicationIdMergePost = async (
+  applicationId: string,
+  applicationMergeRequest: ApplicationMergeRequest,
+  options?: RequestInit,
+): Promise<mergeApplicationApplicationsApplicationIdMergePostResponse> => {
+  const res = await fetch(
+    getMergeApplicationApplicationsApplicationIdMergePostUrl(applicationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(applicationMergeRequest),
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: mergeApplicationApplicationsApplicationIdMergePostResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as mergeApplicationApplicationsApplicationIdMergePostResponse;
 };
 
 export type getApplicationDetailApplicationsIdGetResponse200 = {

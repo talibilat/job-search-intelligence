@@ -7,6 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.repositories import ApplicationRepository, EmailRepository, EventRepository
+from app.db.repositories.application import ApplicationUpsertOutcome
 from app.pipeline.aggregate import (
     ApplicationGroupingKey,
     build_application_grouping_key,
@@ -31,6 +32,9 @@ class AggregationRunResult(BaseModel):
     applications_upserted: int = Field(ge=0)
     events_upserted: int = Field(ge=0)
     skipped_not_job_related: int = Field(ge=0)
+    manual_conflict_count: int = Field(default=0, ge=0)
+    manual_conflict_application_ids: list[str] = Field(default_factory=list)
+    merged_source_skip_count: int = Field(default=0, ge=0)
 
 
 class AggregationService:
@@ -66,6 +70,9 @@ class AggregationService:
         applications_upserted = 0
         events_upserted = 0
         skipped_not_job_related = 0
+        manual_conflict_count = 0
+        manual_conflict_application_ids: list[str] = []
+        merged_source_skip_count = 0
 
         job_related_results = _filter_job_related(accepted_results)
         skipped_not_job_related = len(accepted_results) - len(job_related_results)
@@ -79,6 +86,9 @@ class AggregationService:
                 applications_upserted=0,
                 events_upserted=0,
                 skipped_not_job_related=skipped_not_job_related,
+                manual_conflict_count=0,
+                manual_conflict_application_ids=[],
+                merged_source_skip_count=0,
             )
 
         _enrich_extractions_with_email_context(
@@ -91,13 +101,23 @@ class AggregationService:
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
             for key, group in groups.items():
-                _upsert_application(
+                application_upsert_outcome = _upsert_application(
                     application_repository=self._application_repository,
                     key=key,
                     group=group,
                     now=now,
                 )
-                applications_upserted += 1
+                if application_upsert_outcome == "manual_conflict":
+                    manual_conflict_count += 1
+                    manual_conflict_application_ids.append(make_application_id(key))
+                    continue
+
+                if application_upsert_outcome == "merged_source":
+                    merged_source_skip_count += 1
+                    continue
+
+                if application_upsert_outcome == "upserted":
+                    applications_upserted += 1
 
                 _upsert_events(
                     event_repository=self._event_repository,
@@ -117,6 +137,9 @@ class AggregationService:
             applications_upserted=applications_upserted,
             events_upserted=events_upserted,
             skipped_not_job_related=skipped_not_job_related,
+            manual_conflict_count=manual_conflict_count,
+            manual_conflict_application_ids=manual_conflict_application_ids,
+            merged_source_skip_count=merged_source_skip_count,
         )
 
 
@@ -168,7 +191,7 @@ def _group_by_key(
             company=extraction.company,
             role_title=extraction.role_title,
             thread_id=result.thread_id,
-            occurred_at=extraction.event_at,
+            occurred_at=_event_at_for_result(result),
         )
         if key not in groups:
             groups[key] = []
@@ -182,7 +205,7 @@ def _upsert_application(
     key: ApplicationGroupingKey,
     group: list[_EnrichedExtraction],
     now: datetime,
-) -> None:
+) -> ApplicationUpsertOutcome:
     application_id = make_application_id(key)
     timestamps = _collect_timestamps(group)
     # Prefer the extraction with company/role data for display fields
@@ -224,7 +247,7 @@ def _upsert_application(
     company = best_result.extraction.company or ""
     role_title = best_result.extraction.role_title or ""
 
-    application_repository.upsert_application(
+    return application_repository.upsert_application(
         id=application_id,
         company=company,
         role_title=role_title,
@@ -254,8 +277,7 @@ def _upsert_events(
     for result in group:
         ext = result.extraction
         event_type = ext.event_type or "applied"
-        event_at = ext.event_at
-        event_at_str = event_at.isoformat() if event_at is not None else _utcnow().isoformat()
+        event_at_str = _event_at_for_result(result).isoformat()
         email_id = result.classification_email_id
 
         event_id = make_event_id(
@@ -284,8 +306,7 @@ def _collect_timestamps(
 ) -> list[datetime]:
     timestamps: list[datetime] = []
     for result in group:
-        if result.extraction.event_at is not None:
-            timestamps.append(result.extraction.event_at)
+        timestamps.append(_event_at_for_result(result))
     timestamps.sort()
     return timestamps
 

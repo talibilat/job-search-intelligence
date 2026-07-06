@@ -285,6 +285,91 @@ def test_aggregation_updates_existing_application_when_new_extractions_arrive(
     assert stored_events[0] == 2
 
 
+def test_aggregation_reports_manual_lock_conflict_without_overwriting_application(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+
+    extraction = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+    )
+    changed_extraction = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="offer",
+        event_type="offer",
+        event_at=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([extraction])
+    stored_id = connection.execute("SELECT id FROM applications").fetchone()
+    assert stored_id is not None
+    connection.execute(
+        """
+        UPDATE applications
+        SET manual_lock = 1, current_status = 'rejected'
+        """,
+    )
+    connection.commit()
+
+    result = service.run([changed_extraction])
+
+    assert result.applications_upserted == 0
+    assert result.events_upserted == 0
+    assert result.manual_conflict_count == 1
+    assert result.manual_conflict_application_ids == [stored_id[0]]
+    assert result.merged_source_skip_count == 0
+    stored_app = connection.execute(
+        "SELECT company, role_title, current_status FROM applications",
+    ).fetchone()
+    assert stored_app is not None
+    assert tuple(stored_app) == ("Acme Corp", "Software Engineer", "rejected")
+
+
+def test_aggregation_does_not_report_conflict_for_unchanged_locked_rerun(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+
+    extraction = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+    )
+    service = make_service(connection)
+
+    service.run([extraction])
+    connection.execute("UPDATE applications SET manual_lock = 1")
+    connection.commit()
+
+    result = service.run([extraction])
+
+    assert result.applications_upserted == 0
+    assert result.events_upserted == 1
+    assert result.manual_conflict_count == 0
+    assert result.manual_conflict_application_ids == []
+    assert result.merged_source_skip_count == 0
+    stored_events = connection.execute(
+        "SELECT COUNT(*) FROM application_events",
+    ).fetchone()
+    assert stored_events is not None
+    assert stored_events[0] == 1
+
+
 def test_aggregation_merges_tech_stack_from_multiple_extractions(tmp_path: Path) -> None:
     connection = migrated_connection(tmp_path)
     insert_raw_email(connection, "email-1", thread_id="thread-abc")

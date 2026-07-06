@@ -10,6 +10,20 @@ from app.models.records import ApplicationEventRecord
 class EventRepository(BaseRepository[ApplicationEventRecord]):
     """Repository seam for application event timeline records."""
 
+    def list_by_application_id(
+        self,
+        application_id: str,
+    ) -> list[ApplicationEventRecord]:
+        return self.fetch_all(
+            """
+            SELECT *
+            FROM application_events
+            WHERE application_id = ?
+            ORDER BY event_at, id
+            """,
+            (application_id,),
+        )
+
     def upsert_event(
         self,
         *,
@@ -50,6 +64,26 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
             )
         if should_commit:
             self.connection.commit()
+
+    def reassign_application_events(
+        self,
+        *,
+        source_application_id: str,
+        target_application_id: str,
+    ) -> int:
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                UPDATE application_events
+                SET application_id = ?
+                WHERE application_id = ?
+                """,
+                (target_application_id, source_application_id),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount
 
     def map_row(self, row: sqlite3.Row) -> ApplicationEventRecord:
         return ApplicationEventRecord.model_validate(row_to_dict(row))

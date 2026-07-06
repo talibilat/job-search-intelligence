@@ -93,6 +93,111 @@
         "title": "ApiErrorResponse",
         "type": "object"
       },
+      "ApplicationCorrectionRecord": {
+        "properties": {
+          "after_json": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "before_json": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "correction_type": {
+            "$ref": "#/components/schemas/CorrectionType"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "correction_type",
+          "before_json",
+          "after_json",
+          "reason",
+          "created_at"
+        ],
+        "title": "ApplicationCorrectionRecord",
+        "type": "object"
+      },
+      "ApplicationMergeRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source_application_id": {
+            "minLength": 1,
+            "title": "Source Application Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_application_id"
+        ],
+        "title": "ApplicationMergeRequest",
+        "type": "object"
+      },
+      "ApplicationMergeResponse": {
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          },
+          "correction": {
+            "$ref": "#/components/schemas/ApplicationCorrectionRecord"
+          },
+          "moved_event_count": {
+            "minimum": 0.0,
+            "title": "Moved Event Count",
+            "type": "integer"
+          },
+          "source_application_id": {
+            "title": "Source Application Id",
+            "type": "string"
+          },
+          "target_application_id": {
+            "title": "Target Application Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_application_id",
+          "source_application_id",
+          "moved_event_count",
+          "application",
+          "correction"
+        ],
+        "title": "ApplicationMergeResponse",
+        "type": "object"
+      },
       "ApplicationRecord": {
         "properties": {
           "company": {
@@ -543,6 +648,16 @@
         "title": "ClassificationRunResponse",
         "type": "object"
       },
+      "CorrectionType": {
+        "enum": [
+          "merge",
+          "split",
+          "status_edit",
+          "event_edit",
+          "reset_lock"
+        ],
+        "type": "string"
+      },
       "EmailAccountRef": {
         "description": "Provider-neutral stable reference to a connected mailbox account.",
         "properties": {
@@ -867,6 +982,10 @@
           "status"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "JsonObject": {
+        "additionalProperties": true,
         "type": "object"
       },
       "LLMModelHealthCheck": {
@@ -1667,6 +1786,79 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/applications/{application_id}/merge": {
+      "post": {
+        "description": "Moves events from a duplicate source application into the target application, deletes the source application, and records an audited merge correction.",
+        "operationId": "merge_application_applications__application_id__merge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationMergeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Merge Duplicate Applications",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/applications/{id}": {
       "get": {
         "description": "Returns one canonical application row from the local SQLite source of truth.",
