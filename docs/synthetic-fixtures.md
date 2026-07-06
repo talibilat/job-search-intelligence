@@ -137,7 +137,7 @@ uv run pytest tests/test_synthetic_fixture_loader.py -v
 ## Golden Set Fixture
 
 The golden-set scaffold is `backend/evals/golden_set.jsonl`.
-It supports `FR-2.7` and feeds the later `backend/evals/run_eval.py` precision and recall runner without checking private inbox content into the repository.
+It supports `FR-2.1` and `FR-2.7` by feeding `backend/evals/run_eval.py` precision and recall runners without checking private inbox content into the repository.
 
 Each JSONL record has these fields:
 
@@ -146,10 +146,23 @@ Each JSONL record has these fields:
 - `contains_private_data`: required, must be `false`.
 - `email`: synthetic Gmail payload with `provider`, `from_addr`, `subject`, and `body_text`.
 - `expected`: expected classifier output with `is_job_related` and `category`.
+- `expected_to_pass_filter`: expected metadata-only heuristic filter outcome for the row.
 - `rationale`: required explanation for the label.
 
 Validate the golden-set fixture from `backend/` with:
 
 ```bash
 uv run pytest tests/test_golden_set_fixture.py -v
+```
+
+Run the heuristic filter eval from `backend/` with:
+
+```bash
+uv run python -m evals.run_eval --filter
+```
+
+Run the classification eval from `backend/` with:
+
+```bash
+uv run python -m evals.run_eval
 ```

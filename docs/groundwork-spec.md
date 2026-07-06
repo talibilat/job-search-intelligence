@@ -34,7 +34,7 @@ A **local-first web app** that connects to your email (Gmail first), mines your 
 | Python tooling    | **uv** + **ruff** + **mypy** + **pre-commit**                                                                       | Modern, fast, low-friction                                                                                       |
 | RAG agent         | **LangGraph** hybrid (router → structured-query tool + semantic retrieval)                                          | Correct _counts_ and semantic recall                                                                             |
 | Ticketing         | **GitHub Issues** via reviewed manifest and `gh` CLI                                                                | Free, trackable, agent-readable via `gh`, ties into future OSS repo                                              |
-| Testing           | **Minimal smoke tests** + **golden-set classification eval** + tiny Playwright smoke suite                          | Speed, but don't trust unverified classification or critical UI paths                                            |
+| Testing           | **Minimal smoke tests** + **golden-set filter and classification evals** + tiny Playwright smoke suite              | Speed, but don't trust unverified filtering, classification, or critical UI paths                                |
 
 ### Design-pattern set
 
@@ -77,7 +77,7 @@ job-search-intelligence/
 │   │   └── setup/                  # first-run wizard logic
 │   ├── evals/
 │   │   ├── golden_set.jsonl        # ~30 private-data-free labeled email cases
-│   │   └── run_eval.py             # classification accuracy report
+│   │   └── run_eval.py             # filter and classification accuracy reports
 │   ├── tests/                      # minimal pytest (pipeline + metrics smoke)
 │   │   └── fixtures/synthetic/      # private-data-free synthetic fixture JSON
 │   ├── pyproject.toml              # uv, ruff, mypy config
@@ -332,7 +332,7 @@ Historical retention note: before JT-065, Phase 1 wording described retained bod
 
 **Phase 2 - Classify + extract + aggregate** _(make-or-break)_
 Heuristic scored filter, provider-neutral classification prompt contract, Azure OpenAI and Ollama adapters, deterministic reprocessing version plan, structured extraction (Pydantic), `applications` + `application_events` with dedup + ghost inference, manual correction/audit path, **golden-set eval**.
-**DoD:** `applications` populated; golden-set classification ≥90% precision AND ≥85% recall on job-vs-not; re-runs idempotent.
+**DoD:** `applications` populated; golden-set filter and classification evals each reach ≥90% precision AND ≥85% recall on job-vs-not; re-runs idempotent.
 
 **Phase 3 - Dashboard (deterministic)** -> Tiers 1-3 (+ 3.5 diagnostics -> Tier 4)
 Metrics endpoints + React dashboard (Recharts + small accessible component layer) + URL-backed filters (incl. sponsorship).
@@ -354,7 +354,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, ch
 
 - **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** starts with the Phase 0 shell for setup copy, overview sync affordance, and dashboard empty-state coverage; later critical paths add dashboard fixture load and chat citation smoke checks as those pages exist.
-- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `uv run python -m evals.run_eval` from `backend/` validates records through the classification contract and reports classification precision/recall. Run it whenever the classify prompt, model, categories, extraction schema, or parser behavior changes. _This is the one thing that keeps the dashboard honest._
+- **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `uv run python -m evals.run_eval --filter` from `backend/` validates metadata-only heuristic filter retention against each row's `expected_to_pass_filter` label, and `uv run python -m evals.run_eval` validates records through the classification contract. Both reports include precision/recall and fail below 90 percent precision or 85 percent recall. Run the filter eval whenever heuristic filter signals change, and run the classification eval whenever the classify prompt, model, categories, extraction schema, or parser behavior changes. _This is the one thing that keeps the dashboard honest._
 
 ---
 

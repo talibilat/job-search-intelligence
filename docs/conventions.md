@@ -84,6 +84,7 @@ Baseline coding standards for every agent and contributor.
 - Frontend component behavior or frontend logic changes: run `npm run test` from `frontend/`.
 - Frontend browser smoke changes: run `npm run test:smoke` from `frontend/` after installing Chromium with `npx playwright install chromium` once per machine.
 - Pre-commit config changes: run `uv run --project backend pre-commit run --all-files` from the repository root.
+- Heuristic filter changes: run `uv run python -m evals.run_eval --filter` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
 - Classification changes to prompts, models, categories, extraction schemas, or parser behavior: run `uv run python -m evals.run_eval` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
 - Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
 - Aggregation changes: verify idempotency and no duplicate applications.

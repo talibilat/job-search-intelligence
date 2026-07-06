@@ -58,6 +58,7 @@ class GoldenSetCase(BaseModel):
     email: GoldenSetEmail
     expected: GoldenSetExpectedClassification
     rationale: str = Field(min_length=1)
+    expected_to_pass_filter: bool
 
     @model_validator(mode="after")
     def validate_negative_cases_are_other(self) -> Self:
@@ -94,6 +95,12 @@ def test_golden_set_fixture_covers_job_vs_not_and_core_categories() -> None:
 
     assert REQUIRED_POSITIVE_CATEGORIES.issubset(positive_categories)
     assert len(negative_cases) >= 5
+
+
+def test_golden_set_fixture_expects_job_related_cases_to_pass_filter() -> None:
+    cases = load_golden_set_cases()
+
+    assert all(case.expected_to_pass_filter for case in cases if case.expected.is_job_related)
 
 
 def load_golden_set_cases() -> tuple[GoldenSetCase, ...]:

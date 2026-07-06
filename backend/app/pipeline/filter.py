@@ -93,6 +93,13 @@ def build_broad_candidate_query() -> EmailCandidateQuery:
             "job opportunity",
             "position",
             "role",
+            "sponsorship",
+            "phone screen",
+            "onsite",
+            "challenge",
+            "work sample",
+            "job search",
+            "hiring event",
         ),
         excluded_label_terms=("spam", "trash", "chats"),
     )

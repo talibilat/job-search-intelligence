@@ -57,7 +57,7 @@ Use the architecture in `docs/groundwork-spec.md` unless the user explicitly app
 - Background sync: APScheduler in-process.
 - RAG agent: LangGraph hybrid router.
 - Python tooling: `uv`, `ruff`, `mypy`, `pre-commit`.
-- Testing: minimal smoke tests plus golden-set classification eval plus a tiny Playwright smoke suite for critical user paths.
+- Testing: minimal smoke tests plus golden-set filter and classification evals plus a tiny Playwright smoke suite for critical user paths.
 
 Use these design patterns:
 
@@ -205,7 +205,8 @@ Classification is make-or-break for the whole product.
 - Store model and prompt version on classification rows.
 - Validate structured extraction with Pydantic.
 - Catch malformed LLM output instead of silently storing it.
-- Run the golden-set eval when classification prompts, models, categories, or extraction schemas change.
+- Run the golden-set filter eval when heuristic filter signals change.
+- Run the golden-set classification eval when classification prompts, models, categories, or extraction schemas change.
 - Treat eval regressions as blockers unless the user explicitly accepts the tradeoff.
 
 ## Privacy and Security Rules
@@ -282,7 +283,8 @@ Required checks depend on the work:
 - Critical frontend flows: run the tiny Playwright smoke suite once scaffolded.
 - API contract changes: regenerate or validate the TypeScript client.
 - Metric changes: verify against sample data or fixtures.
-- Classification changes: run the golden-set eval.
+- Heuristic filter changes: run the golden-set filter eval.
+- Classification changes: run the golden-set classification eval.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Chat or insight changes: verify grounding and citations.
 - Config changes: verify the tool can load the config.
