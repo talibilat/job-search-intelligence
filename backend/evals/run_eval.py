@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
@@ -136,26 +136,7 @@ def evaluate_golden_set(
 
 
 def load_golden_set(fixture_path: Path) -> list[GoldenSetEntry]:
-    entries: list[GoldenSetEntry] = []
-    for line_number, line in enumerate(fixture_path.read_text(encoding="utf-8").splitlines(), 1):
-        stripped_line = line.strip()
-        if not stripped_line:
-            continue
-        try:
-            raw_entry = json.loads(stripped_line)
-        except json.JSONDecodeError as exc:
-            msg = f"{fixture_path}:{line_number}: invalid JSON"
-            raise ValueError(msg) from exc
-        try:
-            entries.append(_golden_set_entry_from_json(raw_entry))
-        except ValidationError as exc:
-            msg = f"{fixture_path}:{line_number}: invalid golden-set entry"
-            raise ValueError(msg) from exc
-
-    if not entries:
-        msg = f"{fixture_path}: golden set is empty"
-        raise ValueError(msg)
-    return entries
+    return _load_golden_set_jsonl(fixture_path, _golden_set_entry_from_json)
 
 
 def _golden_set_entry_from_json(raw_entry: object) -> GoldenSetEntry:
@@ -262,7 +243,14 @@ def evaluate_filter_golden_set(
 
 
 def _load_golden_set_cases(fixture_path: Path) -> tuple[GoldenSetCase, ...]:
-    cases: list[GoldenSetCase] = []
+    return tuple(_load_golden_set_jsonl(fixture_path, GoldenSetCase.model_validate))
+
+
+def _load_golden_set_jsonl[T](
+    fixture_path: Path,
+    parse_entry: Callable[[object], T],
+) -> list[T]:
+    entries: list[T] = []
     for line_number, line in enumerate(fixture_path.read_text(encoding="utf-8").splitlines(), 1):
         stripped_line = line.strip()
         if not stripped_line:
@@ -273,14 +261,14 @@ def _load_golden_set_cases(fixture_path: Path) -> tuple[GoldenSetCase, ...]:
             msg = f"{fixture_path}:{line_number}: invalid JSON"
             raise ValueError(msg) from exc
         try:
-            cases.append(GoldenSetCase.model_validate(raw_entry))
+            entries.append(parse_entry(raw_entry))
         except ValidationError as exc:
             msg = f"{fixture_path}:{line_number}: invalid golden-set entry"
             raise ValueError(msg) from exc
-    if not cases:
+    if not entries:
         msg = f"{fixture_path}: golden set is empty"
         raise ValueError(msg)
-    return tuple(cases)
+    return entries
 
 
 def main(argv: Sequence[str] | None = None) -> int:

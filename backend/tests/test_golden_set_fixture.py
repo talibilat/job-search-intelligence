@@ -97,6 +97,12 @@ def test_golden_set_fixture_covers_job_vs_not_and_core_categories() -> None:
     assert len(negative_cases) >= 5
 
 
+def test_golden_set_fixture_expects_job_related_cases_to_pass_filter() -> None:
+    cases = load_golden_set_cases()
+
+    assert all(case.expected_to_pass_filter for case in cases if case.expected.is_job_related)
+
+
 def load_golden_set_cases() -> tuple[GoldenSetCase, ...]:
     assert GOLDEN_SET_PATH.exists()
     lines = GOLDEN_SET_PATH.read_text().splitlines()
