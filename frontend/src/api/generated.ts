@@ -963,7 +963,7 @@ export type splitApplicationApplicationsApplicationIdSplitPostResponse409 = {
 };
 
 export type splitApplicationApplicationsApplicationIdSplitPostResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 

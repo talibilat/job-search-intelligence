@@ -252,6 +252,7 @@ def edit_application_event(
     responses={
         404: {"model": ApiErrorResponse, "description": "Application not found."},
         409: {"model": ApiErrorResponse, "description": "Application split conflict."},
+        422: {"model": ApiErrorResponse, "description": "Request validation failed."},
     },
 )
 async def split_application(
