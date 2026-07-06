@@ -85,7 +85,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     dependencies: ["GET /setup/status", "GET /auth/gmail"],
     description:
       "Local-first first-run setup shell that guides provider choice, classification mode selection, and Gmail read-only OAuth start.",
-    endpoints: ["GET /setup/status", "POST /setup", "GET /auth/gmail"],
+    endpoints: ["GET /setup/status", "GET /auth/gmail"],
     files: ["frontend/src/pages/SetupPage.tsx", "frontend/src/setupWizardCopy.ts"],
     howToUse: {
       expectedBehaviour:

@@ -508,6 +508,7 @@ describe("App", () => {
       .parentElement;
     expect(frontendApiIntegrations).toBeTruthy();
     expect(frontendApiIntegrations?.textContent).toContain("GET /setup/status");
+    expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
     expect(frontendApiIntegrations?.textContent).not.toContain("GET /metrics/summary");
     expect(frontendApiIntegrations?.textContent).not.toContain("GET /insights");
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
