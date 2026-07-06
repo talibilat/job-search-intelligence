@@ -83,6 +83,40 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         sql = f"{sql} ORDER BY first_seen_at DESC, id ASC"
         return self.fetch_all(sql, tuple(parameters))
 
+    def list_ghost_inference_candidates(self, *, cutoff_at: str) -> list[ApplicationRecord]:
+        """Return applied applications whose timeline has no response evidence."""
+
+        return self.fetch_all(
+            """
+            SELECT applications.*
+            FROM applications
+            WHERE applications.current_status = 'applied'
+              AND applications.last_activity_at <= ?
+              AND EXISTS (
+                SELECT 1
+                FROM application_events
+                WHERE application_events.application_id = applications.id
+                  AND application_events.event_type = 'applied'
+              )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM application_events
+                WHERE application_events.application_id = applications.id
+                  AND application_events.event_type IN (
+                    'response',
+                    'assessment',
+                    'interview_scheduled',
+                    'feedback',
+                    'rejection',
+                    'offer',
+                    'ghost_inferred'
+                  )
+              )
+            ORDER BY applications.last_activity_at ASC, applications.id ASC
+            """,
+            (cutoff_at,),
+        )
+
     def upsert_application(
         self,
         *,

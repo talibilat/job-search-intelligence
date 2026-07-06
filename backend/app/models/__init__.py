@@ -21,6 +21,7 @@ from .correction import (
     ApplicationSplitResponse,
     ApplicationSplitSourceApplication,
 )
+from .ghost_inference import GhostInferenceRunResponse
 from .health import HealthResponse
 from .provider_config import (
     EmailProviderConfigResponse,
@@ -77,6 +78,7 @@ from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 __all__ = [
     "ClassificationPromptOutput",
     "EmailProviderConfigResponse",
+    "GhostInferenceRunResponse",
     "HealthResponse",
     "LLMProviderConfigResponse",
     "ProviderConfigRequirementResponse",

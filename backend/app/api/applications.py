@@ -9,6 +9,7 @@ from app.api.dependencies import (
     get_application_correction_service,
     get_application_detail_service,
     get_application_events_service,
+    get_ghost_inference_service,
     get_manual_edit_service,
     get_manual_merge_service,
 )
@@ -24,6 +25,7 @@ from app.models import (
     ApplicationSplitResponse,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
+    GhostInferenceRunResponse,
 )
 from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.services.application_corrections import (
@@ -41,6 +43,7 @@ from app.services.applications import (
 from app.services.applications import (
     ApplicationNotFoundError as ApplicationReadNotFoundError,
 )
+from app.services.ghost_inference import GhostInferenceService
 from app.services.manual_edit import (
     ManualApplicationEditService,
     ManualEditInvalidRequestError,
@@ -106,6 +109,24 @@ def list_applications(
                 ),
             ),
         ) from error
+
+
+@router.post(
+    "/ghost-inference",
+    response_model=GhostInferenceRunResponse,
+    summary="Run Ghost Inference",
+    description=(
+        "Marks applied applications as ghosted when their event timeline has no "
+        "response after the configured silence threshold."
+    ),
+)
+def run_ghost_inference(
+    service: Annotated[
+        GhostInferenceService,
+        Depends(get_ghost_inference_service),
+    ],
+) -> GhostInferenceRunResponse:
+    return service.run()
 
 
 @router.get(
