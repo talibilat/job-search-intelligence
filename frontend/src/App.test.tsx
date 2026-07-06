@@ -538,6 +538,7 @@ describe("App", () => {
     expect(screen.getByText("Manual sync API")).toBeTruthy();
     expect(screen.getByText("Local data wipe API")).toBeTruthy();
     expect(screen.getByText("Provider configuration API")).toBeTruthy();
+    expect(screen.getByText("Classification control API")).toBeTruthy();
     expect(screen.getByText("How to use Local data wipe API")).toBeTruthy();
     expect(screen.getAllByText("POST /local-data/wipe").length).toBeGreaterThan(0);
 
@@ -550,5 +551,13 @@ describe("App", () => {
     expect(screen.queryByText("Gmail read-only OAuth API")).toBeNull();
     expect(screen.queryByText("Manual sync API")).toBeNull();
     expect(screen.queryByText("Local data wipe API")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
+      target: { value: "GET /classification/estimate" },
+    });
+
+    expect(screen.getByText("Classification control API")).toBeTruthy();
+    expect(screen.getAllByText("GET /classification/estimate").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Provider configuration API")).toBeNull();
   });
 });
