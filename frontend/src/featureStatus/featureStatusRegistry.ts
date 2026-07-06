@@ -11,6 +11,7 @@ export interface FeatureRelationshipStep {
   label: string;
   type:
     | "api"
+    | "background_job"
     | "component"
     | "controller"
     | "database"

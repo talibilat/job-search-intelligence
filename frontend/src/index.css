@@ -610,9 +610,10 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   min-width: 0;
+  margin: 0;
 }
 
-.feature-summary-grid p,
+.feature-summary-grid div,
 .feature-empty-state {
   min-width: 0;
   margin-bottom: 0;
@@ -622,6 +623,19 @@ h3 {
   color: #203f2c;
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.feature-summary-grid dt {
+  margin-bottom: 4px;
+  color: #3f6b52;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.feature-summary-grid dd {
+  margin: 0;
 }
 
 .feature-section__header,

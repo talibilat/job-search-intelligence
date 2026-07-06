@@ -495,6 +495,11 @@ describe("App", () => {
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();
     expect(screen.getByText("How to use First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Setup wizard API")).toBeTruthy();
+    expect(screen.getByText("Frontend routes")).toBeTruthy();
+    expect(screen.getByText("Frontend shared UI elements")).toBeTruthy();
+    expect(screen.getByText("Frontend state management connections")).toBeTruthy();
+    expect(screen.getByText("Frontend API integrations")).toBeTruthy();
+    expect(screen.getByText("Backend services consumed by frontend")).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Search features"), {
       target: { value: "sync" },
@@ -511,5 +516,16 @@ describe("App", () => {
       screen.getAllByText("No completed features match these filters.").length,
     ).toBeGreaterThan(0);
     expect(screen.getByText("Sync orchestration UI hardening")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
+
+    expect(screen.getByText("Controllers")).toBeTruthy();
+    expect(screen.getByText("Services")).toBeTruthy();
+    expect(screen.getByText("Database models")).toBeTruthy();
+    expect(screen.getByText("Background jobs")).toBeTruthy();
+    expect(screen.getByText("Workers")).toBeTruthy();
+    expect(screen.getByText("Queues")).toBeTruthy();
+    expect(screen.getByText("External integrations")).toBeTruthy();
+    expect(screen.getByText("Frontend consumers")).toBeTruthy();
   });
 });

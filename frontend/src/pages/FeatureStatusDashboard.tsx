@@ -18,6 +18,21 @@ function formatList(items: readonly string[]) {
   return items.length > 0 ? items.join(", ") : "None";
 }
 
+function uniqueList(items: readonly string[]) {
+  return Array.from(new Set(items.filter(Boolean)));
+}
+
+function relationshipLabels(
+  features: readonly FeatureStatusRecord[],
+  type: FeatureStatusRecord["relationship"][number]["type"],
+) {
+  return uniqueList(
+    features.flatMap((feature) =>
+      feature.relationship.filter((step) => step.type === type).map((step) => step.label),
+    ),
+  );
+}
+
 function featureMatchesKeyword(feature: FeatureStatusRecord, keyword: string) {
   if (!keyword) {
     return true;
@@ -246,6 +261,84 @@ function FeatureCard({ feature }: { feature: FeatureStatusRecord }) {
   );
 }
 
+function FrontendTopologySummary({ features }: { features: readonly FeatureStatusRecord[] }) {
+  return (
+    <dl className="feature-summary-grid">
+      <div>
+        <dt>Frontend screens</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.screens)))}</dd>
+      </div>
+      <div>
+        <dt>Frontend routes</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.routes)))}</dd>
+      </div>
+      <div>
+        <dt>Frontend components</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.components)))}</dd>
+      </div>
+      <div>
+        <dt>Frontend shared UI elements</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.sharedUi)))}</dd>
+      </div>
+      <div>
+        <dt>Frontend state management connections</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.stateConnections)))}</dd>
+      </div>
+      <div>
+        <dt>Frontend API integrations</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.endpoints)))}</dd>
+      </div>
+      <div>
+        <dt>Backend services consumed by frontend</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.connectedModules)))}</dd>
+      </div>
+    </dl>
+  );
+}
+
+function BackendTopologySummary({ features }: { features: readonly FeatureStatusRecord[] }) {
+  return (
+    <dl className="feature-summary-grid">
+      <div>
+        <dt>APIs</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.endpoints)))}</dd>
+      </div>
+      <div>
+        <dt>Controllers</dt>
+        <dd>{formatList(relationshipLabels(features, "controller"))}</dd>
+      </div>
+      <div>
+        <dt>Services</dt>
+        <dd>{formatList(relationshipLabels(features, "service"))}</dd>
+      </div>
+      <div>
+        <dt>Database models</dt>
+        <dd>{formatList(relationshipLabels(features, "database"))}</dd>
+      </div>
+      <div>
+        <dt>Background jobs</dt>
+        <dd>{formatList(relationshipLabels(features, "background_job"))}</dd>
+      </div>
+      <div>
+        <dt>Workers</dt>
+        <dd>{formatList(relationshipLabels(features, "worker"))}</dd>
+      </div>
+      <div>
+        <dt>Queues</dt>
+        <dd>{formatList(relationshipLabels(features, "queue"))}</dd>
+      </div>
+      <div>
+        <dt>External integrations</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.dependencies)))}</dd>
+      </div>
+      <div>
+        <dt>Frontend consumers</dt>
+        <dd>{formatList(uniqueList(features.flatMap((feature) => feature.screens)))}</dd>
+      </div>
+    </dl>
+  );
+}
+
 interface FeatureSectionProps {
   emptyMessage: string;
   features: readonly FeatureStatusRecord[];
@@ -305,12 +398,11 @@ function FeatureAreaView({ area, keyword, scope, status, testable }: FeatureArea
           <p className="eyebrow">{areaLabels[area]} map</p>
           <h2>{areaLabels[area]} implementation overview</h2>
         </div>
-        <div className="feature-summary-grid">
-          <p>Screens: {formatList(Array.from(new Set(visibleFeatures.flatMap((feature) => feature.screens))))}</p>
-          <p>Components: {formatList(Array.from(new Set(visibleFeatures.flatMap((feature) => feature.components))))}</p>
-          <p>APIs: {formatList(Array.from(new Set(visibleFeatures.flatMap((feature) => feature.endpoints))))}</p>
-          <p>Modules: {formatList(Array.from(new Set(visibleFeatures.flatMap((feature) => feature.assignedModules))))}</p>
-        </div>
+        {area === "frontend" ? (
+          <FrontendTopologySummary features={visibleFeatures} />
+        ) : (
+          <BackendTopologySummary features={visibleFeatures} />
+        )}
       </section>
 
       <FeatureSection
