@@ -48,8 +48,9 @@ The frontend also has a Recharts chart wrapper foundation with an empty state fo
 The frontend also has a primary navigation shell with a `/setup` Phase 0 setup page for provider, mode, Gmail read-only, privacy, checklist, backend-backed Gmail OAuth start, callback status, and not-ready copy.
 The frontend also has an empty `/dashboard` page shell with placeholder filter and metrics regions.
 The frontend also has static Phase 0 setup-copy cards for provider, mode, Gmail, and privacy choices.
+The frontend also has a registry-backed `/features` developer inventory route with QA entry points, topology summaries, connection maps, and URL-backed filters for implemented frontend and backend surfaces.
 The frontend also has an empty `/chat` route shell with a disabled composer for the later Phase 5 RAG chat work.
-There are backend endpoints for health, setup status, setup submission, provider config, Gmail auth start and callback, classification estimates, classification reprocessing plans, application detail, application event timelines, manual status and event corrections, manual sync, sync status, and wiping local data.
+There are backend endpoints for health, setup status, setup submission, provider config, Gmail auth start and callback, classification estimates, classification reprocessing plans, classification runs, application detail, application event timelines, manual status, event, split, and merge corrections, manual sync, sync status, and wiping local data.
 There are typed provider interfaces for Gmail and LLM implementations, plus an exported Gmail provider adapter with read-only OAuth URL construction, callback token exchange and persistence, non-secret connection metadata persistence, provider-level token refresh, safe metadata-only full-backfill and incremental history listing, retained-body fetching when a `SecretStore` is configured, and an Azure OpenAI chat-completions adapter behind the LLM provider seam.
 There is configuration infrastructure, a keyring-backed secret-store path, Alembic migration infrastructure, raw-email metadata and retained-body persistence, sync-state persistence, and lint/type/test tooling.
 
@@ -1004,10 +1005,10 @@ Then open `http://127.0.0.1:5173/` and `http://127.0.0.1:5173/setup` in a browse
 ## What To Look For In The App Right Now
 
 Backend:
-You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, Gmail auth-start, application detail and event timeline endpoints, manual application status and event edit endpoints, manual sync, sync status, local wipe-data infrastructure, async SQLite engine infrastructure, Alembic migration infrastructure, and local sync/raw-email persistence.
+You can see a FastAPI app, generated API docs, a health endpoint, typed errors, setup status, setup submission, Gmail auth-start, classification estimate, reprocessing, and run endpoints, application detail and event timeline endpoints, manual application status, event edit, split, and merge endpoints, manual sync, sync status, local wipe-data infrastructure, async SQLite engine infrastructure, Alembic migration infrastructure, and local sync/raw-email persistence.
 
 Frontend:
-You can see a React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics, a `/setup` page shell for provider, mode, Gmail, privacy, checklist, Gmail OAuth start, callback status, and not-ready copy, a disabled `/chat` shell for later RAG work, and shared accessible UI primitives for later pages.
+You can see a React shell for JobTracker, including an empty Recharts foundation panel for future deterministic dashboard metrics, a `/setup` page shell for provider, mode, Gmail, privacy, checklist, Gmail OAuth start, callback status, and not-ready copy, a `/features` developer inventory for implemented surfaces and QA guidance, a disabled `/chat` shell for later RAG work, and shared accessible UI primitives for later pages.
 Only the setup page's Gmail auth status and auth-start path are connected to backend data yet.
 
 Configuration:
@@ -1025,12 +1026,12 @@ You can see early safety work for typed errors, secret references, safe configur
 
 The closed tickets have built the foundation, not the finished product.
 The backend can start, expose a few basic endpoints, prepare Alembic's version table, run tests, lint, and type checks.
-The frontend can start, run unit tests, and build, with a backend-backed Gmail auth setup path plus an otherwise scaffolded chart foundation, disabled chat route shell, and shared primitive layer.
+The frontend can start, run unit tests, and build, with a backend-backed Gmail auth setup path, a registry-backed feature status dashboard, an otherwise scaffolded chart foundation, disabled chat route shell, and shared primitive layer.
 Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, run tests, lint, and type checks.
 Frontend CI now runs the existing frontend typecheck, lint, unit test, and build gate on pushes and pull requests to `main`.
 The backend can start, expose a few basic endpoints, create a configured async SQLite engine, initialize Alembic's version table, run tests, lint, and type checks.
-The frontend can start, test, and build, with an empty chart foundation, a `/setup` page shell that can start Gmail OAuth and display callback status, and a disabled chat route shell.
+The frontend can start, test, and build, with an empty chart foundation, a `/setup` page shell that can start Gmail OAuth and display callback status, a `/features` developer inventory route, and a disabled chat route shell.
 Frontend CI now runs backend OpenAPI generation plus the existing frontend typecheck, lint, Vitest, and build gate on pushes and pull requests to `main`.
 The provider interfaces prepare the app for Gmail and LLM integrations; Gmail auth-start, Gmail callback token persistence, provider-level token refresh, non-secret connection metadata persistence, default connected-account lookup, `SecretStore`-backed full and incremental metadata listing, selected-ref retained-body fetching, resumable full-backfill orchestration, and manual-sync retained-body repository writes exist, while product pages and concrete LLM adapters remain later work.
 The privacy-related groundwork is already visible through secret references, typed errors, safe env examples, the SQLite engine, Alembic migrations, and the wipe-data endpoint.

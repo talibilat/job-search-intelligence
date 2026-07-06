@@ -3,6 +3,7 @@ import { SyncStatusPanel } from "./components/SyncStatusPanel";
 import { ApplicationDetailPage } from "./pages/ApplicationDetailPage";
 import Chat from "./pages/Chat";
 import { DashboardPage } from "./pages/DashboardPage";
+import { FeatureStatusDashboard } from "./pages/FeatureStatusDashboard";
 import { Insights } from "./pages/Insights";
 import { SetupPage } from "./pages/SetupPage";
 
@@ -16,6 +17,7 @@ const navigationItems = [
   { href: "/", label: "Overview" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },
+  { href: "/features", label: "Feature Status" },
   { href: "/insights", label: "Insights" },
   { href: "/chat", label: "Chat" },
 ] as const;
@@ -93,6 +95,8 @@ function App() {
         <SetupPage />
       ) : currentPath === "/dashboard" ? (
         <DashboardPage />
+      ) : currentPath === "/features" ? (
+        <FeatureStatusDashboard />
       ) : currentPath === "/insights" ? (
         <Insights />
       ) : currentPath === "/chat" ? (
