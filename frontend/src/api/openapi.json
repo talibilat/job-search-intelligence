@@ -521,6 +521,40 @@
         "title": "ApplicationRecord",
         "type": "object"
       },
+      "ApplicationResetLockRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "ApplicationResetLockRequest",
+        "type": "object"
+      },
+      "ApplicationResetLockResponse": {
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          },
+          "correction": {
+            "$ref": "#/components/schemas/ApplicationCorrectionRecord"
+          }
+        },
+        "required": [
+          "application",
+          "correction"
+        ],
+        "title": "ApplicationResetLockResponse",
+        "type": "object"
+      },
       "ApplicationSource": {
         "enum": [
           "linkedin",
@@ -2615,6 +2649,79 @@
           }
         },
         "summary": "Merge Duplicate Applications",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/applications/{application_id}/reset-lock": {
+      "post": {
+        "description": "Clears one application's manual correction lock so future automatic aggregation can update the application summary again, and records an audited reset_lock correction.",
+        "operationId": "reset_application_lock_applications__application_id__reset_lock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationResetLockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationResetLockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Application not found."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Application lock reset conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Reset Application Correction Lock",
         "tags": [
           "applications"
         ]

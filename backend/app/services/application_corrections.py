@@ -8,6 +8,7 @@ from typing import cast
 
 from app.db.repositories import ApplicationRepository, CorrectionRepository, EventRepository
 from app.models.correction import (
+    ApplicationResetLockResponse,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
     ApplicationSplitSourceApplication,
@@ -37,6 +38,10 @@ class ApplicationSplitConflictError(ApplicationCorrectionServiceError):
     pass
 
 
+class ApplicationLockResetConflictError(ApplicationCorrectionServiceError):
+    pass
+
+
 class ApplicationCorrectionService:
     """Business logic for audited manual application corrections."""
 
@@ -52,6 +57,73 @@ class ApplicationCorrectionService:
         self._event_repository = event_repository
         self._correction_repository = correction_repository
         self._clock = clock or _utcnow
+
+    def reset_application_lock(
+        self,
+        *,
+        application_id: str,
+        reason: str | None,
+    ) -> ApplicationResetLockResponse:
+        self._validate_lock_reset_connection()
+
+        should_commit = not self._application_repository.connection.in_transaction
+        try:
+            if should_commit:
+                self._application_repository.connection.execute("BEGIN IMMEDIATE")
+
+            with self._application_repository.transaction():
+                before_application = self._application_repository.get_by_id(application_id)
+                if before_application is None:
+                    raise ApplicationNotFoundError("Application was not found.")
+                if not before_application.manual_lock:
+                    raise ApplicationLockResetConflictError(
+                        "Application is not manually locked.",
+                    )
+
+                now_iso = self._clock().isoformat()
+                reset = self._application_repository.set_manual_lock(
+                    application_id=application_id,
+                    manual_lock=False,
+                    updated_at=now_iso,
+                )
+                if not reset:
+                    raise ApplicationLockResetConflictError(
+                        "Application lock could not be reset.",
+                    )
+                after_application = self._application_repository.get_by_id(application_id)
+                if after_application is None:
+                    raise ApplicationLockResetConflictError(
+                        "Application lock state could not be loaded.",
+                    )
+
+                correction = self._correction_repository.create_correction(
+                    application_id=application_id,
+                    correction_type="reset_lock",
+                    before_json={"application": _application_json(before_application)},
+                    after_json={"application": _application_json(after_application)},
+                    reason=reason,
+                    created_at=now_iso,
+                )
+
+            if should_commit:
+                self._application_repository.connection.commit()
+        except sqlite3.OperationalError as exc:
+            if should_commit and self._application_repository.connection.in_transaction:
+                self._application_repository.connection.rollback()
+            if _is_sqlite_lock_error(exc):
+                raise ApplicationLockResetConflictError(
+                    "Manual lock reset could not acquire the application write lock.",
+                ) from exc
+            raise
+        except Exception:
+            if should_commit and self._application_repository.connection.in_transaction:
+                self._application_repository.connection.rollback()
+            raise
+
+        return ApplicationResetLockResponse(
+            application=after_application,
+            correction=correction,
+        )
 
     def split_application(
         self,
@@ -241,6 +313,12 @@ class ApplicationCorrectionService:
         ):
             raise ApplicationSplitConflictError(
                 "Manual split repositories must share one SQLite connection.",
+            )
+
+    def _validate_lock_reset_connection(self) -> None:
+        if self._application_repository.connection is not self._correction_repository.connection:
+            raise ApplicationLockResetConflictError(
+                "Manual lock reset repositories must share one SQLite connection.",
             )
 
 

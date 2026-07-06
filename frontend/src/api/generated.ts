@@ -189,6 +189,15 @@ export interface ApplicationMergeResponse {
   target_application_id: string;
 }
 
+export interface ApplicationResetLockRequest {
+  reason?: string | null;
+}
+
+export interface ApplicationResetLockResponse {
+  application: ApplicationRecord;
+  correction: ApplicationCorrectionRecord;
+}
+
 export interface ApplicationSplitNewApplication {
   /** @minLength 1 */
   company: string;
@@ -946,6 +955,85 @@ export const mergeApplicationApplicationsApplicationIdMergePost = async (
     headers: res.headers,
   } as mergeApplicationApplicationsApplicationIdMergePostResponse;
 };
+
+export type resetApplicationLockApplicationsApplicationIdResetLockPostResponse200 =
+  {
+    data: ApplicationResetLockResponse;
+    status: 200;
+  };
+
+export type resetApplicationLockApplicationsApplicationIdResetLockPostResponse404 =
+  {
+    data: ApiErrorResponse;
+    status: 404;
+  };
+
+export type resetApplicationLockApplicationsApplicationIdResetLockPostResponse409 =
+  {
+    data: ApiErrorResponse;
+    status: 409;
+  };
+
+export type resetApplicationLockApplicationsApplicationIdResetLockPostResponse422 =
+  {
+    data: ApiErrorResponse;
+    status: 422;
+  };
+
+export type resetApplicationLockApplicationsApplicationIdResetLockPostResponseSuccess =
+  resetApplicationLockApplicationsApplicationIdResetLockPostResponse200 & {
+    headers: Headers;
+  };
+export type resetApplicationLockApplicationsApplicationIdResetLockPostResponseError =
+  (
+    | resetApplicationLockApplicationsApplicationIdResetLockPostResponse404
+    | resetApplicationLockApplicationsApplicationIdResetLockPostResponse409
+    | resetApplicationLockApplicationsApplicationIdResetLockPostResponse422
+  ) & {
+    headers: Headers;
+  };
+
+export type resetApplicationLockApplicationsApplicationIdResetLockPostResponse =
+  | resetApplicationLockApplicationsApplicationIdResetLockPostResponseSuccess
+  | resetApplicationLockApplicationsApplicationIdResetLockPostResponseError;
+
+export const getResetApplicationLockApplicationsApplicationIdResetLockPostUrl =
+  (applicationId: string) => {
+    return `/applications/${applicationId}/reset-lock`;
+  };
+
+/**
+ * Clears one application's manual correction lock so future automatic aggregation can update the application summary again, and records an audited reset_lock correction.
+ * @summary Reset Application Correction Lock
+ */
+export const resetApplicationLockApplicationsApplicationIdResetLockPost =
+  async (
+    applicationId: string,
+    applicationResetLockRequest: ApplicationResetLockRequest,
+    options?: RequestInit,
+  ): Promise<resetApplicationLockApplicationsApplicationIdResetLockPostResponse> => {
+    const res = await fetch(
+      getResetApplicationLockApplicationsApplicationIdResetLockPostUrl(
+        applicationId,
+      ),
+      {
+        ...options,
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...options?.headers },
+        body: JSON.stringify(applicationResetLockRequest),
+      },
+    );
+
+    const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+    const data: resetApplicationLockApplicationsApplicationIdResetLockPostResponse["data"] =
+      body ? JSON.parse(body) : {};
+    return {
+      data,
+      status: res.status,
+      headers: res.headers,
+    } as resetApplicationLockApplicationsApplicationIdResetLockPostResponse;
+  };
 
 export type splitApplicationApplicationsApplicationIdSplitPostResponse200 = {
   data: ApplicationSplitResponse;
