@@ -147,6 +147,38 @@ export interface ClassificationReprocessingPlan {
 }
 
 /**
+ * Public response for a completed classification batch run.
+ */
+export interface ClassificationRunResponse {
+  /** @minimum 0 */
+  candidate_count: number;
+  classification_mode: ClassificationMode;
+  /** @minimum 0 */
+  classified_count: number;
+  completed_at: string;
+  /** @minimum 0 */
+  completion_tokens: number;
+  /** @minimum 0 */
+  estimated_cost_usd: number;
+  llm_provider: LLMProviderName;
+  /** @minimum 0 */
+  malformed_count: number;
+  /** @minLength 1 */
+  model: string;
+  /** @minimum 0 */
+  prompt_tokens: number;
+  /** @minLength 1 */
+  prompt_version: string;
+  /** @minLength 1 */
+  provider: string;
+  /** @minLength 1 */
+  run_id: string;
+  started_at: string;
+  /** @minimum 0 */
+  total_tokens: number;
+}
+
+/**
  * Provider-neutral stable reference to a connected mailbox account.
  */
 export interface EmailAccountRef {
@@ -692,6 +724,46 @@ export const classificationReprocessingPlanClassificationReprocessingPlanGet =
       headers: res.headers,
     } as classificationReprocessingPlanClassificationReprocessingPlanGetResponse;
   };
+
+export type classificationRunClassificationRunPostResponse200 = {
+  data: ClassificationRunResponse;
+  status: 200;
+};
+
+export type classificationRunClassificationRunPostResponseSuccess =
+  classificationRunClassificationRunPostResponse200 & {
+    headers: Headers;
+  };
+export type classificationRunClassificationRunPostResponse =
+  classificationRunClassificationRunPostResponseSuccess;
+
+export const getClassificationRunClassificationRunPostUrl = () => {
+  return `/classification/run`;
+};
+
+/**
+ * Classifies retained email candidates through the configured LLM provider and idempotently stores classification results plus run accounting.
+ * @summary Run Classification Batch
+ */
+export const classificationRunClassificationRunPost = async (
+  options?: RequestInit,
+): Promise<classificationRunClassificationRunPostResponse> => {
+  const res = await fetch(getClassificationRunClassificationRunPostUrl(), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: classificationRunClassificationRunPostResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as classificationRunClassificationRunPostResponse;
+};
 
 export type getProviderConfigConfigProvidersGetResponse200 = {
   data: ProviderConfigResponse;

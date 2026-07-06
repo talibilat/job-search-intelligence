@@ -357,6 +357,28 @@ class ClassificationPreRunEstimate(BaseModel):
     )
 
 
+class ClassificationRunResponse(BaseModel):
+    """Public response for a completed classification batch run."""
+
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str = Field(min_length=1)
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    prompt_version: str = Field(min_length=1)
+    started_at: datetime
+    completed_at: datetime
+    candidate_count: int = Field(ge=0)
+    classified_count: int = Field(ge=0)
+    malformed_count: int = Field(ge=0)
+    prompt_tokens: int = Field(ge=0)
+    completion_tokens: int = Field(ge=0)
+    total_tokens: int = Field(ge=0)
+    estimated_cost_usd: float = Field(ge=0)
+    classification_mode: ClassificationMode
+    llm_provider: LLMProviderName
+
+
 def _validate_timezone_aware[
     DatetimeT: datetime | None,
 ](value: DatetimeT, *, field_name: str) -> DatetimeT:

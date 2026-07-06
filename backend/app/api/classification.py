@@ -4,12 +4,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_readonly_email_repository
+from app.api.dependencies import (
+    get_readonly_email_repository,
+    get_structured_extraction_service,
+)
 from app.config import AppSettings, get_settings
 from app.db.repositories import EmailRepository
-from app.models import ClassificationPreRunEstimate, ClassificationReprocessingPlan
+from app.models import (
+    ClassificationPreRunEstimate,
+    ClassificationReprocessingPlan,
+    ClassificationRunResponse,
+)
 from app.services.classification_estimate import build_classification_pre_run_estimate
 from app.services.classification_reprocessing import build_classification_reprocessing_plan
+from app.services.structured_extraction import StructuredExtractionService
 
 router = APIRouter(prefix="/classification", tags=["classification"])
 
@@ -55,4 +63,40 @@ async def classification_reprocessing_plan(
     return build_classification_reprocessing_plan(
         settings=settings,
         email_repository=email_repository,
+    )
+
+
+@router.post(
+    "/run",
+    response_model=ClassificationRunResponse,
+    summary="Run Classification Batch",
+    description=(
+        "Classifies retained email candidates through the configured LLM provider "
+        "and idempotently stores classification results plus run accounting."
+    ),
+)
+async def classification_run(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    classification_service: Annotated[
+        StructuredExtractionService,
+        Depends(get_structured_extraction_service),
+    ],
+) -> ClassificationRunResponse:
+    result = await classification_service.run_batch()
+    return ClassificationRunResponse(
+        run_id=result.run_record.id,
+        provider=result.run_record.provider,
+        model=result.run_record.model,
+        prompt_version=result.run_record.prompt_version,
+        started_at=result.run_record.started_at,
+        completed_at=result.run_record.completed_at,
+        candidate_count=result.run_record.candidate_count,
+        classified_count=result.run_record.classified_count,
+        malformed_count=len(result.malformed_results),
+        prompt_tokens=result.run_record.prompt_tokens,
+        completion_tokens=result.run_record.completion_tokens,
+        total_tokens=result.run_record.total_tokens,
+        estimated_cost_usd=float(result.run_record.estimated_cost_usd),
+        classification_mode=settings.classification_mode,
+        llm_provider=settings.llm_provider,
     )
