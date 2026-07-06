@@ -229,11 +229,23 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         application_id: str,
         first_seen_at: str,
         current_status: str,
+        company: str,
+        role_title: str,
+        source: str,
+        salary_min: int | None,
+        salary_max: int | None,
+        currency: str | None,
+        location: str | None,
+        work_mode: str | None,
+        seniority: str | None,
+        sponsorship: str,
+        tech_stack: list[str],
         last_activity_at: str,
         updated_at: str,
     ) -> bool:
         """Update timeline-derived summary fields for an existing application."""
 
+        tech_stack_json = json.dumps(tech_stack, separators=(",", ":"))
         should_commit = not self.connection.in_transaction
         with self.transaction():
             cursor = self.execute(
@@ -241,6 +253,17 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
                 UPDATE applications
                 SET first_seen_at = ?,
                     current_status = ?,
+                    company = ?,
+                    role_title = ?,
+                    source = ?,
+                    salary_min = ?,
+                    salary_max = ?,
+                    currency = ?,
+                    location = ?,
+                    work_mode = ?,
+                    seniority = ?,
+                    sponsorship = ?,
+                    tech_stack = ?,
                     last_activity_at = ?,
                     updated_at = ?
                 WHERE id = ?
@@ -248,6 +271,17 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
                 (
                     first_seen_at,
                     current_status,
+                    company,
+                    role_title,
+                    source,
+                    salary_min,
+                    salary_max,
+                    currency,
+                    location,
+                    work_mode,
+                    seniority,
+                    sponsorship,
+                    tech_stack_json,
                     last_activity_at,
                     updated_at,
                     application_id,

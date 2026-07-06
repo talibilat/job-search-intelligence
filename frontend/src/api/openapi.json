@@ -543,6 +543,16 @@
               }
             ],
             "title": "Reason"
+          },
+          "source_application": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplicationSplitNewApplication"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

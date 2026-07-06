@@ -71,6 +71,7 @@ class ApplicationSplitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     event_ids: list[str] = Field(min_length=1)
+    source_application: ApplicationSplitNewApplication | None = None
     new_application: ApplicationSplitNewApplication
     reason: str | None = None
 

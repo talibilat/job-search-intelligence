@@ -193,6 +193,7 @@ export interface ApplicationSplitRequest {
   event_ids: string[];
   new_application: ApplicationSplitNewApplication;
   reason?: string | null;
+  source_application?: ApplicationSplitNewApplication | null;
 }
 
 export interface ApplicationSplitResponse {
