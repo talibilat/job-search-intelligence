@@ -25,16 +25,20 @@ from app.models import (
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
 )
+from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.services.application_corrections import (
     ApplicationCorrectionService,
-    ApplicationNotFoundError as ApplicationSplitNotFoundError,
     ApplicationSplitConflictError,
 )
-from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
+from app.services.application_corrections import (
+    ApplicationNotFoundError as ApplicationSplitNotFoundError,
+)
 from app.services.applications import (
     ApplicationDetailService,
     ApplicationEventsService,
     ApplicationFilterValidationError,
+)
+from app.services.applications import (
     ApplicationNotFoundError as ApplicationReadNotFoundError,
 )
 from app.services.manual_edit import (
