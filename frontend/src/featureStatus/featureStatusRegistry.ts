@@ -17,6 +17,7 @@ export interface FeatureRelationshipStep {
     | "database"
     | "dto_model"
     | "frontend_update"
+    | "module"
     | "planned_api"
     | "queue"
     | "runtime_config"
@@ -300,6 +301,80 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       entryPoint: "/chat",
       exampleInputs: ["No message input accepted while disabled"],
       expectedOutputs: ["Chat shell renders", "Message textarea is disabled", "No chat response is generated"],
+      requiredSetup: ["Frontend dev server"],
+    },
+  },
+  {
+    area: "frontend",
+    assignedModules: [
+      "frontend/src/pages/FeatureStatusDashboard.tsx",
+      "frontend/src/featureStatus/featureStatusRegistry.ts",
+    ],
+    blockers: [],
+    components: ["FeatureStatusDashboard", "Tabs", "FormField", "TextInput"],
+    connectedModules: ["Feature status registry", "Frontend topology summary", "Backend topology summary"],
+    completedDate: "2026-07-06",
+    dependencies: ["Feature status registry", "Route query strings"],
+    description:
+      "Registry-backed developer inventory page that maps implemented frontend and backend surfaces, searchable QA entry points, and topology summaries.",
+    endpoints: [],
+    files: [
+      "frontend/src/pages/FeatureStatusDashboard.tsx",
+      "frontend/src/featureStatus/featureStatusRegistry.ts",
+      "frontend/src/App.tsx",
+    ],
+    howToUse: {
+      expectedBehaviour:
+        "The dashboard renders registry records for implemented and in-progress surfaces, keeps filters in the route query string, and distinguishes implemented endpoints from planned dependencies.",
+      expectedSuccessResult:
+        "QA can share a filtered /features URL and inspect route, component, relationship, topology, and how-to-use details for each registered surface.",
+      navigationPath: "Primary navigation -> Feature Status",
+      prerequisites: ["Frontend dev server"],
+      qaValidationPoints: [
+        "The /features route appears in the frontend topology summary.",
+        "Search, status, testable, scope, and tab filters persist in route query strings.",
+        "Frontend API integrations list only currently wired frontend calls, not planned future endpoints.",
+      ],
+      steps: [
+        "Open /features.",
+        "Search for feature status or filter the module scope to /features.",
+        "Confirm this dashboard record lists FeatureStatusDashboard, topology summaries, filters, relationship mapping, and QA guidance.",
+        "Copy the URL after changing filters and confirm the same filtered view reloads from the query string.",
+      ],
+    },
+    id: "frontend-feature-status-dashboard",
+    implementationStatus:
+      "Implemented as a self-describing registry-backed frontend QA dashboard with URL-backed filters and topology summaries.",
+    name: "Feature Status Dashboard inventory",
+    relationship: [
+      { label: "Feature Status", type: "screen" },
+      { label: "FeatureStatusDashboard", type: "component" },
+      { label: "Feature status registry", type: "module" },
+      { label: "Frontend topology summary", type: "component" },
+      { label: "Backend topology summary", type: "component" },
+      { label: "Route query filters", type: "frontend_update" },
+    ],
+    remainingWork: [],
+    routes: ["/features"],
+    screens: ["Feature Status"],
+    sharedUi: ["Tabs", "FormField", "TextInput"],
+    stateConnections: [
+      "Search filter query state",
+      "Status filter query state",
+      "Testable filter query state",
+      "Scope filter query state",
+      "Active tab query state",
+    ],
+    status: "completed",
+    testing: {
+      canTestNow: true,
+      entryPoint: "/features",
+      exampleInputs: ["search=feature status", "scope=/features", "tab=backend"],
+      expectedOutputs: [
+        "Feature status dashboard renders",
+        "FeatureStatusDashboard appears in the registry cards",
+        "Filtered views survive refresh through URLSearchParams",
+      ],
       requiredSetup: ["Frontend dev server"],
     },
   },

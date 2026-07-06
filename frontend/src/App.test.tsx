@@ -495,7 +495,9 @@ describe("App", () => {
     expect(screen.getByText("Dashboard route shell")).toBeTruthy();
     expect(screen.getByText("Insights route shell")).toBeTruthy();
     expect(screen.getByText("Chat route shell")).toBeTruthy();
+    expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();
+    expect(screen.getByText("How to use Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("How to use First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Setup wizard API")).toBeTruthy();
     expect(screen.getByText("Frontend routes")).toBeTruthy();
@@ -528,6 +530,22 @@ describe("App", () => {
       screen.getAllByText("No completed features match these filters.").length,
     ).toBeGreaterThan(0);
     expect(screen.getByText("Sync orchestration UI hardening")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Search features"), {
+      target: { value: "feature status" },
+    });
+    fireEvent.change(screen.getByLabelText("Status"), {
+      target: { value: "completed" },
+    });
+
+    expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
+    expect(screen.getByText("FeatureStatusDashboard")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
+      target: { value: "/features" },
+    });
+
+    expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
 
