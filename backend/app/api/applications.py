@@ -6,11 +6,21 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies import (
     get_application_detail_service,
+    get_application_events_service,
     get_manual_merge_service,
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
-from app.models import ApplicationMergeRequest, ApplicationMergeResponse, ApplicationRecord
-from app.services.applications import ApplicationDetailService, ApplicationNotFoundError
+from app.models import (
+    ApplicationEventRecord,
+    ApplicationMergeRequest,
+    ApplicationMergeResponse,
+    ApplicationRecord,
+)
+from app.services.applications import (
+    ApplicationDetailService,
+    ApplicationEventsService,
+    ApplicationNotFoundError,
+)
 from app.services.manual_merge import (
     ManualApplicationMergeService,
     ManualMergeInvalidRequestError,
@@ -36,6 +46,30 @@ def get_application_detail(
 ) -> ApplicationRecord:
     try:
         return service.get_application(id)
+    except ApplicationNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message="Application not found.",
+        ) from error
+
+
+@router.get(
+    "/{id}/events",
+    response_model=list[ApplicationEventRecord],
+    responses={404: {"model": ApiErrorResponse}},
+    summary="List Application Events",
+    description="Returns the canonical event timeline for one application from local SQLite.",
+)
+def get_application_events(
+    id: str,
+    service: Annotated[
+        ApplicationEventsService,
+        Depends(get_application_events_service),
+    ],
+) -> list[ApplicationEventRecord]:
+    try:
+        return service.list_application_events(id)
     except ApplicationNotFoundError as error:
         raise ApiError(
             status_code=404,

@@ -8,6 +8,7 @@ from alembic import command
 from alembic.config import Config
 from app.config import AppSettings, get_settings
 from app.db.repositories import ApplicationRepository
+from app.db.repositories.event import EventRepository
 from app.main import create_app
 from fastapi.testclient import TestClient
 
@@ -62,6 +63,84 @@ def test_get_application_detail_returns_typed_not_found(tmp_path: Path) -> None:
     }
 
 
+def test_get_application_events_returns_ordered_timeline(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="application-42")
+        insert_raw_email(connection, email_id="email-1")
+        insert_raw_email(connection, email_id="email-2")
+        event_repository = EventRepository(connection)
+        event_repository.upsert_event(
+            id="event-2",
+            application_id="application-42",
+            email_id="email-2",
+            event_type="rejection",
+            event_at="2026-07-03T10:00:00+00:00",
+            extract_note="Rejected after review.",
+        )
+        event_repository.upsert_event(
+            id="event-1",
+            application_id="application-42",
+            email_id="email-1",
+            event_type="applied",
+            event_at="2026-07-01T09:00:00+00:00",
+            extract_note="Application confirmation received.",
+        )
+
+    client = create_test_client(database_path)
+
+    response = client.get("/applications/application-42/events")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": "event-1",
+            "application_id": "application-42",
+            "email_id": "email-1",
+            "event_type": "applied",
+            "event_at": "2026-07-01T09:00:00Z",
+            "extract_note": "Application confirmation received.",
+        },
+        {
+            "id": "event-2",
+            "application_id": "application-42",
+            "email_id": "email-2",
+            "event_type": "rejection",
+            "event_at": "2026-07-03T10:00:00Z",
+            "extract_note": "Rejected after review.",
+        },
+    ]
+
+
+def test_get_application_events_returns_empty_timeline(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="application-without-events")
+
+    client = create_test_client(database_path)
+
+    response = client.get("/applications/application-without-events/events")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_get_application_events_returns_typed_not_found(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get("/applications/missing-application/events")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "error": {
+            "code": "not_found",
+            "message": "Application not found.",
+            "details": [],
+        }
+    }
+
+
 def test_get_application_detail_endpoint_is_documented_in_openapi() -> None:
     client = TestClient(create_app())
 
@@ -72,6 +151,19 @@ def test_get_application_detail_endpoint_is_documented_in_openapi() -> None:
     success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     not_found_schema = operation["responses"]["404"]["content"]["application/json"]["schema"]
     assert success_schema["$ref"] == "#/components/schemas/ApplicationRecord"
+    assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
+
+
+def test_application_events_endpoint_is_documented_in_openapi() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    operation = response.json()["paths"]["/applications/{id}/events"]["get"]
+    success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    not_found_schema = operation["responses"]["404"]["content"]["application/json"]["schema"]
+    assert success_schema["items"]["$ref"] == "#/components/schemas/ApplicationEventRecord"
     assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
@@ -148,5 +240,30 @@ def insert_application(connection: sqlite3.Connection, *, application_id: str) -
         sponsorship="unknown",
         tech_stack=["Python", "FastAPI"],
         manual_lock=False,
+    )
+    connection.commit()
+
+
+def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
+    connection.execute(
+        """
+        INSERT INTO raw_emails (
+            id, thread_id, from_addr, to_addr, subject, sent_at, body_text,
+            body_retention_state, labels, provider, ingested_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            email_id,
+            "thread-42",
+            "jobs@example.test",
+            "applicant@example.test",
+            "Application update",
+            "2026-07-01T09:00:00+00:00",
+            "Synthetic retained body.",
+            "retained",
+            "[]",
+            "gmail",
+            "2026-07-01T09:01:00+00:00",
+        ),
     )
     connection.commit()

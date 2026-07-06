@@ -71,6 +71,29 @@ export interface ApplicationCorrectionRecord {
   reason: string | null;
 }
 
+export type ApplicationEventType =
+  (typeof ApplicationEventType)[keyof typeof ApplicationEventType];
+
+export const ApplicationEventType = {
+  applied: "applied",
+  response: "response",
+  assessment: "assessment",
+  interview_scheduled: "interview_scheduled",
+  feedback: "feedback",
+  rejection: "rejection",
+  offer: "offer",
+  ghost_inferred: "ghost_inferred",
+} as const;
+
+export interface ApplicationEventRecord {
+  application_id: string;
+  email_id: string | null;
+  event_at: string;
+  event_type: ApplicationEventType;
+  extract_note: string | null;
+  id: string;
+}
+
 export interface ApplicationMergeRequest {
   reason?: string | null;
   /** @minLength 1 */
@@ -748,6 +771,70 @@ export const getApplicationDetailApplicationsIdGet = async (
     status: res.status,
     headers: res.headers,
   } as getApplicationDetailApplicationsIdGetResponse;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponse200 = {
+  data: ApplicationEventRecord[];
+  status: 200;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponse404 = {
+  data: ApiErrorResponse;
+  status: 404;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponseSuccess =
+  getApplicationEventsApplicationsIdEventsGetResponse200 & {
+    headers: Headers;
+  };
+export type getApplicationEventsApplicationsIdEventsGetResponseError = (
+  | getApplicationEventsApplicationsIdEventsGetResponse404
+  | getApplicationEventsApplicationsIdEventsGetResponse422
+) & {
+  headers: Headers;
+};
+
+export type getApplicationEventsApplicationsIdEventsGetResponse =
+  | getApplicationEventsApplicationsIdEventsGetResponseSuccess
+  | getApplicationEventsApplicationsIdEventsGetResponseError;
+
+export const getGetApplicationEventsApplicationsIdEventsGetUrl = (
+  id: string,
+) => {
+  return `/applications/${id}/events`;
+};
+
+/**
+ * Returns the canonical event timeline for one application from local SQLite.
+ * @summary List Application Events
+ */
+export const getApplicationEventsApplicationsIdEventsGet = async (
+  id: string,
+  options?: RequestInit,
+): Promise<getApplicationEventsApplicationsIdEventsGetResponse> => {
+  const res = await fetch(
+    getGetApplicationEventsApplicationsIdEventsGetUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getApplicationEventsApplicationsIdEventsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getApplicationEventsApplicationsIdEventsGetResponse;
 };
 
 export type gmailAuthUrlAuthGmailGetResponse200 = {
