@@ -684,6 +684,92 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
   },
   {
     area: "backend",
+    assignedModules: [
+      "backend/app/api/applications.py",
+      "backend/app/services/manual_edit.py",
+      "backend/app/services/manual_merge.py",
+    ],
+    blockers: [],
+    components: ["DashboardPage"],
+    connectedModules: ["Future deterministic dashboard", "ManualApplicationEditService", "ManualApplicationMergeService", "CorrectionRepository"],
+    completedDate: "2026-07-06",
+    dependencies: ["applications", "application_events", "application_corrections", "raw_emails"],
+    description:
+      "Manual correction API that audits user status edits, timeline event edits, and duplicate-application merges while locking corrected records from automatic overwrite.",
+    endpoints: [
+      "PATCH /applications/{application_id}/status",
+      "PATCH /applications/{application_id}/events/{event_id}",
+      "POST /applications/{application_id}/merge",
+    ],
+    files: [
+      "backend/app/api/applications.py",
+      "backend/app/services/manual_edit.py",
+      "backend/app/services/manual_merge.py",
+      "backend/app/db/repositories/corrections.py",
+      "backend/app/models/application_edit.py",
+      "backend/app/models/application_merge.py",
+    ],
+    howToUse: {
+      expectedBehaviour:
+        "The API applies a requested correction in one transaction, sets manual_lock on the affected application, and stores a before/after audit row in application_corrections.",
+      expectedSuccessResult:
+        "QA can verify the corrected application, moved timeline events, and audit correction records reconcile with the local SQLite tables.",
+      navigationPath:
+        "API client -> PATCH /applications/{application_id}/status, PATCH /applications/{application_id}/events/{event_id}, or POST /applications/{application_id}/merge",
+      prerequisites: ["Backend running", "SQLite database with application, event, and correction fixtures"],
+      qaValidationPoints: [
+        "Status edits return an updated ApplicationRecord with manual_lock=true and a status_edit correction.",
+        "Event edits reject no-op changes and missing source emails with typed public API errors.",
+        "Merge requests move source events into the target application, delete the source application, and record a merge correction.",
+      ],
+      steps: [
+        "Seed at least two application records and one event timeline into local SQLite.",
+        "Call PATCH /applications/{application_id}/status with a corrected current_status and optional reason.",
+        "Call PATCH /applications/{application_id}/events/{event_id} with a changed event field and verify status replay.",
+        "Call POST /applications/{application_id}/merge with source_application_id for a duplicate record.",
+      ],
+    },
+    id: "backend-application-manual-corrections-api",
+    implementationStatus:
+      "Implemented with thin FastAPI routes, audited manual edit and merge services, typed request and response DTOs, and repository-backed correction records.",
+    name: "Application manual corrections API",
+    relationship: [
+      { label: "Dashboard", type: "screen" },
+      { label: "DashboardPage", type: "component" },
+      { label: "PATCH /applications/{application_id}/status", type: "api" },
+      { label: "PATCH /applications/{application_id}/events/{event_id}", type: "api" },
+      { label: "POST /applications/{application_id}/merge", type: "api" },
+      { label: "applications router", type: "controller" },
+      { label: "ManualApplicationEditService", type: "service" },
+      { label: "ManualApplicationMergeService", type: "service" },
+      { label: "applications", type: "database" },
+      { label: "application_events", type: "database" },
+      { label: "application_corrections", type: "database" },
+    ],
+    remainingWork: [],
+    routes: [],
+    screens: ["Dashboard", "Developer API"],
+    sharedUi: [],
+    stateConnections: [],
+    status: "completed",
+    testing: {
+      canTestNow: true,
+      entryPoint: "PATCH /applications/{application_id}/status",
+      exampleInputs: [
+        "current_status=interview&reason=Corrected from email review",
+        "event_type=rejection for an existing event ID",
+        "source_application_id=duplicate-application-id",
+      ],
+      expectedOutputs: [
+        "ApplicationStatusEditResponse with manual_lock=true",
+        "ApplicationEventEditResponse with replayed current status",
+        "ApplicationMergeResponse with moved_event_count and merge correction",
+      ],
+      requiredSetup: ["Backend app test client", "Application, event, raw email, and correction fixtures in local SQLite"],
+    },
+  },
+  {
+    area: "backend",
     assignedModules: ["backend/app/api/wipe_data.py", "backend/app/services/wipe_data.py"],
     blockers: [],
     components: [],

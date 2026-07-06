@@ -540,6 +540,7 @@ describe("App", () => {
     expect(screen.getByText("Provider configuration API")).toBeTruthy();
     expect(screen.getByText("Classification control API")).toBeTruthy();
     expect(screen.getByText("Application read API")).toBeTruthy();
+    expect(screen.getByText("Application manual corrections API")).toBeTruthy();
     expect(screen.getByText("How to use Local data wipe API")).toBeTruthy();
     expect(screen.getAllByText("POST /local-data/wipe").length).toBeGreaterThan(0);
 
@@ -568,5 +569,15 @@ describe("App", () => {
     expect(screen.getByText("Application read API")).toBeTruthy();
     expect(screen.getAllByText("GET /applications/{id}/events").length).toBeGreaterThan(0);
     expect(screen.queryByText("Classification control API")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Module, API, screen, or component"), {
+      target: { value: "PATCH /applications/{application_id}/status" },
+    });
+
+    expect(screen.getByText("Application manual corrections API")).toBeTruthy();
+    expect(
+      screen.getAllByText("PATCH /applications/{application_id}/status").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Application read API")).toBeNull();
   });
 });
