@@ -97,6 +97,66 @@ def test_aggregation_groups_multiple_extractions_into_one_application(tmp_path: 
     assert tuple(stored_events[1]) == ("rejection", "email-2", "Position filled")
 
 
+def test_status_derivation_uses_latest_event_in_timeline(tmp_path: Path) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    insert_raw_email(connection, "email-2", thread_id="thread-abc")
+    connection.commit()
+
+    offer = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.OFFER,
+        status="offer",
+        event_type="offer",
+        event_at=datetime(2026, 7, 9, 10, 0, tzinfo=UTC),
+    )
+    rejection = make_extraction(
+        email_id="email-2",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.REJECTION,
+        status="rejected",
+        event_type="rejection",
+        event_at=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+    )
+
+    make_service(connection).run([offer, rejection])
+
+    current_status = connection.execute(
+        "SELECT current_status FROM applications",
+    ).fetchone()
+    assert current_status is not None
+    assert current_status[0] == "rejected"
+
+
+def test_status_derivation_uses_event_type_when_status_is_missing(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+
+    extraction = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.INTERVIEW_INVITE,
+        status=None,
+        event_type="interview_scheduled",
+        event_at=EVENT_AT,
+    )
+
+    make_service(connection).run([extraction])
+
+    current_status = connection.execute(
+        "SELECT current_status FROM applications",
+    ).fetchone()
+    assert current_status is not None
+    assert current_status[0] == "interview"
+
+
 def test_aggregation_is_idempotent(tmp_path: Path) -> None:
     connection = migrated_connection(tmp_path)
     insert_raw_email(connection, "email-1", thread_id="thread-abc")

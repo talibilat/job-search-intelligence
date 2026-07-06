@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.repositories import ApplicationRepository, EmailRepository, EventRepository
 from app.db.repositories.application import ApplicationUpsertOutcome
+from app.models.application import ApplicationStatus
+from app.models.event import ApplicationEventType
 from app.pipeline.aggregate import (
     ApplicationGroupingKey,
     build_application_grouping_key,
@@ -18,6 +20,26 @@ from app.pipeline.classify import AcceptedLLMExtraction, JobApplicationExtractio
 
 type Clock = Callable[[], datetime]
 type RunIdFactory = Callable[[], str]
+
+_STATUS_BY_EVENT_TYPE: dict[ApplicationEventType, ApplicationStatus | None] = {
+    "applied": "applied",
+    "response": "in_review",
+    "assessment": "assessment",
+    "interview_scheduled": "interview",
+    "feedback": None,
+    "rejection": "rejected",
+    "offer": "offer",
+    "ghost_inferred": "ghosted",
+}
+
+_EVENT_TYPE_BY_STATUS: dict[ApplicationStatus, ApplicationEventType] = {
+    "applied": "applied",
+    "in_review": "response",
+    "assessment": "assessment",
+    "interview": "interview_scheduled",
+    "offer": "offer",
+    "rejected": "rejection",
+}
 
 
 class AggregationRunResult(BaseModel):
@@ -276,7 +298,7 @@ def _upsert_events(
 ) -> None:
     for result in group:
         ext = result.extraction
-        event_type = ext.event_type or "applied"
+        event_type = _event_type_for_result(result)
         event_at_str = _event_at_for_result(result).isoformat()
         email_id = result.classification_email_id
 
@@ -304,33 +326,34 @@ def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
 def _collect_timestamps(
     group: list[_EnrichedExtraction],
 ) -> list[datetime]:
-    timestamps: list[datetime] = []
-    for result in group:
-        timestamps.append(_event_at_for_result(result))
-    timestamps.sort()
-    return timestamps
+    return sorted(_event_at_for_result(result) for result in group)
 
 
 def _derive_current_status(
     group: list[_EnrichedExtraction],
-) -> str:
-    status_priority = [
-        "offer",
-        "rejected",
-        "interview",
-        "assessment",
-        "in_review",
-        "applied",
-    ]
-    seen_statuses: set[str] = set()
-    for result in group:
-        if result.extraction.status is not None:
-            seen_statuses.add(result.extraction.status)
+) -> ApplicationStatus:
+    current_status: ApplicationStatus = "applied"
+    for result in sorted(group, key=_event_at_for_result):
+        event_status = _status_for_event(result)
+        if event_status is not None:
+            current_status = event_status
+    return current_status
 
-    for status in status_priority:
-        if status in seen_statuses:
-            return status
+
+def _event_type_for_result(result: _EnrichedExtraction) -> ApplicationEventType:
+    if result.extraction.event_type is not None:
+        return result.extraction.event_type
+    if result.extraction.status is not None:
+        return _EVENT_TYPE_BY_STATUS.get(result.extraction.status, "applied")
     return "applied"
+
+
+def _status_for_event(result: _EnrichedExtraction) -> ApplicationStatus | None:
+    event_type = _event_type_for_result(result)
+    event_status = _STATUS_BY_EVENT_TYPE[event_type]
+    if event_status is not None:
+        return event_status
+    return result.extraction.status
 
 
 def _pick_best_extraction(
