@@ -192,9 +192,17 @@ export interface ApplicationMergeResponse {
 export interface ApplicationSplitNewApplication {
   /** @minLength 1 */
   company: string;
+  currency?: string | null;
+  location?: string | null;
   /** @minLength 1 */
   role_title: string;
+  salary_max?: number | null;
+  salary_min?: number | null;
+  seniority?: string | null;
   source?: ApplicationSource;
+  sponsorship?: SponsorshipStatus;
+  tech_stack?: string[];
+  work_mode?: WorkMode | null;
 }
 
 export interface ApplicationSplitRequest {

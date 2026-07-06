@@ -74,6 +74,8 @@ class ApplicationCorrectionService:
         application_id: str,
         request: ApplicationSplitRequest,
     ) -> ApplicationSplitResponse:
+        self._validate_shared_connection()
+
         source_before = self._application_repository.get_by_id(application_id)
         if source_before is None:
             raise ApplicationNotFoundError("Application was not found.")
@@ -206,6 +208,17 @@ class ApplicationCorrectionService:
         if len(selected_events) == len(source_events):
             raise ApplicationSplitConflictError(
                 "A split must leave at least one event on the source application.",
+            )
+
+    def _validate_shared_connection(self) -> None:
+        if (
+            self._application_repository.connection
+            is not self._event_repository.connection
+            or self._application_repository.connection
+            is not self._correction_repository.connection
+        ):
+            raise ApplicationSplitConflictError(
+                "Manual split repositories must share one SQLite connection.",
             )
 
 

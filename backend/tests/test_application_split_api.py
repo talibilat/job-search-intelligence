@@ -4,10 +4,17 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from app.config import AppSettings, get_settings
+from app.db.repositories import ApplicationRepository, CorrectionRepository, EventRepository
 from app.main import create_app
+from app.models.correction import ApplicationSplitNewApplication, ApplicationSplitRequest
+from app.services.application_corrections import (
+    ApplicationCorrectionService,
+    ApplicationSplitConflictError,
+)
 from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -373,6 +380,86 @@ def test_post_application_split_preserves_target_segmentation_fields(
             "offered",
             '["Python","FastAPI"]',
         )
+
+
+def test_application_split_rejects_repositories_with_different_connections(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    setup_connection = migrated_connection(database_path)
+    try:
+        insert_raw_email(setup_connection, "email-applied")
+        insert_raw_email(setup_connection, "email-rejected")
+        insert_application(
+            setup_connection,
+            application_id="app-merged",
+            company="Acme Corp",
+            role_title="Software Engineer",
+            first_seen_at=APPLIED_AT,
+            current_status="rejected",
+            last_activity_at=REJECTED_AT,
+        )
+        insert_event(
+            setup_connection,
+            event_id="event-applied",
+            application_id="app-merged",
+            email_id="email-applied",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+        insert_event(
+            setup_connection,
+            event_id="event-rejected",
+            application_id="app-merged",
+            email_id="email-rejected",
+            event_type="rejection",
+            event_at=REJECTED_AT,
+        )
+        setup_connection.commit()
+    finally:
+        setup_connection.close()
+
+    application_connection = sqlite3.connect(database_path)
+    event_connection = sqlite3.connect(database_path)
+    correction_connection = sqlite3.connect(database_path)
+    try:
+        service = ApplicationCorrectionService(
+            application_repository=ApplicationRepository(application_connection),
+            event_repository=EventRepository(event_connection),
+            correction_repository=CorrectionRepository(correction_connection),
+        )
+
+        with pytest.raises(
+            ApplicationSplitConflictError,
+            match="Manual split repositories must share one SQLite connection.",
+        ):
+            service.split_application(
+                application_id="app-merged",
+                request=ApplicationSplitRequest(
+                    event_ids=["event-rejected"],
+                    new_application=ApplicationSplitNewApplication(
+                        company="Beta Labs",
+                        role_title="Data Engineer",
+                        source="linkedin",
+                    ),
+                ),
+            )
+
+        with sqlite3.connect(database_path) as db:
+            assert db.execute(
+                "SELECT COUNT(*) FROM applications WHERE id LIKE 'manual-split-%'",
+            ).fetchone() == (0,)
+            assert db.execute(
+                "SELECT application_id FROM application_events WHERE id = ?",
+                ("event-rejected",),
+            ).fetchone() == ("app-merged",)
+            assert db.execute(
+                "SELECT COUNT(*) FROM application_corrections",
+            ).fetchone() == (0,)
+    finally:
+        application_connection.close()
+        event_connection.close()
+        correction_connection.close()
 
 
 def migrated_connection(database_path: Path) -> sqlite3.Connection:
