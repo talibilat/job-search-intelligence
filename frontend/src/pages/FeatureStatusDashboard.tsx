@@ -316,6 +316,10 @@ function BackendTopologySummary({ features }: { features: readonly FeatureStatus
         <dd>{formatList(relationshipLabels(features, "database"))}</dd>
       </div>
       <div>
+        <dt>Runtime and config</dt>
+        <dd>{formatList(relationshipLabels(features, "runtime_config"))}</dd>
+      </div>
+      <div>
         <dt>Background jobs</dt>
         <dd>{formatList(relationshipLabels(features, "background_job"))}</dd>
       </div>

@@ -18,6 +18,7 @@ export interface FeatureRelationshipStep {
     | "frontend_update"
     | "planned_api"
     | "queue"
+    | "runtime_config"
     | "screen"
     | "service"
     | "worker";
@@ -115,7 +116,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "GET /setup/status", type: "api" },
       { label: "setup router", type: "controller" },
       { label: "SetupStatusService", type: "service" },
-      { label: "Runtime settings", type: "database" },
+      { label: "Runtime settings", type: "runtime_config" },
     ],
     remainingWork: [],
     routes: ["/setup"],
@@ -438,7 +439,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "GET /health", type: "api" },
       { label: "health router", type: "controller" },
       { label: "HealthResponse", type: "service" },
-      { label: "FastAPI runtime", type: "database" },
+      { label: "FastAPI runtime", type: "runtime_config" },
     ],
     remainingWork: [],
     routes: [],
@@ -493,7 +494,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "GET /setup/status", type: "api" },
       { label: "setup router", type: "controller" },
       { label: "SetupStatusService", type: "service" },
-      { label: "Settings", type: "database" },
+      { label: "Settings", type: "runtime_config" },
     ],
     remainingWork: [],
     routes: [],
@@ -556,7 +557,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "POST /config/providers/llm/health", type: "api" },
       { label: "config router", type: "controller" },
       { label: "ProviderConfigService", type: "service" },
-      { label: "AppSettings", type: "database" },
+      { label: "AppSettings", type: "runtime_config" },
       { label: "LLM health check", type: "worker" },
     ],
     remainingWork: [],

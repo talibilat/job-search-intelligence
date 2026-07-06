@@ -541,6 +541,24 @@ describe("App", () => {
     expect(screen.getByText("Frontend consumers")).toBeTruthy();
   });
 
+  it("separates backend runtime and config from database models", () => {
+    renderAtPath("/features");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Backend" }));
+
+    const databaseModels = screen.getByText("Database models").parentElement;
+    expect(databaseModels).toBeTruthy();
+    expect(databaseModels?.textContent).not.toContain("FastAPI runtime");
+    expect(databaseModels?.textContent).not.toContain("Settings");
+    expect(databaseModels?.textContent).not.toContain("AppSettings");
+
+    const runtimeAndConfig = screen.getByText("Runtime and config").parentElement;
+    expect(runtimeAndConfig).toBeTruthy();
+    expect(runtimeAndConfig?.textContent).toContain("FastAPI runtime");
+    expect(runtimeAndConfig?.textContent).toContain("Settings");
+    expect(runtimeAndConfig?.textContent).toContain("AppSettings");
+  });
+
   it("surfaces implemented backend APIs with testing details and API filtering", () => {
     renderAtPath("/features");
 
