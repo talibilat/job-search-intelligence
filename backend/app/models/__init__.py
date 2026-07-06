@@ -6,6 +6,7 @@ from .classification import (
     ClassificationPromptOutput,
     ClassificationReprocessingPlan,
     ClassificationReprocessingStats,
+    ClassificationRunResponse,
 )
 from .health import HealthResponse
 from .provider_config import (
@@ -81,6 +82,7 @@ __all__ = [
     "ClassificationPreRunEstimate",
     "ClassificationReprocessingPlan",
     "ClassificationReprocessingStats",
+    "ClassificationRunResponse",
     "EmailBackfillStateRecord",
     "EmailBackfillStatus",
     "EmailCandidateQueryStrategy",
