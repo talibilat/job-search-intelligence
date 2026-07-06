@@ -14,7 +14,7 @@ class GhostInferenceRunResponse(BaseModel):
     threshold_days: int = Field(ge=1)
     applications_ghosted: int = Field(ge=0)
     ghosted_application_ids: list[str]
-    ghost_events_retracted: int = Field(ge=0)
+    ghost_retraction_count: int = Field(ge=0)
     retracted_application_ids: list[str]
     manual_conflict_count: int = Field(ge=0)
     manual_conflict_application_ids: list[str]

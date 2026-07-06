@@ -173,7 +173,7 @@ def test_post_ghost_inference_removes_stale_ghost_when_response_predates_thresho
     assert response.status_code == 200
     body = response.json()
     assert body["applications_ghosted"] == 0
-    assert body["ghost_events_retracted"] == 1
+    assert body["ghost_retraction_count"] == 1
     assert body["retracted_application_ids"] == ["app-stale"]
 
     with sqlite3.connect(database_path) as connection:
@@ -232,7 +232,7 @@ def test_post_ghost_inference_recomputes_existing_ghost_when_threshold_changes(
     body = response.json()
     assert body["applications_ghosted"] == 1
     assert body["ghosted_application_ids"] == ["app-threshold"]
-    assert body["ghost_events_retracted"] == 1
+    assert body["ghost_retraction_count"] == 1
     assert body["retracted_application_ids"] == ["app-threshold"]
 
     with sqlite3.connect(database_path) as connection:
@@ -251,6 +251,64 @@ def test_post_ghost_inference_recomputes_existing_ghost_when_threshold_changes(
 
     assert application_rows == [("ghosted", "2026-06-15T09:00:00+00:00")]
     assert ghost_events == [("2026-06-15T09:00:00+00:00",)]
+
+
+def test_post_ghost_inference_uses_response_order_after_latest_applied_event(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, email_id="email-response", sent_at="2026-05-15T09:00:00+00:00")
+        insert_raw_email(connection, email_id="email-applied", sent_at="2026-06-01T09:00:00+00:00")
+        insert_application(
+            connection,
+            application_id="app-later-applied",
+            current_status="applied",
+            first_seen_at="2026-05-01T09:00:00+00:00",
+            last_activity_at="2026-06-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-response",
+            application_id="app-later-applied",
+            email_id="email-response",
+            event_type="response",
+            event_at="2026-05-15T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-later-applied",
+            email_id="email-applied",
+            event_type="applied",
+            event_at="2026-06-01T09:00:00+00:00",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.post("/applications/ghost-inference")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["applications_ghosted"] == 1
+    assert body["ghosted_application_ids"] == ["app-later-applied"]
+
+    with sqlite3.connect(database_path) as connection:
+        application_rows = connection.execute(
+            "SELECT current_status, last_activity_at FROM applications WHERE id = ?",
+            ("app-later-applied",),
+        ).fetchall()
+        ghost_events = connection.execute(
+            """
+            SELECT event_at
+            FROM application_events
+            WHERE application_id = ? AND event_type = 'ghost_inferred'
+            """,
+            ("app-later-applied",),
+        ).fetchall()
+
+    assert application_rows == [("ghosted", "2026-07-01T09:00:00+00:00")]
+    assert ghost_events == [("2026-07-01T09:00:00+00:00",)]
 
 
 def test_post_ghost_inference_reports_protected_ghost_event_conflict(
@@ -365,7 +423,7 @@ def test_post_ghost_inference_reconciles_stale_ghost_after_status_advances(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["ghost_events_retracted"] == 1
+    assert body["ghost_retraction_count"] == 1
     assert body["retracted_application_ids"] == ["app-advanced"]
 
     with sqlite3.connect(database_path) as connection:
@@ -440,7 +498,7 @@ def test_post_ghost_inference_reports_protected_ghost_retraction_conflict(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["ghost_events_retracted"] == 0
+    assert body["ghost_retraction_count"] == 0
     assert body["retracted_application_ids"] == []
     assert body["manual_conflict_count"] == 1
     assert body["manual_conflict_application_ids"] == ["app-protected-retraction"]
@@ -460,6 +518,72 @@ def test_post_ghost_inference_reports_protected_ghost_retraction_conflict(
         ).fetchone()[0]
 
     assert application_rows == [("ghosted", "2026-05-31T09:00:00+00:00")]
+    assert ghost_event_count == 1
+
+
+def test_post_ghost_inference_keeps_ghost_when_response_precedes_latest_applied(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, email_id="email-response", sent_at="2026-05-15T09:00:00+00:00")
+        insert_raw_email(connection, email_id="email-applied", sent_at="2026-06-01T09:00:00+00:00")
+        insert_application(
+            connection,
+            application_id="app-ordered-ghost",
+            current_status="ghosted",
+            first_seen_at="2026-05-01T09:00:00+00:00",
+            last_activity_at="2026-07-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-response",
+            application_id="app-ordered-ghost",
+            email_id="email-response",
+            event_type="response",
+            event_at="2026-05-15T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-ordered-ghost",
+            email_id="email-applied",
+            event_type="applied",
+            event_at="2026-06-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-ghost",
+            application_id="app-ordered-ghost",
+            email_id=None,
+            event_type="ghost_inferred",
+            event_at="2026-07-01T09:00:00+00:00",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.post("/applications/ghost-inference")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ghost_retraction_count"] == 0
+    assert body["retracted_application_ids"] == []
+
+    with sqlite3.connect(database_path) as connection:
+        application_rows = connection.execute(
+            "SELECT current_status, last_activity_at FROM applications WHERE id = ?",
+            ("app-ordered-ghost",),
+        ).fetchall()
+        ghost_event_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM application_events
+            WHERE application_id = ? AND event_type = 'ghost_inferred'
+            """,
+            ("app-ordered-ghost",),
+        ).fetchone()[0]
+
+    assert application_rows == [("ghosted", "2026-07-01T09:00:00+00:00")]
     assert ghost_event_count == 1
 
 

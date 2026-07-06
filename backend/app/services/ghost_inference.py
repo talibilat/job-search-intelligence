@@ -5,19 +5,11 @@ from datetime import UTC, datetime, timedelta
 
 from app.db.repositories import ApplicationRepository, EventRepository
 from app.models import ApplicationEventRecord, GhostInferenceRunResponse
+from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES, ApplicationEventType
 from app.pipeline.aggregate import make_event_id
 from app.services.aggregation import derive_current_status_from_events
 
 type Clock = Callable[[], datetime]
-
-_RESPONSE_EVENT_TYPES = {
-    "assessment",
-    "feedback",
-    "interview_scheduled",
-    "offer",
-    "rejection",
-    "response",
-}
 
 
 class GhostInferenceService:
@@ -94,7 +86,7 @@ class GhostInferenceService:
             threshold_days=self._threshold_days,
             applications_ghosted=len(ghosted_application_ids),
             ghosted_application_ids=ghosted_application_ids,
-            ghost_events_retracted=len(retracted_application_ids),
+            ghost_retraction_count=len(retracted_application_ids),
             retracted_application_ids=retracted_application_ids,
             manual_conflict_count=len(manual_conflict_application_ids),
             manual_conflict_application_ids=manual_conflict_application_ids,
@@ -123,19 +115,24 @@ class GhostInferenceService:
             if not non_ghost_events:
                 continue
 
+            latest_applied_at = _latest_event_at(non_ghost_events, event_type="applied")
+            if latest_applied_at is None:
+                continue
             latest_non_ghost_at = _last_event_at(
                 non_ghost_events,
                 fallback=application.last_activity_at,
             )
             expected_ghosted_at = latest_non_ghost_at + timedelta(days=self._threshold_days)
-            has_response_evidence = any(
-                event.event_type in _RESPONSE_EVENT_TYPES for event in non_ghost_events
+            has_response_after_latest_applied = any(
+                event.event_type in RESPONSE_LIKE_APPLICATION_EVENT_TYPES
+                and event.event_at > latest_applied_at
+                for event in non_ghost_events
             )
             ghost_dates_are_current = (
                 len(ghost_events) == 1 and ghost_events[0].event_at == expected_ghosted_at
             )
             should_retract = (
-                has_response_evidence
+                has_response_after_latest_applied
                 or expected_ghosted_at > evaluated_at
                 or not ghost_dates_are_current
             )
@@ -185,6 +182,17 @@ def _last_event_at(
     if not events:
         return fallback
     return max(event.event_at for event in events)
+
+
+def _latest_event_at(
+    events: list[ApplicationEventRecord],
+    *,
+    event_type: ApplicationEventType,
+) -> datetime | None:
+    matching_events = [event.event_at for event in events if event.event_type == event_type]
+    if not matching_events:
+        return None
+    return max(matching_events)
 
 
 def _utcnow() -> datetime:

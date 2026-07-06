@@ -6,6 +6,7 @@ from typing import Literal
 
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
+from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 from app.models.records import (
     ApplicationRecord,
     ApplicationSource,
@@ -86,8 +87,11 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
     def list_ghost_inference_candidates(self, *, cutoff_at: str) -> list[ApplicationRecord]:
         """Return applied applications whose timeline has no response evidence."""
 
+        response_type_placeholders = ", ".join(
+            "?" for _ in RESPONSE_LIKE_APPLICATION_EVENT_TYPES
+        )
         return self.fetch_all(
-            """
+            f"""
             SELECT applications.*
             FROM applications
             WHERE applications.current_status = 'applied'
@@ -103,18 +107,24 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
                 FROM application_events
                 WHERE application_events.application_id = applications.id
                   AND application_events.event_type IN (
-                    'response',
-                    'assessment',
-                    'interview_scheduled',
-                    'feedback',
-                    'rejection',
-                    'offer',
                     'ghost_inferred'
+                  )
+              )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM application_events AS response_events
+                WHERE response_events.application_id = applications.id
+                  AND response_events.event_type IN ({response_type_placeholders})
+                  AND response_events.event_at > (
+                    SELECT MAX(applied_events.event_at)
+                    FROM application_events AS applied_events
+                    WHERE applied_events.application_id = applications.id
+                      AND applied_events.event_type = 'applied'
                   )
               )
             ORDER BY applications.last_activity_at ASC, applications.id ASC
             """,
-            (cutoff_at,),
+            (cutoff_at, *RESPONSE_LIKE_APPLICATION_EVENT_TYPES),
         )
 
     def list_applications_with_ghost_inferred_events(self) -> list[ApplicationRecord]:
