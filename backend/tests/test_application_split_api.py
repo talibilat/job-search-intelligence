@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -1002,6 +1004,99 @@ def test_application_split_rejects_refused_target_upsert_before_moving_events(
             ).fetchone()[0]
             == "app-merged"
         )
+    finally:
+        connection.close()
+
+
+def test_application_split_derives_summaries_inside_write_transaction(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    response_at = datetime(2026, 7, 4, 11, 0, tzinfo=UTC)
+    connection = migrated_connection(database_path)
+    try:
+        insert_raw_email(connection, "email-applied")
+        insert_raw_email(connection, "email-rejected")
+        insert_raw_email(connection, "email-response")
+        insert_application(
+            connection,
+            application_id="app-merged",
+            company="Acme Corp",
+            role_title="Software Engineer",
+            first_seen_at=APPLIED_AT,
+            current_status="rejected",
+            last_activity_at=REJECTED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-merged",
+            email_id="email-applied",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-rejected",
+            application_id="app-merged",
+            email_id="email-rejected",
+            event_type="rejection",
+            event_at=REJECTED_AT,
+        )
+        connection.commit()
+
+        class MutatingApplicationRepository(ApplicationRepository):
+            did_mutate = False
+
+            @contextmanager
+            def transaction(self) -> Iterator[None]:
+                if not self.did_mutate:
+                    self.did_mutate = True
+                    insert_event(
+                        connection,
+                        event_id="event-response",
+                        application_id="app-merged",
+                        email_id="email-response",
+                        event_type="response",
+                        event_at=response_at,
+                    )
+                with super().transaction():
+                    yield
+
+        service = ApplicationCorrectionService(
+            application_repository=MutatingApplicationRepository(connection),
+            event_repository=EventRepository(connection),
+            correction_repository=CorrectionRepository(connection),
+            clock=lambda: NOW,
+        )
+
+        result = service.split_application(
+            application_id="app-merged",
+            request=ApplicationSplitRequest(
+                event_ids=["event-rejected"],
+                new_application=ApplicationSplitNewApplication(
+                    company="Beta Labs",
+                    role_title="Data Engineer",
+                    source="linkedin",
+                ),
+            ),
+        )
+
+        assert result.source_application.current_status == "in_review"
+        assert result.source_application.last_activity_at == response_at
+        source_events = result.correction.before_json["source_events"]
+        assert isinstance(source_events, list)
+        assert [event["id"] for event in source_events] == [
+            "event-applied",
+            "event-rejected",
+            "event-response",
+        ]
+        source_row = connection.execute(
+            "SELECT current_status, last_activity_at FROM applications WHERE id = ?",
+            ("app-merged",),
+        ).fetchone()
+        assert source_row is not None
+        assert tuple(source_row) == ("in_review", response_at.isoformat())
     finally:
         connection.close()
 
