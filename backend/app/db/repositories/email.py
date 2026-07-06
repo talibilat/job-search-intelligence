@@ -498,7 +498,8 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         ).fetchone()
         if row is None:
             return None
-        return row["thread_id"]
+        thread_id = row["thread_id"]
+        return str(thread_id) if thread_id is not None else None
 
     def _table_exists(self, table_name: str) -> bool:
         row = self.execute(
