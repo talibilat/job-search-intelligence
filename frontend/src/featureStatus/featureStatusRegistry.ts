@@ -400,6 +400,61 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
   },
   {
     area: "backend",
+    assignedModules: ["backend/app/api/health.py", "backend/app/models/health.py"],
+    blockers: [],
+    components: [],
+    connectedModules: ["FastAPI app shell", "Frontend OpenAPI generation"],
+    completedDate: "2026-07-05",
+    dependencies: ["FastAPI app factory"],
+    description:
+      "Minimal liveness endpoint that confirms the local FastAPI backend process is reachable without touching secrets, email data, or the database.",
+    endpoints: ["GET /health"],
+    files: ["backend/app/api/health.py", "backend/app/models/health.py", "backend/app/api/router.py"],
+    howToUse: {
+      expectedBehaviour:
+        "The route returns a typed status=ok response when the backend process is running and routable.",
+      expectedSuccessResult:
+        "QA and local setup checks can confirm backend liveness before exercising setup, sync, classification, or application APIs.",
+      navigationPath: "API client -> GET /health",
+      prerequisites: ["Backend process running locally"],
+      qaValidationPoints: [
+        "The response body is exactly the typed liveness shape with status=ok.",
+        "The endpoint does not read or expose secrets, OAuth tokens, email content, or database rows.",
+        "OpenAPI generation includes HealthResponse for frontend contract checks.",
+      ],
+      steps: [
+        "Start the backend app.",
+        "Call GET /health.",
+        "Confirm the response is HTTP 200 with status=ok.",
+      ],
+    },
+    id: "backend-health-check-api",
+    implementationStatus:
+      "Implemented as a Phase 0 liveness route with a typed Pydantic response model.",
+    name: "Health check API",
+    relationship: [
+      { label: "Developer API", type: "screen" },
+      { label: "GET /health", type: "api" },
+      { label: "health router", type: "controller" },
+      { label: "HealthResponse", type: "service" },
+      { label: "FastAPI runtime", type: "database" },
+    ],
+    remainingWork: [],
+    routes: [],
+    screens: ["Developer API"],
+    sharedUi: [],
+    stateConnections: [],
+    status: "completed",
+    testing: {
+      canTestNow: true,
+      entryPoint: "GET /health",
+      exampleInputs: ["No request body or query parameters"],
+      expectedOutputs: ["HTTP 200", "status=ok"],
+      requiredSetup: ["Backend app test client or running local backend"],
+    },
+  },
+  {
+    area: "backend",
     assignedModules: ["backend/app/api/setup.py", "backend/app/services/setup_status.py"],
     blockers: [],
     components: [],
