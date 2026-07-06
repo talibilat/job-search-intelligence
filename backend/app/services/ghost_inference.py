@@ -107,7 +107,10 @@ class GhostInferenceService:
         manual_conflict_application_ids: list[str],
     ) -> list[str]:
         retracted_application_ids: list[str] = []
-        for application in self._application_repository.list_applications(current_status="ghosted"):
+        ghosted_applications = (
+            self._application_repository.list_applications_with_ghost_inferred_events()
+        )
+        for application in ghosted_applications:
             events = self._event_repository.list_by_application_id(application.id)
             ghost_events = [event for event in events if event.event_type == "ghost_inferred"]
             if not ghost_events:
@@ -139,10 +142,13 @@ class GhostInferenceService:
             if not should_retract:
                 continue
 
-            deleted_count = self._event_repository.delete_ghost_inferred_events_for_application(
+            delete_outcome = self._event_repository.delete_ghost_inferred_events_for_application(
                 application.id,
             )
-            if deleted_count == 0:
+            if delete_outcome == "manual_conflict":
+                manual_conflict_application_ids.append(application.id)
+                continue
+            if delete_outcome == "not_found":
                 continue
 
             retracted_application_ids.append(application.id)

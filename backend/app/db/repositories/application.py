@@ -117,6 +117,18 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
             (cutoff_at,),
         )
 
+    def list_applications_with_ghost_inferred_events(self) -> list[ApplicationRecord]:
+        return self.fetch_all(
+            """
+            SELECT DISTINCT applications.*
+            FROM applications
+            INNER JOIN application_events
+                ON application_events.application_id = applications.id
+            WHERE application_events.event_type = 'ghost_inferred'
+            ORDER BY applications.last_activity_at ASC, applications.id ASC
+            """,
+        )
+
     def update_timeline_status(
         self,
         *,
