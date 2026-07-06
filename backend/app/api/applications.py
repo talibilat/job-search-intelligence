@@ -7,19 +7,29 @@ from fastapi import APIRouter, Depends
 from app.api.dependencies import (
     get_application_detail_service,
     get_application_events_service,
+    get_manual_edit_service,
     get_manual_merge_service,
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.models import (
+    ApplicationEventEditRequest,
+    ApplicationEventEditResponse,
     ApplicationEventRecord,
     ApplicationMergeRequest,
     ApplicationMergeResponse,
     ApplicationRecord,
+    ApplicationStatusEditRequest,
+    ApplicationStatusEditResponse,
 )
 from app.services.applications import (
     ApplicationDetailService,
     ApplicationEventsService,
     ApplicationNotFoundError,
+)
+from app.services.manual_edit import (
+    ManualApplicationEditService,
+    ManualEditInvalidRequestError,
+    ManualEditNotFoundError,
 )
 from app.services.manual_merge import (
     ManualApplicationMergeService,
@@ -75,6 +85,95 @@ def get_application_events(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,
             message="Application not found.",
+        ) from error
+
+
+@router.patch(
+    "/{application_id}/status",
+    response_model=ApplicationStatusEditResponse,
+    responses={
+        404: {"model": ApiErrorResponse},
+        422: {"model": ApiErrorResponse},
+    },
+    summary="Edit Application Status",
+    description=(
+        "Manually corrects one application's current status, locks it from automatic "
+        "overwrite, and records an audited status_edit correction."
+    ),
+)
+def edit_application_status(
+    application_id: str,
+    request: ApplicationStatusEditRequest,
+    edit_service: Annotated[
+        ManualApplicationEditService,
+        Depends(get_manual_edit_service),
+    ],
+) -> ApplicationStatusEditResponse:
+    try:
+        return edit_service.edit_status(
+            application_id=application_id,
+            current_status=request.current_status,
+            reason=request.reason,
+        )
+    except ManualEditNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message="Application was not found.",
+        ) from error
+
+
+@router.patch(
+    "/{application_id}/events/{event_id}",
+    response_model=ApplicationEventEditResponse,
+    responses={
+        400: {"model": ApiErrorResponse},
+        404: {"model": ApiErrorResponse},
+        422: {"model": ApiErrorResponse},
+    },
+    summary="Edit Application Event",
+    description=(
+        "Manually corrects one timeline event, locks the application from automatic "
+        "overwrite, and records an audited event_edit correction."
+    ),
+)
+def edit_application_event(
+    application_id: str,
+    event_id: str,
+    request: ApplicationEventEditRequest,
+    edit_service: Annotated[
+        ManualApplicationEditService,
+        Depends(get_manual_edit_service),
+    ],
+) -> ApplicationEventEditResponse:
+    try:
+        return edit_service.edit_event(
+            application_id=application_id,
+            event_id=event_id,
+            event_type=request.event_type,
+            event_at=request.event_at,
+            email_id=request.email_id,
+            extract_note=request.extract_note,
+            update_email_id="email_id" in request.model_fields_set,
+            update_extract_note="extract_note" in request.model_fields_set,
+            reason=request.reason,
+        )
+    except ManualEditInvalidRequestError as error:
+        raise ApiError(
+            status_code=400,
+            code=ApiErrorCode.BAD_REQUEST,
+            message="Application event edit is invalid.",
+        ) from error
+    except ManualEditNotFoundError as error:
+        message = (
+            "Application was not found."
+            if error.resource == "application"
+            else "Application event was not found."
+        )
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message=message,
         ) from error
 
 

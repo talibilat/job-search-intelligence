@@ -142,12 +142,17 @@ class AggregationService:
                 if application_upsert_outcome == "upserted":
                     applications_upserted += 1
 
-                _upsert_events(
+                events_upserted_for_group, event_manual_conflict = _upsert_events(
                     event_repository=self._event_repository,
                     application_id=make_application_id(key),
                     group=group,
                 )
-                events_upserted += len(group)
+                events_upserted += events_upserted_for_group
+                if event_manual_conflict:
+                    manual_conflict_count += 1
+                    application_id = make_application_id(key)
+                    if application_id not in manual_conflict_application_ids:
+                        manual_conflict_application_ids.append(application_id)
 
         if should_commit:
             self._application_repository.connection.commit()
@@ -308,7 +313,9 @@ def _upsert_events(
     event_repository: EventRepository,
     application_id: str,
     group: list[_EnrichedExtraction],
-) -> None:
+) -> tuple[int, bool]:
+    events_upserted = 0
+    manual_conflict = False
     for result in group:
         ext = result.extraction
         event_type = _event_type_for_result(result)
@@ -322,7 +329,7 @@ def _upsert_events(
             event_at=event_at_str,
         )
 
-        event_repository.upsert_event(
+        outcome = event_repository.upsert_event(
             id=event_id,
             application_id=application_id,
             email_id=email_id,
@@ -331,6 +338,11 @@ def _upsert_events(
             extract_note=ext.rejection_reason,
             extracted_status=ext.status,
         )
+        if outcome == "manual_conflict":
+            manual_conflict = True
+            continue
+        events_upserted += 1
+    return events_upserted, manual_conflict
 
 
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:

@@ -165,6 +165,7 @@ Status-bearing event types map to application statuses: `applied -> applied`, `r
 `ghosted` is **inferred** when an application has an `applied` event but no response after your personal ghost-threshold (default 30 days, tunable).
 Aggregation must be **idempotent** - re-runs never duplicate.
 Manual corrections are audited, lock affected grouping/status from automatic overwrite by default, and surface conflicts when new evidence disagrees.
+Manual event edits also protect the edited event identity and source email, so aggregation reruns must return a manual conflict instead of creating a competing timeline row for the same edited source evidence.
 
 ---
 
@@ -274,8 +275,9 @@ Show a **pre-run cost estimate** and track tokens per run.
   Raw-email retained and debugging body persistence is insert-or-update, so explicit body fetches are not dropped if they arrive before metadata.
 - **Classification:** `GET /classification/estimate` returns retained candidate counts, estimated prompt and completion tokens, total estimated tokens, model and prompt version, token-estimate method, and cost availability before a bulk classification pass without calling an LLM or returning email content; `GET /classification/reprocessing-plan` returns read-only retained-candidate buckets for up-to-date, unclassified, stale-model, stale-prompt-version, and missing-target-model rows so prompt/model reruns are deterministic before a later runner executes them.
 - **Applications:** `GET /applications` (filters: status, source, sponsorship, date range, role, salary band, work_mode), `GET /applications/{id}`, `GET /applications/{id}/events`, correction endpoints for merge, split, status edit, and event edit.
-  [JT-116 2026-07-06] The backend now implements the read-only detail slice, `GET /applications/{id}`, returning one `ApplicationRecord` from local SQLite and a typed `404` error when no application row matches; list and correction routes remain later slices.
-  [JT-117 2026-07-06] The backend now implements the read-only event timeline slice, `GET /applications/{id}/events`, returning ordered `ApplicationEventRecord` rows from local SQLite, an empty list for applications without events, and a typed `404` error when no parent application row matches; list and correction routes remain later slices.
+  [JT-116 2026-07-06] The backend now implements the read-only detail slice, `GET /applications/{id}`, returning one `ApplicationRecord` from local SQLite and a typed `404` error when no application row matches.
+  [JT-117 2026-07-06] The backend now implements the read-only event timeline slice, `GET /applications/{id}/events`, returning ordered `ApplicationEventRecord` rows from local SQLite, an empty list for applications without events, and a typed `404` error when no parent application row matches.
+  [JT-113 2026-07-06] The backend now implements `PATCH /applications/{application_id}/status` and `PATCH /applications/{application_id}/events/{event_id}` for audited manual status and timeline-event corrections; event edits require at least one changed event field, validate source emails, replay application status from the edited timeline, and protect edited event/source-email evidence from conflicting aggregation reruns; list, split, and reset-lock routes remain later slices.
 - **Metrics (deterministic):** `GET /metrics/summary`, `/metrics/rates`, `/metrics/funnel`, `/metrics/timeseries`, `/metrics/breakdown?dimension=role|source|salary|tech|sponsorship|seniority|work_mode`, `/metrics/diagnostics`
 - **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`

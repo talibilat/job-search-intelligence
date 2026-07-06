@@ -141,11 +141,104 @@
         "title": "ApplicationCorrectionRecord",
         "type": "object"
       },
+      "ApplicationEventEditRequest": {
+        "properties": {
+          "email_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Id"
+          },
+          "event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event At"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplicationEventType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extract_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extract Note"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "ApplicationEventEditRequest",
+        "type": "object"
+      },
+      "ApplicationEventEditResponse": {
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          },
+          "correction": {
+            "$ref": "#/components/schemas/ApplicationCorrectionRecord"
+          },
+          "event": {
+            "$ref": "#/components/schemas/ApplicationEventRecord"
+          }
+        },
+        "required": [
+          "application",
+          "event",
+          "correction"
+        ],
+        "title": "ApplicationEventEditResponse",
+        "type": "object"
+      },
       "ApplicationEventRecord": {
         "properties": {
           "application_id": {
             "title": "Application Id",
             "type": "string"
+          },
+          "classification_classified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification Classified At"
           },
           "email_id": {
             "anyOf": [
@@ -157,6 +250,18 @@
               }
             ],
             "title": "Email Id"
+          },
+          "email_sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Sent At"
           },
           "event_at": {
             "format": "date-time",
@@ -176,6 +281,16 @@
               }
             ],
             "title": "Extract Note"
+          },
+          "extracted_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplicationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "title": "Id",
@@ -428,6 +543,45 @@
           "withdrawn"
         ],
         "type": "string"
+      },
+      "ApplicationStatusEditRequest": {
+        "properties": {
+          "current_status": {
+            "$ref": "#/components/schemas/ApplicationStatus"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "current_status"
+        ],
+        "title": "ApplicationStatusEditRequest",
+        "type": "object"
+      },
+      "ApplicationStatusEditResponse": {
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          },
+          "correction": {
+            "$ref": "#/components/schemas/ApplicationCorrectionRecord"
+          }
+        },
+        "required": [
+          "application",
+          "correction"
+        ],
+        "title": "ApplicationStatusEditResponse",
+        "type": "object"
       },
       "ClassificationMode": {
         "enum": [
@@ -1851,6 +2005,88 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/applications/{application_id}/events/{event_id}": {
+      "patch": {
+        "description": "Manually corrects one timeline event, locks the application from automatic overwrite, and records an audited event_edit correction.",
+        "operationId": "edit_application_event_applications__application_id__events__event_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationEventEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationEventEditResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Edit Application Event",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/applications/{application_id}/merge": {
       "post": {
         "description": "Moves events from a duplicate source application into the target application, deletes the source application, and records an audited merge correction.",
@@ -1919,6 +2155,69 @@
           }
         },
         "summary": "Merge Duplicate Applications",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/applications/{application_id}/status": {
+      "patch": {
+        "description": "Manually corrects one application's current status, locks it from automatic overwrite, and records an audited status_edit correction.",
+        "operationId": "edit_application_status_applications__application_id__status_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationStatusEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationStatusEditResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Edit Application Status",
         "tags": [
           "applications"
         ]
