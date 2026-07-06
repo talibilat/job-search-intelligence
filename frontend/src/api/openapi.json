@@ -282,6 +282,101 @@
         "title": "ClassificationReprocessingPlan",
         "type": "object"
       },
+      "ClassificationRunResponse": {
+        "description": "Public response for a completed classification batch run.",
+        "properties": {
+          "candidate_count": {
+            "minimum": 0.0,
+            "title": "Candidate Count",
+            "type": "integer"
+          },
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "classified_count": {
+            "minimum": 0.0,
+            "title": "Classified Count",
+            "type": "integer"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "completion_tokens": {
+            "minimum": 0.0,
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "estimated_cost_usd": {
+            "minimum": 0.0,
+            "title": "Estimated Cost Usd",
+            "type": "number"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "malformed_count": {
+            "minimum": 0.0,
+            "title": "Malformed Count",
+            "type": "integer"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_tokens": {
+            "minimum": 0.0,
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "prompt_version": {
+            "minLength": 1,
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "run_id": {
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "total_tokens": {
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "provider",
+          "model",
+          "prompt_version",
+          "started_at",
+          "completed_at",
+          "candidate_count",
+          "classified_count",
+          "malformed_count",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens",
+          "estimated_cost_usd",
+          "classification_mode",
+          "llm_provider"
+        ],
+        "title": "ClassificationRunResponse",
+        "type": "object"
+      },
       "EmailAccountRef": {
         "description": "Provider-neutral stable reference to a connected mailbox account.",
         "properties": {
@@ -1525,6 +1620,28 @@
           }
         },
         "summary": "Plan Classification Reprocessing",
+        "tags": [
+          "classification"
+        ]
+      }
+    },
+    "/classification/run": {
+      "post": {
+        "description": "Classifies retained email candidates through the configured LLM provider and idempotently stores classification results plus run accounting.",
+        "operationId": "classification_run_classification_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassificationRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Run Classification Batch",
         "tags": [
           "classification"
         ]
