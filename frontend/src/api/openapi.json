@@ -662,7 +662,7 @@
           "source_application": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ApplicationSplitNewApplication"
+                "$ref": "#/components/schemas/ApplicationSplitSourceApplication"
               },
               {
                 "type": "null"
@@ -703,6 +703,105 @@
           "correction"
         ],
         "title": "ApplicationSplitResponse",
+        "type": "object"
+      },
+      "ApplicationSplitSourceApplication": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "minLength": 1,
+            "title": "Company",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "role_title": {
+            "minLength": 1,
+            "title": "Role Title",
+            "type": "string"
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Max"
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Min"
+          },
+          "seniority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seniority"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ApplicationSource",
+            "title": "Source"
+          },
+          "sponsorship": {
+            "$ref": "#/components/schemas/SponsorshipStatus",
+            "title": "Sponsorship"
+          },
+          "tech_stack": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tech Stack",
+            "type": "array"
+          },
+          "work_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ApplicationSplitSourceApplication",
         "type": "object"
       },
       "ApplicationStatus": {

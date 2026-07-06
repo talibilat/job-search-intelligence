@@ -19,6 +19,7 @@ from .correction import (
     ApplicationSplitNewApplication,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
+    ApplicationSplitSourceApplication,
 )
 from .health import HealthResponse
 from .provider_config import (
@@ -94,6 +95,7 @@ __all__ = [
     "ApplicationSplitNewApplication",
     "ApplicationSplitRequest",
     "ApplicationSplitResponse",
+    "ApplicationSplitSourceApplication",
     "ChatMessageRecord",
     "ChatMessageRole",
     "ClassificationRunRecord",

@@ -205,12 +205,28 @@ export interface ApplicationSplitNewApplication {
   work_mode?: WorkMode | null;
 }
 
+export interface ApplicationSplitSourceApplication {
+  /** @minLength 1 */
+  company?: string;
+  currency?: string | null;
+  location?: string | null;
+  /** @minLength 1 */
+  role_title?: string;
+  salary_max?: number | null;
+  salary_min?: number | null;
+  seniority?: string | null;
+  source?: ApplicationSource;
+  sponsorship?: SponsorshipStatus;
+  tech_stack?: string[];
+  work_mode?: WorkMode | null;
+}
+
 export interface ApplicationSplitRequest {
   /** @minItems 1 */
   event_ids: string[];
   new_application: ApplicationSplitNewApplication;
   reason?: string | null;
-  source_application?: ApplicationSplitNewApplication | null;
+  source_application?: ApplicationSplitSourceApplication | null;
 }
 
 export interface ApplicationSplitResponse {

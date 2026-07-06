@@ -6,7 +6,11 @@ from hashlib import sha256
 from typing import cast
 
 from app.db.repositories import ApplicationRepository, CorrectionRepository, EventRepository
-from app.models.correction import ApplicationSplitRequest, ApplicationSplitResponse
+from app.models.correction import (
+    ApplicationSplitRequest,
+    ApplicationSplitResponse,
+    ApplicationSplitSourceApplication,
+)
 from app.models.records import (
     ApplicationEventRecord,
     ApplicationEventType,
@@ -111,7 +115,10 @@ class ApplicationCorrectionService:
             if source_before.manual_lock
             else _derive_current_status(remaining_events)
         )
-        source_application_fields = request.source_application or source_before
+        source_application_fields = _merge_source_application_fields(
+            source_before=source_before,
+            source_application=request.source_application,
+        )
 
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
@@ -270,6 +277,26 @@ def _application_json(application: ApplicationRecord) -> JsonObject:
 
 def _events_json(events: list[ApplicationEventRecord]) -> list[JsonObject]:
     return [cast(JsonObject, event.model_dump(mode="json")) for event in events]
+
+
+def _merge_source_application_fields(
+    *,
+    source_before: ApplicationRecord,
+    source_application: ApplicationSplitSourceApplication | None,
+) -> ApplicationRecord:
+    if source_application is None:
+        return source_before
+
+    merged_data = {
+        **source_before.model_dump(),
+        **source_application.model_dump(exclude_unset=True),
+    }
+    try:
+        return ApplicationRecord.model_validate(merged_data)
+    except ValueError as error:
+        raise ApplicationSplitConflictError(
+            "Source application correction fields are invalid.",
+        ) from error
 
 
 def _utcnow() -> datetime:
