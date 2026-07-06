@@ -198,6 +198,85 @@ def test_post_application_split_preserves_terminal_status_priority(
         assert target == ("rejected",)
 
 
+def test_post_application_split_preserves_locked_source_status(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    connection = migrated_connection(database_path)
+    try:
+        insert_raw_email(connection, "email-applied")
+        insert_raw_email(connection, "email-rejected")
+        insert_application(
+            connection,
+            application_id="app-merged",
+            company="Acme Corp",
+            role_title="Software Engineer",
+            first_seen_at=APPLIED_AT,
+            current_status="withdrawn",
+            last_activity_at=REJECTED_AT,
+            manual_lock=True,
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-merged",
+            email_id="email-applied",
+            event_type="applied",
+            event_at=APPLIED_AT,
+        )
+        insert_event(
+            connection,
+            event_id="event-rejected",
+            application_id="app-merged",
+            email_id="email-rejected",
+            event_type="rejection",
+            event_at=REJECTED_AT,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/applications/app-merged/split",
+        json={
+            "event_ids": ["event-rejected"],
+            "new_application": {
+                "company": "Beta Labs",
+                "role_title": "Data Engineer",
+                "source": "linkedin",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_application"]["current_status"] == "withdrawn"
+    assert payload["source_application"]["manual_lock"] is True
+
+    with sqlite3.connect(database_path) as db:
+        source = db.execute(
+            """
+            SELECT current_status, first_seen_at, last_activity_at, manual_lock
+            FROM applications
+            WHERE id = ?
+            """,
+            ("app-merged",),
+        ).fetchone()
+        assert source == (
+            "withdrawn",
+            APPLIED_AT.isoformat(),
+            APPLIED_AT.isoformat(),
+            1,
+        )
+
+
 def migrated_connection(database_path: Path) -> sqlite3.Connection:
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
@@ -241,6 +320,7 @@ def insert_application(
     first_seen_at: datetime,
     current_status: str,
     last_activity_at: datetime,
+    manual_lock: bool = False,
 ) -> None:
     connection.execute(
         """
@@ -267,7 +347,7 @@ def insert_application(
             "unknown",
             "[]",
             last_activity_at.isoformat(),
-            0,
+            int(manual_lock),
             NOW.isoformat(),
             NOW.isoformat(),
         ),

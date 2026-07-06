@@ -104,6 +104,11 @@ class ApplicationCorrectionService:
         now_iso = now.isoformat()
         new_first_seen_at, new_last_activity_at = _event_bounds(selected_events)
         source_first_seen_at, source_last_activity_at = _event_bounds(remaining_events)
+        source_current_status = (
+            source_before.current_status
+            if source_before.manual_lock
+            else _derive_current_status(remaining_events)
+        )
 
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
@@ -131,7 +136,7 @@ class ApplicationCorrectionService:
             self._application_repository.update_timeline_summary(
                 application_id=application_id,
                 first_seen_at=source_first_seen_at.isoformat(),
-                current_status=_derive_current_status(remaining_events),
+                current_status=source_current_status,
                 last_activity_at=source_last_activity_at.isoformat(),
                 updated_at=now_iso,
             )
