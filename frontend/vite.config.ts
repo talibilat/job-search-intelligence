@@ -4,10 +4,6 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 const BACKEND_URL = "http://127.0.0.1:8000";
-interface ProxyBypassRequest {
-  method?: string;
-  url?: string;
-}
 
 export default defineConfig({
   plugins: [react()],
