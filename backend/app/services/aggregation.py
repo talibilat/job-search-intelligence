@@ -200,13 +200,9 @@ def _upsert_application(
 
     for result in group:
         ext = result.extraction
-        if ext.salary_min is not None and (
-            salary_min is None or ext.salary_min < salary_min
-        ):
+        if ext.salary_min is not None and (salary_min is None or ext.salary_min < salary_min):
             salary_min = ext.salary_min
-        if ext.salary_max is not None and (
-            salary_max is None or ext.salary_max > salary_max
-        ):
+        if ext.salary_max is not None and (salary_max is None or ext.salary_max > salary_max):
             salary_max = ext.salary_max
         if ext.currency is not None and currency is None:
             currency = ext.currency
@@ -218,9 +214,7 @@ def _upsert_application(
             seniority = ext.seniority
         if ext.sponsorship != "unknown" and sponsorship == "unknown":
             sponsorship = ext.sponsorship
-        tech_stack.extend(
-            t for t in ext.tech_stack if t not in tech_stack
-        )
+        tech_stack.extend(t for t in ext.tech_stack if t not in tech_stack)
 
     company = best_result.extraction.company or ""
     role_title = best_result.extraction.role_title or ""
@@ -256,9 +250,7 @@ def _upsert_events(
         ext = result.extraction
         event_type = ext.event_type or "applied"
         event_at = ext.event_at
-        event_at_str = (
-            event_at.isoformat() if event_at is not None else _utcnow().isoformat()
-        )
+        event_at_str = event_at.isoformat() if event_at is not None else _utcnow().isoformat()
         email_id = result.classification_email_id
 
         event_id = make_event_id(

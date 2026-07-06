@@ -8,11 +8,13 @@ from fastapi import Depends
 
 from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
+from app.db.repositories.application import ApplicationRepository
 from app.db.repositories.classification_run import ClassificationRunRepository
 from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
+from app.services.applications import ApplicationDetailService
 from app.services.structured_extraction import StructuredExtractionService
 
 
@@ -93,6 +95,27 @@ def get_structured_extraction_service(
         classification_run_repository=classification_run_repository,
         llm_provider=llm_provider,
     )
+
+
+def get_readonly_application_repository(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ApplicationRepository]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield ApplicationRepository(connection)
+    finally:
+        connection.close()
+
+
+def get_application_detail_service(
+    application_repository: Annotated[
+        ApplicationRepository,
+        Depends(get_readonly_application_repository),
+    ],
+) -> ApplicationDetailService:
+    return ApplicationDetailService(application_repository)
 
 
 def get_readonly_email_repository(
