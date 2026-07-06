@@ -187,6 +187,63 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
   },
   {
     area: "frontend",
+    assignedModules: ["frontend/src/pages/Insights.tsx"],
+    blockers: [],
+    components: ["Insights"],
+    connectedModules: ["Future insights API", "Future deterministic application evidence"],
+    completedDate: "2026-07-05",
+    dependencies: ["Future insights endpoints", "applications", "raw_emails"],
+    description:
+      "Phase 0 insights page shell that reserves the narrative insights route without generating LLM output or implying uncited conclusions.",
+    endpoints: ["GET /insights", "POST /insights/regenerate"],
+    files: ["frontend/src/pages/Insights.tsx"],
+    howToUse: {
+      expectedBehaviour:
+        "The page renders placeholder guidance only, clearly stating that narrative insights are not generated yet and that future insights must cite source applications and emails.",
+      expectedSuccessResult:
+        "QA can confirm the route exists, avoids model calls, and does not show uncited narrative claims or dashboard counts.",
+      navigationPath: "Primary navigation -> Insights",
+      prerequisites: ["Frontend dev server"],
+      qaValidationPoints: [
+        "The page says narrative insights are not generated yet.",
+        "The copy states that future insights must cite applications and emails.",
+        "No regenerate action calls an LLM provider in the Phase 0 shell.",
+      ],
+      steps: [
+        "Open /insights.",
+        "Read the Current state card.",
+        "Confirm the page contains placeholder copy only and no generated insight content.",
+      ],
+    },
+    id: "frontend-insights-shell",
+    implementationStatus:
+      "Implemented as a Phase 0 route shell with generated insight behaviour deferred to Phase 4.",
+    name: "Insights route shell",
+    relationship: [
+      { label: "Insights", type: "screen" },
+      { label: "Insights", type: "component" },
+      { label: "GET /insights", type: "api" },
+      { label: "insights router", type: "controller" },
+      { label: "InsightsService", type: "service" },
+      { label: "insights", type: "database" },
+      { label: "applications", type: "database" },
+    ],
+    remainingWork: [],
+    routes: ["/insights"],
+    screens: ["Insights"],
+    sharedUi: [],
+    stateConnections: ["Future cached insight state"],
+    status: "completed",
+    testing: {
+      canTestNow: true,
+      entryPoint: "/insights",
+      exampleInputs: ["No application data required"],
+      expectedOutputs: ["Insights shell renders", "Generated insight content remains absent"],
+      requiredSetup: ["Frontend dev server"],
+    },
+  },
+  {
+    area: "frontend",
     assignedModules: ["frontend/src/components/SyncStatusPanel.tsx"],
     blockers: [],
     components: ["SyncStatusPanel", "Button", "Alert"],

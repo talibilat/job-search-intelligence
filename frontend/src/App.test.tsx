@@ -492,6 +492,7 @@ describe("App", () => {
     expect(screen.getAllByText("Completed features").length).toBeGreaterThan(0);
     expect(screen.getByText("First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Dashboard route shell")).toBeTruthy();
+    expect(screen.getByText("Insights route shell")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();
     expect(screen.getByText("How to use First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Setup wizard API")).toBeTruthy();
