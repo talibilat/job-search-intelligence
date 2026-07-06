@@ -111,6 +111,7 @@ class ApplicationCorrectionService:
             if source_before.manual_lock
             else _derive_current_status(remaining_events)
         )
+        source_application_fields = request.source_application or source_before
 
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
@@ -147,6 +148,17 @@ class ApplicationCorrectionService:
                 application_id=application_id,
                 first_seen_at=source_first_seen_at.isoformat(),
                 current_status=source_current_status,
+                company=source_application_fields.company,
+                role_title=source_application_fields.role_title,
+                source=source_application_fields.source,
+                salary_min=source_application_fields.salary_min,
+                salary_max=source_application_fields.salary_max,
+                currency=source_application_fields.currency,
+                location=source_application_fields.location,
+                work_mode=source_application_fields.work_mode,
+                seniority=source_application_fields.seniority,
+                sponsorship=source_application_fields.sponsorship,
+                tech_stack=source_application_fields.tech_stack,
                 last_activity_at=source_last_activity_at.isoformat(),
                 updated_at=now_iso,
             )
