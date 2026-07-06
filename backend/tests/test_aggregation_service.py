@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -676,6 +677,83 @@ def test_aggregation_does_not_report_conflict_for_unchanged_locked_rerun(
     ).fetchone()
     assert stored_events is not None
     assert stored_events[0] == 1
+
+
+def test_aggregation_reports_conflict_instead_of_overwriting_manual_event_edit(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+
+    extraction = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+    )
+    service = make_service(connection)
+    service.run([extraction])
+
+    stored_event = connection.execute(
+        "SELECT id, application_id FROM application_events",
+    ).fetchone()
+    assert stored_event is not None
+    event_id = stored_event[0]
+    application_id = stored_event[1]
+    edited_at = datetime(2026, 7, 8, 10, 0, tzinfo=UTC)
+    connection.execute(
+        """
+        UPDATE application_events
+        SET event_type = 'interview_scheduled',
+            event_at = ?,
+            extract_note = 'Manual timeline correction.'
+        WHERE id = ?
+        """,
+        (edited_at.isoformat(), event_id),
+    )
+    connection.execute("UPDATE applications SET manual_lock = 1 WHERE id = ?", (application_id,))
+    connection.execute(
+        """
+        INSERT INTO application_corrections (
+            application_id, correction_type, before_json,
+            after_json, reason, created_at
+        ) VALUES (?, 'event_edit', ?, ?, ?, ?)
+        """,
+        (
+            application_id,
+            json.dumps({"event": {"id": event_id, "event_type": "applied"}}),
+            json.dumps(
+                {
+                    "event": {
+                        "id": event_id,
+                        "event_type": "interview_scheduled",
+                    }
+                }
+            ),
+            "Manual event correction.",
+            NOW.isoformat(),
+        ),
+    )
+    connection.commit()
+
+    result = service.run([extraction])
+
+    assert result.events_upserted == 0
+    assert result.manual_conflict_count == 1
+    assert result.manual_conflict_application_ids == [application_id]
+    event_after_rerun = connection.execute(
+        "SELECT event_type, event_at, extract_note FROM application_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    assert event_after_rerun is not None
+    assert tuple(event_after_rerun) == (
+        "interview_scheduled",
+        edited_at.isoformat(),
+        "Manual timeline correction.",
+    )
 
 
 def test_aggregation_merges_tech_stack_from_multiple_extractions(tmp_path: Path) -> None:
