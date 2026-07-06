@@ -5,6 +5,8 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, model_validator
 
+from app.models.application import ApplicationStatus
+
 type ApplicationEventType = Literal[
     "applied",
     "response",
@@ -24,6 +26,9 @@ class ApplicationEventRecord(BaseModel):
     event_type: ApplicationEventType
     event_at: datetime
     extract_note: str | None
+    extracted_status: ApplicationStatus | None = None
+    email_sent_at: datetime | None = None
+    classification_classified_at: datetime | None = None
 
     @model_validator(mode="after")
     def validate_email_id_for_event_type(self) -> Self:
