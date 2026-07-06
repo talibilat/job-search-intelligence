@@ -490,6 +490,17 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         ).fetchall()
         return [str(row[0]) for row in rows]
 
+    def get_thread_id(self, email_id: str) -> str | None:
+        """Return the thread_id for a raw email, or None if not found."""
+        row = self.execute(
+            "SELECT thread_id FROM raw_emails WHERE id = ?",
+            (email_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        thread_id = row["thread_id"]
+        return str(thread_id) if thread_id is not None else None
+
     def _table_exists(self, table_name: str) -> bool:
         row = self.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime
+from uuid import UUID, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.services.normalization import normalize_company_name, normalize_role_title
 
 DEFAULT_APPLICATION_GROUPING_WINDOW_DAYS = 30
+
+_APPLICATION_UUID_NAMESPACE = UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+_EVENT_UUID_NAMESPACE = UUID("6ba7b812-9dad-11d1-80b4-00c04fd430c8")
 
 
 class ApplicationGroupingKey(BaseModel):
@@ -94,8 +99,58 @@ def _utc_date(value: datetime) -> date:
     return value.astimezone(UTC).date()
 
 
+def make_application_id(key: ApplicationGroupingKey) -> str:
+    """Generate a deterministic application ID from a grouping key.
+
+    The same grouping key always produces the same UUID,
+    which makes re-running aggregation idempotent.
+    """
+
+    canonical = json.dumps(
+        {
+            "company": key.normalized_company,
+            "role": key.normalized_role,
+            "thread_id": key.thread_id,
+            "time_window_start": key.time_window_start.isoformat()
+            if key.time_window_start is not None
+            else None,
+            "window_days": key.time_window_days,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return uuid5(_APPLICATION_UUID_NAMESPACE, canonical).hex
+
+
+def make_event_id(
+    application_id: str,
+    email_id: str | None,
+    event_type: str,
+    event_at: str,
+) -> str:
+    """Generate a deterministic event ID from event identity signals.
+
+    Evidence-backed events use (application_id, email_id, event_type, event_at).
+    Ghost-inferred events exclude the None email_id but include the other three.
+    """
+
+    canonical = json.dumps(
+        {
+            "application_id": application_id,
+            "email_id": email_id,
+            "event_type": event_type,
+            "event_at": event_at,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return uuid5(_EVENT_UUID_NAMESPACE, canonical).hex
+
+
 __all__ = [
     "ApplicationGroupingKey",
     "DEFAULT_APPLICATION_GROUPING_WINDOW_DAYS",
     "build_application_grouping_key",
+    "make_application_id",
+    "make_event_id",
 ]
