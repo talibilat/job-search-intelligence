@@ -81,7 +81,7 @@ class AggregationService:
                 skipped_not_job_related=skipped_not_job_related,
             )
 
-        _enrich_extractions_with_thread_ids(
+        _enrich_extractions_with_email_context(
             email_repository=self._email_repository,
             results=job_related_results,
         )
@@ -126,8 +126,10 @@ class _EnrichedExtraction(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     classification_email_id: str = Field(min_length=1)
+    classification_classified_at: datetime
     extraction: JobApplicationExtraction
     thread_id: str | None = None
+    email_sent_at: datetime | None = None
 
 
 def _filter_job_related(
@@ -136,6 +138,7 @@ def _filter_job_related(
     return [
         _EnrichedExtraction(
             classification_email_id=result.classification.email_id,
+            classification_classified_at=result.classification.classified_at,
             extraction=result.extraction,
         )
         for result in results
@@ -143,14 +146,16 @@ def _filter_job_related(
     ]
 
 
-def _enrich_extractions_with_thread_ids(
+def _enrich_extractions_with_email_context(
     *,
     email_repository: EmailRepository,
     results: list[_EnrichedExtraction],
 ) -> None:
     for result in results:
         thread_id = email_repository.get_thread_id(result.classification_email_id)
+        email_sent_at = email_repository.get_sent_at(result.classification_email_id)
         object.__setattr__(result, "thread_id", thread_id)
+        object.__setattr__(result, "email_sent_at", email_sent_at)
 
 
 def _group_by_key(
@@ -268,6 +273,10 @@ def _upsert_events(
             event_at=event_at_str,
             extract_note=ext.rejection_reason,
         )
+
+
+def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
+    return result.extraction.event_at or result.email_sent_at or result.classification_classified_at
 
 
 def _collect_timestamps(

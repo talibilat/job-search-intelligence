@@ -131,6 +131,34 @@ def test_aggregation_is_idempotent(tmp_path: Path) -> None:
     assert stored_events[0] == 1
 
 
+def test_aggregation_uses_email_sent_at_for_missing_event_at_idempotency(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+
+    extraction = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=None,
+    )
+    service = make_service(connection)
+
+    service.run([extraction])
+    service.run([extraction])
+
+    stored_events = connection.execute(
+        "SELECT event_at FROM application_events",
+    ).fetchall()
+
+    assert len(stored_events) == 1
+    assert stored_events[0][0] == NOW.isoformat()
+
+
 def test_aggregation_skips_non_job_related_extractions(tmp_path: Path) -> None:
     connection = migrated_connection(tmp_path)
     insert_raw_email(connection, "email-1", thread_id="thread-abc")
