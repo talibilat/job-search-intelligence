@@ -15,6 +15,11 @@ from .classification import (
     ClassificationReprocessingStats,
     ClassificationRunResponse,
 )
+from .correction import (
+    ApplicationSplitNewApplication,
+    ApplicationSplitRequest,
+    ApplicationSplitResponse,
+)
 from .health import HealthResponse
 from .provider_config import (
     EmailProviderConfigResponse,
@@ -86,6 +91,9 @@ __all__ = [
     "ApplicationRecord",
     "ApplicationStatusEditRequest",
     "ApplicationStatusEditResponse",
+    "ApplicationSplitNewApplication",
+    "ApplicationSplitRequest",
+    "ApplicationSplitResponse",
     "ChatMessageRecord",
     "ChatMessageRole",
     "ClassificationRunRecord",

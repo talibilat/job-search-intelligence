@@ -531,6 +531,92 @@
         ],
         "type": "string"
       },
+      "ApplicationSplitNewApplication": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "minLength": 1,
+            "title": "Company",
+            "type": "string"
+          },
+          "role_title": {
+            "minLength": 1,
+            "title": "Role Title",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ApplicationSource",
+            "default": "other"
+          }
+        },
+        "required": [
+          "company",
+          "role_title"
+        ],
+        "title": "ApplicationSplitNewApplication",
+        "type": "object"
+      },
+      "ApplicationSplitRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Event Ids",
+            "type": "array"
+          },
+          "new_application": {
+            "$ref": "#/components/schemas/ApplicationSplitNewApplication"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "event_ids",
+          "new_application"
+        ],
+        "title": "ApplicationSplitRequest",
+        "type": "object"
+      },
+      "ApplicationSplitResponse": {
+        "properties": {
+          "correction": {
+            "$ref": "#/components/schemas/ApplicationCorrectionRecord"
+          },
+          "moved_events": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationEventRecord"
+            },
+            "title": "Moved Events",
+            "type": "array"
+          },
+          "new_application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          },
+          "source_application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          }
+        },
+        "required": [
+          "source_application",
+          "new_application",
+          "moved_events",
+          "correction"
+        ],
+        "title": "ApplicationSplitResponse",
+        "type": "object"
+      },
       "ApplicationStatus": {
         "enum": [
           "applied",
@@ -2342,6 +2428,79 @@
           }
         },
         "summary": "Merge Duplicate Applications",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/applications/{application_id}/split": {
+      "post": {
+        "description": "Splits selected events out of an incorrectly grouped application into a new application and records an audited manual correction.",
+        "operationId": "split_application_applications__application_id__split_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationSplitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationSplitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Application not found."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Application split conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Split Application",
         "tags": [
           "applications"
         ]

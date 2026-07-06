@@ -281,6 +281,40 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         ).fetchone()
         return row is not None
 
+    def update_timeline_summary(
+        self,
+        *,
+        application_id: str,
+        first_seen_at: str,
+        current_status: str,
+        last_activity_at: str,
+        updated_at: str,
+    ) -> bool:
+        """Update timeline-derived summary fields for an existing application."""
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                UPDATE applications
+                SET first_seen_at = ?,
+                    current_status = ?,
+                    last_activity_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    first_seen_at,
+                    current_status,
+                    last_activity_at,
+                    updated_at,
+                    application_id,
+                ),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount > 0
+
     def map_row(self, row: sqlite3.Row) -> ApplicationRecord:
         return ApplicationRecord.model_validate(row_to_dict(row))
 
