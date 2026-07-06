@@ -25,7 +25,6 @@ from .correction import (
 )
 from .ghost_inference import GhostInferenceRunResponse
 from .health import HealthResponse
-from .insight import InsightInput, InsightInputEvidence, InsightInputFact
 from .provider_config import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
@@ -54,6 +53,9 @@ from .records import (
     EmailFilterDecisionOutcome,
     EmailFilterDecisionRecord,
     EmailSyncStateRecord,
+    InsightInput,
+    InsightInputEvidence,
+    InsightInputFact,
     InsightRecord,
     JobEmailCategory,
     RawEmailBodyRetentionState,
@@ -124,10 +126,10 @@ __all__ = [
     "EmailFilterDecisionOutcome",
     "EmailFilterDecisionRecord",
     "EmailSyncStateRecord",
-    "InsightRecord",
     "InsightInput",
     "InsightInputEvidence",
     "InsightInputFact",
+    "InsightRecord",
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",

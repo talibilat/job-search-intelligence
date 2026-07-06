@@ -34,11 +34,19 @@ class InsightRecord(BaseModel):
 
 
 type InsightInputFactSource = Literal["applications", "application_events"]
+type InsightInputFactName = Literal[
+    "total_applications",
+    "status_counts",
+    "source_counts",
+    "sponsorship_counts",
+    "work_mode_counts",
+    "event_type_counts",
+]
 type InsightInputFactValue = int | float | str | bool | dict[str, int] | list[str] | None
 
 
 class InsightInputFact(BaseModel):
-    name: str
+    name: InsightInputFactName
     value: InsightInputFactValue
     source: InsightInputFactSource
 
@@ -73,4 +81,5 @@ class InsightInput(BaseModel):
     type: InsightType
     facts: list[InsightInputFact]
     evidence: list[InsightInputEvidence]
+    source_fingerprint: str
     inputs_hash: str

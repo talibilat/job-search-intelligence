@@ -34,10 +34,9 @@ def test_insight_input_builder_prepares_facts_citations_and_hash(
         "rejection": 1,
     }
     assert [evidence.event_id for evidence in insight_input.evidence] == [
-        "event-rejected-applied",
         "event-rejected-rejection",
     ]
-    rejection_evidence = insight_input.evidence[1]
+    rejection_evidence = insight_input.evidence[0]
     assert rejection_evidence.citation_id == (
         "application:application-rejected|event:event-rejected-rejection|email:email-rejection"
     )
@@ -75,6 +74,91 @@ def test_insight_input_builder_hash_changes_when_source_evidence_changes(
         updated_hash = builder.build("why_rejected").inputs_hash
 
     assert updated_hash != original_hash
+
+
+def test_insight_input_builder_hash_covers_limited_out_evidence(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_second_rejected_application_fixture(connection)
+        builder = InsightInputBuilder(InsightRepository(connection))
+
+        original = builder.build("why_rejected", max_evidence_items=1)
+        connection.execute(
+            "UPDATE application_events SET extract_note = ? WHERE id = ?",
+            (
+                "Second rejection mentioned missing platform depth.",
+                "event-second-rejection",
+            ),
+        )
+        connection.commit()
+
+        updated = builder.build("why_rejected", max_evidence_items=1)
+
+    assert [evidence.event_id for evidence in original.evidence] == [
+        "event-rejected-rejection",
+    ]
+    assert [evidence.event_id for evidence in updated.evidence] == [
+        "event-rejected-rejection",
+    ]
+    assert updated.inputs_hash != original.inputs_hash
+
+
+def test_insight_input_builder_keeps_debugging_bodies_out_of_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_raw_email(
+            connection,
+            email_id="email-debug-feedback",
+            subject="Detailed feedback",
+            body_text="Private debugging copy of interview feedback.",
+            sent_at="2026-07-05T10:00:00+00:00",
+            body_retention_state="debugging",
+        )
+        EventRepository(connection).upsert_event(
+            id="event-debug-feedback",
+            application_id="application-rejected",
+            email_id="email-debug-feedback",
+            event_type="feedback",
+            event_at="2026-07-05T10:00:00+00:00",
+            extract_note="Debug feedback retained for reconciliation.",
+        )
+        connection.commit()
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "why_rejected",
+        )
+
+    debug_evidence = next(
+        evidence
+        for evidence in insight_input.evidence
+        if evidence.event_id == "event-debug-feedback"
+    )
+    assert debug_evidence.email_subject == "Detailed feedback"
+    assert debug_evidence.email_body_text is None
+    assert "Private debugging" not in insight_input.model_dump_json()
+
+
+def test_weekly_actions_input_prefers_open_current_evidence(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "weekly_actions",
+            max_evidence_items=1,
+        )
+
+    assert [evidence.application_id for evidence in insight_input.evidence] == [
+        "application-interview",
+    ]
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-interview-invite",
+    ]
 
 
 def test_insight_input_builder_rejects_empty_evidence_limit(tmp_path: Path) -> None:
@@ -180,6 +264,33 @@ def insert_interview_application_fixture(connection: sqlite3.Connection) -> None
     connection.commit()
 
 
+def insert_second_rejected_application_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-second-rejection",
+        subject="Your application status",
+        body_text="We selected candidates with deeper platform engineering experience.",
+        sent_at="2026-07-06T10:00:00+00:00",
+    )
+    insert_application(
+        connection,
+        application_id="application-second-rejected",
+        company="Delta Inc",
+        current_status="rejected",
+        first_seen_at="2026-07-03T09:00:00+00:00",
+        last_activity_at="2026-07-06T10:00:00+00:00",
+    )
+    EventRepository(connection).upsert_event(
+        id="event-second-rejection",
+        application_id="application-second-rejected",
+        email_id="email-second-rejection",
+        event_type="rejection",
+        event_at="2026-07-06T10:00:00+00:00",
+        extract_note="Second rejection mentioned platform engineering experience.",
+    )
+    connection.commit()
+
+
 def insert_application(
     connection: sqlite3.Connection,
     *,
@@ -219,6 +330,7 @@ def insert_raw_email(
     subject: str,
     body_text: str,
     sent_at: str,
+    body_retention_state: str = "retained",
 ) -> None:
     connection.execute(
         """
@@ -235,7 +347,7 @@ def insert_raw_email(
             subject,
             sent_at,
             body_text,
-            "retained",
+            body_retention_state,
             "[]",
             "gmail",
             sent_at,
