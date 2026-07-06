@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import (
     get_application_detail_service,
@@ -21,6 +22,7 @@ from app.models import (
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
 )
+from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.services.applications import (
     ApplicationDetailService,
     ApplicationEventsService,
@@ -38,6 +40,44 @@ from app.services.manual_merge import (
 )
 
 router = APIRouter(prefix="/applications", tags=["applications"])
+
+
+@router.get(
+    "",
+    response_model=list[ApplicationRecord],
+    summary="List Applications",
+    description=(
+        "Returns canonical application rows from the local SQLite source of truth, "
+        "optionally filtered by status, source, sponsorship, first-seen date range, "
+        "role title, salary band, and work mode."
+    ),
+)
+def list_applications(
+    service: Annotated[
+        ApplicationDetailService,
+        Depends(get_application_detail_service),
+    ],
+    status: Annotated[ApplicationStatus | None, Query()] = None,
+    source: Annotated[ApplicationSource | None, Query()] = None,
+    sponsorship: Annotated[SponsorshipStatus | None, Query()] = None,
+    first_seen_from: Annotated[datetime | None, Query()] = None,
+    first_seen_to: Annotated[datetime | None, Query()] = None,
+    role: Annotated[str | None, Query(min_length=1)] = None,
+    salary_min: Annotated[int | None, Query(ge=0)] = None,
+    salary_max: Annotated[int | None, Query(ge=0)] = None,
+    work_mode: Annotated[WorkMode | None, Query()] = None,
+) -> list[ApplicationRecord]:
+    return service.list_applications(
+        status=status,
+        source=source,
+        sponsorship=sponsorship,
+        first_seen_from=first_seen_from,
+        first_seen_to=first_seen_to,
+        role=role,
+        salary_min=salary_min,
+        salary_max=salary_max,
+        work_mode=work_mode,
+    )
 
 
 @router.get(

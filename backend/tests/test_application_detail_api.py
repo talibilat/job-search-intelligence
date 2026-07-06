@@ -47,6 +47,73 @@ def test_get_application_detail_returns_application_record(tmp_path: Path) -> No
     }
 
 
+def test_list_applications_returns_application_records(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="application-older",
+            first_seen_at="2026-06-01T09:00:00+00:00",
+            last_activity_at="2026-06-03T10:00:00+00:00",
+            created_at="2026-06-01T09:01:00+00:00",
+            updated_at="2026-06-03T10:01:00+00:00",
+        )
+        insert_application(connection, application_id="application-newer")
+
+    client = create_test_client(database_path)
+
+    response = client.get("/applications")
+
+    assert response.status_code == 200
+    records = response.json()
+    assert [record["id"] for record in records] == [
+        "application-newer",
+        "application-older",
+    ]
+    assert records[0]["company"] == "Acme Corp"
+    assert records[0]["tech_stack"] == ["Python", "FastAPI"]
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_ids"),
+    [
+        ("status=interview", ["application-remote"]),
+        ("source=company_site", ["application-onsite"]),
+        ("sponsorship=offered", ["application-offered"]),
+        ("work_mode=remote", ["application-offered", "application-remote"]),
+    ],
+)
+def test_list_applications_applies_enum_filters(
+    tmp_path: Path,
+    query: str,
+    expected_ids: list[str],
+) -> None:
+    database_path = database_with_filter_fixture(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get(f"/applications?{query}")
+
+    assert response.status_code == 200
+    assert [record["id"] for record in response.json()] == expected_ids
+
+
+def test_list_applications_applies_date_role_and_salary_band_filters(tmp_path: Path) -> None:
+    database_path = database_with_filter_fixture(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get(
+        "/applications"
+        "?first_seen_from=2026-07-01T00:00:00Z"
+        "&first_seen_to=2026-07-31T23:59:59Z"
+        "&role=backend"
+        "&salary_min=125000"
+        "&salary_max=170000",
+    )
+
+    assert response.status_code == 200
+    assert [record["id"] for record in response.json()] == ["application-offered"]
+
+
 def test_get_application_detail_returns_typed_not_found(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     client = create_test_client(database_path)
@@ -173,6 +240,17 @@ def test_application_events_endpoint_is_documented_in_openapi() -> None:
     assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
+def test_list_applications_endpoint_is_documented_in_openapi() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    operation = response.json()["paths"]["/applications"]["get"]
+    success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert success_schema["items"]["$ref"] == "#/components/schemas/ApplicationRecord"
+
+
 def test_application_repository_get_by_id_returns_matching_record(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -185,6 +263,26 @@ def test_application_repository_get_by_id_returns_matching_record(tmp_path: Path
     assert record.id == "application-42"
     assert record.company == "Acme Corp"
     assert record.tech_stack == ["Python", "FastAPI"]
+
+
+def test_application_repository_list_returns_filtered_records(tmp_path: Path) -> None:
+    database_path = database_with_filter_fixture(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        repository = ApplicationRepository(connection)
+
+        records = repository.list_applications(
+            current_status="applied",
+            source="linkedin",
+            sponsorship="offered",
+            first_seen_from="2026-07-01T00:00:00+00:00",
+            first_seen_to="2026-07-31T23:59:59+00:00",
+            role="backend",
+            salary_min=125000,
+            salary_max=170000,
+            work_mode="remote",
+        )
+
+    assert [record.id for record in records] == ["application-offered"]
 
 
 def test_application_repository_get_by_id_raises_when_applications_table_is_missing() -> None:
@@ -206,6 +304,18 @@ def test_application_detail_service_raises_for_missing_application(tmp_path: Pat
             service.get_application("missing-application")
 
 
+def test_application_detail_service_lists_applications(tmp_path: Path) -> None:
+    from app.services.applications import ApplicationDetailService
+
+    database_path = database_with_filter_fixture(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        service = ApplicationDetailService(ApplicationRepository(connection))
+
+        records = service.list_applications(status="interview")
+
+    assert [record.id for record in records] == ["application-remote"]
+
+
 def create_test_client(database_path: Path) -> TestClient:
     settings = AppSettings(
         _env_file=None,
@@ -225,27 +335,95 @@ def migrated_database(tmp_path: Path) -> Path:
     return database_path
 
 
-def insert_application(connection: sqlite3.Connection, *, application_id: str) -> None:
+def database_with_filter_fixture(tmp_path: Path) -> Path:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="application-remote",
+            role_title="Backend Engineer",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="interview",
+            last_activity_at="2026-07-03T10:00:00+00:00",
+            salary_min=100000,
+            salary_max=120000,
+            work_mode="remote",
+            sponsorship="unknown",
+        )
+        insert_application(
+            connection,
+            application_id="application-onsite",
+            company="Beta LLC",
+            role_title="Frontend Engineer",
+            source="company_site",
+            first_seen_at="2026-06-15T09:00:00+00:00",
+            current_status="rejected",
+            last_activity_at="2026-06-17T10:00:00+00:00",
+            salary_min=70000,
+            salary_max=90000,
+            work_mode="onsite",
+            sponsorship="not_offered",
+        )
+        insert_application(
+            connection,
+            application_id="application-offered",
+            company="Gamma Inc",
+            role_title="Senior Backend Engineer",
+            source="linkedin",
+            first_seen_at="2026-07-10T09:00:00+00:00",
+            current_status="applied",
+            last_activity_at="2026-07-11T10:00:00+00:00",
+            salary_min=130000,
+            salary_max=160000,
+            work_mode="remote",
+            sponsorship="offered",
+        )
+    return database_path
+
+
+def insert_application(
+    connection: sqlite3.Connection,
+    *,
+    application_id: str,
+    company: str = "Acme Corp",
+    role_title: str = "Software Engineer",
+    source: str = "linkedin",
+    first_seen_at: str = "2026-07-01T09:00:00+00:00",
+    current_status: str = "interview",
+    last_activity_at: str = "2026-07-03T10:00:00+00:00",
+    created_at: str = "2026-07-01T09:01:00+00:00",
+    updated_at: str = "2026-07-03T10:01:00+00:00",
+    salary_min: int | None = 100000,
+    salary_max: int | None = 120000,
+    currency: str | None = "USD",
+    location: str | None = "Remote",
+    work_mode: str | None = "remote",
+    seniority: str | None = "senior",
+    sponsorship: str = "unknown",
+    tech_stack: list[str] | None = None,
+    manual_lock: bool = False,
+) -> None:
     repository = ApplicationRepository(connection)
     repository.upsert_application(
         id=application_id,
-        company="Acme Corp",
-        role_title="Software Engineer",
-        source="linkedin",
-        first_seen_at="2026-07-01T09:00:00+00:00",
-        current_status="interview",
-        last_activity_at="2026-07-03T10:00:00+00:00",
-        created_at="2026-07-01T09:01:00+00:00",
-        updated_at="2026-07-03T10:01:00+00:00",
-        salary_min=100000,
-        salary_max=120000,
-        currency="USD",
-        location="Remote",
-        work_mode="remote",
-        seniority="senior",
-        sponsorship="unknown",
-        tech_stack=["Python", "FastAPI"],
-        manual_lock=False,
+        company=company,
+        role_title=role_title,
+        source=source,
+        first_seen_at=first_seen_at,
+        current_status=current_status,
+        last_activity_at=last_activity_at,
+        created_at=created_at,
+        updated_at=updated_at,
+        salary_min=salary_min,
+        salary_max=salary_max,
+        currency=currency,
+        location=location,
+        work_mode=work_mode,
+        seniority=seniority,
+        sponsorship=sponsorship,
+        tech_stack=tech_stack or ["Python", "FastAPI"],
+        manual_lock=manual_lock,
     )
     connection.commit()
 
