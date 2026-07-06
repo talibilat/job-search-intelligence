@@ -425,7 +425,6 @@ class GmailEmailProvider:
             {
                 "access_type": "offline",
                 "client_id": client_config.installed.client_id,
-                "include_granted_scopes": "true",
                 "prompt": "consent",
                 "redirect_uri": request.redirect_uri,
                 "response_type": "code",

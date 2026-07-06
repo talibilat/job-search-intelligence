@@ -1,3 +1,5 @@
+import type { IncomingMessage } from "node:http";
+
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
@@ -20,10 +22,9 @@ export default defineConfig({
       "/setup": {
         target: BACKEND_URL,
         changeOrigin: true,
-        bypass(req: ProxyBypassRequest) {
-          const { method, url } = req;
-          if (method === "GET" && url === "/setup") {
-            return url;
+        bypass(req: IncomingMessage) {
+          if (req.method === "GET" && req.url === "/setup") {
+            return req.url;
           }
         },
       },
