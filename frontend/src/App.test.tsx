@@ -475,4 +475,41 @@ describe("App", () => {
       "Deterministic metrics will appear here after the metrics API is available.",
     );
   });
+
+  it("renders the feature status dashboard with searchable frontend feature metadata", () => {
+    renderAtPath("/features");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Feature Status Dashboard",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("navigation", { name: "Primary" }).textContent,
+    ).toContain("Feature Status");
+
+    expect(screen.getAllByText("Completed features").length).toBeGreaterThan(0);
+    expect(screen.getByText("First-run setup shell")).toBeTruthy();
+    expect(screen.getByText("Dashboard route shell")).toBeTruthy();
+    expect(screen.getByText("Manual sync status panel")).toBeTruthy();
+    expect(screen.getByText("How to use First-run setup shell")).toBeTruthy();
+    expect(screen.getByText("Setup wizard API")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Search features"), {
+      target: { value: "sync" },
+    });
+
+    expect(screen.getByText("Manual sync status panel")).toBeTruthy();
+    expect(screen.queryByText("First-run setup shell")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Status"), {
+      target: { value: "in_progress" },
+    });
+
+    expect(
+      screen.getAllByText("No completed features match these filters.").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Sync orchestration UI hardening")).toBeTruthy();
+  });
 });
