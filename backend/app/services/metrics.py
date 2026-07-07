@@ -3,10 +3,60 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+from app.db.repositories import ApplicationRepository
 from app.db.repositories.metrics import MetricsRepository
-from app.models import MetricsSummaryResponse
+from app.models import FoundationalMetricsSnapshot, MetricsSummaryResponse, MetricStatusCount
+from app.models.records import ApplicationStatus
 
 type Clock = Callable[[], datetime]
+
+APPLICATION_STATUS_ORDER: tuple[ApplicationStatus, ...] = (
+    "applied",
+    "in_review",
+    "assessment",
+    "interview",
+    "offer",
+    "rejected",
+    "ghosted",
+    "withdrawn",
+)
+
+
+class MetricsService:
+    """Deterministic metrics logic over the canonical applications table."""
+
+    def __init__(
+        self,
+        application_repository: ApplicationRepository,
+        *,
+        clock: Clock | None = None,
+    ) -> None:
+        self._application_repository = application_repository
+        self._clock = clock or _utcnow
+
+    def get_foundational_metrics(self) -> FoundationalMetricsSnapshot:
+        applications = self._application_repository.list_applications()
+        status_counts: dict[ApplicationStatus, int] = dict.fromkeys(
+            APPLICATION_STATUS_ORDER,
+            0,
+        )
+        company_keys: set[str] = set()
+
+        for application in applications:
+            status_counts[application.current_status] += 1
+            company_key = application.company.strip().casefold()
+            if company_key:
+                company_keys.add(company_key)
+
+        return FoundationalMetricsSnapshot(
+            total_applications=len(applications),
+            distinct_companies=len(company_keys),
+            status_counts=tuple(
+                MetricStatusCount(status=status, count=status_counts[status])
+                for status in APPLICATION_STATUS_ORDER
+            ),
+            generated_at=self._clock(),
+        )
 
 
 class MetricsSummaryService:
