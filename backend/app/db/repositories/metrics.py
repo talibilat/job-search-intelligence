@@ -453,7 +453,7 @@ def _response_placeholders() -> str:
 
 
 def _rate_metric(*, name: MetricRateName, numerator: int, denominator: int) -> MetricRateRow:
-    rate = 0.0 if denominator == 0 else numerator / denominator
+    rate = None if denominator == 0 else numerator / denominator
     return MetricRateRow(
         name=name,
         numerator=numerator,

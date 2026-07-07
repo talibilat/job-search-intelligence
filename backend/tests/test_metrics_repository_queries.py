@@ -109,7 +109,7 @@ def test_interview_to_offer_rate_counts_offers_only_after_interviews(
 
     assert rates["interview_to_offer"].numerator == 0
     assert rates["interview_to_offer"].denominator == 0
-    assert rates["interview_to_offer"].rate == 0.0
+    assert rates["interview_to_offer"].rate is None
 
 
 def test_interview_to_offer_rate_excludes_offers_before_interviews(

@@ -68,7 +68,7 @@ class MetricRateRow(BaseModel):
     name: MetricRateName
     numerator: int = Field(ge=0)
     denominator: int = Field(ge=0)
-    rate: float = Field(ge=0, le=1)
+    rate: float | None = Field(ge=0, le=1)
 
 
 class MetricFunnelStage(BaseModel):
