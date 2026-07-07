@@ -259,6 +259,7 @@ Provider responses must pass `app.pipeline.classify.parse_classification_generat
 `StructuredExtractionService` lists non-empty retained candidates stale for the configured model or prompt version, calls the configured `LLMProvider`, stores only accepted classification records through `EmailRepository`, writes completed-run accounting through `ClassificationRunRepository`, and returns accepted extraction facts plus public-safe malformed results without writing applications or events.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
+Cached insight generations must pass service-level grounding validation before persistence: every factual claim cites prepared `InsightInput` evidence, and any citation-like bracket token must match a prepared `citation_id`.
 
 **Cost control:** `classification_mode` config - `hybrid` (filter -> LLM), `llm` (LLM on everything), `local` (Ollama, offline/free).
 Setup asks explicitly and recommends `hybrid` for Azure OpenAI, or `local` for Ollama, when the user has not explicitly selected a provider-valid mode.

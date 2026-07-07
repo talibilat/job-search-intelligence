@@ -7,6 +7,7 @@ A local-first web app that connects to your email (Gmail first), mines your enti
 All factual job-search answers come from one clean `applications` table and its event timeline (`application_events`).
 Dashboard numbers are deterministic SQL or typed Python logic.
 The LLM synthesizes narrative insight only after deterministic facts are prepared, and it never produces authoritative counts or emits raw SQL for execution.
+Generated narrative insights are validated before caching so factual claims cite prepared evidence and fabricated citation-like IDs are rejected.
 
 ## Status
 
@@ -114,6 +115,7 @@ scripts/          repository-level developer and operational scripts
 - Classification candidates carry only retained body text selected for the classification stage, keep that text out of repr output, and require timezone-aware `sent_at` values when present.
 - Classification results and stored classification records reject unknown fields, strip model and prompt-version strings, require supported categories plus confidence from `0` through `1`, and require timezone-aware `classified_at` values.
 - Structured extraction stores only accepted classification rows; malformed provider output returns public-safe quarantine metadata and does not write `email_classifications`, `applications`, or `application_events` rows.
+- Generated narrative insights are validated against the prepared `InsightInput` evidence before cache persistence; ungrounded claims or citation-like bracket tokens that do not match prepared `citation_id` values return a public-safe LLM provider response error and leave the cache unchanged.
 - Raw email repository upserts are idempotent by provider message ID, and metadata-only replays preserve existing retained or debugging body text.
 - Retained and debugging body upserts can create a minimal `raw_emails` row before metadata arrives, then later metadata-only replays fill the remaining metadata without downgrading the retained body.
 - Classification prompts are built only for retained email candidates, request JSON-object output through `LLMProvider`, embed the prompt version, and instruct providers not to include raw SQL, counts, secrets, or provider payloads.
