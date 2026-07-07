@@ -58,8 +58,8 @@ class InsightReadService:
                 insight_type,
                 include_stale=True,
             )
-        if insight is not None:
-            insights.append(insight)
+            if insight is not None:
+                insights.append(insight)
         return insights
 
 
