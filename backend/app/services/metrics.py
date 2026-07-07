@@ -7,6 +7,7 @@ from app.db.repositories import ApplicationRepository
 from app.db.repositories.metrics import MetricsRepository
 from app.models import FoundationalMetricsSnapshot, MetricsSummaryResponse, MetricStatusCount
 from app.models.records import ApplicationStatus
+from app.services.normalization import normalize_company_name
 
 type Clock = Callable[[], datetime]
 
@@ -44,7 +45,7 @@ class MetricsService:
 
         for application in applications:
             status_counts[application.current_status] += 1
-            company_key = application.company.strip().casefold()
+            company_key = normalize_company_name(application.company)
             if company_key:
                 company_keys.add(company_key)
 

@@ -14,16 +14,23 @@ def test_metrics_service_returns_foundational_counts_from_applications() -> None
     connection = sqlite3.connect(":memory:")
     SyntheticFixtureRepository(connection).load_file(sample_fixture_path())
     insert_application(connection)
+    insert_application(
+        connection,
+        application_id="application-beta-frontend-duplicate-company",
+        company="beta-labs.com",
+        role_title="Product Engineer",
+        current_status="applied",
+    )
 
     snapshot = MetricsService(
         ApplicationRepository(connection),
         clock=lambda: NOW,
     ).get_foundational_metrics()
 
-    assert snapshot.total_applications == 2
+    assert snapshot.total_applications == 3
     assert snapshot.distinct_companies == 2
     assert [(item.status, item.count) for item in snapshot.status_counts] == [
-        ("applied", 0),
+        ("applied", 1),
         ("in_review", 0),
         ("assessment", 0),
         ("interview", 1),
@@ -56,7 +63,14 @@ def sample_fixture_path() -> Path:
     return backend_root / "tests" / "fixtures" / "synthetic" / "basic_job_search.json"
 
 
-def insert_application(connection: sqlite3.Connection) -> None:
+def insert_application(
+    connection: sqlite3.Connection,
+    *,
+    application_id: str = "application-beta-frontend",
+    company: str = "Beta Labs",
+    role_title: str = "Frontend Engineer",
+    current_status: str = "interview",
+) -> None:
     connection.execute(
         """
         INSERT INTO applications (
@@ -81,12 +95,12 @@ def insert_application(connection: sqlite3.Connection) -> None:
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            "application-beta-frontend",
-            "Beta Labs",
-            "Frontend Engineer",
+            application_id,
+            company,
+            role_title,
             "company_site",
             "2026-07-21T09:00:00+00:00",
-            "interview",
+            current_status,
             None,
             None,
             None,
