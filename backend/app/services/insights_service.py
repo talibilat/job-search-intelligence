@@ -39,8 +39,6 @@ INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
 INSIGHT_GENERATION_TEMPERATURE = 0.2
 _CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
 _CITATION_LIKE_TOKEN_PATTERN = re.compile(r"^(?:\d+|[A-Za-z]+-\d+|\S*[:|]\S*)$")
-_SENTENCE_PATTERN = re.compile(r"[^.!?\n]+(?:[.!?]|\n|$)")
-_UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
 _ROLE_FIT_WIN_STATUSES: tuple[ApplicationStatus, ...] = ("interview", "offer")
 _ROLE_FIT_LOSS_STATUSES: tuple[ApplicationStatus, ...] = ("rejected", "ghosted")
 _CLAIM_SENTENCE_PATTERN = re.compile(r"[^.!?\n]+[.!?](?:\s*\[[^\[\]]+\])*")
@@ -303,95 +301,16 @@ def _validated_insight_content(
         or not _content_uses_allowed_citations(content, insight_input)
     ):
         raise LLMProviderResponseError(public_message="LLM returned invalid insight content.")
-    _validate_grounding_citations(content, insight_input)
     return content
-
-
-def _validate_grounding_citations(content: str, insight_input: InsightInput) -> None:
-    allowed_citation_ids = _allowed_citation_ids(insight_input)
-    cited_evidence_ids: set[str] = set()
-    invalid_citation_ids: set[str] = set()
-    valid_citation_spans: list[tuple[int, int]] = []
-
-    for match in _CITATION_PATTERN.finditer(content):
-        for citation_id in _split_citation_tokens(match.group(1)):
-            if not _is_citation_like_token(citation_id, allowed_citation_ids):
-                continue
-            if citation_id in allowed_citation_ids:
-                cited_evidence_ids.add(citation_id)
-                valid_citation_spans.append(match.span())
-            else:
-                invalid_citation_ids.add(citation_id)
-
-    if (
-        not cited_evidence_ids
-        or invalid_citation_ids
-        or _has_ungrounded_claim(content, valid_citation_spans)
-    ):
-        raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
-
-
-def _split_citation_tokens(value: str) -> list[str]:
-    return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
 
 
 def _is_citation_like_token(value: str, allowed_citation_ids: set[str]) -> bool:
     return value in allowed_citation_ids or bool(_CITATION_LIKE_TOKEN_PATTERN.fullmatch(value))
 
 
-def _has_ungrounded_claim(content: str, citation_spans: list[tuple[int, int]]) -> bool:
-    pending_claim = False
-    pending_claim_end = 0
-
-    for match in _SENTENCE_PATTERN.finditer(content):
-        sentence_start, sentence_end = match.span()
-        if not _has_claim_text(content, sentence_start, sentence_end, citation_spans):
-            if pending_claim and _has_citation_between(
-                citation_spans,
-                pending_claim_end,
-                sentence_end,
-            ):
-                pending_claim = False
-            continue
-        if pending_claim:
-            return True
-        if _has_citation_between(citation_spans, sentence_start, sentence_end):
-            pending_claim = False
-            continue
-        pending_claim = True
-        pending_claim_end = sentence_end
-
-    return pending_claim
-
-
-def _has_claim_text(
-    content: str,
-    start: int,
-    end: int,
-    citation_spans: list[tuple[int, int]],
-) -> bool:
-    parts: list[str] = []
-    cursor = start
-    for span_start, span_end in citation_spans:
-        if span_end <= start or span_start >= end:
-            continue
-        parts.append(content[cursor : max(cursor, span_start)])
-        cursor = max(cursor, span_end)
-    parts.append(content[cursor:end])
-    return bool(re.sub(r"[\s.!?]+", "", "".join(parts)))
-
-
-def _has_citation_between(
-    citation_spans: list[tuple[int, int]],
-    start: int,
-    end: int,
-) -> bool:
-    return any(span_start >= start and span_end <= end for span_start, span_end in citation_spans)
-
-
 def _content_uses_allowed_citations(content: str, insight_input: InsightInput) -> bool:
     allowed_citation_ids = _allowed_citation_ids(insight_input)
-    citation_ids = _extract_citation_ids(content)
+    citation_ids = _extract_citation_ids(content, allowed_citation_ids)
     if not allowed_citation_ids:
         return not citation_ids and _states_insufficient_evidence(content)
     if not citation_ids:
@@ -402,8 +321,9 @@ def _content_uses_allowed_citations(content: str, insight_input: InsightInput) -
 
 
 def _all_claim_units_grounded(content: str) -> bool:
+    allowed_citation_ids: set[str] = set()
     return all(
-        _extract_citation_ids(unit) or _states_insufficient_evidence(unit)
+        _extract_citation_ids(unit, allowed_citation_ids) or _states_insufficient_evidence(unit)
         for unit in _content_claim_units(content)
     )
 
@@ -430,13 +350,17 @@ def _states_insufficient_evidence(content: str) -> bool:
     return any(term in normalized for term in _INSUFFICIENT_EVIDENCE_TERMS)
 
 
-def _extract_citation_ids(content: str) -> list[str]:
+def _extract_citation_ids(
+    content: str,
+    allowed_citation_ids: set[str],
+) -> list[str]:
     citation_ids: list[str] = []
     for match in _CITATION_PATTERN.finditer(content):
         citation_ids.extend(
             citation_id.strip()
             for citation_id in match.group(1).replace(";", ",").split(",")
             if citation_id.strip()
+            and _is_citation_like_token(citation_id.strip(), allowed_citation_ids)
         )
     return citation_ids
 
