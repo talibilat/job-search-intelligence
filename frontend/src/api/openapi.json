@@ -1483,6 +1483,69 @@
         "title": "EmailSyncStatus",
         "type": "object"
       },
+      "GhostInferenceRunResponse": {
+        "description": "Public result for one ghost-inference run.",
+        "properties": {
+          "applications_ghosted": {
+            "minimum": 0.0,
+            "title": "Applications Ghosted",
+            "type": "integer"
+          },
+          "evaluated_at": {
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          },
+          "ghost_retraction_count": {
+            "minimum": 0.0,
+            "title": "Ghost Retraction Count",
+            "type": "integer"
+          },
+          "ghosted_application_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ghosted Application Ids",
+            "type": "array"
+          },
+          "manual_conflict_application_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Manual Conflict Application Ids",
+            "type": "array"
+          },
+          "manual_conflict_count": {
+            "minimum": 0.0,
+            "title": "Manual Conflict Count",
+            "type": "integer"
+          },
+          "retracted_application_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Retracted Application Ids",
+            "type": "array"
+          },
+          "threshold_days": {
+            "minimum": 1.0,
+            "title": "Threshold Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "evaluated_at",
+          "threshold_days",
+          "applications_ghosted",
+          "ghosted_application_ids",
+          "ghost_retraction_count",
+          "retracted_application_ids",
+          "manual_conflict_count",
+          "manual_conflict_application_ids"
+        ],
+        "title": "GhostInferenceRunResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2494,6 +2557,28 @@
           }
         },
         "summary": "List Applications",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/applications/ghost-inference": {
+      "post": {
+        "description": "Marks applied applications as ghosted when their event timeline has no response after the configured silence threshold.",
+        "operationId": "run_ghost_inference_applications_ghost_inference_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GhostInferenceRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Run Ghost Inference",
         "tags": [
           "applications"
         ]

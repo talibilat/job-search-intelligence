@@ -1,5 +1,6 @@
 import { ChartPanel } from "./components/charts";
 import { SyncStatusPanel } from "./components/SyncStatusPanel";
+import { ApplicationDetailPage } from "./pages/ApplicationDetailPage";
 import Chat from "./pages/Chat";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FeatureStatusDashboard } from "./pages/FeatureStatusDashboard";
@@ -64,6 +65,7 @@ function OverviewPage() {
 
 function App() {
   const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
+  const applicationDetailMatch = /^\/applications\/([^/]+)$/.exec(routePath);
   const currentPath = navigationItems.some((item) => item.href === routePath)
     ? routePath
     : "/";
@@ -87,7 +89,9 @@ function App() {
           ))}
         </div>
       </nav>
-      {currentPath === "/setup" ? (
+      {applicationDetailMatch ? (
+        <ApplicationDetailPage applicationId={decodeURIComponent(applicationDetailMatch[1])} />
+      ) : currentPath === "/setup" ? (
         <SetupPage />
       ) : currentPath === "/dashboard" ? (
         <DashboardPage />
