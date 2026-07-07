@@ -70,7 +70,7 @@ class InsightGenerationService:
         max_evidence_items: int = 100,
         force: bool = False,
     ) -> InsightGenerationResult:
-        """Return a cached insight or synthesize and persist a fresh one."""
+        """Return a cached insight or synthesize, validate, and persist a fresh one."""
 
         insight_input = self._input_builder.build(
             insight_type,

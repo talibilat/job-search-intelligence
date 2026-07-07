@@ -143,6 +143,7 @@ job-search-intelligence/
   [JT-107 2026-07-06] - **`application_events`** also stores nullable `extracted_status` using the same status enum as `applications.current_status` so status replay can preserve extraction-provided status on status-neutral event types.
 - **`application_corrections`** - `id`, `application_id` (FK to `applications.id` with cascade delete), `correction_type` (`merge | split | status_edit | event_edit | reset_lock`), valid JSON `before_json`, valid JSON `after_json`, `reason`, `created_at`.
 - **`insights`** - `id`, `type` (`why_rejected | skill_gaps | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
+  `inputs_hash` is computed from deterministic insight inputs plus `INSIGHT_GENERATION_PROMPT_VERSION`, so prompt-template changes bypass legacy cached rows without a schema change.
 - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, `embedding`.
   [JT-020 2026-07-05 v2] - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, 1536-dimensional `embedding`.
 - **`chat_messages`** - `id`, `conversation_id`, `role`, `content`, `citations_json`, `tool_outputs_json`, `created_at`.
@@ -355,6 +356,7 @@ Metrics endpoints + React dashboard (Recharts + small accessible component layer
 
 **Phase 4 - Insights (cached LLM narrative)** -> Tier 5
 Insights service + page (why-rejected, skill-gaps, role-fit, weekly actions, story); cached with `regenerate`, stale detection, and user-triggered regeneration.
+`weekly_actions` answers Q-45 as exactly three numbered, cited actions that are executable during the next week, and invalid provider output is rejected before caching.
 **DoD:** insights render and cite the applications/emails they're drawn from.
 
 **Phase 5 - RAG chat (LangGraph)** -> Tier 6
