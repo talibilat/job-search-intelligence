@@ -105,6 +105,48 @@ def test_get_metrics_summary_counts_ghosted_applications_from_threshold(
     assert ghost_event_count == 1
 
 
+def test_get_metrics_summary_returns_distinct_company_count_from_applications(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="application-1",
+            company="Acme Corp",
+        )
+        insert_application(
+            connection,
+            application_id="application-2",
+            company=" acme corp ",
+        )
+        insert_application(
+            connection,
+            application_id="application-3",
+            company="Beta LLC",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.get("/metrics/summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["distinct_company_count"] == 2
+    assert body["ghosted_applications"] == 0
+
+
+def test_metrics_summary_endpoint_is_documented_in_openapi() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    operation = response.json()["paths"]["/metrics/summary"]["get"]
+    success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert success_schema["$ref"] == "#/components/schemas/MetricsSummaryResponse"
+
+
 def create_test_client(database_path: Path, *, ghost_threshold_days: int) -> TestClient:
     settings = AppSettings(
         _env_file=None,
@@ -129,9 +171,10 @@ def insert_application(
     connection: sqlite3.Connection,
     *,
     application_id: str,
-    current_status: str,
-    first_seen_at: str,
-    last_activity_at: str,
+    current_status: str = "applied",
+    first_seen_at: str = "2026-07-01T09:00:00+00:00",
+    last_activity_at: str = "2026-07-03T10:00:00+00:00",
+    company: str = "Acme Corp",
 ) -> None:
     connection.execute(
         """
@@ -144,7 +187,7 @@ def insert_application(
         """,
         (
             application_id,
-            "Acme Corp",
+            company,
             "Software Engineer",
             "company_site",
             first_seen_at,

@@ -138,6 +138,22 @@ describe("App", () => {
     );
   });
 
+  it("renders the Q-03 distinct company count on the dashboard", async () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        distinct_company_count: 3,
+      },
+    });
+
+    renderAtPath("/dashboard");
+
+    expect(await screen.findByText("3")).toBeTruthy();
+    expect(screen.getByText("Distinct companies")).toBeTruthy();
+    expect(
+      screen.getByText("Q-03 counted from normalized applications"),
+    ).toBeTruthy();
+  });
+
   it("shows sync status progress, counts, last run, and starts manual sync", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url =
