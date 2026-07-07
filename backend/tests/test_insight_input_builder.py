@@ -183,6 +183,24 @@ def test_skill_gaps_input_counts_rejected_role_skills_and_excludes_wins(
     }
 
 
+def test_skill_gaps_input_counts_only_cited_rejected_role_skills(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_second_rejected_application_fixture(connection)
+        builder = InsightInputBuilder(InsightRepository(connection))
+
+        insight_input = builder.build("skill_gaps", max_evidence_items=1)
+
+    fact_values = {fact.name: fact.value for fact in insight_input.facts}
+    assert [evidence.application_id for evidence in insight_input.evidence] == [
+        "application-rejected",
+    ]
+    assert fact_values["rejected_skill_counts"] == {"Kubernetes": 1, "Python": 1}
+
+
 def test_weekly_actions_input_prefers_open_current_evidence(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:

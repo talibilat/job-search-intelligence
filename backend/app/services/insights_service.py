@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
-from app.models import InsightInput, InsightInputFact, InsightRecord
+from app.models import InsightInput, InsightInputEvidence, InsightInputFact, InsightRecord
 from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
 from app.providers.llm import (
     LLMFinishReason,
@@ -158,10 +158,11 @@ class InsightInputBuilder:
             event_types=scope.event_types,
             newest_first=scope.newest_first,
         )
+        evidence = scoped_evidence[:max_evidence_items]
         insight_input = InsightInput(
             type=insight_type,
-            facts=self._build_facts(insight_type),
-            evidence=scoped_evidence[:max_evidence_items],
+            facts=self._build_facts(insight_type, evidence=evidence),
+            evidence=evidence,
             source_fingerprint=_hash_payload(
                 [item.model_dump(mode="json") for item in scoped_evidence],
             ),
@@ -171,7 +172,12 @@ class InsightInputBuilder:
             update={"inputs_hash": _hash_insight_input(insight_input)},
         )
 
-    def _build_facts(self, insight_type: InsightType) -> list[InsightInputFact]:
+    def _build_facts(
+        self,
+        insight_type: InsightType,
+        *,
+        evidence: list[InsightInputEvidence],
+    ) -> list[InsightInputFact]:
         facts = [
             InsightInputFact(
                 name="total_applications",
@@ -208,11 +214,30 @@ class InsightInputBuilder:
             facts.append(
                 InsightInputFact(
                     name="rejected_skill_counts",
-                    value=self._insight_repository.count_rejected_applications_by_skill(),
+                    value=_count_rejected_skills_from_evidence(evidence),
                     source="applications",
                 ),
             )
         return facts
+
+
+def _count_rejected_skills_from_evidence(
+    evidence: list[InsightInputEvidence],
+) -> dict[str, int]:
+    skills_by_application: dict[str, set[str]] = {}
+    for item in evidence:
+        application_skills = skills_by_application.setdefault(item.application_id, set())
+        application_skills.update(
+            skill.strip()
+            for skill in item.tech_stack
+            if isinstance(skill, str) and skill.strip()
+        )
+
+    counts: dict[str, int] = {}
+    for skills in skills_by_application.values():
+        for skill in skills:
+            counts[skill] = counts.get(skill, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _insight_system_prompt(insight_type: InsightType) -> str:
