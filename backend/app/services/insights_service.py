@@ -315,7 +315,7 @@ def _has_claim_text(
     for span_start, span_end in citation_spans:
         if span_end <= start or span_start >= end:
             continue
-        parts.append(content[cursor:max(cursor, span_start)])
+        parts.append(content[cursor : max(cursor, span_start)])
         cursor = max(cursor, span_end)
     parts.append(content[cursor:end])
     return bool(re.sub(r"[\s.!?]+", "", "".join(parts)))

@@ -133,8 +133,7 @@ def test_insight_generation_service_allows_bracketed_non_citation_prose(
             (
                 LLMGenerationResponse(
                     content=(
-                        "Focus on Kubernetes [especially production experience]. "
-                        f"[{CITATION_ID}]"
+                        f"Focus on Kubernetes [especially production experience]. [{CITATION_ID}]"
                     ),
                     model="llama3.1",
                     finish_reason=LLMFinishReason.STOP,
