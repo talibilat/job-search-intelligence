@@ -36,6 +36,31 @@ _CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
 _CITATION_LIKE_TOKEN_PATTERN = re.compile(r"^(?:\d+|[A-Za-z]+-\d+|\S*[:|]\S*)$")
 _SENTENCE_PATTERN = re.compile(r"[^.!?\n]+(?:[.!?]|\n|$)")
 _UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
+SUPPORTED_INSIGHT_TYPES: tuple[InsightType, ...] = (
+    "why_rejected",
+    "skill_gaps",
+    "role_fit",
+    "weekly_actions",
+    "story",
+)
+
+
+class InsightReadService:
+    """Read cached narrative insights for the API boundary."""
+
+    def __init__(self, insight_repository: InsightRepository) -> None:
+        self._insight_repository = insight_repository
+
+    def list_latest_insights(self) -> list[InsightRecord]:
+        insights: list[InsightRecord] = []
+        for insight_type in SUPPORTED_INSIGHT_TYPES:
+            insight = self._insight_repository.get_latest_insight(
+                insight_type,
+                include_stale=True,
+            )
+        if insight is not None:
+            insights.append(insight)
+        return insights
 
 
 class InsightGenerationResult(BaseModel):

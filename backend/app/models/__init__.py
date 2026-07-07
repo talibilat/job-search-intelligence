@@ -25,6 +25,7 @@ from .correction import (
 )
 from .ghost_inference import GhostInferenceRunResponse
 from .health import HealthResponse
+from .insight import InsightRegenerateRequest, InsightRegenerateResponse
 from .provider_config import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
@@ -134,6 +135,8 @@ __all__ = [
     "InsightInputEvidence",
     "InsightInputFact",
     "InsightRecord",
+    "InsightRegenerateRequest",
+    "InsightRegenerateResponse",
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
