@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import type { MetricsSummaryResponse } from "./api";
 import styles from "./index.css?raw";
 
 function renderAtPath(pathname: string) {
@@ -27,6 +28,22 @@ type MockResponse =
     };
 
 type MockResponseConfig = MockResponse | MockResponse[];
+
+function metricsSummaryResponse(
+  overrides: Partial<MetricsSummaryResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsSummaryResponse = {
+    distinct_company_count: 0,
+    evaluated_at: "2026-07-07T20:00:00Z",
+    ghost_threshold_days: 30,
+    ghosted_applications: 0,
+    interview_invitation_count: 0,
+    rejected_applications: 0,
+    total_applications: 0,
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
 
 function isMockResponseConfig(
   value: MockResponse,
@@ -141,13 +158,10 @@ describe("App", () => {
 
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
-      "/metrics/summary": {
+      "/metrics/summary": metricsSummaryResponse({
         total_applications: 12,
         distinct_company_count: 3,
-        ghosted_applications: 0,
-        ghost_threshold_days: 30,
-        evaluated_at: "2026-07-07T20:00:00Z",
-      },
+      }),
       "/metrics/rates": {
         overall_response_rate: {
           numerator: 0,
@@ -529,13 +543,7 @@ describe("App", () => {
 
   it("renders an empty dashboard page shell at the dashboard route", () => {
     mockFetchResponses({
-      "/metrics/summary": {
-        total_applications: 0,
-        distinct_company_count: 0,
-        ghosted_applications: 0,
-        ghost_threshold_days: 30,
-        evaluated_at: "2026-07-07T20:00:00Z",
-      },
+      "/metrics/summary": metricsSummaryResponse(),
     });
 
     renderAtPath("/dashboard");
@@ -562,15 +570,14 @@ describe("App", () => {
 
   it("renders Q-07 interview invitations from the metrics summary", async () => {
     mockFetchResponses({
-      "/metrics/summary": {
+      "/metrics/summary": metricsSummaryResponse({
         total_applications: 12,
         distinct_company_count: 7,
         evaluated_at: "2026-07-07T12:00:00Z",
-        ghost_threshold_days: 30,
         ghosted_applications: 2,
         interview_invitation_count: 3,
         rejected_applications: 1,
-      },
+      }),
     });
 
     renderAtPath("/dashboard");
@@ -616,15 +623,14 @@ describe("App", () => {
 
   it("shows live applications awaiting a reply on the dashboard", async () => {
     const fetchMock = mockFetchResponses({
-      "/metrics/summary": {
+      "/metrics/summary": metricsSummaryResponse({
         total_applications: 12,
         distinct_company_count: 7,
         evaluated_at: "2026-07-07T12:00:00Z",
-        ghost_threshold_days: 30,
         ghosted_applications: 3,
         interview_invitation_count: 4,
         rejected_applications: 1,
-      },
+      }),
       "/applications?status=applied": {
         body: [
           {
@@ -738,15 +744,9 @@ describe("App", () => {
 
   it("shows an empty live applications state on the dashboard", async () => {
     mockFetchResponses({
-      "/metrics/summary": {
-        total_applications: 0,
-        distinct_company_count: 0,
+      "/metrics/summary": metricsSummaryResponse({
         evaluated_at: "2026-07-07T12:00:00Z",
-        ghost_threshold_days: 30,
-        ghosted_applications: 0,
-        interview_invitation_count: 0,
-        rejected_applications: 0,
-      },
+      }),
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
       "/applications?status=assessment": { body: [], status: 200 },
@@ -771,15 +771,10 @@ describe("App", () => {
 
   it("shows the lifetime applications count on the dashboard", async () => {
     mockFetchResponses({
-      "/metrics/summary": {
+      "/metrics/summary": metricsSummaryResponse({
         total_applications: 3,
         distinct_company_count: 2,
-        ghosted_applications: 0,
-        ghost_threshold_days: 30,
-        evaluated_at: "2026-07-07T20:00:00Z",
-        interview_invitation_count: 0,
-        rejected_applications: 0,
-      },
+      }),
     });
 
     renderAtPath("/dashboard");
