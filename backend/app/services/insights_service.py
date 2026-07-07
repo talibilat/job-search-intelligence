@@ -28,7 +28,7 @@ from app.providers.llm import (
 
 type Clock = Callable[[], datetime]
 
-INSIGHT_GENERATION_PROMPT_VERSION = "v1"
+INSIGHT_GENERATION_PROMPT_VERSION = "v2"
 INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
 INSIGHT_GENERATION_TEMPERATURE = 0.2
 _CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
@@ -376,7 +376,10 @@ def _utcnow() -> datetime:
 
 
 def _hash_insight_input(insight_input: InsightInput) -> str:
-    payload = insight_input.model_dump(mode="json", exclude={"inputs_hash"})
+    payload = {
+        "prompt_version": INSIGHT_GENERATION_PROMPT_VERSION,
+        "input": insight_input.model_dump(mode="json", exclude={"inputs_hash"}),
+    }
     return _hash_payload(payload)
 
 
