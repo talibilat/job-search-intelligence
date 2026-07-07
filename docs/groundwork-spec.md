@@ -354,7 +354,8 @@ Metrics endpoints + React dashboard (Recharts + small accessible component layer
 **DoD:** every Tier 1–3 question is answered on screen; numbers reconcile with the DB.
 
 **Phase 4 - Insights (cached LLM narrative)** -> Tier 5
-Insights service + page (why-rejected, skill-gaps, role-fit, weekly actions, story); cached with `regenerate`, stale detection, and user-triggered regeneration.
+Insights service + page (why-rejected, skill-gaps, role-fit, weekly actions, story); cached with prompt-versioned input hashes, `regenerate`, stale detection, and user-triggered regeneration.
+The Q-40 `why_rejected` insight uses rejection-event evidence only and prompts for recurring themes across rejection emails; feedback-specific summaries belong to Q-41.
 **DoD:** insights render and cite the applications/emails they're drawn from.
 
 **Phase 5 - RAG chat (LangGraph)** -> Tier 6
