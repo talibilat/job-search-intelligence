@@ -142,7 +142,7 @@ job-search-intelligence/
   [JT-020 2026-07-05 v2] - **`application_events`** - `id`, `application_id` (FK), nullable `email_id` (FK; null for inferred events such as `ghost_inferred`), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
   [JT-107 2026-07-06] - **`application_events`** also stores nullable `extracted_status` using the same status enum as `applications.current_status` so status replay can preserve extraction-provided status on status-neutral event types.
 - **`application_corrections`** - `id`, `application_id` (FK to `applications.id` with cascade delete), `correction_type` (`merge | split | status_edit | event_edit | reset_lock`), valid JSON `before_json`, valid JSON `after_json`, `reason`, `created_at`.
-- **`insights`** - `id`, `type` (`why_rejected | skill_gaps | strongest_weakest_signals | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
+- **`insights`** - `id`, `type` (`why_rejected | recurring_feedback | skill_gaps | strongest_weakest_signals | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
 - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, `embedding`.
   [JT-020 2026-07-05 v2] - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, 1536-dimensional `embedding`.
 - **`chat_messages`** - `id`, `conversation_id`, `role`, `content`, `citations_json`, `tool_outputs_json`, `created_at`.
@@ -153,6 +153,7 @@ job-search-intelligence/
 [JT-096 2026-07-05] The classification run accounting migration creates `classification_runs` with lookup indexes on `started_at` and `(provider, model)` so later classifier services can persist per-run token usage and estimated cost through `ClassificationRunRepository`.
 [JT-084 2026-07-05] The filter decision schema migration creates `email_filter_decisions` with constrained strategy and outcome values, `raw_emails` cascade deletion, and lookup indexes for outcome and strategy.
 [JT-192 2026-07-07] The insight type constraint now includes `strongest_weakest_signals` for Q-43 and preserves the shared insight staleness triggers across migration upgrade and downgrade.
+[JT-190 2026-07-07] The recurring-feedback insight migration adds `recurring_feedback` to the constrained `insights.type` values for Q-41 while preserving insight staleness triggers across application, event, and source-email changes.
 
 ### Aggregation rule (the hard part)
 
@@ -283,7 +284,8 @@ Show a **pre-run cost estimate** and track tokens per run.
   [JT-112 2026-07-06] The backend now implements the manual split slice, `POST /applications/{application_id}/split`, moving selected events into a deterministic new manually locked application, locking the source application, recalculating source and target timeline dates, deriving target status from moved events, preserving an already locked source status, preserving corrected segmentation fields for deterministic dashboard breakdowns, writing one audited `split` correction row, and returning typed `404` or `409` errors for missing source applications and split conflicts.
   [2026-07-06] The backend now implements the manual merge slice, `POST /applications/{application_id}/merge`, moving source events into the target application, recalculating the merged summary, deleting the source application, writing one audited `merge` correction row, and returning typed errors for missing applications, self-merge requests, and duplicate evidence conflicts.
 - **Metrics (deterministic):** `GET /metrics/summary`, `/metrics/rates`, `/metrics/funnel`, `/metrics/timeseries`, `/metrics/breakdown?dimension=role|source|salary|tech|sponsorship|seniority|work_mode`, `/metrics/diagnostics`
-- **Insights (cached LLM):** `GET /insights`, `POST /insights/regenerate`
+- **Insights (cached LLM):** `GET /insights` returns the latest fresh cached narrative insight per type from local SQLite without calling an LLM; `POST /insights/regenerate` regenerates one requested insight type through the configured LLM provider, returns the saved insight plus evidence citation IDs, and keeps regeneration user-triggered for cost control.
+  [JT-190 2026-07-07] `recurring_feedback` answers Q-41 from `feedback` timeline events only; if fewer than two cited feedback items exist, the service saves an insufficient-evidence explanation instead of asking the LLM to infer a recurring theme.
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
 
 OpenAPI schema -> `backend/scripts/generate_openapi.py` -> `frontend/src/api/openapi.json` -> Orval fetch client in `frontend/src/api/generated.ts`.
