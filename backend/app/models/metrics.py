@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -21,6 +22,20 @@ class MetricRate(BaseModel):
 
 class MetricsRatesResponse(BaseModel):
     overall_response_rate: MetricRate
+
+
+class MetricsApplicationWindow(StrEnum):
+    WEEK = "week"
+    MONTH = "month"
+    YEAR = "year"
+    CUSTOM = "custom"
+
+
+class ApplicationWindowMetric(BaseModel):
+    window: MetricsApplicationWindow
+    start_at: datetime
+    end_at: datetime
+    application_count: int = Field(ge=0)
 
 
 class ResponseSilenceMetric(BaseModel):
@@ -44,3 +59,4 @@ class MetricsSummaryResponse(BaseModel):
     ghost_threshold_days: int = Field(ge=1)
     evaluated_at: datetime
     interview_invitation_count: int = Field(ge=0)
+    application_windows: list[ApplicationWindowMetric]

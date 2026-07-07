@@ -12,6 +12,20 @@ _RESPONSE_LIKE_EVENT_TYPES = RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 class MetricsRepository(BaseRepository[int]):
     """Repository seam for deterministic dashboard metric reads."""
 
+    def count_applications_between(self, *, start_at: str, end_at: str) -> int:
+        row = self.execute(
+            """
+            SELECT COUNT(*)
+            FROM applications
+            WHERE first_seen_at >= ?
+              AND first_seen_at < ?
+            """,
+            (start_at, end_at),
+        ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+
     def count_distinct_companies(self) -> int:
         row = self.execute(
             """

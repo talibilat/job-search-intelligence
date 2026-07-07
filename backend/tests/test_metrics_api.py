@@ -13,6 +13,144 @@ from fastapi.testclient import TestClient
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_metrics_summary_returns_application_counts_by_window(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="week-start",
+            first_seen_at="2026-07-13T00:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="week-middle",
+            first_seen_at="2026-07-15T09:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="week-end-boundary",
+            first_seen_at="2026-07-20T00:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="month-start",
+            first_seen_at="2026-07-01T00:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="month-end-boundary",
+            first_seen_at="2026-08-01T00:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="year-start",
+            first_seen_at="2026-01-01T00:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="year-end-boundary",
+            first_seen_at="2027-01-01T00:00:00+00:00",
+        )
+
+    client = create_test_client(database_path)
+
+    response = client.get(
+        "/metrics/summary"
+        "?anchor_at=2026-07-15T12:00:00Z"
+        "&custom_start_at=2026-07-01T00:00:00Z"
+        "&custom_end_at=2026-08-01T00:00:00Z",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["application_windows"] == [
+        {
+            "window": "week",
+            "start_at": "2026-07-13T00:00:00Z",
+            "end_at": "2026-07-20T00:00:00Z",
+            "application_count": 2,
+        },
+        {
+            "window": "month",
+            "start_at": "2026-07-01T00:00:00Z",
+            "end_at": "2026-08-01T00:00:00Z",
+            "application_count": 4,
+        },
+        {
+            "window": "year",
+            "start_at": "2026-01-01T00:00:00Z",
+            "end_at": "2027-01-01T00:00:00Z",
+            "application_count": 6,
+        },
+        {
+            "window": "custom",
+            "start_at": "2026-07-01T00:00:00Z",
+            "end_at": "2026-08-01T00:00:00Z",
+            "application_count": 4,
+        },
+    ]
+
+
+def test_metrics_summary_rejects_naive_anchor_at(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get("/metrics/summary?anchor_at=2026-07-15T12:00:00")
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "validation_error",
+            "message": "Request validation failed.",
+            "details": [
+                {
+                    "field": "query.anchor_at",
+                    "message": "anchor_at must include a timezone offset.",
+                    "type": "timezone_aware",
+                }
+            ],
+        }
+    }
+
+
+def test_metrics_summary_rejects_incomplete_custom_window(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get(
+        "/metrics/summary?anchor_at=2026-07-15T12:00:00Z&custom_start_at=2026-07-01T00:00:00Z",
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"] == [
+        {
+            "field": "query.custom_end_at",
+            "message": "custom_start_at and custom_end_at must be provided together.",
+            "type": "missing_custom_window_bound",
+        }
+    ]
+
+
+def test_metrics_summary_rejects_inverted_custom_window(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get(
+        "/metrics/summary"
+        "?anchor_at=2026-07-15T12:00:00Z"
+        "&custom_start_at=2026-08-01T00:00:00Z"
+        "&custom_end_at=2026-07-01T00:00:00Z",
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"] == [
+        {
+            "field": "query.custom_start_at",
+            "message": "custom_start_at must be earlier than custom_end_at.",
+            "type": "value_error",
+        }
+    ]
+
+
 def test_metrics_summary_counts_interview_invitations_from_event_history(
     tmp_path: Path,
 ) -> None:
@@ -77,7 +215,9 @@ def test_metrics_summary_endpoint_is_documented_in_openapi() -> None:
     assert response.status_code == 200
     operation = response.json()["paths"]["/metrics/summary"]["get"]
     success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    validation_schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert success_schema["$ref"] == "#/components/schemas/MetricsSummaryResponse"
+    assert validation_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
 def migrated_database(tmp_path: Path) -> Path:
@@ -104,17 +244,18 @@ def insert_application(
     *,
     application_id: str,
     current_status: str = "rejected",
+    first_seen_at: str = "2026-07-01T09:00:00+00:00",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
         company="Acme Corp",
         role_title="Software Engineer",
         source="linkedin",
-        first_seen_at="2026-07-01T09:00:00+00:00",
+        first_seen_at=first_seen_at,
         current_status=current_status,
-        last_activity_at="2026-07-03T10:00:00+00:00",
-        created_at="2026-07-01T09:01:00+00:00",
-        updated_at="2026-07-03T10:01:00+00:00",
+        last_activity_at=first_seen_at,
+        created_at=first_seen_at,
+        updated_at=first_seen_at,
         salary_min=None,
         salary_max=None,
         currency=None,

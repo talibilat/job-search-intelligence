@@ -31,7 +31,9 @@ from .insight import (
     InsightRegenerateResponse,
 )
 from .metrics import (
+    ApplicationWindowMetric,
     MetricRate,
+    MetricsApplicationWindow,
     MetricsRatesResponse,
     MetricsSummaryResponse,
     ResponseSilenceMetric,
@@ -119,6 +121,7 @@ __all__ = [
     "ApplicationResetLockResponse",
     "ApplicationStatusEditRequest",
     "ApplicationStatusEditResponse",
+    "ApplicationWindowMetric",
     "ApplicationSplitNewApplication",
     "ApplicationSplitRequest",
     "ApplicationSplitResponse",
@@ -154,6 +157,8 @@ __all__ = [
     "InsightRegenerateResponse",
     "InsightRoleOutcomeSummary",
     "JobEmailCategory",
+    "MetricsApplicationWindow",
+    "MetricsSummaryResponse",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
     "ResponseSilenceMetric",

@@ -943,6 +943,36 @@
         "title": "ApplicationStatusEditResponse",
         "type": "object"
       },
+      "ApplicationWindowMetric": {
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/MetricsApplicationWindow"
+          }
+        },
+        "required": [
+          "window",
+          "start_at",
+          "end_at",
+          "application_count"
+        ],
+        "title": "ApplicationWindowMetric",
+        "type": "object"
+      },
       "ClassificationMode": {
         "enum": [
           "hybrid",
@@ -1912,6 +1942,16 @@
         "title": "MetricRate",
         "type": "object"
       },
+      "MetricsApplicationWindow": {
+        "enum": [
+          "week",
+          "month",
+          "year",
+          "custom"
+        ],
+        "title": "MetricsApplicationWindow",
+        "type": "string"
+      },
       "MetricsRatesResponse": {
         "properties": {
           "overall_response_rate": {
@@ -1927,6 +1967,13 @@
       "MetricsSummaryResponse": {
         "description": "Deterministic summary metrics for the dashboard.",
         "properties": {
+          "application_windows": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationWindowMetric"
+            },
+            "title": "Application Windows",
+            "type": "array"
+          },
           "distinct_company_count": {
             "minimum": 0.0,
             "title": "Distinct Company Count",
@@ -1977,7 +2024,8 @@
           "rejected_applications",
           "ghost_threshold_days",
           "evaluated_at",
-          "interview_invitation_count"
+          "interview_invitation_count",
+          "application_windows"
         ],
         "title": "MetricsSummaryResponse",
         "type": "object"
@@ -3875,8 +3923,67 @@
     },
     "/metrics/summary": {
       "get": {
-        "description": "Returns deterministic dashboard summary metrics from the local SQLite applications and event timeline source of truth.",
+        "description": "Returns deterministic dashboard summary metrics and application counts by date window from the local SQLite source of truth.",
         "operationId": "get_metrics_summary_metrics_summary_get",
+        "parameters": [
+          {
+            "description": "Timezone-aware instant used to derive this week, month, and year.",
+            "in": "query",
+            "name": "anchor_at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timezone-aware instant used to derive this week, month, and year.",
+              "title": "Anchor At"
+            }
+          },
+          {
+            "description": "Inclusive timezone-aware custom window start.",
+            "in": "query",
+            "name": "custom_start_at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive timezone-aware custom window start.",
+              "title": "Custom Start At"
+            }
+          },
+          {
+            "description": "Exclusive timezone-aware custom window end.",
+            "in": "query",
+            "name": "custom_end_at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exclusive timezone-aware custom window end.",
+              "title": "Custom End At"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3887,6 +3994,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Get Metrics Summary",
