@@ -142,7 +142,11 @@ describe("App", () => {
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": {
+        total_applications: 12,
         distinct_company_count: 3,
+        ghosted_applications: 0,
+        ghost_threshold_days: 30,
+        evaluated_at: "2026-07-07T20:00:00Z",
       },
       "/metrics/rates": {
         overall_response_rate: {
@@ -524,6 +528,16 @@ describe("App", () => {
   });
 
   it("renders an empty dashboard page shell at the dashboard route", () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        total_applications: 0,
+        distinct_company_count: 0,
+        ghosted_applications: 0,
+        ghost_threshold_days: 30,
+        evaluated_at: "2026-07-07T20:00:00Z",
+      },
+    });
+
     renderAtPath("/dashboard");
 
     expect(screen.getByRole("main", { name: "Dashboard" })).toBeTruthy();
@@ -549,11 +563,13 @@ describe("App", () => {
   it("renders Q-07 interview invitations from the metrics summary", async () => {
     mockFetchResponses({
       "/metrics/summary": {
+        total_applications: 12,
         distinct_company_count: 7,
         evaluated_at: "2026-07-07T12:00:00Z",
         ghost_threshold_days: 30,
         ghosted_applications: 2,
         interview_invitation_count: 3,
+        rejected_applications: 1,
       },
     });
 
@@ -601,11 +617,13 @@ describe("App", () => {
   it("shows live applications awaiting a reply on the dashboard", async () => {
     const fetchMock = mockFetchResponses({
       "/metrics/summary": {
+        total_applications: 12,
         distinct_company_count: 7,
         evaluated_at: "2026-07-07T12:00:00Z",
         ghost_threshold_days: 30,
         ghosted_applications: 3,
         interview_invitation_count: 4,
+        rejected_applications: 1,
       },
       "/applications?status=applied": {
         body: [
@@ -721,11 +739,13 @@ describe("App", () => {
   it("shows an empty live applications state on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": {
+        total_applications: 0,
         distinct_company_count: 0,
         evaluated_at: "2026-07-07T12:00:00Z",
         ghost_threshold_days: 30,
         ghosted_applications: 0,
         interview_invitation_count: 0,
+        rejected_applications: 0,
       },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
@@ -747,6 +767,52 @@ describe("App", () => {
         "No live applications are awaiting a reply right now.",
       ),
     ).toBeTruthy();
+  });
+
+  it("shows the lifetime applications count on the dashboard", async () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        total_applications: 3,
+        distinct_company_count: 2,
+        ghosted_applications: 0,
+        ghost_threshold_days: 30,
+        evaluated_at: "2026-07-07T20:00:00Z",
+        interview_invitation_count: 0,
+        rejected_applications: 0,
+      },
+    });
+
+    renderAtPath("/dashboard");
+
+    const totalApplicationsCard = screen
+      .getByText("Total applications")
+      .closest("article");
+
+    await waitFor(() => {
+      expect(totalApplicationsCard?.textContent).toContain("3");
+    });
+    expect(totalApplicationsCard?.textContent).toContain(
+      "Q-01 reconciled from applications",
+    );
+  });
+
+  it("shows the lifetime applications count as unavailable when summary loading fails", async () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        body: { error: { code: "internal_error", message: "Failed" } },
+        status: 500,
+      },
+    });
+
+    renderAtPath("/dashboard");
+
+    const totalApplicationsCard = screen
+      .getByText("Total applications")
+      .closest("article");
+
+    await waitFor(() => {
+      expect(totalApplicationsCard?.textContent).toContain("Unavailable");
+    });
   });
 
   it("renders the feature status dashboard with searchable frontend feature metadata", () => {

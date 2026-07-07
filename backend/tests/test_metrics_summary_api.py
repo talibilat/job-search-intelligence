@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_get_metrics_summary_counts_ghosted_applications_from_threshold(
+def test_get_metrics_summary_counts_lifetime_and_ghosted_applications(
     tmp_path: Path,
 ) -> None:
     database_path = migrated_database(tmp_path)
@@ -95,6 +95,8 @@ def test_get_metrics_summary_counts_ghosted_applications_from_threshold(
 
     assert response.status_code == 200
     body = response.json()
+    assert body["total_applications"] == 4
+    assert body["distinct_company_count"] == 1
     assert body["ghosted_applications"] == 2
     assert body["rejected_applications"] == 0
     assert body["ghost_threshold_days"] == 45
@@ -133,6 +135,7 @@ def test_get_metrics_summary_returns_distinct_company_count_from_applications(
 
     assert response.status_code == 200
     body = response.json()
+    assert body["total_applications"] == 3
     assert body["distinct_company_count"] == 2
     assert body["ghosted_applications"] == 0
 
@@ -150,6 +153,7 @@ def test_get_metrics_summary_counts_rejected_applications(tmp_path: Path) -> Non
 
     assert response.status_code == 200
     body = response.json()
+    assert body["total_applications"] == 3
     assert body["rejected_applications"] == 2
 
 
@@ -205,6 +209,24 @@ def test_get_metrics_summary_counts_offers_received_from_event_history(
     assert body["ghosted_applications"] == 0
 
 
+def test_metrics_summary_returns_zero_without_applications(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get("/metrics/summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_applications"] == 0
+    assert body["distinct_company_count"] == 0
+    assert body["offers_received"] == 0
+    assert body["ghosted_applications"] == 0
+    assert body["rejected_applications"] == 0
+    assert body["interview_invitation_count"] == 0
+    assert body["ghost_threshold_days"] == 30
+    assert "evaluated_at" in body
+
+
 def test_metrics_summary_endpoint_is_documented_in_openapi() -> None:
     client = TestClient(create_app())
 
@@ -216,7 +238,7 @@ def test_metrics_summary_endpoint_is_documented_in_openapi() -> None:
     assert success_schema["$ref"] == "#/components/schemas/MetricsSummaryResponse"
 
 
-def create_test_client(database_path: Path, *, ghost_threshold_days: int) -> TestClient:
+def create_test_client(database_path: Path, *, ghost_threshold_days: int = 30) -> TestClient:
     settings = AppSettings(
         _env_file=None,
         database_url=f"sqlite+aiosqlite:///{database_path}",

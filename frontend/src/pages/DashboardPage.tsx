@@ -34,12 +34,7 @@ const filterPlaceholders = [
   "Work mode",
 ] as const;
 
-const metricPlaceholders = [
-  {
-    label: "Total applications",
-    note: "Counted from applications",
-  },
-] as const;
+const metricPlaceholders = [] as const;
 
 const percentageFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
@@ -203,6 +198,10 @@ export function DashboardPage() {
     };
   }, []);
 
+  const totalApplicationsValue = summaryMetricValue(
+    isLoadingSummary,
+    summary?.total_applications,
+  );
   const distinctCompanyValue = summaryMetricValue(
     isLoadingSummary,
     summary?.distinct_company_count,
@@ -228,9 +227,9 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-03, Q-07, Q-08, Q-10, and Q-11 now render from deterministic
-          application and metrics endpoints, while remaining dashboard questions
-          stay clearly marked as pending.
+          Q-01, Q-03, Q-07, Q-08, Q-10, and Q-11 now render from
+          deterministic application and metrics endpoints, while remaining
+          dashboard questions stay clearly marked as pending.
         </p>
       </section>
 
@@ -263,6 +262,15 @@ export function DashboardPage() {
             <h2 id="metrics-overview-title">Metrics overview</h2>
           </div>
           <div className="dashboard-metric-grid">
+            <article className="metric-placeholder">
+              <p className="metric-placeholder__label">Total applications</p>
+              <p className="metric-placeholder__value">
+                {totalApplicationsValue}
+              </p>
+              <p className="dashboard-card__meta">
+                Q-01 reconciled from applications
+              </p>
+            </article>
             <article className="metric-placeholder">
               <p className="metric-placeholder__label">Distinct companies</p>
               <p className="metric-placeholder__value">
