@@ -655,6 +655,71 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.dashboard-filter-form,
+.dashboard-filter-grid,
+.dashboard-filter-actions,
+.status-table-card {
+  min-width: 0;
+}
+
+.dashboard-filter-form,
+.status-table-card {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboard-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.status-table-card {
+  overflow: hidden;
+}
+
+.status-badge {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0.36rem 0.62rem;
+  border: 1px solid #b8c8ae;
+  border-radius: 999px;
+  background: #edf6eb;
+  color: #203f2c;
+  font-size: 0.84rem;
+  font-weight: 900;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.status-badge--rejected,
+.status-badge--ghosted,
+.status-badge--withdrawn {
+  border-color: #e0a7a7;
+  background: #fff0f0;
+  color: #6e1717;
+}
+
+.status-badge--interview,
+.status-badge--offer {
+  border-color: #abc5da;
+  background: #eef7ff;
+  color: #17364f;
+}
+
+.status-badge--assessment,
+.status-badge--in_review {
+  border-color: #e1c98f;
+  background: #fff7df;
+  color: #5d4210;
+}
+
 .application-detail-shell {
   display: grid;
   gap: 24px;
@@ -1105,6 +1170,7 @@ h3 {
   .dashboard-live-card,
   .application-detail-grid,
   .filter-placeholder-list,
+  .dashboard-filter-grid,
   .dashboard-metric-grid,
   .sync-panel__metrics,
   .sync-panel__meta-grid,
