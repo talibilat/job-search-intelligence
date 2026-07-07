@@ -1634,6 +1634,119 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "InsightListResponse": {
+        "properties": {
+          "insights": {
+            "items": {
+              "$ref": "#/components/schemas/InsightRecord"
+            },
+            "title": "Insights",
+            "type": "array"
+          }
+        },
+        "required": [
+          "insights"
+        ],
+        "title": "InsightListResponse",
+        "type": "object"
+      },
+      "InsightRecord": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "inputs_hash": {
+            "title": "Inputs Hash",
+            "type": "string"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/InsightType"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "content",
+          "inputs_hash",
+          "is_stale",
+          "model",
+          "generated_at"
+        ],
+        "title": "InsightRecord",
+        "type": "object"
+      },
+      "InsightRegenerateRequest": {
+        "properties": {
+          "max_evidence_items": {
+            "default": 100,
+            "minimum": 1.0,
+            "title": "Max Evidence Items",
+            "type": "integer"
+          },
+          "type": {
+            "$ref": "#/components/schemas/InsightType"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "InsightRegenerateRequest",
+        "type": "object"
+      },
+      "InsightRegenerateResponse": {
+        "properties": {
+          "cached": {
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "evidence_citation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Citation Ids",
+            "type": "array"
+          },
+          "insight": {
+            "$ref": "#/components/schemas/InsightRecord"
+          }
+        },
+        "required": [
+          "insight",
+          "cached",
+          "evidence_citation_ids"
+        ],
+        "title": "InsightRegenerateResponse",
+        "type": "object"
+      },
+      "InsightType": {
+        "enum": [
+          "why_rejected",
+          "recurring_feedback",
+          "skill_gaps",
+          "role_fit",
+          "weekly_actions",
+          "story"
+        ],
+        "type": "string"
+      },
       "JsonObject": {
         "additionalProperties": true,
         "type": "object"
@@ -3440,6 +3553,70 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/insights": {
+      "get": {
+        "description": "Returns fresh cached narrative insights from local SQLite without calling an LLM.",
+        "operationId": "list_insights_insights_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Cached Insights",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/insights/regenerate": {
+      "post": {
+        "description": "Regenerates one cached narrative insight through the configured LLM provider using deterministic facts and cited source evidence.",
+        "operationId": "regenerate_insight_insights_regenerate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsightRegenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightRegenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Regenerate Insight",
+        "tags": [
+          "insights"
         ]
       }
     },

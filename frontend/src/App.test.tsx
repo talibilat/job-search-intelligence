@@ -88,8 +88,24 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("renders the insights page shell on the insights route", () => {
+  it("renders recurring feedback on the insights route", async () => {
     window.history.pushState({}, "", "/insights");
+    mockFetchResponses({
+      "/insights": {
+        insights: [
+          {
+            id: 1,
+            type: "recurring_feedback",
+            content:
+              "Feedback consistently says to improve system design examples. [application:app-1|event:event-1|email:email-1]",
+            inputs_hash: "inputs-hash",
+            is_stale: false,
+            model: "llama3.1",
+            generated_at: "2026-07-07T12:00:00+00:00",
+          },
+        ],
+      },
+    });
 
     render(<App />);
 
@@ -97,7 +113,12 @@ describe("App", () => {
       screen.getByRole("heading", { level: 1, name: "Insights" }),
     ).toBeTruthy();
     expect(
-      screen.getByText("Narrative insights are not generated yet."),
+      await screen.findByText("Recurring recruiter feedback"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Feedback consistently says to improve system design examples. [application:app-1|event:event-1|email:email-1]",
+      ),
     ).toBeTruthy();
   });
 

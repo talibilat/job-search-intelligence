@@ -124,6 +124,27 @@ class InsightRepository(BaseRepository[InsightRecord]):
             (insight_type,),
         )
 
+    def list_latest_insights(self, *, include_stale: bool = False) -> list[InsightRecord]:
+        stale_clause = "" if include_stale else "AND insights.is_stale = 0"
+        nested_stale_clause = "" if include_stale else "AND candidate_insights.is_stale = 0"
+        rows = self.execute(
+            f"""
+            SELECT *
+            FROM insights
+            WHERE insights.id = (
+                SELECT candidate_insights.id
+                FROM insights AS candidate_insights
+                WHERE candidate_insights.type = insights.type
+                  {nested_stale_clause}
+                ORDER BY candidate_insights.generated_at DESC, candidate_insights.id DESC
+                LIMIT 1
+            )
+              {stale_clause}
+            ORDER BY insights.type, insights.id DESC
+            """,
+        ).fetchall()
+        return [self.map_row(row) for row in rows]
+
     def mark_stale_except_inputs_hash(self, inputs_hash: str) -> int:
         should_commit = not self.connection.in_transaction
         with self.transaction():

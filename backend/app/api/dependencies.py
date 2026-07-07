@@ -13,6 +13,7 @@ from app.db.repositories import (
     CorrectionConflictRepository,
     CorrectionRepository,
     EventRepository,
+    InsightRepository,
 )
 from app.db.repositories.classification_run import ClassificationRunRepository
 from app.db.repositories.connection import EmailConnectionRepository
@@ -26,6 +27,7 @@ from app.services.applications import (
     ApplicationEventsService,
 )
 from app.services.ghost_inference import GhostInferenceService
+from app.services.insights_service import InsightGenerationService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.structured_extraction import StructuredExtractionService
@@ -60,6 +62,36 @@ def get_llm_provider(
         status_code=503,
         code=ApiErrorCode.SERVICE_UNAVAILABLE,
         message="Selected LLM provider is unavailable.",
+    )
+
+
+def get_insight_repository(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[InsightRepository]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    try:
+        yield InsightRepository(connection)
+    finally:
+        connection.close()
+
+
+def get_insight_generation_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    insight_repository: Annotated[
+        InsightRepository,
+        Depends(get_insight_repository),
+    ],
+    llm_provider: Annotated[
+        LLMProvider,
+        Depends(get_llm_provider),
+    ],
+) -> InsightGenerationService:
+    return InsightGenerationService(
+        settings=settings,
+        insight_repository=insight_repository,
+        llm_provider=llm_provider,
     )
 
 

@@ -593,6 +593,43 @@ export const HealthResponseValue = {
 } as const;
 export type HealthResponse = typeof HealthResponseValue;
 
+export type InsightType = (typeof InsightType)[keyof typeof InsightType];
+
+export const InsightType = {
+  why_rejected: "why_rejected",
+  recurring_feedback: "recurring_feedback",
+  skill_gaps: "skill_gaps",
+  role_fit: "role_fit",
+  weekly_actions: "weekly_actions",
+  story: "story",
+} as const;
+
+export interface InsightRecord {
+  content: string;
+  generated_at: string;
+  id: number;
+  inputs_hash: string;
+  is_stale: boolean;
+  model: string;
+  type: InsightType;
+}
+
+export interface InsightListResponse {
+  insights: InsightRecord[];
+}
+
+export interface InsightRegenerateRequest {
+  /** @minimum 1 */
+  max_evidence_items?: number;
+  type: InsightType;
+}
+
+export interface InsightRegenerateResponse {
+  cached: boolean;
+  evidence_citation_ids: string[];
+  insight: InsightRecord;
+}
+
 export type LLMModelKind = (typeof LLMModelKind)[keyof typeof LLMModelKind];
 
 export const LLMModelKind = {
@@ -1869,6 +1906,100 @@ export const healthHealthGet = async (
     status: res.status,
     headers: res.headers,
   } as healthHealthGetResponse;
+};
+
+export type listInsightsInsightsGetResponse200 = {
+  data: InsightListResponse;
+  status: 200;
+};
+
+export type listInsightsInsightsGetResponseSuccess =
+  listInsightsInsightsGetResponse200 & {
+    headers: Headers;
+  };
+export type listInsightsInsightsGetResponse =
+  listInsightsInsightsGetResponseSuccess;
+
+export const getListInsightsInsightsGetUrl = () => {
+  return `/insights`;
+};
+
+/**
+ * Returns fresh cached narrative insights from local SQLite without calling an LLM.
+ * @summary List Cached Insights
+ */
+export const listInsightsInsightsGet = async (
+  options?: RequestInit,
+): Promise<listInsightsInsightsGetResponse> => {
+  const res = await fetch(getListInsightsInsightsGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listInsightsInsightsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listInsightsInsightsGetResponse;
+};
+
+export type regenerateInsightInsightsRegeneratePostResponse200 = {
+  data: InsightRegenerateResponse;
+  status: 200;
+};
+
+export type regenerateInsightInsightsRegeneratePostResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type regenerateInsightInsightsRegeneratePostResponseSuccess =
+  regenerateInsightInsightsRegeneratePostResponse200 & {
+    headers: Headers;
+  };
+export type regenerateInsightInsightsRegeneratePostResponseError =
+  regenerateInsightInsightsRegeneratePostResponse422 & {
+    headers: Headers;
+  };
+
+export type regenerateInsightInsightsRegeneratePostResponse =
+  | regenerateInsightInsightsRegeneratePostResponseSuccess
+  | regenerateInsightInsightsRegeneratePostResponseError;
+
+export const getRegenerateInsightInsightsRegeneratePostUrl = () => {
+  return `/insights/regenerate`;
+};
+
+/**
+ * Regenerates one cached narrative insight through the configured LLM provider using deterministic facts and cited source evidence.
+ * @summary Regenerate Insight
+ */
+export const regenerateInsightInsightsRegeneratePost = async (
+  insightRegenerateRequest: InsightRegenerateRequest,
+  options?: RequestInit,
+): Promise<regenerateInsightInsightsRegeneratePostResponse> => {
+  const res = await fetch(getRegenerateInsightInsightsRegeneratePostUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(insightRegenerateRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: regenerateInsightInsightsRegeneratePostResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as regenerateInsightInsightsRegeneratePostResponse;
 };
 
 export type wipeDataLocalDataWipePostResponse200 = {

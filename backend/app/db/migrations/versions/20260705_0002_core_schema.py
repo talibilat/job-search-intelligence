@@ -53,7 +53,6 @@ EVENT_TYPES = (
 )
 INSIGHT_TYPES = (
     "why_rejected",
-    "recurring_feedback",
     "skill_gaps",
     "strongest_weakest_signals",
     "role_fit",
