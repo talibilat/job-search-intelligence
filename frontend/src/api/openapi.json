@@ -2201,6 +2201,38 @@
         "title": "ProviderSelection",
         "type": "object"
       },
+      "ResponseSilenceMetric": {
+        "properties": {
+          "human_response_count": {
+            "minimum": 0.0,
+            "title": "Human Response Count",
+            "type": "integer"
+          },
+          "question_id": {
+            "const": "Q-04",
+            "default": "Q-04",
+            "title": "Question Id",
+            "type": "string"
+          },
+          "silent_count": {
+            "minimum": 0.0,
+            "title": "Silent Count",
+            "type": "integer"
+          },
+          "total_applications": {
+            "minimum": 0.0,
+            "title": "Total Applications",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_applications",
+          "human_response_count",
+          "silent_count"
+        ],
+        "title": "ResponseSilenceMetric",
+        "type": "object"
+      },
       "SecretKind": {
         "enum": [
           "oauth_token",
@@ -3690,6 +3722,28 @@
         "summary": "Wipe local app data",
         "tags": [
           "local-data"
+        ]
+      }
+    },
+    "/metrics/response-silence": {
+      "get": {
+        "description": "Answers Q-04 by counting applications with at least one response-like timeline event versus applications with total silence. Counts are deterministic SQLite reads from applications and application_events.",
+        "operationId": "get_response_silence_metric_metrics_response_silence_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseSilenceMetric"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Response Versus Silence Metric",
+        "tags": [
+          "metrics"
         ]
       }
     },

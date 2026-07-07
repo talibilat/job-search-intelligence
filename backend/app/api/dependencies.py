@@ -30,6 +30,7 @@ from app.services.ghost_inference import GhostInferenceService
 from app.services.insights_service import InsightGenerationService, InsightReadService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
+from app.services.metrics import MetricsService
 from app.services.structured_extraction import StructuredExtractionService
 
 
@@ -161,6 +162,15 @@ def get_application_detail_service(
     ],
 ) -> ApplicationDetailService:
     return ApplicationDetailService(application_repository)
+
+
+def get_metrics_service(
+    application_repository: Annotated[
+        ApplicationRepository,
+        Depends(get_readonly_application_repository),
+    ],
+) -> MetricsService:
+    return MetricsService(application_repository)
 
 
 def get_application_events_service(
