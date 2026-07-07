@@ -39,6 +39,7 @@ class InsightRoleOutcomeSummary(BaseModel):
     win_count: int
     loss_count: int
     status_counts: dict[str, int]
+    citation_ids: list[str]
 
 
 type InsightInputFactSource = Literal["applications", "application_events"]

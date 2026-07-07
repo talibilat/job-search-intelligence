@@ -11,13 +11,8 @@ from app.models.records import (
     ApplicationStatus,
     InsightInputEvidence,
     InsightRecord,
-    InsightRoleOutcomeSummary,
     InsightType,
 )
-
-_ROLE_FIT_WIN_STATUSES: tuple[ApplicationStatus, ...] = ("interview", "offer")
-_ROLE_FIT_LOSS_STATUSES: tuple[ApplicationStatus, ...] = ("rejected", "ghosted")
-_ROLE_FIT_OUTCOME_STATUSES = _ROLE_FIT_WIN_STATUSES + _ROLE_FIT_LOSS_STATUSES
 
 
 class InsightRepository(BaseRepository[InsightRecord]):
@@ -231,56 +226,6 @@ class InsightRepository(BaseRepository[InsightRecord]):
             for skill in skills:
                 counts[skill] = counts.get(skill, 0) + 1
         return dict(sorted(counts.items()))
-
-    def list_role_outcome_summaries(self) -> list[InsightRoleOutcomeSummary]:
-        rows = self.execute(
-            f"""
-            SELECT
-                TRIM(role_title) AS role_title,
-                current_status,
-                COUNT(*) AS count
-            FROM applications
-            WHERE current_status IN ({_placeholders(len(_ROLE_FIT_OUTCOME_STATUSES))})
-              AND TRIM(role_title) != ''
-            GROUP BY TRIM(role_title), current_status
-            ORDER BY LOWER(TRIM(role_title)), current_status
-            """,
-            _ROLE_FIT_OUTCOME_STATUSES,
-        ).fetchall()
-
-        by_role: dict[str, dict[str, int]] = {}
-        for row in rows:
-            role_title = str(row["role_title"])
-            status = str(row["current_status"])
-            by_role.setdefault(role_title, {})[status] = int(row["count"])
-
-        summaries = [
-            InsightRoleOutcomeSummary(
-                role_title=role_title,
-                application_count=sum(status_counts.values()),
-                win_count=sum(
-                    count
-                    for status, count in status_counts.items()
-                    if status in _ROLE_FIT_WIN_STATUSES
-                ),
-                loss_count=sum(
-                    count
-                    for status, count in status_counts.items()
-                    if status in _ROLE_FIT_LOSS_STATUSES
-                ),
-                status_counts=status_counts,
-            )
-            for role_title, status_counts in by_role.items()
-        ]
-        return sorted(
-            summaries,
-            key=lambda summary: (
-                -summary.win_count,
-                summary.loss_count,
-                -summary.application_count,
-                summary.role_title.casefold(),
-            ),
-        )
 
     def list_input_evidence(
         self,

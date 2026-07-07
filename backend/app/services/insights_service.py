@@ -11,7 +11,13 @@ from pydantic import BaseModel, ConfigDict
 
 from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
-from app.models import InsightInput, InsightInputEvidence, InsightInputFact, InsightRecord
+from app.models import (
+    InsightInput,
+    InsightInputEvidence,
+    InsightInputFact,
+    InsightRecord,
+    InsightRoleOutcomeSummary,
+)
 from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
 from app.providers.llm import (
     LLMFinishReason,
@@ -35,6 +41,8 @@ _CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
 _CITATION_LIKE_TOKEN_PATTERN = re.compile(r"^(?:\d+|[A-Za-z]+-\d+|\S*[:|]\S*)$")
 _SENTENCE_PATTERN = re.compile(r"[^.!?\n]+(?:[.!?]|\n|$)")
 _UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
+_ROLE_FIT_WIN_STATUSES: tuple[ApplicationStatus, ...] = ("interview", "offer")
+_ROLE_FIT_LOSS_STATUSES: tuple[ApplicationStatus, ...] = ("rejected", "ghosted")
 
 
 class InsightGenerationResult(BaseModel):
@@ -163,11 +171,11 @@ class InsightInputBuilder:
             event_types=scope.event_types,
             newest_first=scope.newest_first,
         )
-        evidence = scoped_evidence[:max_evidence_items]
+        included_evidence = scoped_evidence[:max_evidence_items]
         insight_input = InsightInput(
             type=insight_type,
-            facts=self._build_facts(insight_type, evidence=evidence),
-            evidence=evidence,
+            facts=self._build_facts(insight_type, included_evidence),
+            evidence=included_evidence,
             source_fingerprint=_hash_payload(
                 [item.model_dump(mode="json") for item in scoped_evidence],
             ),
@@ -180,8 +188,7 @@ class InsightInputBuilder:
     def _build_facts(
         self,
         insight_type: InsightType,
-        *,
-        evidence: list[InsightInputEvidence],
+        included_evidence: list[InsightInputEvidence],
     ) -> list[InsightInputFact]:
         facts = [
             InsightInputFact(
@@ -227,7 +234,7 @@ class InsightInputBuilder:
             facts.append(
                 InsightInputFact(
                     name="role_outcome_summaries",
-                    value=self._insight_repository.list_role_outcome_summaries(),
+                    value=_build_role_outcome_summaries(included_evidence),
                     source="applications",
                 ),
             )
@@ -265,9 +272,10 @@ def _insight_system_prompt(insight_type: InsightType) -> str:
                 "based on patterns of wins.",
                 "For role_fit, treat interviews and offers as wins, compare them against "
                 "rejected and ghosted outcomes, and use role_outcome_summaries as "
-                "deterministic role-level evidence.",
-                "For role_fit, cite the applications or emails behind each role-fit claim "
-                "and call out thin evidence instead of overstating fit.",
+                "deterministic role-level evidence derived from the cited applications.",
+                "For role_fit, each role_outcome_summary includes citation_ids; cite the "
+                "applications or emails behind each role-fit claim and call out thin evidence "
+                "instead of overstating fit.",
             ),
         )
     lines.append("Return plain text only. Do not wrap the answer in JSON or Markdown tables.")
@@ -407,10 +415,63 @@ def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
     if insight_type == "skill_gaps":
         return _EvidenceScope(application_statuses=("rejected",))
     if insight_type == "role_fit":
-        return _EvidenceScope(application_statuses=("interview", "offer", "rejected", "ghosted"))
+        return _EvidenceScope()
     if insight_type == "weekly_actions":
         return _EvidenceScope(
             application_statuses=("applied", "in_review", "assessment", "interview"),
             newest_first=True,
         )
     return _EvidenceScope()
+
+
+def _build_role_outcome_summaries(
+    evidence: list[InsightInputEvidence],
+) -> list[InsightRoleOutcomeSummary]:
+    application_summaries: dict[str, tuple[str, ApplicationStatus]] = {}
+    role_citation_ids: dict[str, list[str]] = {}
+    for item in evidence:
+        role_title = item.role_title.strip()
+        if not role_title:
+            continue
+        role_citation_ids.setdefault(role_title, [])
+        if item.citation_id not in role_citation_ids[role_title]:
+            role_citation_ids[role_title].append(item.citation_id)
+        if item.application_id not in application_summaries:
+            application_summaries[item.application_id] = (
+                role_title,
+                item.application_status,
+            )
+
+    role_status_counts: dict[str, dict[str, int]] = {}
+    for role_title, status in application_summaries.values():
+        role_status_counts.setdefault(role_title, {}).setdefault(status, 0)
+        role_status_counts[role_title][status] += 1
+
+    summaries = [
+        InsightRoleOutcomeSummary(
+            role_title=role_title,
+            application_count=sum(status_counts.values()),
+            win_count=sum(
+                count
+                for status, count in status_counts.items()
+                if status in _ROLE_FIT_WIN_STATUSES
+            ),
+            loss_count=sum(
+                count
+                for status, count in status_counts.items()
+                if status in _ROLE_FIT_LOSS_STATUSES
+            ),
+            status_counts=dict(sorted(status_counts.items())),
+            citation_ids=role_citation_ids[role_title],
+        )
+        for role_title, status_counts in role_status_counts.items()
+    ]
+    return sorted(
+        summaries,
+        key=lambda summary: (
+            -summary.win_count,
+            summary.loss_count,
+            -summary.application_count,
+            summary.role_title.casefold(),
+        ),
+    )

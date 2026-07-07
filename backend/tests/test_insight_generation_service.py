@@ -221,6 +221,8 @@ def test_role_fit_generation_request_answers_q44_with_win_pattern_facts(
     assert "Q-44" in request.messages[0].content
     assert "interviews and offers as wins" in request.messages[0].content
     assert "rejected and ghosted outcomes" in request.messages[0].content
+    assert "derived from the cited applications" in request.messages[0].content
+    assert "each role_outcome_summary includes citation_ids" in request.messages[0].content
 
     prompt_payload = json.loads(request.messages[1].content)
     role_outcome_fact = next(
@@ -234,6 +236,12 @@ def test_role_fit_generation_request_answers_q44_with_win_pattern_facts(
             "win_count": 1,
             "loss_count": 1,
             "status_counts": {"interview": 1, "rejected": 1},
+            "citation_ids": [
+                "application:application-rejected|event:event-rejected-applied|email:email-applied",
+                "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+                CITATION_ID,
+                "application:application-interview|event:event-interview-invite|email:email-interview",
+            ],
         },
     ]
 
