@@ -88,6 +88,8 @@ def test_insight_generation_service_generates_and_persists_grounded_narrative(
     assert "Never produce authoritative counts" in request.messages[0].content
     assert "Never emit raw SQL" in request.messages[0].content
     assert "Use only the provided citation_id values" in request.messages[0].content
+    assert "Q-40" in request.messages[0].content
+    assert "recurring rejection themes" in request.messages[0].content
 
     prompt_payload = json.loads(request.messages[1].content)
     assert prompt_payload["type"] == "why_rejected"
@@ -126,6 +128,72 @@ def test_insight_generation_service_generates_and_persists_grounded_narrative(
     ]
 
 
+def test_insight_generation_service_allows_bracketed_non_citation_prose(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        f"Focus on Kubernetes [especially production experience]. [{CITATION_ID}]"
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("why_rejected"))
+
+    assert result.insight.content == (
+        f"Focus on Kubernetes [especially production experience]. [{CITATION_ID}]"
+    )
+
+
+@pytest.mark.parametrize(
+    "content",
+    (
+        f"[{CITATION_ID}] Rejected applications mention Kubernetes experience.",
+        f"According to [{CITATION_ID}], rejected applications mention Kubernetes experience.",
+    ),
+)
+def test_insight_generation_service_accepts_claims_with_same_sentence_citations(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=InsightRepository(connection),
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content=content,
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("why_rejected"))
+
+    assert result.insight.content == content
+
+
 def test_insight_generation_service_uses_fresh_cache_without_calling_provider(
     tmp_path: Path,
 ) -> None:
@@ -155,6 +223,47 @@ def test_insight_generation_service_uses_fresh_cache_without_calling_provider(
     assert result.insight == cached
     assert result.input.inputs_hash == insight_input.inputs_hash
     assert provider.requests == []
+
+
+def test_insight_generation_service_bypasses_cache_from_previous_prompt_identity(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        repository = InsightRepository(connection)
+        insight_input = InsightInputBuilder(repository).build("why_rejected")
+        legacy_payload = insight_input.model_dump(mode="json", exclude={"inputs_hash"})
+        legacy_inputs_hash = sha256_payload(legacy_payload)
+        repository.save_generated_insight(
+            insight_type="why_rejected",
+            content=f"Cached broad rejection narrative. [{CITATION_ID}]",
+            inputs_hash=legacy_inputs_hash,
+            model="llama3.1",
+            generated_at=GENERATED_AT,
+        )
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=f"Fresh recurring rejection theme. [{CITATION_ID}]",
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("why_rejected"))
+
+    assert legacy_inputs_hash != insight_input.inputs_hash
+    assert result.cached is False
+    assert result.insight.content == f"Fresh recurring rejection theme. [{CITATION_ID}]"
+    assert len(provider.requests) == 1
 
 
 def test_insight_generation_service_force_regenerate_bypasses_cache(
@@ -211,6 +320,7 @@ def test_weekly_actions_generation_requires_three_cited_next_week_actions(
     )
     with sqlite3.connect(database_path) as connection:
         insert_current_application_fixture(connection)
+
         repository = InsightRepository(connection)
         provider = FakeLLMProvider(
             (
@@ -247,6 +357,43 @@ def test_weekly_actions_generation_requires_three_cited_next_week_actions(
         WEEKLY_ACTIONS_CITATION_ID,
         "application:application-interview|event:event-interview-applied|email:email-interview-applied",
     ]
+
+
+def test_skill_gaps_generation_request_focuses_on_rejected_role_technology_gaps(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(f"Kubernetes appears as a rejected-role gap. [{CITATION_ID}]"),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("skill_gaps"))
+
+    request = provider.requests[0]
+    prompt_payload = json.loads(request.messages[1].content)
+    assert result.insight.type == "skill_gaps"
+    assert prompt_payload["type"] == "skill_gaps"
+    assert {fact["name"]: fact["value"] for fact in prompt_payload["facts"]}[
+        "rejected_skill_counts"
+    ] == {"Kubernetes": 1, "Python": 1}
+    assert "For skill_gaps" in request.messages[0].content
+    assert "technologies and skills that recur in rejected roles" in request.messages[0].content
+    assert "Do not treat skills from interviews or offers as gaps" in request.messages[0].content
 
 
 def test_weekly_actions_generation_rejects_uncited_or_wrong_count_actions(
@@ -400,6 +547,60 @@ def test_insight_generation_service_rejects_invalid_provider_output(
             asyncio.run(service.generate_insight("why_rejected"))
 
 
+@pytest.mark.parametrize(
+    "content",
+    (
+        "Rejected applications repeatedly mention Kubernetes experience.",
+        "Rejected applications repeatedly mention Kubernetes experience. [application:missing]",
+        (
+            "Rejected applications repeatedly mention Kubernetes experience. "
+            f"[{CITATION_ID}] [source-999]"
+        ),
+        (f"Rejected applications repeatedly mention Kubernetes experience. [{CITATION_ID}] [1]"),
+        (
+            "Rejected applications repeatedly mention Kubernetes experience. "
+            f"[{CITATION_ID}] Your salary target is too high."
+        ),
+        (
+            "Your salary target is too high. "
+            f"Rejected applications mention Kubernetes experience [{CITATION_ID}]."
+        ),
+    ),
+)
+def test_insight_generation_service_rejects_ungrounded_provider_output(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        repository = InsightRepository(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content=content,
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="LLM returned ungrounded insight content.",
+        ):
+            asyncio.run(service.generate_insight("why_rejected"))
+
+        cached = repository.get_latest_insight("why_rejected", include_stale=True)
+
+    assert cached is None
+
+
 def migrated_database(tmp_path: Path) -> Path:
     database_path = tmp_path / "jobtracker.sqlite3"
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
@@ -419,6 +620,11 @@ def insight_settings() -> AppSettings:
 def legacy_insight_input_hash(payload: dict[str, object]) -> str:
     payload = dict(payload)
     payload.pop("inputs_hash")
+
+    return sha256_payload(payload)
+
+
+def sha256_payload(payload: object) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 

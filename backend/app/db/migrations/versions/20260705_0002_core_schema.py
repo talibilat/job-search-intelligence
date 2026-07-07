@@ -51,7 +51,14 @@ EVENT_TYPES = (
     "offer",
     "ghost_inferred",
 )
-INSIGHT_TYPES = ("why_rejected", "skill_gaps", "role_fit", "weekly_actions", "story")
+INSIGHT_TYPES = (
+    "why_rejected",
+    "skill_gaps",
+    "strongest_weakest_signals",
+    "role_fit",
+    "weekly_actions",
+    "story",
+)
 
 
 def upgrade() -> None:

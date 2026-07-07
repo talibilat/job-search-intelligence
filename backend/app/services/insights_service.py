@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
-from app.models import InsightInput, InsightInputFact, InsightRecord
+from app.models import InsightInput, InsightInputEvidence, InsightInputFact, InsightRecord
 from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
 from app.providers.llm import (
     LLMFinishReason,
@@ -28,11 +28,14 @@ from app.providers.llm import (
 
 type Clock = Callable[[], datetime]
 
-INSIGHT_GENERATION_PROMPT_VERSION = "v1"
+INSIGHT_GENERATION_PROMPT_VERSION = "v2"
 INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
 INSIGHT_GENERATION_TEMPERATURE = 0.2
 WEEKLY_ACTIONS_VALIDATION_ERROR = "Weekly actions insight must contain exactly three cited actions."
-_CITATION_PATTERN = re.compile(r"\[([^\]]+)\]")
+_CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
+_CITATION_LIKE_TOKEN_PATTERN = re.compile(r"^(?:\d+|[A-Za-z]+-\d+|\S*[:|]\S*)$")
+_SENTENCE_PATTERN = re.compile(r"[^.!?\n]+(?:[.!?]|\n|$)")
+_UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
 
 
 class InsightGenerationResult(BaseModel):
@@ -161,10 +164,13 @@ class InsightInputBuilder:
             event_types=scope.event_types,
             newest_first=scope.newest_first,
         )
+        evidence = (
+            scoped_evidence if scope.include_all_evidence else scoped_evidence[:max_evidence_items]
+        )
         insight_input = InsightInput(
             type=insight_type,
-            facts=self._build_facts(),
-            evidence=scoped_evidence[:max_evidence_items],
+            facts=self._build_facts(insight_type, evidence=evidence),
+            evidence=evidence,
             source_fingerprint=_hash_payload(
                 [item.model_dump(mode="json") for item in scoped_evidence],
             ),
@@ -174,8 +180,13 @@ class InsightInputBuilder:
             update={"inputs_hash": _hash_insight_input(insight_input)},
         )
 
-    def _build_facts(self) -> list[InsightInputFact]:
-        return [
+    def _build_facts(
+        self,
+        insight_type: InsightType,
+        *,
+        evidence: list[InsightInputEvidence],
+    ) -> list[InsightInputFact]:
+        facts = [
             InsightInputFact(
                 name="total_applications",
                 value=self._insight_repository.count_applications(),
@@ -207,6 +218,15 @@ class InsightInputBuilder:
                 source="application_events",
             ),
         ]
+        if insight_type == "skill_gaps":
+            facts.append(
+                InsightInputFact(
+                    name="rejected_skill_counts",
+                    value=self._insight_repository.count_rejected_application_skills(),
+                    source="applications",
+                ),
+            )
+        return facts
 
 
 def _insight_system_prompt(insight_type: InsightType) -> str:
@@ -223,19 +243,39 @@ def _insight_system_prompt(insight_type: InsightType) -> str:
         "If the evidence is insufficient, say what is missing instead of guessing.",
         "Return plain text only. Do not wrap the answer in JSON or Markdown tables.",
     ]
-    if insight_type == "weekly_actions":
-        lines.extend(
-            (
-                "For weekly_actions insights, answer Q-45: What are the 3 concrete "
-                "things I should do next week to improve outcomes?",
-                "Return exactly three numbered actions, one per line, numbered 1. through 3.",
-                "Each action must be concrete, specific to the provided evidence, and "
-                "executable during the next week.",
-                "Each action line must cite at least one provided citation_id in square brackets.",
-                "Do not include an introduction, recap, or extra action beyond the three lines.",
-            ),
-        )
+    type_prompt = _insight_type_prompt(insight_type)
+    if type_prompt:
+        lines.extend(("", type_prompt))
     return "\n".join(lines)
+
+
+def _insight_type_prompt(insight_type: InsightType) -> str:
+    if insight_type == "why_rejected":
+        return (
+            "For Q-40 / why_rejected, answer why rejections happen by identifying "
+            "recurring rejection themes across rejection emails. Group the answer by "
+            "theme, explain why each theme appears, and cite rejection-email evidence "
+            "for every theme. Do not infer causes that are absent from the cited "
+            "rejection evidence."
+        )
+    if insight_type == "skill_gaps":
+        return (
+            "For skill_gaps, answer Q-42: identify technologies and skills that recur "
+            "in rejected roles. Use rejected_skill_counts, rejected application tech_stack "
+            "values, and cited rejection or feedback evidence. Do not treat skills from "
+            "interviews or offers as gaps unless they also appear in rejected-role evidence."
+        )
+    if insight_type == "weekly_actions":
+        return (
+            "For weekly_actions insights, answer Q-45: What are the 3 concrete things I "
+            "should do next week to improve outcomes? Return exactly three numbered "
+            "actions, one per line, numbered 1. through 3. Each action must be concrete, "
+            "specific to the provided evidence, and executable during the next week. "
+            "Each action line must cite at least one provided citation_id in square "
+            "brackets. Do not include an introduction, recap, or extra action beyond "
+            "the three lines."
+        )
+    return ""
 
 
 def _validated_insight_content(
@@ -250,6 +290,7 @@ def _validated_insight_content(
             content,
             {evidence.citation_id for evidence in insight_input.evidence},
         )
+    _validate_grounding_citations(content, insight_input)
     return content
 
 
@@ -277,9 +318,92 @@ def _extract_citation_ids(value: str) -> set[str]:
     citation_ids: set[str] = set()
     for bracket_content in _CITATION_PATTERN.findall(value):
         citation_ids.update(
-            citation_id.strip() for citation_id in bracket_content.split(",") if citation_id.strip()
+            _split_citation_tokens(bracket_content),
         )
     return citation_ids
+
+
+def _validate_grounding_citations(content: str, insight_input: InsightInput) -> None:
+    allowed_citation_ids = {evidence.citation_id for evidence in insight_input.evidence}
+    cited_evidence_ids: set[str] = set()
+    invalid_citation_ids: set[str] = set()
+    valid_citation_spans: list[tuple[int, int]] = []
+
+    for match in _CITATION_PATTERN.finditer(content):
+        for citation_id in _split_citation_tokens(match.group(1)):
+            if not _is_citation_like_token(citation_id, allowed_citation_ids):
+                continue
+            if citation_id in allowed_citation_ids:
+                cited_evidence_ids.add(citation_id)
+                valid_citation_spans.append(match.span())
+            else:
+                invalid_citation_ids.add(citation_id)
+
+    if (
+        not cited_evidence_ids
+        or invalid_citation_ids
+        or _has_ungrounded_claim(content, valid_citation_spans)
+    ):
+        raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
+
+
+def _split_citation_tokens(value: str) -> list[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _is_citation_like_token(value: str, allowed_citation_ids: set[str]) -> bool:
+    return value in allowed_citation_ids or bool(_CITATION_LIKE_TOKEN_PATTERN.fullmatch(value))
+
+
+def _has_ungrounded_claim(content: str, citation_spans: list[tuple[int, int]]) -> bool:
+    pending_claim = False
+    pending_claim_end = 0
+
+    for match in _SENTENCE_PATTERN.finditer(content):
+        sentence_start, sentence_end = match.span()
+        if not _has_claim_text(content, sentence_start, sentence_end, citation_spans):
+            if pending_claim and _has_citation_between(
+                citation_spans,
+                pending_claim_end,
+                sentence_end,
+            ):
+                pending_claim = False
+            continue
+        if pending_claim:
+            return True
+        if _has_citation_between(citation_spans, sentence_start, sentence_end):
+            pending_claim = False
+            continue
+        pending_claim = True
+        pending_claim_end = sentence_end
+
+    return pending_claim
+
+
+def _has_claim_text(
+    content: str,
+    start: int,
+    end: int,
+    citation_spans: list[tuple[int, int]],
+) -> bool:
+    parts: list[str] = []
+    cursor = start
+    for span_start, span_end in citation_spans:
+        if span_end <= start or span_start >= end:
+            continue
+        parts.append(content[cursor : max(cursor, span_start)])
+        cursor = max(cursor, span_end)
+    parts.append(content[cursor:end])
+    claim_text = re.sub(r"^\s*\d+\.\s*", "", "".join(parts))
+    return bool(re.sub(r"[\s.!?]+", "", claim_text))
+
+
+def _has_citation_between(
+    citation_spans: list[tuple[int, int]],
+    start: int,
+    end: int,
+) -> bool:
+    return any(span_start >= start and span_end <= end for span_start, span_end in citation_spans)
 
 
 def _configured_chat_model(settings: AppSettings) -> str:
@@ -317,11 +441,16 @@ class _EvidenceScope:
     application_statuses: tuple[ApplicationStatus, ...] = ()
     event_types: tuple[ApplicationEventType, ...] = ()
     newest_first: bool = False
+    include_all_evidence: bool = False
 
 
 def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
-    if insight_type in {"why_rejected", "skill_gaps"}:
-        return _EvidenceScope(event_types=("rejection", "feedback"))
+    if insight_type == "why_rejected":
+        return _EvidenceScope(event_types=("rejection",))
+    if insight_type == "skill_gaps":
+        return _EvidenceScope(application_statuses=("rejected",))
+    if insight_type == "strongest_weakest_signals":
+        return _EvidenceScope(include_all_evidence=True)
     if insight_type == "role_fit":
         return _EvidenceScope(application_statuses=("interview", "offer", "rejected", "ghosted"))
     if insight_type == "weekly_actions":

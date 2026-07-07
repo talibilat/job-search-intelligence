@@ -17,6 +17,7 @@ from app.models.event import ApplicationEventType
 type InsightType = Literal[
     "why_rejected",
     "skill_gaps",
+    "strongest_weakest_signals",
     "role_fit",
     "weekly_actions",
     "story",
@@ -41,6 +42,7 @@ type InsightInputFactName = Literal[
     "sponsorship_counts",
     "work_mode_counts",
     "event_type_counts",
+    "rejected_skill_counts",
 ]
 type InsightInputFactValue = int | float | str | bool | dict[str, int] | list[str] | None
 

@@ -142,7 +142,7 @@ job-search-intelligence/
   [JT-020 2026-07-05 v2] - **`application_events`** - `id`, `application_id` (FK), nullable `email_id` (FK; null for inferred events such as `ghost_inferred`), `event_type` (`applied | response | assessment | interview_scheduled | feedback | rejection | offer | ghost_inferred`), `event_at`, `extract_note`.
   [JT-107 2026-07-06] - **`application_events`** also stores nullable `extracted_status` using the same status enum as `applications.current_status` so status replay can preserve extraction-provided status on status-neutral event types.
 - **`application_corrections`** - `id`, `application_id` (FK to `applications.id` with cascade delete), `correction_type` (`merge | split | status_edit | event_edit | reset_lock`), valid JSON `before_json`, valid JSON `after_json`, `reason`, `created_at`.
-- **`insights`** - `id`, `type` (`why_rejected | skill_gaps | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
+- **`insights`** - `id`, `type` (`why_rejected | skill_gaps | strongest_weakest_signals | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
   `inputs_hash` is computed from deterministic insight inputs plus `INSIGHT_GENERATION_PROMPT_VERSION`, so prompt-template changes bypass legacy cached rows without a schema change.
 - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, `embedding`.
   [JT-020 2026-07-05 v2] - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, 1536-dimensional `embedding`.
@@ -153,6 +153,7 @@ job-search-intelligence/
 [JT-022 2026-07-05] The chat history schema migration creates `chat_messages`; `role` is constrained to `user | assistant | tool | system`, `citations_json` and `tool_outputs_json` must be valid JSON arrays, and `(conversation_id, created_at)` is indexed for history reads.
 [JT-096 2026-07-05] The classification run accounting migration creates `classification_runs` with lookup indexes on `started_at` and `(provider, model)` so later classifier services can persist per-run token usage and estimated cost through `ClassificationRunRepository`.
 [JT-084 2026-07-05] The filter decision schema migration creates `email_filter_decisions` with constrained strategy and outcome values, `raw_emails` cascade deletion, and lookup indexes for outcome and strategy.
+[JT-192 2026-07-07] The insight type constraint now includes `strongest_weakest_signals` for Q-43 and preserves the shared insight staleness triggers across migration upgrade and downgrade.
 
 ### Aggregation rule (the hard part)
 
@@ -355,7 +356,8 @@ Metrics endpoints + React dashboard (Recharts + small accessible component layer
 **DoD:** every Tier 1–3 question is answered on screen; numbers reconcile with the DB.
 
 **Phase 4 - Insights (cached LLM narrative)** -> Tier 5
-Insights service + page (why-rejected, skill-gaps, role-fit, weekly actions, story); cached with `regenerate`, stale detection, and user-triggered regeneration.
+Insights service + page (why-rejected, skill-gaps, strongest/weakest signals, role-fit, weekly actions, story); cached with prompt-versioned input hashes, `regenerate`, stale detection, and user-triggered regeneration.
+The Q-40 `why_rejected` insight uses rejection-event evidence only and prompts for recurring themes across rejection emails; feedback-specific summaries belong to Q-41.
 `weekly_actions` answers Q-45 as exactly three numbered, cited actions that are executable during the next week, and invalid provider output is rejected before caching.
 **DoD:** insights render and cite the applications/emails they're drawn from.
 
