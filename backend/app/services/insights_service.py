@@ -28,7 +28,7 @@ from app.providers.llm import (
 
 type Clock = Callable[[], datetime]
 
-INSIGHT_GENERATION_PROMPT_VERSION = "v1"
+INSIGHT_GENERATION_PROMPT_VERSION = "v2"
 INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
 INSIGHT_GENERATION_TEMPERATURE = 0.2
 _CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
@@ -240,22 +240,31 @@ def _insight_system_prompt(insight_type: InsightType) -> str:
         "or more source evidence citation_id values.",
         "Use only the provided citation_id values and format citations in square brackets.",
         "If the evidence is insufficient, say what is missing instead of guessing.",
+        "Return plain text only. Do not wrap the answer in JSON or Markdown tables.",
     ]
-    if insight_type == "skill_gaps":
-        lines.extend(
-            (
-                "For skill_gaps, answer Q-42: identify technologies and skills that recur "
-                "in rejected roles.",
-                "Use rejected_skill_counts, rejected application tech_stack values, and "
-                "cited rejection or feedback evidence.",
-                "Do not treat skills from interviews or offers as gaps unless they also "
-                "appear in rejected-role evidence.",
-            ),
+    type_prompt = _insight_type_prompt(insight_type)
+    if type_prompt:
+        lines.extend(("", type_prompt))
+    return "\n".join(lines)
+
+
+def _insight_type_prompt(insight_type: InsightType) -> str:
+    if insight_type == "why_rejected":
+        return (
+            "For Q-40 / why_rejected, answer why rejections happen by identifying "
+            "recurring rejection themes across rejection emails. Group the answer by "
+            "theme, explain why each theme appears, and cite rejection-email evidence "
+            "for every theme. Do not infer causes that are absent from the cited "
+            "rejection evidence."
         )
-    lines.append("Return plain text only. Do not wrap the answer in JSON or Markdown tables.")
-    return "\n".join(
-        lines,
-    )
+    if insight_type == "skill_gaps":
+        return (
+            "For skill_gaps, answer Q-42: identify technologies and skills that recur "
+            "in rejected roles. Use rejected_skill_counts, rejected application tech_stack "
+            "values, and cited rejection or feedback evidence. Do not treat skills from "
+            "interviews or offers as gaps unless they also appear in rejected-role evidence."
+        )
+    return ""
 
 
 def _validated_insight_content(
@@ -369,7 +378,10 @@ def _utcnow() -> datetime:
 
 
 def _hash_insight_input(insight_input: InsightInput) -> str:
-    payload = insight_input.model_dump(mode="json", exclude={"inputs_hash"})
+    payload = {
+        "prompt_version": INSIGHT_GENERATION_PROMPT_VERSION,
+        "input": insight_input.model_dump(mode="json", exclude={"inputs_hash"}),
+    }
     return _hash_payload(payload)
 
 
@@ -388,7 +400,7 @@ class _EvidenceScope:
 
 def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
     if insight_type == "why_rejected":
-        return _EvidenceScope(event_types=("rejection", "feedback"))
+        return _EvidenceScope(event_types=("rejection",))
     if insight_type == "skill_gaps":
         return _EvidenceScope(application_statuses=("rejected",))
     if insight_type == "strongest_weakest_signals":

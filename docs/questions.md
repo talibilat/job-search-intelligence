@@ -73,7 +73,7 @@ Build phase: Diagnostics, Phase 3.5–4.
 
 ## Tier 5 — Narrative "Why"
 
-Capability: LLM synthesis over rejection/feedback text, cached.
+Capability: LLM synthesis over cited rejection emails, recruiter feedback, and related job-search evidence, cached.
 
 Build phase: Insights page, Phase 4.
 
