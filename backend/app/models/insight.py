@@ -34,6 +34,16 @@ class InsightRecord(BaseModel):
     generated_at: datetime
 
 
+class InsightRegenerateRequest(BaseModel):
+    type: InsightType
+    max_evidence_items: int = Field(default=100, ge=1)
+
+
+class InsightRegenerateResponse(BaseModel):
+    insight: InsightRecord
+    cached: bool
+
+
 class InsightRoleOutcomeSummary(BaseModel):
     """Deterministic role-level outcome facts used to ground Q-44 synthesis."""
 

@@ -54,6 +54,32 @@ _INSUFFICIENT_EVIDENCE_TERMS = (
 )
 _UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
 STORY_EVIDENCE_WINDOW_DAYS = 366
+SUPPORTED_INSIGHT_TYPES: tuple[InsightType, ...] = (
+    "why_rejected",
+    "skill_gaps",
+    "strongest_weakest_signals",
+    "role_fit",
+    "weekly_actions",
+    "story",
+)
+
+
+class InsightReadService:
+    """Read cached narrative insights for the API boundary."""
+
+    def __init__(self, insight_repository: InsightRepository) -> None:
+        self._insight_repository = insight_repository
+
+    def list_latest_insights(self) -> list[InsightRecord]:
+        insights: list[InsightRecord] = []
+        for insight_type in SUPPORTED_INSIGHT_TYPES:
+            insight = self._insight_repository.get_latest_insight(
+                insight_type,
+                include_stale=True,
+            )
+            if insight is not None:
+                insights.append(insight)
+        return insights
 
 
 class InsightGenerationResult(BaseModel):
