@@ -20,9 +20,7 @@ def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> N
         total_applications = repository.count_total_applications()
         rates = {
             metric.name: metric
-            for metric in repository.get_rate_metrics(
-                ghost_cutoff_at="2026-07-02T09:00:00+00:00"
-            )
+            for metric in repository.get_rate_metrics(ghost_cutoff_at="2026-07-02T09:00:00+00:00")
         }
         funnel = {stage.stage: stage.count for stage in repository.get_funnel_metrics()}
 
@@ -66,8 +64,7 @@ def test_funnel_metrics_count_offers_only_after_interviews(tmp_path: Path) -> No
         )
 
         funnel = {
-            stage.stage: stage.count
-            for stage in MetricsRepository(connection).get_funnel_metrics()
+            stage.stage: stage.count for stage in MetricsRepository(connection).get_funnel_metrics()
         }
 
     assert funnel["applied"] == 2
