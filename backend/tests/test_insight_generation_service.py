@@ -34,6 +34,9 @@ CITATION_ID = (
 FEEDBACK_CITATION_ID = (
     "application:application-rejected|event:event-rejected-feedback|email:email-feedback"
 )
+WEEKLY_ACTIONS_CITATION_ID = (
+    "application:application-interview|event:event-interview-invite|email:email-interview"
+)
 
 
 def test_insight_generation_service_generates_and_persists_grounded_narrative(
@@ -270,6 +273,98 @@ def test_insight_generation_service_accepts_claims_with_same_sentence_citations(
     assert result.insight.content == content
 
 
+def test_role_fit_generation_request_answers_q44_with_win_pattern_facts(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "Backend Engineer is the clearest fit because it produced an "
+                        f"interview signal. [{CITATION_ID}]"
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        asyncio.run(service.generate_insight("role_fit"))
+
+    request = provider.requests[0]
+    assert "Q-44" in request.messages[0].content
+    assert "interviews and offers as wins" in request.messages[0].content
+    assert "rejected and ghosted outcomes" in request.messages[0].content
+    assert "derived from the cited applications" in request.messages[0].content
+    assert "each role_outcome_summary includes citation_ids" in request.messages[0].content
+
+    prompt_payload = json.loads(request.messages[1].content)
+    role_outcome_fact = next(
+        fact for fact in prompt_payload["facts"] if fact["name"] == "role_outcome_summaries"
+    )
+    assert role_outcome_fact["source"] == "applications"
+    assert role_outcome_fact["value"] == [
+        {
+            "role_title": "Backend Engineer",
+            "application_count": 2,
+            "win_count": 1,
+            "loss_count": 1,
+            "status_counts": {"interview": 1, "rejected": 1},
+            "citation_ids": [
+                "application:application-rejected|event:event-rejected-applied|email:email-applied",
+                "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+                CITATION_ID,
+                "application:application-interview|event:event-interview-invite|email:email-interview",
+            ],
+        },
+    ]
+
+
+def test_insight_generation_service_allows_no_evidence_caveat(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "There is insufficient cited evidence to identify best-fit roles yet. "
+                        "Missing evidence: applications with interview or offer outcomes."
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("role_fit"))
+
+    assert result.cached is False
+    assert result.insight.content == (
+        "There is insufficient cited evidence to identify best-fit roles yet. "
+        "Missing evidence: applications with interview or offer outcomes."
+    )
+
+
 def test_insight_generation_service_uses_fresh_cache_without_calling_provider(
     tmp_path: Path,
 ) -> None:
@@ -342,6 +437,47 @@ def test_insight_generation_service_bypasses_cache_from_previous_prompt_identity
     assert len(provider.requests) == 1
 
 
+def test_insight_generation_service_uses_q46_story_prompt(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "The recent search story shows a backend-focused search with "
+                        f"clear rejection evidence. [{CITATION_ID}]"
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("story"))
+
+    assert result.cached is False
+    assert result.insight.type == "story"
+    assert len(provider.requests) == 1
+
+    request = provider.requests[0]
+    system_prompt = request.messages[0].content
+    assert "Q-46" in system_prompt
+    assert "last 6 to 12 months" in system_prompt
+    assert "chronological" in system_prompt
+    assert "Use only the provided citation_id values" in system_prompt
+
+    prompt_payload = json.loads(request.messages[1].content)
+    assert prompt_payload["type"] == "story"
+
+
 def test_insight_generation_service_force_regenerate_bypasses_cache(
     tmp_path: Path,
 ) -> None:
@@ -378,6 +514,61 @@ def test_insight_generation_service_force_regenerate_bypasses_cache(
     assert result.cached is False
     assert result.insight.content == f"Regenerated rejection theme. [{CITATION_ID}]"
     assert len(provider.requests) == 1
+
+
+def test_weekly_actions_generation_requires_three_cited_next_week_actions(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    content = "\n".join(
+        (
+            "1. Send Beta LLC a concise scheduling follow-up before Friday. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "2. Prepare a focused interview notes page for the Beta LLC backend role. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "3. Apply to three similar backend roles that match the same Python signals. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+        ),
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_current_application_fixture(connection)
+
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=content,
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            ),
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("weekly_actions"))
+
+    assert result.cached is False
+    assert result.insight.type == "weekly_actions"
+    assert result.insight.content == content
+    request = provider.requests[0]
+    assert "For weekly_actions insights, answer Q-45" in request.messages[0].content
+    assert "Return exactly three numbered actions" in request.messages[0].content
+    assert "executable during the next week" in request.messages[0].content
+    assert "Each action line must cite at least one provided citation_id" in (
+        request.messages[0].content
+    )
+
+    prompt_payload = json.loads(request.messages[1].content)
+    assert prompt_payload["type"] == "weekly_actions"
+    assert [evidence["citation_id"] for evidence in prompt_payload["evidence"]] == [
+        WEEKLY_ACTIONS_CITATION_ID,
+        "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+    ]
 
 
 def test_skill_gaps_generation_request_focuses_on_rejected_role_technology_gaps(
@@ -417,6 +608,174 @@ def test_skill_gaps_generation_request_focuses_on_rejected_role_technology_gaps(
     assert "Do not treat skills from interviews or offers as gaps" in request.messages[0].content
 
 
+def test_weekly_actions_generation_rejects_uncited_or_wrong_count_actions(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_current_application_fixture(connection)
+        repository = InsightRepository(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content="Follow up with Beta LLC next week.",
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="Weekly actions insight must contain exactly three cited actions.",
+        ):
+            asyncio.run(service.generate_insight("weekly_actions"))
+
+
+def test_weekly_actions_generation_rejects_citation_only_actions(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    content = "\n".join(
+        (
+            f"1. [{WEEKLY_ACTIONS_CITATION_ID}]",
+            "2. Prepare a focused interview notes page for the Beta LLC backend role. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "3. Apply to three similar backend roles that match the same Python signals. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+        ),
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_current_application_fixture(connection)
+        repository = InsightRepository(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content=content,
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="Weekly actions insight must contain exactly three cited actions.",
+        ):
+            asyncio.run(service.generate_insight("weekly_actions"))
+
+
+def test_weekly_actions_generation_does_not_reuse_legacy_unvalidated_cache(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    content = "\n".join(
+        (
+            "1. Send Beta LLC a concise scheduling follow-up before Friday. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "2. Prepare a focused interview notes page for the Beta LLC backend role. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "3. Apply to three similar backend roles that match the same Python signals. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+        ),
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_current_application_fixture(connection)
+        repository = InsightRepository(connection)
+        insight_input = InsightInputBuilder(repository).build("weekly_actions")
+        repository.save_generated_insight(
+            insight_type="weekly_actions",
+            content="Follow up with Beta LLC next week.",
+            inputs_hash=legacy_insight_input_hash(insight_input.model_dump(mode="json")),
+            model="llama3.1",
+            generated_at=GENERATED_AT,
+        )
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=content,
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            ),
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("weekly_actions"))
+
+    assert result.cached is False
+    assert result.insight.content == content
+    assert len(provider.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "content",
+    (
+        "Rejected applications repeatedly mention Kubernetes experience.",
+        "Rejected applications repeatedly mention Kubernetes experience. [application:unknown]",
+        (
+            f"Backend Engineer produced an interview signal. [{CITATION_ID}] "
+            "Product Manager is also a strong fit."
+        ),
+        (
+            "Rejected applications repeatedly mention Kubernetes experience. "
+            f"[{CITATION_ID}] [source-999]"
+        ),
+        (f"Rejected applications repeatedly mention Kubernetes experience. [{CITATION_ID}] [1]"),
+        (
+            "Rejected applications repeatedly mention Kubernetes experience. "
+            f"[{CITATION_ID}] Your salary target is too high."
+        ),
+        (
+            "Your salary target is too high. "
+            f"Rejected applications mention Kubernetes experience [{CITATION_ID}]."
+        ),
+    ),
+)
+def test_insight_generation_service_rejects_ungrounded_provider_output(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=InsightRepository(connection),
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content=content,
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="LLM returned ungrounded insight content.",
+        ):
+            asyncio.run(service.generate_insight("why_rejected"))
+
+
 @pytest.mark.parametrize(
     "response",
     (
@@ -453,60 +812,6 @@ def test_insight_generation_service_rejects_invalid_provider_output(
             asyncio.run(service.generate_insight("why_rejected"))
 
 
-@pytest.mark.parametrize(
-    "content",
-    (
-        "Rejected applications repeatedly mention Kubernetes experience.",
-        "Rejected applications repeatedly mention Kubernetes experience. [application:missing]",
-        (
-            "Rejected applications repeatedly mention Kubernetes experience. "
-            f"[{CITATION_ID}] [source-999]"
-        ),
-        (f"Rejected applications repeatedly mention Kubernetes experience. [{CITATION_ID}] [1]"),
-        (
-            "Rejected applications repeatedly mention Kubernetes experience. "
-            f"[{CITATION_ID}] Your salary target is too high."
-        ),
-        (
-            "Your salary target is too high. "
-            f"Rejected applications mention Kubernetes experience [{CITATION_ID}]."
-        ),
-    ),
-)
-def test_insight_generation_service_rejects_ungrounded_provider_output(
-    tmp_path: Path,
-    content: str,
-) -> None:
-    database_path = migrated_database(tmp_path)
-    with sqlite3.connect(database_path) as connection:
-        insert_rejected_application_fixture(connection)
-        repository = InsightRepository(connection)
-        service = InsightGenerationService(
-            settings=insight_settings(),
-            insight_repository=repository,
-            llm_provider=FakeLLMProvider(
-                (
-                    LLMGenerationResponse(
-                        content=content,
-                        model="llama3.1",
-                        finish_reason=LLMFinishReason.STOP,
-                    ),
-                ),
-            ),
-            clock=lambda: GENERATED_AT,
-        )
-
-        with pytest.raises(
-            LLMProviderResponseError,
-            match="LLM returned ungrounded insight content.",
-        ):
-            asyncio.run(service.generate_insight("why_rejected"))
-
-        cached = repository.get_latest_insight("why_rejected", include_stale=True)
-
-    assert cached is None
-
-
 def migrated_database(tmp_path: Path) -> Path:
     database_path = tmp_path / "jobtracker.sqlite3"
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
@@ -521,6 +826,13 @@ def insight_settings() -> AppSettings:
         llm_provider=LLMProviderName.OLLAMA,
         ollama_chat_model="llama3.1",
     )
+
+
+def legacy_insight_input_hash(payload: dict[str, object]) -> str:
+    payload = dict(payload)
+    payload.pop("inputs_hash")
+
+    return sha256_payload(payload)
 
 
 def sha256_payload(payload: object) -> str:
@@ -603,6 +915,60 @@ def insert_feedback_event_fixture(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
+def insert_interview_application_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-interview-applied",
+        subject="Thanks for applying",
+        body_text="Thanks for applying to Beta LLC.",
+        sent_at="2026-07-02T09:00:00+00:00",
+    )
+    insert_raw_email(
+        connection,
+        email_id="email-interview",
+        subject="Interview invitation",
+        body_text="We would like to invite you to interview with Beta LLC.",
+        sent_at="2026-07-05T10:00:00+00:00",
+    )
+    ApplicationRepository(connection).upsert_application(
+        id="application-interview",
+        company="Beta LLC",
+        role_title="Backend Engineer",
+        source="linkedin",
+        first_seen_at="2026-07-02T09:00:00+00:00",
+        current_status="interview",
+        last_activity_at="2026-07-05T10:00:00+00:00",
+        created_at="2026-07-02T09:00:00+00:00",
+        updated_at="2026-07-05T10:00:00+00:00",
+        salary_min=None,
+        salary_max=None,
+        currency=None,
+        location="Remote",
+        work_mode="remote",
+        seniority="senior",
+        sponsorship="unknown",
+        tech_stack=["Python", "Kubernetes"],
+    )
+    event_repository = EventRepository(connection)
+    event_repository.upsert_event(
+        id="event-interview-applied",
+        application_id="application-interview",
+        email_id="email-interview-applied",
+        event_type="applied",
+        event_at="2026-07-02T09:00:00+00:00",
+        extract_note="Application confirmation received.",
+    )
+    event_repository.upsert_event(
+        id="event-interview-invite",
+        application_id="application-interview",
+        email_id="email-interview",
+        event_type="interview_scheduled",
+        event_at="2026-07-05T10:00:00+00:00",
+        extract_note="Interview invite received.",
+    )
+    connection.commit()
+
+
 def insert_second_feedback_event_fixture(connection: sqlite3.Connection) -> None:
     insert_raw_email(
         connection,
@@ -620,6 +986,10 @@ def insert_second_feedback_event_fixture(connection: sqlite3.Connection) -> None
         extract_note="Recruiter again recommended clearer system design examples.",
     )
     connection.commit()
+
+
+def insert_current_application_fixture(connection: sqlite3.Connection) -> None:
+    insert_interview_application_fixture(connection)
 
 
 def insert_raw_email(

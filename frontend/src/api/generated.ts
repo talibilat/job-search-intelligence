@@ -1926,7 +1926,7 @@ export const getListInsightsInsightsGetUrl = () => {
 };
 
 /**
- * Returns fresh cached narrative insights from local SQLite without calling an LLM.
+ * Returns the latest cached narrative insights from local SQLite, including stale records so clients can show when user-triggered regeneration is needed.
  * @summary List Cached Insights
  */
 export const listInsightsInsightsGet = async (
@@ -1955,18 +1955,31 @@ export type regenerateInsightInsightsRegeneratePostResponse200 = {
 };
 
 export type regenerateInsightInsightsRegeneratePostResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
+};
+
+export type regenerateInsightInsightsRegeneratePostResponse502 = {
+  data: ApiErrorResponse;
+  status: 502;
+};
+
+export type regenerateInsightInsightsRegeneratePostResponse503 = {
+  data: ApiErrorResponse;
+  status: 503;
 };
 
 export type regenerateInsightInsightsRegeneratePostResponseSuccess =
   regenerateInsightInsightsRegeneratePostResponse200 & {
     headers: Headers;
   };
-export type regenerateInsightInsightsRegeneratePostResponseError =
-  regenerateInsightInsightsRegeneratePostResponse422 & {
-    headers: Headers;
-  };
+export type regenerateInsightInsightsRegeneratePostResponseError = (
+  | regenerateInsightInsightsRegeneratePostResponse422
+  | regenerateInsightInsightsRegeneratePostResponse502
+  | regenerateInsightInsightsRegeneratePostResponse503
+) & {
+  headers: Headers;
+};
 
 export type regenerateInsightInsightsRegeneratePostResponse =
   | regenerateInsightInsightsRegeneratePostResponseSuccess
@@ -1977,7 +1990,7 @@ export const getRegenerateInsightInsightsRegeneratePostUrl = () => {
 };
 
 /**
- * Regenerates one cached narrative insight through the configured LLM provider using deterministic facts and cited source evidence.
+ * Forces one cached narrative insight to be regenerated through the configured LLM provider using deterministic facts and cited evidence from local SQLite.
  * @summary Regenerate Insight
  */
 export const regenerateInsightInsightsRegeneratePost = async (

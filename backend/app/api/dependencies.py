@@ -27,7 +27,7 @@ from app.services.applications import (
     ApplicationEventsService,
 )
 from app.services.ghost_inference import GhostInferenceService
-from app.services.insights_service import InsightGenerationService
+from app.services.insights_service import InsightGenerationService, InsightReadService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.structured_extraction import StructuredExtractionService
@@ -268,5 +268,17 @@ def get_application_correction_service(
             event_repository=EventRepository(connection),
             correction_repository=CorrectionRepository(connection),
         )
+    finally:
+        connection.close()
+
+
+def get_insight_read_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[InsightReadService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield InsightReadService(InsightRepository(connection))
     finally:
         connection.close()

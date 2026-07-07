@@ -174,7 +174,7 @@ Gmail ingestion · classification + extraction + aggregation · deterministic da
 - **FR-4.1 Narrative insights** *(P0)* - Generate: why rejections happen (themes), recurring feedback, real skill gaps, strongest/weakest signals, best-fit roles, next-week actions, the search "story".
   *Accept:* Questions 40–46 answered; each insight cites the applications/emails it's drawn from.
 - **FR-4.2 Caching + regenerate** *(P0)* - Insights are cached with an inputs hash that includes the insight prompt identity; `POST /insights/regenerate` recomputes on demand.
-  *Accept:* insights load instantly from cache; source changes mark insights stale; regeneration remains user-triggered for cost control.
+  *Accept:* insights load instantly from cache; source changes mark insights stale; prompt-version changes do not reuse legacy cached content; regeneration remains user-triggered for cost control.
 - **FR-4.3 Grounding** *(P0)* - No free-floating claims; insights are traceable to source data.
   *Accept:* every insight links back to evidence.
 

@@ -3559,7 +3559,7 @@
     },
     "/insights": {
       "get": {
-        "description": "Returns fresh cached narrative insights from local SQLite without calling an LLM.",
+        "description": "Returns the latest cached narrative insights from local SQLite, including stale records so clients can show when user-triggered regeneration is needed.",
         "operationId": "list_insights_insights_get",
         "responses": {
           "200": {
@@ -3581,7 +3581,7 @@
     },
     "/insights/regenerate": {
       "post": {
-        "description": "Regenerates one cached narrative insight through the configured LLM provider using deterministic facts and cited source evidence.",
+        "description": "Forces one cached narrative insight to be regenerated through the configured LLM provider using deterministic facts and cited evidence from local SQLite.",
         "operationId": "regenerate_insight_insights_regenerate_post",
         "requestBody": {
           "content": {
@@ -3608,11 +3608,31 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Regenerate Insight",

@@ -25,7 +25,7 @@ from .correction import (
 )
 from .ghost_inference import GhostInferenceRunResponse
 from .health import HealthResponse
-from .insights import (
+from .insight import (
     InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,
@@ -64,6 +64,7 @@ from .records import (
     InsightInputEvidence,
     InsightInputFact,
     InsightRecord,
+    InsightRoleOutcomeSummary,
     JobEmailCategory,
     RawEmailBodyRetentionState,
     RawEmailRecord,
@@ -142,6 +143,7 @@ __all__ = [
     "InsightRecord",
     "InsightRegenerateRequest",
     "InsightRegenerateResponse",
+    "InsightRoleOutcomeSummary",
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",

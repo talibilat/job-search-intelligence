@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import cast
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from app.db.repositories import ApplicationRepository, EventRepository, InsightRepository
+from app.models.records import InsightRoleOutcomeSummary
+from app.services import insights_service
 from app.services.insights_service import InsightInputBuilder
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -164,6 +167,23 @@ def test_why_rejected_input_uses_only_rejection_email_evidence(tmp_path: Path) -
     assert {evidence.event_type for evidence in insight_input.evidence} == {"rejection"}
 
 
+def test_insight_input_builder_hash_changes_when_prompt_version_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        builder = InsightInputBuilder(InsightRepository(connection))
+
+        original_hash = builder.build("story").inputs_hash
+        monkeypatch.setattr(insights_service, "INSIGHT_GENERATION_PROMPT_VERSION", "v-next")
+
+        updated_hash = builder.build("story").inputs_hash
+
+    assert updated_hash != original_hash
+
+
 def test_insight_input_builder_keeps_debugging_bodies_out_of_evidence(
     tmp_path: Path,
 ) -> None:
@@ -280,6 +300,112 @@ def test_weekly_actions_input_prefers_open_current_evidence(tmp_path: Path) -> N
     ]
 
 
+def test_role_fit_input_includes_role_outcome_summaries(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+        insert_application(
+            connection,
+            application_id="application-frontend-rejected",
+            company="Gamma Inc",
+            role_title="Frontend Engineer",
+            current_status="rejected",
+            first_seen_at="2026-07-03T09:00:00+00:00",
+            last_activity_at="2026-07-06T10:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="application-backend-applied",
+            company="Omega Inc",
+            current_status="applied",
+            first_seen_at="2026-07-03T08:00:00+00:00",
+            last_activity_at="2026-07-03T08:00:00+00:00",
+        )
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build("role_fit")
+
+    fact_values = {fact.name: fact.value for fact in insight_input.facts}
+    role_outcomes = cast(
+        list[InsightRoleOutcomeSummary],
+        fact_values["role_outcome_summaries"],
+    )
+
+    assert insight_input.type == "role_fit"
+    assert [outcome.model_dump() for outcome in role_outcomes] == [
+        {
+            "role_title": "Backend Engineer",
+            "application_count": 3,
+            "win_count": 1,
+            "loss_count": 1,
+            "status_counts": {"applied": 1, "interview": 1, "rejected": 1},
+            "citation_ids": [
+                "application:application-rejected|event:event-rejected-applied|email:email-applied",
+                "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+                "application:application-backend-applied",
+                "application:application-rejected|event:event-rejected-rejection|email:email-rejection",
+                "application:application-interview|event:event-interview-invite|email:email-interview",
+            ],
+        },
+        {
+            "role_title": "Frontend Engineer",
+            "application_count": 1,
+            "win_count": 0,
+            "loss_count": 1,
+            "status_counts": {"rejected": 1},
+            "citation_ids": ["application:application-frontend-rejected"],
+        },
+    ]
+    evidence_sources = [
+        (evidence.application_id, evidence.event_id) for evidence in insight_input.evidence
+    ]
+    assert evidence_sources == [
+        ("application-rejected", "event-rejected-applied"),
+        ("application-interview", "event-interview-applied"),
+        ("application-backend-applied", None),
+        ("application-frontend-rejected", None),
+        ("application-rejected", "event-rejected-rejection"),
+        ("application-interview", "event-interview-invite"),
+    ]
+
+
+def test_role_fit_outcome_summaries_include_limited_out_applications(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "role_fit",
+            max_evidence_items=1,
+        )
+
+    fact_values = {fact.name: fact.value for fact in insight_input.facts}
+    role_outcomes = cast(
+        list[InsightRoleOutcomeSummary],
+        fact_values["role_outcome_summaries"],
+    )
+
+    assert len(insight_input.evidence) == 1
+    assert [outcome.model_dump() for outcome in role_outcomes] == [
+        {
+            "role_title": "Backend Engineer",
+            "application_count": 2,
+            "win_count": 1,
+            "loss_count": 1,
+            "status_counts": {"interview": 1, "rejected": 1},
+            "citation_ids": [
+                "application:application-rejected|event:event-rejected-applied|email:email-applied",
+                "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+                "application:application-rejected|event:event-rejected-rejection|email:email-rejection",
+                "application:application-interview|event:event-interview-invite|email:email-interview",
+            ],
+        },
+    ]
+
+
 def test_strongest_weakest_signals_input_uses_whole_history_evidence(
     tmp_path: Path,
 ) -> None:
@@ -300,6 +426,87 @@ def test_strongest_weakest_signals_input_uses_whole_history_evidence(
         "event-rejected-rejection",
         "event-interview-invite",
     ]
+
+
+def test_story_input_uses_recent_chronological_search_window(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_old_application_fixture(connection)
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build("story")
+
+    assert insight_input.type == "story"
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-rejected-applied",
+        "event-interview-applied",
+        "event-rejected-rejection",
+        "event-interview-invite",
+    ]
+    assert "event-old-application" not in {evidence.event_id for evidence in insight_input.evidence}
+
+
+def test_story_input_limit_keeps_newest_recent_evidence_in_chronological_order(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_story_application_event(
+            connection,
+            suffix="first",
+            happened_at="2026-01-01T09:00:00+00:00",
+        )
+        insert_story_application_event(
+            connection,
+            suffix="second",
+            happened_at="2026-01-02T09:00:00+00:00",
+        )
+        insert_story_application_event(
+            connection,
+            suffix="third",
+            happened_at="2026-01-03T09:00:00+00:00",
+        )
+        insert_story_application_event(
+            connection,
+            suffix="fourth",
+            happened_at="2026-01-04T09:00:00+00:00",
+        )
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "story",
+            max_evidence_items=2,
+        )
+
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-third",
+        "event-fourth",
+    ]
+
+
+def test_story_input_excludes_application_rows_without_recent_event_or_email_timestamp(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="application-without-events",
+            company="No Events Inc",
+            first_seen_at="2024-01-01T09:00:00+00:00",
+            last_activity_at="2024-01-01T09:00:00+00:00",
+        )
+        insert_story_application_event(
+            connection,
+            suffix="recent",
+            happened_at="2026-01-04T09:00:00+00:00",
+        )
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build("story")
+
+    assert "application-without-events" not in {
+        evidence.application_id for evidence in insight_input.evidence
+    }
 
 
 def test_insight_input_builder_rejects_empty_evidence_limit(tmp_path: Path) -> None:
@@ -447,6 +654,65 @@ def insert_feedback_event_fixture(connection: sqlite3.Connection) -> None:
         event_type="feedback",
         event_at="2026-07-05T10:00:00+00:00",
         extract_note="Recruiter feedback recommended improving system design examples.",
+    )
+    connection.commit()
+
+
+def insert_old_application_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-old-application",
+        subject="Application received last year",
+        body_text="Thanks for applying to OldCo.",
+        sent_at="2025-05-01T09:00:00+00:00",
+    )
+    insert_application(
+        connection,
+        application_id="application-old",
+        company="OldCo",
+        first_seen_at="2025-05-01T09:00:00+00:00",
+        last_activity_at="2025-05-01T09:00:00+00:00",
+    )
+    EventRepository(connection).upsert_event(
+        id="event-old-application",
+        application_id="application-old",
+        email_id="email-old-application",
+        event_type="applied",
+        event_at="2025-05-01T09:00:00+00:00",
+        extract_note="Old application outside the recent story window.",
+    )
+    connection.commit()
+
+
+def insert_story_application_event(
+    connection: sqlite3.Connection,
+    *,
+    suffix: str,
+    happened_at: str,
+) -> None:
+    application_id = f"application-{suffix}"
+    email_id = f"email-{suffix}"
+    insert_raw_email(
+        connection,
+        email_id=email_id,
+        subject=f"Application update {suffix}",
+        body_text=f"Search event {suffix}.",
+        sent_at=happened_at,
+    )
+    insert_application(
+        connection,
+        application_id=application_id,
+        company=f"Company {suffix}",
+        first_seen_at=happened_at,
+        last_activity_at=happened_at,
+    )
+    EventRepository(connection).upsert_event(
+        id=f"event-{suffix}",
+        application_id=application_id,
+        email_id=email_id,
+        event_type="applied",
+        event_at=happened_at,
+        extract_note=f"Story evidence {suffix}.",
     )
     connection.commit()
 

@@ -4,14 +4,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_insight_generation_service, get_insight_repository
-from app.db.repositories import InsightRepository
+from app.api.dependencies import get_insight_generation_service, get_insight_read_service
+from app.api.errors import ApiErrorResponse
 from app.models import (
     InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,
 )
-from app.services.insights_service import InsightGenerationService
+from app.services.insights_service import InsightGenerationService, InsightReadService
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
@@ -20,15 +20,15 @@ router = APIRouter(prefix="/insights", tags=["insights"])
     "",
     response_model=InsightListResponse,
     summary="List Cached Insights",
-    description="Returns fresh cached narrative insights from local SQLite without calling an LLM.",
+    description=(
+        "Returns the latest cached narrative insights from local SQLite, including "
+        "stale records so clients can show when user-triggered regeneration is needed."
+    ),
 )
-def list_insights(
-    insight_repository: Annotated[
-        InsightRepository,
-        Depends(get_insight_repository),
-    ],
+async def list_insights(
+    service: Annotated[InsightReadService, Depends(get_insight_read_service)],
 ) -> InsightListResponse:
-    return InsightListResponse(insights=insight_repository.list_latest_insights())
+    return InsightListResponse(insights=service.list_latest_insights())
 
 
 @router.post(
@@ -36,18 +36,23 @@ def list_insights(
     response_model=InsightRegenerateResponse,
     summary="Regenerate Insight",
     description=(
-        "Regenerates one cached narrative insight through the configured LLM provider "
-        "using deterministic facts and cited source evidence."
+        "Forces one cached narrative insight to be regenerated through the configured "
+        "LLM provider using deterministic facts and cited evidence from local SQLite."
     ),
+    responses={
+        422: {"model": ApiErrorResponse},
+        502: {"model": ApiErrorResponse},
+        503: {"model": ApiErrorResponse},
+    },
 )
 async def regenerate_insight(
     request: InsightRegenerateRequest,
-    insight_service: Annotated[
+    service: Annotated[
         InsightGenerationService,
         Depends(get_insight_generation_service),
     ],
 ) -> InsightRegenerateResponse:
-    result = await insight_service.generate_insight(
+    result = await service.generate_insight(
         request.type,
         max_evidence_items=request.max_evidence_items,
         force=True,

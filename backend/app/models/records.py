@@ -36,6 +36,7 @@ from app.models.insight import (
     InsightInputEvidence,
     InsightInputFact,
     InsightRecord,
+    InsightRoleOutcomeSummary,
     InsightType,
 )
 from app.models.raw_email import RawEmailBodyRetentionState, RawEmailRecord
@@ -74,6 +75,7 @@ __all__ = [
     "InsightInputEvidence",
     "InsightInputFact",
     "InsightType",
+    "InsightRoleOutcomeSummary",
     "JobEmailCategory",
     "JsonObject",
     "JsonObjectList",
