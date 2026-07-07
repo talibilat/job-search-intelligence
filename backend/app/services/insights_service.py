@@ -452,9 +452,7 @@ def _build_role_outcome_summaries(
             role_title=role_title,
             application_count=sum(status_counts.values()),
             win_count=sum(
-                count
-                for status, count in status_counts.items()
-                if status in _ROLE_FIT_WIN_STATUSES
+                count for status, count in status_counts.items() if status in _ROLE_FIT_WIN_STATUSES
             ),
             loss_count=sum(
                 count
