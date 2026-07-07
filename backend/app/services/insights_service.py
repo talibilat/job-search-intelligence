@@ -5,7 +5,7 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict
 
@@ -53,9 +53,11 @@ _INSUFFICIENT_EVIDENCE_TERMS = (
     "unable to determine",
 )
 _UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
+STORY_EVIDENCE_WINDOW_DAYS = 366
 SUPPORTED_INSIGHT_TYPES: tuple[InsightType, ...] = (
     "why_rejected",
     "skill_gaps",
+    "strongest_weakest_signals",
     "role_fit",
     "weekly_actions",
     "story",
@@ -206,9 +208,15 @@ class InsightInputBuilder:
             event_types=scope.event_types,
             newest_first=scope.newest_first,
         )
-        evidence = (
-            scoped_evidence if scope.include_all_evidence else scoped_evidence[:max_evidence_items]
-        )
+        if insight_type == "story":
+            scoped_evidence = _recent_story_evidence(scoped_evidence)
+            evidence = scoped_evidence[-max_evidence_items:]
+        else:
+            evidence = (
+                scoped_evidence
+                if scope.include_all_evidence
+                else scoped_evidence[:max_evidence_items]
+            )
         insight_input = InsightInput(
             type=insight_type,
             facts=self._build_facts(insight_type, scoped_evidence),
@@ -334,7 +342,41 @@ def _insight_type_prompt(insight_type: InsightType) -> str:
             "brackets. Do not include an introduction, recap, or extra action beyond "
             "the three lines."
         )
+    if insight_type == "story":
+        return "\n".join(
+            (
+                "Answer Q-46: What's the story my last 6 to 12 months of job searching tells?",
+                "Write a chronological narrative of the recent search arc, including phases, "
+                "turning points, repeated patterns, and what changed over time.",
+                "Ground the story in the provided recent evidence window and cite each narrative "
+                "beat with one or more citation_id values.",
+            ),
+        )
     return ""
+
+
+def _recent_story_evidence(
+    evidence: list[InsightInputEvidence],
+) -> list[InsightInputEvidence]:
+    timestamps = [_as_utc(timestamp) for item in evidence if (timestamp := _story_timestamp(item))]
+    if not timestamps:
+        return []
+    cutoff = max(timestamps) - timedelta(days=STORY_EVIDENCE_WINDOW_DAYS)
+    return [
+        item
+        for item in evidence
+        if (timestamp := _story_timestamp(item)) is not None and _as_utc(timestamp) >= cutoff
+    ]
+
+
+def _story_timestamp(evidence: InsightInputEvidence) -> datetime | None:
+    return evidence.event_at or evidence.email_sent_at
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _validated_insight_content(

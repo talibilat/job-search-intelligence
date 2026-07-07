@@ -9,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 from app.db.repositories import ApplicationRepository, EventRepository, InsightRepository
 from app.models.records import InsightRoleOutcomeSummary
+from app.services import insights_service
 from app.services.insights_service import InsightInputBuilder
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -135,6 +136,23 @@ def test_why_rejected_input_uses_only_rejection_email_evidence(tmp_path: Path) -
         "event-rejected-rejection",
     ]
     assert {evidence.event_type for evidence in insight_input.evidence} == {"rejection"}
+
+
+def test_insight_input_builder_hash_changes_when_prompt_version_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        builder = InsightInputBuilder(InsightRepository(connection))
+
+        original_hash = builder.build("story").inputs_hash
+        monkeypatch.setattr(insights_service, "INSIGHT_GENERATION_PROMPT_VERSION", "v-next")
+
+        updated_hash = builder.build("story").inputs_hash
+
+    assert updated_hash != original_hash
 
 
 def test_insight_input_builder_keeps_debugging_bodies_out_of_evidence(
@@ -381,6 +399,87 @@ def test_strongest_weakest_signals_input_uses_whole_history_evidence(
     ]
 
 
+def test_story_input_uses_recent_chronological_search_window(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_old_application_fixture(connection)
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build("story")
+
+    assert insight_input.type == "story"
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-rejected-applied",
+        "event-interview-applied",
+        "event-rejected-rejection",
+        "event-interview-invite",
+    ]
+    assert "event-old-application" not in {evidence.event_id for evidence in insight_input.evidence}
+
+
+def test_story_input_limit_keeps_newest_recent_evidence_in_chronological_order(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_story_application_event(
+            connection,
+            suffix="first",
+            happened_at="2026-01-01T09:00:00+00:00",
+        )
+        insert_story_application_event(
+            connection,
+            suffix="second",
+            happened_at="2026-01-02T09:00:00+00:00",
+        )
+        insert_story_application_event(
+            connection,
+            suffix="third",
+            happened_at="2026-01-03T09:00:00+00:00",
+        )
+        insert_story_application_event(
+            connection,
+            suffix="fourth",
+            happened_at="2026-01-04T09:00:00+00:00",
+        )
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "story",
+            max_evidence_items=2,
+        )
+
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-third",
+        "event-fourth",
+    ]
+
+
+def test_story_input_excludes_application_rows_without_recent_event_or_email_timestamp(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="application-without-events",
+            company="No Events Inc",
+            first_seen_at="2024-01-01T09:00:00+00:00",
+            last_activity_at="2024-01-01T09:00:00+00:00",
+        )
+        insert_story_application_event(
+            connection,
+            suffix="recent",
+            happened_at="2026-01-04T09:00:00+00:00",
+        )
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build("story")
+
+    assert "application-without-events" not in {
+        evidence.application_id for evidence in insight_input.evidence
+    }
+
+
 def test_insight_input_builder_rejects_empty_evidence_limit(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -507,6 +606,65 @@ def insert_second_rejected_application_fixture(connection: sqlite3.Connection) -
         event_type="rejection",
         event_at="2026-07-06T10:00:00+00:00",
         extract_note="Second rejection mentioned platform engineering experience.",
+    )
+    connection.commit()
+
+
+def insert_old_application_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-old-application",
+        subject="Application received last year",
+        body_text="Thanks for applying to OldCo.",
+        sent_at="2025-05-01T09:00:00+00:00",
+    )
+    insert_application(
+        connection,
+        application_id="application-old",
+        company="OldCo",
+        first_seen_at="2025-05-01T09:00:00+00:00",
+        last_activity_at="2025-05-01T09:00:00+00:00",
+    )
+    EventRepository(connection).upsert_event(
+        id="event-old-application",
+        application_id="application-old",
+        email_id="email-old-application",
+        event_type="applied",
+        event_at="2025-05-01T09:00:00+00:00",
+        extract_note="Old application outside the recent story window.",
+    )
+    connection.commit()
+
+
+def insert_story_application_event(
+    connection: sqlite3.Connection,
+    *,
+    suffix: str,
+    happened_at: str,
+) -> None:
+    application_id = f"application-{suffix}"
+    email_id = f"email-{suffix}"
+    insert_raw_email(
+        connection,
+        email_id=email_id,
+        subject=f"Application update {suffix}",
+        body_text=f"Search event {suffix}.",
+        sent_at=happened_at,
+    )
+    insert_application(
+        connection,
+        application_id=application_id,
+        company=f"Company {suffix}",
+        first_seen_at=happened_at,
+        last_activity_at=happened_at,
+    )
+    EventRepository(connection).upsert_event(
+        id=f"event-{suffix}",
+        application_id=application_id,
+        email_id=email_id,
+        event_type="applied",
+        event_at=happened_at,
+        extract_note=f"Story evidence {suffix}.",
     )
     connection.commit()
 
