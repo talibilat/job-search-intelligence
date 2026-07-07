@@ -929,6 +929,114 @@ def test_application_events_require_email_for_evidence_backed_events(
             )
 
 
+def test_application_source_changes_mark_cached_insights_stale(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        insert_cached_insight(connection)
+
+        insert_application(connection)
+
+        assert cached_insight_is_stale(connection)
+
+        set_cached_insight_stale(connection, False)
+        connection.execute(
+            "UPDATE applications SET current_status = ? WHERE id = ?",
+            ("rejected", "app_1"),
+        )
+
+        assert cached_insight_is_stale(connection)
+
+        set_cached_insight_stale(connection, False)
+        connection.execute("DELETE FROM applications WHERE id = ?", ("app_1",))
+
+        assert cached_insight_is_stale(connection)
+
+
+def test_application_event_source_changes_mark_cached_insights_stale(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection)
+        insert_cached_insight(connection)
+
+        insert_application_event(connection)
+
+        assert cached_insight_is_stale(connection)
+
+        set_cached_insight_stale(connection, False)
+        connection.execute(
+            "UPDATE application_events SET extract_note = ? WHERE id = ?",
+            ("Ghosted after thirty days of silence.", "event_1"),
+        )
+
+        assert cached_insight_is_stale(connection)
+
+        set_cached_insight_stale(connection, False)
+        connection.execute("DELETE FROM application_events WHERE id = ?", ("event_1",))
+
+        assert cached_insight_is_stale(connection)
+
+
+def test_cited_raw_email_source_changes_mark_cached_insights_stale(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        insert_application(connection)
+        insert_raw_email(connection)
+        insert_evidence_backed_application_event(connection)
+        insert_cached_insight(connection)
+
+        connection.execute(
+            "UPDATE raw_emails SET body_text = ? WHERE id = ?",
+            ("Updated retained feedback.", "email_1"),
+        )
+
+        assert cached_insight_is_stale(connection)
+
+        set_cached_insight_stale(connection, False)
+        connection.execute(
+            "UPDATE raw_emails SET labels = ? WHERE id = ?",
+            ('["INBOX", "STARRED"]', "email_1"),
+        )
+
+        assert not cached_insight_is_stale(connection)
+
+
+def test_application_timestamp_only_update_keeps_cached_insights_fresh(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection)
+        insert_cached_insight(connection)
+
+        connection.execute(
+            "UPDATE applications SET updated_at = ? WHERE id = ?",
+            ("2026-07-02T00:00:00Z", "app_1"),
+        )
+
+        assert not cached_insight_is_stale(connection)
+
+
 def test_alembic_downgrade_removes_jt020_core_schema(tmp_path: Path) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
     config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
@@ -1027,7 +1135,11 @@ def insert_application(connection: sqlite3.Connection) -> None:
     )
 
 
-def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
+def insert_raw_email(
+    connection: sqlite3.Connection,
+    *,
+    email_id: str = "email_1",
+) -> None:
     connection.execute(
         """
         INSERT INTO raw_emails (
@@ -1057,6 +1169,91 @@ def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
             "gmail",
             "2026-07-31T00:00:00Z",
         ),
+    )
+
+
+def insert_application_event(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        INSERT INTO application_events (
+            id,
+            application_id,
+            email_id,
+            event_type,
+            event_at,
+            extract_note
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "event_1",
+            "app_1",
+            None,
+            "ghost_inferred",
+            "2026-08-01T00:00:00Z",
+            "Ghosted after thirty days.",
+        ),
+    )
+
+
+def insert_evidence_backed_application_event(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        INSERT INTO application_events (
+            id,
+            application_id,
+            email_id,
+            event_type,
+            event_at,
+            extract_note
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "event_1",
+            "app_1",
+            "email_1",
+            "feedback",
+            "2026-07-05T00:00:00Z",
+            "Feedback mentioned platform depth.",
+        ),
+    )
+
+
+def insert_cached_insight(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        INSERT INTO insights (
+            type,
+            content,
+            inputs_hash,
+            is_stale,
+            model,
+            generated_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "story",
+            "Your recent search is weighted toward platform roles.",
+            "inputs-hash-v1",
+            0,
+            "gpt-4.1-mini",
+            "2026-07-01T12:00:00+00:00",
+        ),
+    )
+
+
+def cached_insight_is_stale(connection: sqlite3.Connection) -> bool:
+    row = connection.execute(
+        "SELECT is_stale FROM insights WHERE type = ?",
+        ("story",),
+    ).fetchone()
+    assert row is not None
+    return bool(row[0])
+
+
+def set_cached_insight_stale(connection: sqlite3.Connection, is_stale: bool) -> None:
+    connection.execute(
+        "UPDATE insights SET is_stale = ? WHERE type = ?",
+        (int(is_stale), "story"),
     )
 
 
