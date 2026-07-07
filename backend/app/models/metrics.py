@@ -136,6 +136,10 @@ class MetricTimeseriesPoint(BaseModel):
     application_count: int = Field(ge=0)
 
 
+class MetricsTimeseriesResponse(BaseModel):
+    points: list[MetricTimeseriesPoint]
+
+
 class MetricBreakdownRow(BaseModel):
     dimension: MetricsBreakdownDimension
     value: str

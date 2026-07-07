@@ -8,6 +8,7 @@ from app.models import (
     MetricRate,
     MetricsRatesResponse,
     MetricsSummaryResponse,
+    MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )
 from app.models.metrics import ApplicationWindowMetric, MetricsApplicationWindow
@@ -209,6 +210,18 @@ class MetricsRatesService:
                 denominator=denominator,
                 rate=_rate(numerator=numerator, denominator=denominator),
             )
+        )
+
+
+class MetricsTimeseriesService:
+    """Build deterministic dashboard timeseries metrics from local SQLite."""
+
+    def __init__(self, *, metrics_repository: MetricsRepository) -> None:
+        self._metrics_repository = metrics_repository
+
+    def get_timeseries(self) -> MetricsTimeseriesResponse:
+        return MetricsTimeseriesResponse(
+            points=list(self._metrics_repository.get_application_timeseries()),
         )
 
 

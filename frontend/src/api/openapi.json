@@ -1942,6 +1942,25 @@
         "title": "MetricRate",
         "type": "object"
       },
+      "MetricTimeseriesPoint": {
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "period_start": {
+            "title": "Period Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "period_start",
+          "application_count"
+        ],
+        "title": "MetricTimeseriesPoint",
+        "type": "object"
+      },
       "MetricsApplicationWindow": {
         "enum": [
           "week",
@@ -2028,6 +2047,22 @@
           "application_windows"
         ],
         "title": "MetricsSummaryResponse",
+        "type": "object"
+      },
+      "MetricsTimeseriesResponse": {
+        "properties": {
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/MetricTimeseriesPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "points"
+        ],
+        "title": "MetricsTimeseriesResponse",
         "type": "object"
       },
       "ProviderConfigRequirementResponse": {
@@ -4007,6 +4042,28 @@
           }
         },
         "summary": "Get Metrics Summary",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/timeseries": {
+      "get": {
+        "description": "Returns deterministic application-volume timeseries points from local applications data.",
+        "operationId": "get_metrics_timeseries_metrics_timeseries_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsTimeseriesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Metrics Timeseries",
         "tags": [
           "metrics"
         ]
