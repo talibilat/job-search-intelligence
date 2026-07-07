@@ -1878,6 +1878,32 @@
         "title": "LLMProviderName",
         "type": "string"
       },
+      "MetricsSummaryResponse": {
+        "properties": {
+          "evaluated_at": {
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          },
+          "ghost_threshold_days": {
+            "minimum": 1.0,
+            "title": "Ghost Threshold Days",
+            "type": "integer"
+          },
+          "ghosted_applications": {
+            "minimum": 0.0,
+            "title": "Ghosted Applications",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ghosted_applications",
+          "ghost_threshold_days",
+          "evaluated_at"
+        ],
+        "title": "MetricsSummaryResponse",
+        "type": "object"
+      },
       "ProviderConfigRequirementResponse": {
         "description": "Non-secret provider setting required by a supported provider.",
         "properties": {
@@ -3742,6 +3768,28 @@
           }
         },
         "summary": "Get Response Versus Silence Metric",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/summary": {
+      "get": {
+        "description": "Returns deterministic dashboard summary metrics from the local SQLite applications and event timeline source of truth.",
+        "operationId": "get_metrics_summary_metrics_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Metrics Summary",
         "tags": [
           "metrics"
         ]

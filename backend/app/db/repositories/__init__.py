@@ -11,6 +11,7 @@ from .email import EmailRepository
 from .event import EventRepository
 from .filter_decision import EmailFilterDecisionRepository
 from .insight import InsightRepository
+from .metrics import MetricsRepository
 from .sync_state import SyncStateRepository
 from .synthetic_fixture import SyntheticFixtureRepository
 
@@ -27,6 +28,7 @@ __all__ = [
     "EmailFilterDecisionRepository",
     "EventRepository",
     "InsightRepository",
+    "MetricsRepository",
     "SqlParameters",
     "SyncStateRepository",
     "SyntheticFixtureRepository",

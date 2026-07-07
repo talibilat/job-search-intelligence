@@ -14,6 +14,7 @@ from app.db.repositories import (
     CorrectionRepository,
     EventRepository,
     InsightRepository,
+    MetricsRepository,
 )
 from app.db.repositories.classification_run import ClassificationRunRepository
 from app.db.repositories.connection import EmailConnectionRepository
@@ -30,7 +31,7 @@ from app.services.ghost_inference import GhostInferenceService
 from app.services.insights_service import InsightGenerationService, InsightReadService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
-from app.services.metrics import MetricsService
+from app.services.metrics import MetricsSummaryService
 from app.services.structured_extraction import StructuredExtractionService
 
 
@@ -164,15 +165,6 @@ def get_application_detail_service(
     return ApplicationDetailService(application_repository)
 
 
-def get_metrics_service(
-    application_repository: Annotated[
-        ApplicationRepository,
-        Depends(get_readonly_application_repository),
-    ],
-) -> MetricsService:
-    return MetricsService(application_repository)
-
-
 def get_application_events_service(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> Iterator[ApplicationEventsService]:
@@ -215,6 +207,21 @@ def get_ghost_inference_service(
             application_repository=ApplicationRepository(connection),
             event_repository=EventRepository(connection),
             threshold_days=settings.ghost_threshold_days,
+        )
+    finally:
+        connection.close()
+
+
+def get_metrics_summary_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[MetricsSummaryService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield MetricsSummaryService(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=settings.ghost_threshold_days,
         )
     finally:
         connection.close()

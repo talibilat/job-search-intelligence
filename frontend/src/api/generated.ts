@@ -679,6 +679,14 @@ export interface LLMProviderHealthCheckResponse {
   status: LLMModelHealthStatus;
 }
 
+export interface MetricsSummaryResponse {
+  evaluated_at: string;
+  /** @minimum 1 */
+  ghost_threshold_days: number;
+  /** @minimum 0 */
+  ghosted_applications: number;
+}
+
 /**
  * Currently selected provider choices for the setup/config shell.
  */
@@ -2126,6 +2134,46 @@ export const getResponseSilenceMetricMetricsResponseSilenceGet = async (
     status: res.status,
     headers: res.headers,
   } as getResponseSilenceMetricMetricsResponseSilenceGetResponse;
+};
+
+export type getMetricsSummaryMetricsSummaryGetResponse200 = {
+  data: MetricsSummaryResponse;
+  status: 200;
+};
+
+export type getMetricsSummaryMetricsSummaryGetResponseSuccess =
+  getMetricsSummaryMetricsSummaryGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsSummaryMetricsSummaryGetResponse =
+  getMetricsSummaryMetricsSummaryGetResponseSuccess;
+
+export const getGetMetricsSummaryMetricsSummaryGetUrl = () => {
+  return `/metrics/summary`;
+};
+
+/**
+ * Returns deterministic dashboard summary metrics from the local SQLite applications and event timeline source of truth.
+ * @summary Get Metrics Summary
+ */
+export const getMetricsSummaryMetricsSummaryGet = async (
+  options?: RequestInit,
+): Promise<getMetricsSummaryMetricsSummaryGetResponse> => {
+  const res = await fetch(getGetMetricsSummaryMetricsSummaryGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsSummaryMetricsSummaryGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsSummaryMetricsSummaryGetResponse;
 };
 
 export type setupSubmitSetupPostResponse200 = {
