@@ -38,6 +38,7 @@ function metricsSummaryResponse(
     ghost_threshold_days: 30,
     ghosted_applications: 0,
     interview_invitation_count: 0,
+    offers_received: 0,
     rejected_applications: 0,
     total_applications: 0,
     ...overrides,

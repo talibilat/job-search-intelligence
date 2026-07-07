@@ -34,7 +34,7 @@ const filterPlaceholders = [
   "Work mode",
 ] as const;
 
-const metricPlaceholders = [] as const;
+const metricPlaceholders: readonly { label: string; note: string }[] = [];
 
 const percentageFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
