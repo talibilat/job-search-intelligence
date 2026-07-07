@@ -16,10 +16,11 @@ function renderAtPath(pathname: string) {
   return render(<App />);
 }
 
-type MockResponseBody = Record<string, unknown>;
+type MockObjectResponseBody = Record<string, unknown>;
+type MockResponseBody = MockObjectResponseBody | unknown[];
 
 type MockResponse =
-  | MockResponseBody
+  | MockObjectResponseBody
   | {
       body: MockResponseBody;
       status: number;
@@ -29,7 +30,7 @@ type MockResponseConfig = MockResponse | MockResponse[];
 
 function isMockResponseConfig(
   value: MockResponse,
-): value is { body: object; status: number } {
+): value is { body: MockResponseBody; status: number } {
   return "body" in value && "status" in value;
 }
 
@@ -516,7 +517,13 @@ describe("App", () => {
 
   it("renders Q-07 interview invitations from the metrics summary", async () => {
     mockFetchResponses({
-      "/metrics/summary": { interview_invitation_count: 3 },
+      "/metrics/summary": {
+        distinct_company_count: 7,
+        evaluated_at: "2026-07-07T12:00:00Z",
+        ghost_threshold_days: 30,
+        ghosted_applications: 2,
+        interview_invitation_count: 3,
+      },
     });
 
     renderAtPath("/dashboard");
@@ -528,7 +535,159 @@ describe("App", () => {
       }),
     ).toBeTruthy();
     expect(screen.getByText("3")).toBeTruthy();
-    expect(screen.getByText("Q-07 - Counted from interview_scheduled events")).toBeTruthy();
+    expect(
+      screen.getByText("Q-07 - Counted from interview_scheduled events"),
+    ).toBeTruthy();
+  });
+
+  it("shows live applications awaiting a reply on the dashboard", async () => {
+    const fetchMock = mockFetchResponses({
+      "/metrics/summary": {
+        distinct_company_count: 7,
+        evaluated_at: "2026-07-07T12:00:00Z",
+        ghost_threshold_days: 30,
+        ghosted_applications: 3,
+        interview_invitation_count: 4,
+      },
+      "/applications?status=applied": {
+        body: [
+          {
+            id: "app-applied",
+            company: "Acme Corp",
+            role_title: "Backend Engineer",
+            source: "linkedin",
+            first_seen_at: "2026-07-01T09:00:00Z",
+            current_status: "applied",
+            salary_min: 100000,
+            salary_max: 120000,
+            currency: "USD",
+            location: "Remote",
+            work_mode: "remote",
+            seniority: "senior",
+            sponsorship: "unknown",
+            tech_stack: ["Python"],
+            last_activity_at: "2026-07-03T09:00:00+01:00",
+            manual_lock: false,
+            created_at: "2026-07-01T09:01:00Z",
+            updated_at: "2026-07-03T10:01:00Z",
+          },
+        ],
+        status: 200,
+      },
+      "/applications?status=in_review": {
+        body: [
+          {
+            id: "app-review",
+            company: "Beta LLC",
+            role_title: "Frontend Engineer",
+            source: "company_site",
+            first_seen_at: "2026-06-15T09:00:00Z",
+            current_status: "in_review",
+            salary_min: null,
+            salary_max: null,
+            currency: null,
+            location: "London",
+            work_mode: "hybrid",
+            seniority: "mid",
+            sponsorship: "not_offered",
+            tech_stack: ["React"],
+            last_activity_at: "2026-07-03T08:30:00Z",
+            manual_lock: false,
+            created_at: "2026-06-15T09:01:00Z",
+            updated_at: "2026-06-18T10:01:00Z",
+          },
+        ],
+        status: 200,
+      },
+      "/applications?status=assessment": {
+        body: [
+          {
+            id: "app-applied",
+            company: "Acme Corp",
+            role_title: "Backend Engineer",
+            source: "linkedin",
+            first_seen_at: "2026-07-01T09:00:00Z",
+            current_status: "applied",
+            salary_min: 100000,
+            salary_max: 120000,
+            currency: "USD",
+            location: "Remote",
+            work_mode: "remote",
+            seniority: "senior",
+            sponsorship: "unknown",
+            tech_stack: ["Python"],
+            last_activity_at: "2026-07-03T09:00:00+01:00",
+            manual_lock: false,
+            created_at: "2026-07-01T09:01:00Z",
+            updated_at: "2026-07-03T10:01:00Z",
+          },
+        ],
+        status: 200,
+      },
+      "/applications?status=interview": { body: [], status: 200 },
+    });
+
+    renderAtPath("/dashboard");
+
+    const liveApplications = await screen.findByRole("region", {
+      name: "Live applications awaiting response",
+    });
+
+    expect(
+      await within(liveApplications).findByText("2 live applications"),
+    ).toBeTruthy();
+    const liveApplicationLinks = within(liveApplications).getAllByRole("link");
+    expect(liveApplicationLinks.map((link) => link.textContent)).toEqual([
+      "Acme Corp",
+      "Beta LLC",
+    ]);
+    expect(
+      liveApplicationLinks.map((link) => link.getAttribute("href")),
+    ).toEqual(["/applications/app-applied", "/applications/app-review"]);
+    expect(within(liveApplications).getByText("Backend Engineer")).toBeTruthy();
+    expect(
+      within(liveApplications).getByText("Frontend Engineer"),
+    ).toBeTruthy();
+    expect(within(liveApplications).getByText("applied")).toBeTruthy();
+    expect(within(liveApplications).getByText("in review")).toBeTruthy();
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/metrics/summary",
+      "/applications?status=applied",
+      "/applications?status=in_review",
+      "/applications?status=assessment",
+      "/applications?status=interview",
+    ]);
+  });
+
+  it("shows an empty live applications state on the dashboard", async () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        distinct_company_count: 0,
+        evaluated_at: "2026-07-07T12:00:00Z",
+        ghost_threshold_days: 30,
+        ghosted_applications: 0,
+        interview_invitation_count: 0,
+      },
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
+    });
+
+    renderAtPath("/dashboard");
+
+    const liveApplications = await screen.findByRole("region", {
+      name: "Live applications awaiting response",
+    });
+
+    expect(
+      await within(liveApplications).findByText("0 live applications"),
+    ).toBeTruthy();
+    expect(
+      within(liveApplications).getByText(
+        "No live applications are awaiting a reply right now.",
+      ),
+    ).toBeTruthy();
   });
 
   it("renders the feature status dashboard with searchable frontend feature metadata", () => {
@@ -572,7 +731,9 @@ describe("App", () => {
     expect(frontendApiIntegrations).toBeTruthy();
     expect(frontendApiIntegrations?.textContent).toContain("GET /setup/status");
     expect(frontendApiIntegrations?.textContent).toContain("GET /insights");
-    expect(frontendApiIntegrations?.textContent).toContain("GET /metrics/summary");
+    expect(frontendApiIntegrations?.textContent).toContain(
+      "GET /metrics/summary",
+    );
     expect(frontendApiIntegrations?.textContent).toContain(
       "POST /insights/regenerate",
     );
