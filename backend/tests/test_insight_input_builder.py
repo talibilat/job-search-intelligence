@@ -53,6 +53,35 @@ def test_insight_input_builder_prepares_facts_citations_and_hash(
     assert insight_input.inputs_hash == repeated_input.inputs_hash
 
 
+def test_recurring_feedback_input_builder_uses_feedback_events_only(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_feedback_event_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "recurring_feedback",
+        )
+
+    assert insight_input.type == "recurring_feedback"
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-rejected-feedback",
+    ]
+    feedback_evidence = insight_input.evidence[0]
+    assert feedback_evidence.event_type == "feedback"
+    assert feedback_evidence.citation_id == (
+        "application:application-rejected|event:event-rejected-feedback|email:email-feedback"
+    )
+    assert feedback_evidence.extract_note == (
+        "Recruiter feedback recommended improving system design examples."
+    )
+    assert feedback_evidence.email_body_text == (
+        "The interviewer recommended improving system design examples."
+    )
+
+
 def test_insight_input_builder_hash_changes_when_source_evidence_changes(
     tmp_path: Path,
 ) -> None:
@@ -399,6 +428,25 @@ def insert_second_rejected_application_fixture(connection: sqlite3.Connection) -
         event_type="rejection",
         event_at="2026-07-06T10:00:00+00:00",
         extract_note="Second rejection mentioned platform engineering experience.",
+    )
+    connection.commit()
+
+
+def insert_feedback_event_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-feedback",
+        subject="Interview feedback",
+        body_text="The interviewer recommended improving system design examples.",
+        sent_at="2026-07-05T10:00:00+00:00",
+    )
+    EventRepository(connection).upsert_event(
+        id="event-rejected-feedback",
+        application_id="application-rejected",
+        email_id="email-feedback",
+        event_type="feedback",
+        event_at="2026-07-05T10:00:00+00:00",
+        extract_note="Recruiter feedback recommended improving system design examples.",
     )
     connection.commit()
 

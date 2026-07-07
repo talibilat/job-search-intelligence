@@ -31,6 +31,9 @@ GENERATED_AT = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
 CITATION_ID = (
     "application:application-rejected|event:event-rejected-rejection|email:email-rejection"
 )
+FEEDBACK_CITATION_ID = (
+    "application:application-rejected|event:event-rejected-feedback|email:email-feedback"
+)
 
 
 def test_insight_generation_service_generates_and_persists_grounded_narrative(
@@ -155,6 +158,51 @@ def test_insight_generation_service_allows_bracketed_non_citation_prose(
     assert result.insight.content == (
         f"Focus on Kubernetes [especially production experience]. [{CITATION_ID}]"
     )
+
+
+def test_insight_generation_service_generates_recurring_feedback_theme(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_feedback_event_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "Recruiter feedback consistently recommends stronger system design "
+                        f"examples. [{FEEDBACK_CITATION_ID}]"
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("recurring_feedback"))
+
+    assert result.cached is False
+    assert result.insight.type == "recurring_feedback"
+    assert result.insight.content == (
+        "Recruiter feedback consistently recommends stronger system design "
+        f"examples. [{FEEDBACK_CITATION_ID}]"
+    )
+    prompt_payload = json.loads(provider.requests[0].messages[1].content)
+    assert prompt_payload["type"] == "recurring_feedback"
+    assert [evidence["event_type"] for evidence in prompt_payload["evidence"]] == [
+        "feedback",
+    ]
+    assert [evidence["citation_id"] for evidence in prompt_payload["evidence"]] == [
+        FEEDBACK_CITATION_ID,
+    ]
 
 
 @pytest.mark.parametrize(
@@ -501,6 +549,25 @@ def insert_rejected_application_fixture(connection: sqlite3.Connection) -> None:
         event_type="rejection",
         event_at="2026-07-04T10:00:00+00:00",
         extract_note="Rejection mentioned Kubernetes experience.",
+    )
+    connection.commit()
+
+
+def insert_feedback_event_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-feedback",
+        subject="Interview feedback",
+        body_text="The interviewer recommended improving system design examples.",
+        sent_at="2026-07-05T10:00:00+00:00",
+    )
+    EventRepository(connection).upsert_event(
+        id="event-rejected-feedback",
+        application_id="application-rejected",
+        email_id="email-feedback",
+        event_type="feedback",
+        event_at="2026-07-05T10:00:00+00:00",
+        extract_note="Recruiter feedback recommended improving system design examples.",
     )
     connection.commit()
 

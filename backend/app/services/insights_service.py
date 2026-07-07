@@ -399,6 +399,8 @@ class _EvidenceScope:
 
 
 def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
+    if insight_type == "recurring_feedback":
+        return _EvidenceScope(event_types=("feedback",))
     if insight_type == "why_rejected":
         return _EvidenceScope(event_types=("rejection",))
     if insight_type == "skill_gaps":
