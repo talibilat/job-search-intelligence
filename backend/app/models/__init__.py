@@ -41,6 +41,7 @@ from .metrics import (
     MetricsFilter,
     MetricsRatesResponse,
     MetricsSummaryResponse,
+    MetricsTimeseriesResponse,
     MetricTimeseriesPoint,
     ResponseSilenceMetric,
 )
@@ -117,6 +118,7 @@ __all__ = [
     "MetricsFilter",
     "MetricsRatesResponse",
     "MetricsSummaryResponse",
+    "MetricsTimeseriesResponse",
     "MetricTimeseriesPoint",
     "ProviderConfigRequirementResponse",
     "ProviderConfigResponse",

@@ -705,6 +705,12 @@ export interface MetricRate {
   rate: number | null;
 }
 
+export interface MetricTimeseriesPoint {
+  /** @minimum 0 */
+  application_count: number;
+  period_start: string;
+}
+
 export interface MetricsRatesResponse {
   overall_response_rate: MetricRate;
 }
@@ -732,6 +738,10 @@ export interface MetricsSummaryResponse {
   rejected_applications: number;
   /** @minimum 0 */
   total_applications: number;
+}
+
+export interface MetricsTimeseriesResponse {
+  points: MetricTimeseriesPoint[];
 }
 
 /**
@@ -2302,6 +2312,46 @@ export const getMetricsSummaryMetricsSummaryGet = async (
     status: res.status,
     headers: res.headers,
   } as getMetricsSummaryMetricsSummaryGetResponse;
+};
+
+export type getMetricsTimeseriesMetricsTimeseriesGetResponse200 = {
+  data: MetricsTimeseriesResponse;
+  status: 200;
+};
+
+export type getMetricsTimeseriesMetricsTimeseriesGetResponseSuccess =
+  getMetricsTimeseriesMetricsTimeseriesGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsTimeseriesMetricsTimeseriesGetResponse =
+  getMetricsTimeseriesMetricsTimeseriesGetResponseSuccess;
+
+export const getGetMetricsTimeseriesMetricsTimeseriesGetUrl = () => {
+  return `/metrics/timeseries`;
+};
+
+/**
+ * Returns deterministic application-volume timeseries points from local applications data.
+ * @summary Get Metrics Timeseries
+ */
+export const getMetricsTimeseriesMetricsTimeseriesGet = async (
+  options?: RequestInit,
+): Promise<getMetricsTimeseriesMetricsTimeseriesGetResponse> => {
+  const res = await fetch(getGetMetricsTimeseriesMetricsTimeseriesGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsTimeseriesMetricsTimeseriesGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsTimeseriesMetricsTimeseriesGetResponse;
 };
 
 export type setupSubmitSetupPostResponse200 = {

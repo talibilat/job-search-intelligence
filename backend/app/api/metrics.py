@@ -5,12 +5,22 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.dependencies import get_metrics_rates_service, get_metrics_summary_service
+from app.api.dependencies import (
+    get_metrics_rates_service,
+    get_metrics_summary_service,
+    get_metrics_timeseries_service,
+)
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
-from app.models import MetricsRatesResponse, MetricsSummaryResponse, ResponseSilenceMetric
+from app.models import (
+    MetricsRatesResponse,
+    MetricsSummaryResponse,
+    MetricsTimeseriesResponse,
+    ResponseSilenceMetric,
+)
 from app.services.metrics import (
     MetricsRatesService,
     MetricsSummaryService,
+    MetricsTimeseriesService,
     MetricsWindowValidationError,
 )
 
@@ -101,3 +111,20 @@ def get_metrics_rates(
     ],
 ) -> MetricsRatesResponse:
     return service.get_rates()
+
+
+@router.get(
+    "/timeseries",
+    response_model=MetricsTimeseriesResponse,
+    summary="Get Metrics Timeseries",
+    description=(
+        "Returns deterministic application-volume timeseries points from local applications data."
+    ),
+)
+def get_metrics_timeseries(
+    service: Annotated[
+        MetricsTimeseriesService,
+        Depends(get_metrics_timeseries_service),
+    ],
+) -> MetricsTimeseriesResponse:
+    return service.get_timeseries()
