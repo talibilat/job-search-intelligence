@@ -41,6 +41,8 @@ class ApplicationWindowMetric(BaseModel):
 
 
 class MetricsFilter(BaseModel):
+    """Typed dashboard metrics filters for future deterministic metrics queries."""
+
     status: ApplicationStatus | None = None
     source: ApplicationSource | None = None
     sponsorship: SponsorshipStatus | None = None
