@@ -47,6 +47,24 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url === "/metrics/rates") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            overall_response_rate: {
+              denominator: 0,
+              numerator: 0,
+              rate: null,
+            },
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
     if (url === "/applications") {
       return Promise.resolve(
         new Response(JSON.stringify([baseApplication]), {

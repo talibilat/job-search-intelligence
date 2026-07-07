@@ -162,6 +162,24 @@ describe("App", () => {
           );
         }
 
+        if (path === "/metrics/rates") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                overall_response_rate: {
+                  denominator: 0,
+                  numerator: 0,
+                  rate: null,
+                },
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+                status: 200,
+              },
+            ),
+          );
+        }
+
         if (path.startsWith("/applications")) {
           return Promise.resolve(
             new Response(JSON.stringify([]), {
@@ -181,6 +199,32 @@ describe("App", () => {
     expect(screen.getByText("Distinct companies")).toBeTruthy();
     expect(
       screen.getByText("Q-03 counted from normalized applications"),
+    ).toBeTruthy();
+  });
+
+  it("shows the deterministic response rate on the dashboard", async () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        distinct_company_count: 3,
+      },
+      "/metrics/rates": {
+        overall_response_rate: {
+          numerator: 3,
+          denominator: 5,
+          rate: 0.6,
+        },
+      },
+    });
+
+    renderAtPath("/dashboard");
+
+    const responseRateCard = screen.getByLabelText("Response rate metric");
+
+    expect(await within(responseRateCard).findByText("60%"));
+    expect(
+      within(responseRateCard).getByText(
+        "3 of 5 applications have response evidence",
+      ),
     ).toBeTruthy();
   });
 
@@ -544,6 +588,24 @@ describe("App", () => {
           );
         }
 
+        if (path === "/metrics/rates") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                overall_response_rate: {
+                  denominator: 0,
+                  numerator: 0,
+                  rate: null,
+                },
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+                status: 200,
+              },
+            ),
+          );
+        }
+
         if (path.startsWith("/applications")) {
           return Promise.resolve(
             new Response(JSON.stringify([]), {
@@ -582,6 +644,14 @@ describe("App", () => {
     expect(
       await screen.findByText("No applications match these filters."),
     ).toBeTruthy();
+
+    const emptyState = screen.getByRole("status", {
+      name: "Dashboard metrics pending",
+    });
+
+    expect(emptyState.textContent).toContain(
+      "Broader deterministic metrics will appear here as additional metrics APIs are available.",
+    );
   });
 
   it("renders Q-07 interview invitations from the metrics summary", async () => {
@@ -607,6 +677,24 @@ describe("App", () => {
                 ghost_threshold_days: 30,
                 ghosted_applications: 2,
                 interview_invitation_count: 3,
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+                status: 200,
+              },
+            ),
+          );
+        }
+
+        if (path === "/metrics/rates") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                overall_response_rate: {
+                  denominator: 0,
+                  numerator: 0,
+                  rate: null,
+                },
               }),
               {
                 headers: { "Content-Type": "application/json" },
@@ -653,6 +741,13 @@ describe("App", () => {
         offers_received: 2,
         evaluated_at: "2026-07-07T12:00:00+00:00",
       },
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
     });
 
     renderAtPath("/dashboard");
@@ -678,6 +773,13 @@ describe("App", () => {
         ghost_threshold_days: 30,
         ghosted_applications: 3,
         interview_invitation_count: 4,
+      },
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
       },
       "/applications": { body: [], status: 200 },
       "/applications?status=applied": {
@@ -788,6 +890,7 @@ describe("App", () => {
       "/applications?status=assessment",
       "/applications?status=interview",
       "/applications",
+      "/metrics/rates",
     ]);
   });
 
@@ -799,6 +902,13 @@ describe("App", () => {
         ghost_threshold_days: 30,
         ghosted_applications: 0,
         interview_invitation_count: 0,
+      },
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
       },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },

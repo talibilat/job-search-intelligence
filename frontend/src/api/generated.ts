@@ -679,6 +679,18 @@ export interface LLMProviderHealthCheckResponse {
   status: LLMModelHealthStatus;
 }
 
+export interface MetricRate {
+  /** @minimum 0 */
+  denominator: number;
+  /** @minimum 0 */
+  numerator: number;
+  rate: number | null;
+}
+
+export interface MetricsRatesResponse {
+  overall_response_rate: MetricRate;
+}
+
 /**
  * Deterministic summary metrics for the dashboard.
  */
@@ -2106,6 +2118,46 @@ export const wipeDataLocalDataWipePost = async (
     status: res.status,
     headers: res.headers,
   } as wipeDataLocalDataWipePostResponse;
+};
+
+export type getMetricsRatesMetricsRatesGetResponse200 = {
+  data: MetricsRatesResponse;
+  status: 200;
+};
+
+export type getMetricsRatesMetricsRatesGetResponseSuccess =
+  getMetricsRatesMetricsRatesGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsRatesMetricsRatesGetResponse =
+  getMetricsRatesMetricsRatesGetResponseSuccess;
+
+export const getGetMetricsRatesMetricsRatesGetUrl = () => {
+  return `/metrics/rates`;
+};
+
+/**
+ * Returns deterministic dashboard rates with explicit numerator and denominator counts from the local applications source of truth.
+ * @summary Get Metrics Rates
+ */
+export const getMetricsRatesMetricsRatesGet = async (
+  options?: RequestInit,
+): Promise<getMetricsRatesMetricsRatesGetResponse> => {
+  const res = await fetch(getGetMetricsRatesMetricsRatesGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsRatesMetricsRatesGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsRatesMetricsRatesGetResponse;
 };
 
 export type getResponseSilenceMetricMetricsResponseSilenceGetResponse200 = {

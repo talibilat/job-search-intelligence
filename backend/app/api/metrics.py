@@ -4,9 +4,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_metrics_summary_service
-from app.models import MetricsSummaryResponse, ResponseSilenceMetric
-from app.services.metrics import MetricsSummaryService
+from app.api.dependencies import get_metrics_rates_service, get_metrics_summary_service
+from app.models import MetricsRatesResponse, MetricsSummaryResponse, ResponseSilenceMetric
+from app.services.metrics import MetricsRatesService, MetricsSummaryService
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -46,3 +46,21 @@ def get_metrics_summary(
     ],
 ) -> MetricsSummaryResponse:
     return service.get_summary()
+
+
+@router.get(
+    "/rates",
+    response_model=MetricsRatesResponse,
+    summary="Get Metrics Rates",
+    description=(
+        "Returns deterministic dashboard rates with explicit numerator and "
+        "denominator counts from the local applications source of truth."
+    ),
+)
+def get_metrics_rates(
+    service: Annotated[
+        MetricsRatesService,
+        Depends(get_metrics_rates_service),
+    ],
+) -> MetricsRatesResponse:
+    return service.get_rates()
