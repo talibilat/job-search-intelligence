@@ -5,7 +5,6 @@ from datetime import datetime
 
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
-from app.models._json import parse_json_column
 from app.models.records import (
     ApplicationEventType,
     ApplicationStatus,
@@ -207,23 +206,6 @@ class InsightRepository(BaseRepository[InsightRecord]):
         ).fetchall()
         return _count_rows_to_dict(rows)
 
-    def count_rejected_applications_by_skill(self) -> dict[str, int]:
-        rows = self.execute(
-            """
-            SELECT tech_stack
-            FROM applications
-            WHERE current_status = 'rejected'
-              AND tech_stack IS NOT NULL
-            ORDER BY id
-            """,
-        ).fetchall()
-        counts: dict[str, int] = {}
-        for row in rows:
-            skills = _parse_skill_list(row["tech_stack"])
-            for skill in skills:
-                counts[skill] = counts.get(skill, 0) + 1
-        return dict(sorted(counts.items()))
-
     def list_input_evidence(
         self,
         *,
@@ -328,15 +310,6 @@ def _optional_str(value: object) -> str | None:
 
 def _count_rows_to_dict(rows: list[sqlite3.Row]) -> dict[str, int]:
     return {str(row["value"]): int(row["count"]) for row in rows}
-
-
-def _parse_skill_list(value: object) -> list[str]:
-    payload = parse_json_column(value)
-    if not isinstance(payload, list):
-        return []
-    return sorted(
-        {skill.strip() for skill in payload if isinstance(skill, str) and skill.strip()},
-    )
 
 
 def _placeholders(count: int) -> str:
