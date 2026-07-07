@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 
 from app.db.repositories.base import BaseRepository
 from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES
-from app.models.metrics import ResponseSilenceMetric
+from app.models.metrics import (
+    MetricBreakdownRow,
+    MetricFunnelStage,
+    MetricRateName,
+    MetricRateRow,
+    MetricsBreakdownDimension,
+    MetricTimeseriesPoint,
+    ResponseSilenceMetric,
+)
 
 _RESPONSE_LIKE_EVENT_TYPES = RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 
@@ -39,18 +48,98 @@ class MetricsRepository(BaseRepository[int]):
         return int(row[0])
 
     def count_applications_with_offer_events(self) -> int:
-        row = self.execute(
+        return self._count_applications_with_event("offer")
+
+    def get_rate_metrics(self, *, ghost_cutoff_at: str) -> tuple[MetricRateRow, ...]:
+        total_applications = self.count_total_applications()
+        response_metric = self.get_response_silence_metric()
+        rejected_applications = self.count_rejected_applications()
+        ghosted_applications = self.count_threshold_ghosted_applications(
+            cutoff_at=ghost_cutoff_at,
+        )
+        interviewed_applications = self._count_applications_with_event("interview_scheduled")
+        offered_after_interview_applications = self._count_applications_with_later_event(
+            first_event_type="interview_scheduled",
+            later_event_type="offer",
+        )
+
+        return (
+            _rate_metric(
+                name="response",
+                numerator=response_metric.human_response_count,
+                denominator=total_applications,
+            ),
+            _rate_metric(
+                name="rejection",
+                numerator=rejected_applications,
+                denominator=total_applications,
+            ),
+            _rate_metric(
+                name="ghost",
+                numerator=ghosted_applications,
+                denominator=total_applications,
+            ),
+            _rate_metric(
+                name="application_to_interview",
+                numerator=interviewed_applications,
+                denominator=total_applications,
+            ),
+            _rate_metric(
+                name="interview_to_offer",
+                numerator=offered_after_interview_applications,
+                denominator=interviewed_applications,
+            ),
+        )
+
+    def get_funnel_metrics(self) -> tuple[MetricFunnelStage, ...]:
+        return (
+            MetricFunnelStage(stage="applied", count=self.count_total_applications()),
+            MetricFunnelStage(
+                stage="response",
+                count=self.get_response_silence_metric().human_response_count,
+            ),
+            MetricFunnelStage(
+                stage="assessment",
+                count=self._count_applications_with_event("assessment"),
+            ),
+            MetricFunnelStage(
+                stage="interview",
+                count=self._count_applications_with_event("interview_scheduled"),
+            ),
+            MetricFunnelStage(
+                stage="offer",
+                count=self._count_applications_with_later_event(
+                    first_event_type="interview_scheduled",
+                    later_event_type="offer",
+                ),
+            ),
+        )
+
+    def get_application_timeseries(self) -> tuple[MetricTimeseriesPoint, ...]:
+        rows = self.execute(
             """
-            SELECT COUNT(DISTINCT application_events.application_id)
-            FROM application_events
-            INNER JOIN applications
-                ON applications.id = application_events.application_id
-            WHERE application_events.event_type = 'offer'
+            SELECT substr(first_seen_at, 1, 10) AS period_start,
+                COUNT(*) AS application_count
+            FROM applications
+            GROUP BY period_start
+            ORDER BY period_start ASC
             """,
-        ).fetchone()
-        if row is None:
-            return 0
-        return int(row[0])
+        ).fetchall()
+        return tuple(
+            MetricTimeseriesPoint(
+                period_start=str(row["period_start"]),
+                application_count=int(row["application_count"]),
+            )
+            for row in rows
+        )
+
+    def get_breakdown(
+        self,
+        dimension: MetricsBreakdownDimension,
+    ) -> tuple[MetricBreakdownRow, ...]:
+        if dimension == "tech":
+            return self._get_tech_breakdown()
+        return self._get_application_breakdown(dimension)
 
     def get_response_silence_metric(self) -> ResponseSilenceMetric:
         row = self.execute(
@@ -87,13 +176,7 @@ class MetricsRepository(BaseRepository[int]):
         return int(row[0])
 
     def count_rejected_applications(self) -> int:
-        row = self.execute(
-            "SELECT COUNT(*) FROM applications WHERE current_status = ?",
-            ("rejected",),
-        ).fetchone()
-        if row is None:
-            return 0
-        return int(row[0])
+        return self._count_applications_with_current_status("rejected")
 
     def count_interview_invitation_events(self) -> int:
         row = self.execute(
@@ -103,6 +186,151 @@ class MetricsRepository(BaseRepository[int]):
             WHERE event_type = 'interview_scheduled'
             """,
         ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+
+    def _count_applications_with_current_status(self, status: str) -> int:
+        return self._fetch_count(
+            "SELECT COUNT(*) FROM applications WHERE current_status = ?",
+            (status,),
+        )
+
+    def _count_applications_with_event(self, event_type: str) -> int:
+        return self._fetch_count(
+            """
+            SELECT COUNT(DISTINCT application_events.application_id)
+            FROM application_events
+            INNER JOIN applications
+                ON applications.id = application_events.application_id
+            WHERE application_events.event_type = ?
+            """,
+            (event_type,),
+        )
+
+    def _count_applications_with_later_event(
+        self,
+        *,
+        first_event_type: str,
+        later_event_type: str,
+    ) -> int:
+        return self._fetch_count(
+            """
+            WITH event_order AS (
+                SELECT
+                    application_events.application_id,
+                    application_events.id,
+                    application_events.event_type,
+                    application_events.event_at,
+                    COALESCE(raw_emails.sent_at, application_events.event_at) AS email_sent_at,
+                    COALESCE(
+                        email_classifications.classified_at,
+                        COALESCE(raw_emails.sent_at, application_events.event_at)
+                    ) AS classified_at
+                FROM application_events
+                LEFT JOIN raw_emails
+                    ON raw_emails.id = application_events.email_id
+                LEFT JOIN email_classifications
+                    ON email_classifications.email_id = application_events.email_id
+                WHERE application_events.event_type IN (?, ?)
+            )
+            SELECT COUNT(DISTINCT first_event.application_id)
+            FROM event_order AS first_event
+            INNER JOIN event_order AS later_event
+                ON later_event.application_id = first_event.application_id
+            INNER JOIN applications
+                ON applications.id = first_event.application_id
+            WHERE first_event.event_type = ?
+              AND later_event.event_type = ?
+              AND (
+                later_event.event_at > first_event.event_at
+                OR (
+                    later_event.event_at = first_event.event_at
+                    AND later_event.email_sent_at > first_event.email_sent_at
+                )
+                OR (
+                    later_event.event_at = first_event.event_at
+                    AND later_event.email_sent_at = first_event.email_sent_at
+                    AND later_event.classified_at > first_event.classified_at
+                )
+                OR (
+                    later_event.event_at = first_event.event_at
+                    AND later_event.email_sent_at = first_event.email_sent_at
+                    AND later_event.classified_at = first_event.classified_at
+                    AND later_event.id > first_event.id
+                )
+              )
+            """,
+            (first_event_type, later_event_type, first_event_type, later_event_type),
+        )
+
+    def _get_application_breakdown(
+        self,
+        dimension: MetricsBreakdownDimension,
+    ) -> tuple[MetricBreakdownRow, ...]:
+        expression = _dimension_expression(dimension)
+        rows = self.execute(
+            f"""
+            SELECT {expression} AS value,
+                COUNT(*) AS application_count,
+                COALESCE(SUM({_exists_response_case()}), 0) AS response_count,
+                COALESCE(SUM({_exists_event_case()}), 0) AS interview_count,
+                COALESCE(SUM({_exists_event_case()}), 0) AS offer_count
+            FROM applications
+            GROUP BY value
+            ORDER BY value ASC
+            """,
+            (*_RESPONSE_LIKE_EVENT_TYPES, "interview_scheduled", "offer"),
+        ).fetchall()
+        return tuple(_breakdown_row(dimension=dimension, row=row) for row in rows)
+
+    def _get_tech_breakdown(self) -> tuple[MetricBreakdownRow, ...]:
+        rows = self.execute(
+            f"""
+            WITH tech_applications AS (
+                SELECT DISTINCT
+                    applications.id AS application_id,
+                    LOWER(TRIM(json_each.value)) AS value
+                FROM applications
+                INNER JOIN json_each(applications.tech_stack)
+                WHERE TRIM(json_each.value) != ''
+            )
+            SELECT tech_applications.value AS value,
+                COUNT(*) AS application_count,
+                COALESCE(SUM(
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM application_events
+                        WHERE application_events.application_id = tech_applications.application_id
+                          AND application_events.event_type IN ({_response_placeholders()})
+                    ) THEN 1 ELSE 0 END
+                ), 0) AS response_count,
+                COALESCE(SUM(
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM application_events
+                        WHERE application_events.application_id = tech_applications.application_id
+                          AND application_events.event_type = ?
+                    ) THEN 1 ELSE 0 END
+                ), 0) AS interview_count,
+                COALESCE(SUM(
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM application_events
+                        WHERE application_events.application_id = tech_applications.application_id
+                          AND application_events.event_type = ?
+                    ) THEN 1 ELSE 0 END
+                ), 0) AS offer_count
+            FROM tech_applications
+            GROUP BY tech_applications.value
+            ORDER BY value ASC
+            """,
+            (*_RESPONSE_LIKE_EVENT_TYPES, "interview_scheduled", "offer"),
+        ).fetchall()
+        return tuple(_breakdown_row(dimension="tech", row=row) for row in rows)
+
+    def _fetch_count(self, sql: str, parameters: Sequence[object] = ()) -> int:
+        row = self.execute(sql, parameters).fetchone()
         if row is None:
             return 0
         return int(row[0])
@@ -228,3 +456,74 @@ class MetricsRepository(BaseRepository[int]):
 
 def _response_placeholders() -> str:
     return ", ".join("?" for _ in _RESPONSE_LIKE_EVENT_TYPES)
+
+
+def _rate_metric(*, name: MetricRateName, numerator: int, denominator: int) -> MetricRateRow:
+    rate = None if denominator == 0 else numerator / denominator
+    return MetricRateRow(
+        name=name,
+        numerator=numerator,
+        denominator=denominator,
+        rate=rate,
+    )
+
+
+def _dimension_expression(dimension: MetricsBreakdownDimension) -> str:
+    if dimension == "role":
+        return "COALESCE(NULLIF(LOWER(TRIM(role_title)), ''), 'unknown')"
+    if dimension == "source":
+        return "COALESCE(NULLIF(source, ''), 'unknown')"
+    if dimension == "salary":
+        return """
+        CASE
+            WHEN salary_min IS NULL AND salary_max IS NULL THEN 'unknown'
+            WHEN COALESCE(salary_max, salary_min) < 100000 THEN 'under_100k'
+            WHEN COALESCE(salary_min, salary_max) >= 150000 THEN '150k_plus'
+            ELSE '100k_149k'
+        END
+        """
+    if dimension == "sponsorship":
+        return "COALESCE(NULLIF(sponsorship, ''), 'unknown')"
+    if dimension == "seniority":
+        return "COALESCE(NULLIF(LOWER(TRIM(seniority)), ''), 'unknown')"
+    if dimension == "work_mode":
+        return "COALESCE(NULLIF(work_mode, ''), 'unknown')"
+    msg = f"Unsupported breakdown dimension: {dimension}"
+    raise ValueError(msg)
+
+
+def _exists_response_case() -> str:
+    return f"""
+    CASE WHEN EXISTS (
+        SELECT 1
+        FROM application_events
+        WHERE application_events.application_id = applications.id
+          AND application_events.event_type IN ({_response_placeholders()})
+    ) THEN 1 ELSE 0 END
+    """
+
+
+def _exists_event_case() -> str:
+    return """
+    CASE WHEN EXISTS (
+        SELECT 1
+        FROM application_events
+        WHERE application_events.application_id = applications.id
+          AND application_events.event_type = ?
+    ) THEN 1 ELSE 0 END
+    """
+
+
+def _breakdown_row(
+    *,
+    dimension: MetricsBreakdownDimension,
+    row: sqlite3.Row,
+) -> MetricBreakdownRow:
+    return MetricBreakdownRow(
+        dimension=dimension,
+        value=str(row["value"]),
+        application_count=int(row["application_count"]),
+        response_count=int(row["response_count"]),
+        interview_count=int(row["interview_count"]),
+        offer_count=int(row["offer_count"]),
+    )

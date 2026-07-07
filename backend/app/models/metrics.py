@@ -45,6 +45,51 @@ class ResponseSilenceMetric(BaseModel):
     silent_count: int = Field(ge=0)
 
 
+type MetricRateName = Literal[
+    "response",
+    "rejection",
+    "ghost",
+    "application_to_interview",
+    "interview_to_offer",
+]
+type MetricFunnelStageName = Literal["applied", "response", "assessment", "interview", "offer"]
+type MetricsBreakdownDimension = Literal[
+    "role",
+    "source",
+    "salary",
+    "tech",
+    "sponsorship",
+    "seniority",
+    "work_mode",
+]
+
+
+class MetricRateRow(BaseModel):
+    name: MetricRateName
+    numerator: int = Field(ge=0)
+    denominator: int = Field(ge=0)
+    rate: float | None = Field(ge=0, le=1)
+
+
+class MetricFunnelStage(BaseModel):
+    stage: MetricFunnelStageName
+    count: int = Field(ge=0)
+
+
+class MetricTimeseriesPoint(BaseModel):
+    period_start: str
+    application_count: int = Field(ge=0)
+
+
+class MetricBreakdownRow(BaseModel):
+    dimension: MetricsBreakdownDimension
+    value: str
+    application_count: int = Field(ge=0)
+    response_count: int = Field(ge=0)
+    interview_count: int = Field(ge=0)
+    offer_count: int = Field(ge=0)
+
+
 class MetricsSummaryResponse(BaseModel):
     """Deterministic summary metrics for the dashboard."""
 
