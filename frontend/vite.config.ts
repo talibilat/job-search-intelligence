@@ -27,6 +27,7 @@ export default defineConfig({
       "/config": BACKEND_URL,
       "/health": BACKEND_URL,
       "/local-data": BACKEND_URL,
+      "/metrics": BACKEND_URL,
     },
   },
   test: {

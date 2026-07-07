@@ -514,6 +514,23 @@ describe("App", () => {
     );
   });
 
+  it("renders Q-07 interview invitations from the metrics summary", async () => {
+    mockFetchResponses({
+      "/metrics/summary": { interview_invitation_count: 3 },
+    });
+
+    renderAtPath("/dashboard");
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 3,
+        name: "Interview invitations",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
+    expect(screen.getByText("Q-07 - Counted from interview_scheduled events")).toBeTruthy();
+  });
+
   it("renders the feature status dashboard with searchable frontend feature metadata", () => {
     renderAtPath("/features");
 
@@ -555,12 +572,13 @@ describe("App", () => {
     expect(frontendApiIntegrations).toBeTruthy();
     expect(frontendApiIntegrations?.textContent).toContain("GET /setup/status");
     expect(frontendApiIntegrations?.textContent).toContain("GET /insights");
+    expect(frontendApiIntegrations?.textContent).toContain("GET /metrics/summary");
     expect(frontendApiIntegrations?.textContent).toContain(
       "POST /insights/regenerate",
     );
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
     expect(frontendApiIntegrations?.textContent).not.toContain(
-      "GET /metrics/summary",
+      "Future GET /metrics/summary",
     );
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
 
