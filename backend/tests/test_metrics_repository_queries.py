@@ -18,7 +18,12 @@ def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> N
         repository = MetricsRepository(connection)
 
         total_applications = repository.count_total_applications()
-        rates = {metric.name: metric for metric in repository.get_rate_metrics()}
+        rates = {
+            metric.name: metric
+            for metric in repository.get_rate_metrics(
+                ghost_cutoff_at="2026-07-02T09:00:00+00:00"
+            )
+        }
         funnel = {stage.stage: stage.count for stage in repository.get_funnel_metrics()}
 
     assert total_applications == 5
@@ -26,7 +31,7 @@ def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> N
     assert rates["response"].denominator == 5
     assert rates["response"].rate == 0.6
     assert rates["rejection"].rate == 0.2
-    assert rates["ghost"].rate == 0.2
+    assert rates["ghost"].rate == 0.4
     assert rates["application_to_interview"].rate == 0.2
     assert rates["interview_to_offer"].rate == 1.0
     assert funnel == {
@@ -36,6 +41,48 @@ def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> N
         "interview": 1,
         "offer": 1,
     }
+
+
+def test_rate_metrics_uses_threshold_ghost_count(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-silent-over-threshold",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="applied",
+            tech_stack=["Python"],
+            event_types=("applied",),
+        )
+        insert_application(
+            connection,
+            application_id="app-silent-under-threshold",
+            source="linkedin",
+            first_seen_at="2026-07-03T09:00:00+00:00",
+            current_status="applied",
+            tech_stack=["Python"],
+            event_types=("applied",),
+        )
+        connection.execute(
+            """
+            UPDATE application_events
+            SET event_at = ?
+            WHERE application_id = ?
+            """,
+            ("2026-07-03T09:00:00+00:00", "app-silent-under-threshold"),
+        )
+
+        rates = {
+            metric.name: metric
+            for metric in MetricsRepository(connection).get_rate_metrics(
+                ghost_cutoff_at="2026-07-02T09:00:00+00:00"
+            )
+        }
+
+    assert rates["ghost"].numerator == 1
+    assert rates["ghost"].denominator == 2
+    assert rates["ghost"].rate == 0.5
 
 
 def test_interview_to_offer_rate_counts_offers_only_after_interviews(
@@ -53,7 +100,12 @@ def test_interview_to_offer_rate_counts_offers_only_after_interviews(
             event_types=("applied", "offer"),
         )
 
-        rates = {metric.name: metric for metric in MetricsRepository(connection).get_rate_metrics()}
+        rates = {
+            metric.name: metric
+            for metric in MetricsRepository(connection).get_rate_metrics(
+                ghost_cutoff_at="2026-07-02T09:00:00+00:00"
+            )
+        }
 
     assert rates["interview_to_offer"].numerator == 0
     assert rates["interview_to_offer"].denominator == 0
@@ -75,7 +127,12 @@ def test_interview_to_offer_rate_excludes_offers_before_interviews(
             event_types=("applied", "offer", "interview_scheduled"),
         )
 
-        rates = {metric.name: metric for metric in MetricsRepository(connection).get_rate_metrics()}
+        rates = {
+            metric.name: metric
+            for metric in MetricsRepository(connection).get_rate_metrics(
+                ghost_cutoff_at="2026-07-02T09:00:00+00:00"
+            )
+        }
 
     assert rates["interview_to_offer"].numerator == 0
     assert rates["interview_to_offer"].denominator == 1
@@ -106,7 +163,12 @@ def test_interview_to_offer_rate_uses_event_id_tiebreaker(
             ("2026-07-02T09:00:00+00:00", "app-interview-offer-same-time"),
         )
 
-        rates = {metric.name: metric for metric in MetricsRepository(connection).get_rate_metrics()}
+        rates = {
+            metric.name: metric
+            for metric in MetricsRepository(connection).get_rate_metrics(
+                ghost_cutoff_at="2026-07-02T09:00:00+00:00"
+            )
+        }
 
     assert rates["interview_to_offer"].numerator == 1
     assert rates["interview_to_offer"].denominator == 1

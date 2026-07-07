@@ -50,11 +50,13 @@ class MetricsRepository(BaseRepository[int]):
     def count_applications_with_offer_events(self) -> int:
         return self._count_applications_with_event("offer")
 
-    def get_rate_metrics(self) -> tuple[MetricRateRow, ...]:
+    def get_rate_metrics(self, *, ghost_cutoff_at: str) -> tuple[MetricRateRow, ...]:
         total_applications = self.count_total_applications()
         response_metric = self.get_response_silence_metric()
         rejected_applications = self.count_rejected_applications()
-        ghosted_applications = self._count_applications_with_current_status("ghosted")
+        ghosted_applications = self.count_threshold_ghosted_applications(
+            cutoff_at=ghost_cutoff_at,
+        )
         interviewed_applications = self._count_applications_with_event("interview_scheduled")
         offered_after_interview_applications = self._count_applications_with_later_event(
             first_event_type="interview_scheduled",
