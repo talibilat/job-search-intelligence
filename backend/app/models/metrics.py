@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+
+from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 
 
 class MetricRate(BaseModel):
@@ -36,6 +38,50 @@ class ApplicationWindowMetric(BaseModel):
     start_at: datetime
     end_at: datetime
     application_count: int = Field(ge=0)
+
+
+class MetricsFilter(BaseModel):
+    status: ApplicationStatus | None = None
+    source: ApplicationSource | None = None
+    sponsorship: SponsorshipStatus | None = None
+    first_seen_from: datetime | None = None
+    first_seen_to: datetime | None = None
+    role: str | None = None
+    salary_min: int | None = Field(default=None, ge=0)
+    salary_max: int | None = Field(default=None, ge=0)
+    work_mode: WorkMode | None = None
+
+    @field_validator("first_seen_from", "first_seen_to")
+    @classmethod
+    def normalize_datetime(cls, value: datetime | None, info: ValidationInfo) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            msg = f"{info.field_name} must include a timezone offset"
+            raise ValueError(msg)
+        return value.astimezone(UTC)
+
+    @field_validator("role")
+    @classmethod
+    def normalize_role(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            msg = "role must not be blank"
+            raise ValueError(msg)
+        return stripped
+
+    @model_validator(mode="after")
+    def validate_salary_band(self) -> Self:
+        if (
+            self.salary_min is not None
+            and self.salary_max is not None
+            and self.salary_min > self.salary_max
+        ):
+            msg = "salary_min must be less than or equal to salary_max"
+            raise ValueError(msg)
+        return self
 
 
 class ResponseSilenceMetric(BaseModel):
