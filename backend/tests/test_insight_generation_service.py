@@ -278,6 +278,44 @@ def test_weekly_actions_generation_rejects_uncited_or_wrong_count_actions(
             asyncio.run(service.generate_insight("weekly_actions"))
 
 
+def test_weekly_actions_generation_rejects_citation_only_actions(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    content = "\n".join(
+        (
+            f"1. [{WEEKLY_ACTIONS_CITATION_ID}]",
+            "2. Prepare a focused interview notes page for the Beta LLC backend role. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "3. Apply to three similar backend roles that match the same Python signals. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+        ),
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_current_application_fixture(connection)
+        repository = InsightRepository(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content=content,
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="Weekly actions insight must contain exactly three cited actions.",
+        ):
+            asyncio.run(service.generate_insight("weekly_actions"))
+
+
 def test_weekly_actions_generation_does_not_reuse_legacy_unvalidated_cache(
     tmp_path: Path,
 ) -> None:

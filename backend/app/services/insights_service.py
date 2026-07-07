@@ -262,10 +262,14 @@ def _validate_weekly_actions_content(
         raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
 
     for expected_number, action_line in enumerate(action_lines, start=1):
-        if not action_line.startswith(f"{expected_number}. "):
+        line_prefix = f"{expected_number}. "
+        if not action_line.startswith(line_prefix):
             raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
         citation_ids = _extract_citation_ids(action_line)
         if not citation_ids or citation_ids - allowed_citation_ids:
+            raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
+        action_text = _CITATION_PATTERN.sub("", action_line.removeprefix(line_prefix)).strip()
+        if not re.search(r"[A-Za-z0-9]", action_text):
             raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
 
 
