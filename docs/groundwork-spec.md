@@ -60,7 +60,7 @@ job-search-intelligence/
 │   │   ├── db/
 │   │   │   ├── engine.py           # SQLite engine, sqlite-vec loading, and connection PRAGMAs
 │   │   │   ├── migrations/         # Alembic revisions (batch mode; vec tables hand-written)
-│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ClassificationRunRepo, ApplicationRepo, EventRepo, InsightRepo, CorrectionRepo, ChatRepo
+│   │   │   └── repositories/       # EmailRepo, SyncStateRepo, ClassificationRunRepo, ApplicationRepo, EventRepo, MetricsRepo, InsightRepo, CorrectionRepo, ChatRepo
 │   │   ├── models/                 # Focused Pydantic DTO modules plus stable aggregate exports
 │   │   ├── providers/
 │   │   │   ├── email/              # EmailProvider protocol + Gmail OAuth start/callback/metadata lister + retained-body text normalization + future outlook.py/imap.py
@@ -115,6 +115,7 @@ job-search-intelligence/
 [JT-066 2026-07-05 v2] `backend/app/db/repositories/` now includes `BackfillStateRepository` for durable full-backfill page progress.
 [JT-096 2026-07-05] `backend/app/db/repositories/` now includes `ClassificationRunRepository` for completed-run token and estimated-cost accounting.
 [JT-094 2026-07-05] `backend/app/services/structured_extraction.py` now owns the Phase 2 structured extraction batch flow from retained candidates through LLM calls, accepted classification storage, public-safe malformed results, and classification-run accounting.
+[JT-122 2026-07-07] `backend/app/db/repositories/` now includes `MetricsRepository` queries and typed DTOs for deterministic Phase 3 total counts, rates, funnel stages, application-volume timeseries, and breakdown rows.
 
 ---
 
@@ -264,6 +265,8 @@ Provider responses must pass `app.pipeline.classify.parse_classification_generat
 For the Q-46 `story` insight, evidence is narrowed to the recent 366-day window anchored to the newest event or email timestamp, then kept chronological so the LLM receives a grounded recent search arc.
 The story prompt names Q-46 directly and asks for phases, turning points, repeated patterns, and changes over time with citation IDs for each narrative beat.
 `InsightGenerationService` builds deterministic facts and cited evidence from local SQLite, calls the configured `LLMProvider` only when regeneration is needed or forced, rejects incomplete, blank, or uncited provider output before caching, and writes accepted narrative insights through `InsightRepository`.
+`MetricsRepository` reads the canonical `applications` table plus `application_events` timeline for deterministic dashboard foundations: total applications, response/rejection/ghost/application-to-interview/interview-to-offer rates, funnel counts, daily application volume from `first_seen_at`, and role/source/salary/tech/sponsorship/seniority/work-mode breakdown rows.
+Repository-layer metrics do not call an LLM and do not expose new REST endpoints until the later metrics route tickets wire them through services and API responses.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 
@@ -289,6 +292,7 @@ Show a **pre-run cost estimate** and track tokens per run.
   [JT-112 2026-07-06] The backend now implements the manual split slice, `POST /applications/{application_id}/split`, moving selected events into a deterministic new manually locked application, locking the source application, recalculating source and target timeline dates, deriving target status from moved events, preserving an already locked source status, preserving corrected segmentation fields for deterministic dashboard breakdowns, writing one audited `split` correction row, and returning typed `404` or `409` errors for missing source applications and split conflicts.
   [2026-07-06] The backend now implements the manual merge slice, `POST /applications/{application_id}/merge`, moving source events into the target application, recalculating the merged summary, deleting the source application, writing one audited `merge` correction row, and returning typed errors for missing applications, self-merge requests, and duplicate evidence conflicts.
 - **Metrics (deterministic):** `GET /metrics/summary`, `/metrics/rates`, `/metrics/funnel`, `/metrics/timeseries`, `/metrics/breakdown?dimension=role|source|salary|tech|sponsorship|seniority|work_mode`, `/metrics/diagnostics`
+  [JT-122 2026-07-07] The repository layer now supplies deterministic typed query results for rates, funnels, timeseries, and breakdowns; endpoint exposure remains owned by the later metrics route tickets.
 - **Insights (cached LLM):** `GET /insights` returns latest cached `InsightRecord` rows from local SQLite, including stale records so clients can show regeneration state; `POST /insights/regenerate` accepts `InsightRegenerateRequest` with an insight `type` and optional `max_evidence_items` defaulting to `100`, forces regeneration through deterministic cited inputs and the configured LLM provider, stores the accepted row in the insights cache, returns the saved insight plus evidence citation IDs, and maps validation or provider failures to typed public-safe API errors.
   [JT-190 2026-07-07] `recurring_feedback` answers Q-41 from `feedback` timeline events only; if fewer than two cited feedback items exist, the service saves an insufficient-evidence explanation instead of asking the LLM to infer a recurring theme.
 - **Chat (agent):** `POST /chat` (SSE streaming), `GET /chat/history`
