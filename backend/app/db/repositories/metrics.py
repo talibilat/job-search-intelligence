@@ -56,8 +56,9 @@ class MetricsRepository(BaseRepository[int]):
         rejected_applications = self.count_rejected_applications()
         ghosted_applications = self._count_applications_with_current_status("ghosted")
         interviewed_applications = self._count_applications_with_event("interview_scheduled")
-        offered_after_interview_applications = self._count_applications_with_events(
-            ("interview_scheduled", "offer"),
+        offered_after_interview_applications = self._count_applications_with_later_event(
+            first_event_type="interview_scheduled",
+            later_event_type="offer",
         )
 
         return (
@@ -199,22 +200,60 @@ class MetricsRepository(BaseRepository[int]):
             (event_type,),
         )
 
-    def _count_applications_with_events(self, event_types: Sequence[str]) -> int:
-        placeholders = ", ".join("?" for _ in event_types)
+    def _count_applications_with_later_event(
+        self,
+        *,
+        first_event_type: str,
+        later_event_type: str,
+    ) -> int:
         return self._fetch_count(
-            f"""
-            SELECT COUNT(*)
-            FROM (
-                SELECT applications.id
-                FROM applications
-                INNER JOIN application_events
-                    ON application_events.application_id = applications.id
-                WHERE application_events.event_type IN ({placeholders})
-                GROUP BY applications.id
-                HAVING COUNT(DISTINCT application_events.event_type) = ?
+            """
+            WITH event_order AS (
+                SELECT
+                    application_events.application_id,
+                    application_events.id,
+                    application_events.event_type,
+                    application_events.event_at,
+                    COALESCE(raw_emails.sent_at, application_events.event_at) AS email_sent_at,
+                    COALESCE(
+                        email_classifications.classified_at,
+                        COALESCE(raw_emails.sent_at, application_events.event_at)
+                    ) AS classified_at
+                FROM application_events
+                LEFT JOIN raw_emails
+                    ON raw_emails.id = application_events.email_id
+                LEFT JOIN email_classifications
+                    ON email_classifications.email_id = application_events.email_id
+                WHERE application_events.event_type IN (?, ?)
             )
+            SELECT COUNT(DISTINCT first_event.application_id)
+            FROM event_order AS first_event
+            INNER JOIN event_order AS later_event
+                ON later_event.application_id = first_event.application_id
+            INNER JOIN applications
+                ON applications.id = first_event.application_id
+            WHERE first_event.event_type = ?
+              AND later_event.event_type = ?
+              AND (
+                later_event.event_at > first_event.event_at
+                OR (
+                    later_event.event_at = first_event.event_at
+                    AND later_event.email_sent_at > first_event.email_sent_at
+                )
+                OR (
+                    later_event.event_at = first_event.event_at
+                    AND later_event.email_sent_at = first_event.email_sent_at
+                    AND later_event.classified_at > first_event.classified_at
+                )
+                OR (
+                    later_event.event_at = first_event.event_at
+                    AND later_event.email_sent_at = first_event.email_sent_at
+                    AND later_event.classified_at = first_event.classified_at
+                    AND later_event.id > first_event.id
+                )
+              )
             """,
-            (*event_types, len(event_types)),
+            (first_event_type, later_event_type, first_event_type, later_event_type),
         )
 
     def _get_application_breakdown(

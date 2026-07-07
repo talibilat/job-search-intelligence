@@ -60,6 +60,59 @@ def test_interview_to_offer_rate_counts_offers_only_after_interviews(
     assert rates["interview_to_offer"].rate == 0.0
 
 
+def test_interview_to_offer_rate_excludes_offers_before_interviews(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-offer-before-interview",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="interview",
+            tech_stack=["Python"],
+            event_types=("applied", "offer", "interview_scheduled"),
+        )
+
+        rates = {metric.name: metric for metric in MetricsRepository(connection).get_rate_metrics()}
+
+    assert rates["interview_to_offer"].numerator == 0
+    assert rates["interview_to_offer"].denominator == 1
+    assert rates["interview_to_offer"].rate == 0.0
+
+
+def test_interview_to_offer_rate_uses_event_id_tiebreaker(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-interview-offer-same-time",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="offer",
+            tech_stack=["Python"],
+            event_types=("applied", "interview_scheduled", "offer"),
+        )
+        connection.execute(
+            """
+            UPDATE application_events
+            SET event_at = ?
+            WHERE application_id = ?
+              AND event_type IN ('interview_scheduled', 'offer')
+            """,
+            ("2026-07-02T09:00:00+00:00", "app-interview-offer-same-time"),
+        )
+
+        rates = {metric.name: metric for metric in MetricsRepository(connection).get_rate_metrics()}
+
+    assert rates["interview_to_offer"].numerator == 1
+    assert rates["interview_to_offer"].denominator == 1
+    assert rates["interview_to_offer"].rate == 1.0
+
+
 def test_metrics_repository_returns_application_timeseries(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
