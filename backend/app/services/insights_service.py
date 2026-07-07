@@ -228,9 +228,7 @@ def _count_rejected_skills_from_evidence(
     for item in evidence:
         application_skills = skills_by_application.setdefault(item.application_id, set())
         application_skills.update(
-            skill.strip()
-            for skill in item.tech_stack
-            if isinstance(skill, str) and skill.strip()
+            skill.strip() for skill in item.tech_stack if isinstance(skill, str) and skill.strip()
         )
 
     counts: dict[str, int] = {}

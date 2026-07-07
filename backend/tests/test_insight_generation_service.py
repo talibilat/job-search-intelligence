@@ -69,8 +69,7 @@ def test_insight_generation_service_generates_and_persists_grounded_narrative(
     assert result.cached is False
     assert result.insight.type == "why_rejected"
     assert result.insight.content == (
-        "Rejected applications repeatedly mention Kubernetes experience. "
-        f"[{CITATION_ID}]"
+        f"Rejected applications repeatedly mention Kubernetes experience. [{CITATION_ID}]"
     )
     assert result.insight.model == "llama3.1"
     assert result.insight.generated_at == GENERATED_AT
@@ -202,10 +201,7 @@ def test_skill_gaps_generation_request_focuses_on_rejected_role_technology_gaps(
         provider = FakeLLMProvider(
             (
                 LLMGenerationResponse(
-                    content=(
-                        "Kubernetes appears as a rejected-role gap. "
-                        f"[{CITATION_ID}]"
-                    ),
+                    content=(f"Kubernetes appears as a rejected-role gap. [{CITATION_ID}]"),
                     model="llama3.1",
                     finish_reason=LLMFinishReason.STOP,
                 ),

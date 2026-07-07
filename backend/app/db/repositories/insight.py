@@ -335,11 +335,7 @@ def _parse_skill_list(value: object) -> list[str]:
     if not isinstance(payload, list):
         return []
     return sorted(
-        {
-            skill.strip()
-            for skill in payload
-            if isinstance(skill, str) and skill.strip()
-        },
+        {skill.strip() for skill in payload if isinstance(skill, str) and skill.strip()},
     )
 
 
