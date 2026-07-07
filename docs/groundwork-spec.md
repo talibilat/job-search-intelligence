@@ -115,6 +115,7 @@ job-search-intelligence/
 [JT-066 2026-07-05 v2] `backend/app/db/repositories/` now includes `BackfillStateRepository` for durable full-backfill page progress.
 [JT-096 2026-07-05] `backend/app/db/repositories/` now includes `ClassificationRunRepository` for completed-run token and estimated-cost accounting.
 [JT-094 2026-07-05] `backend/app/services/structured_extraction.py` now owns the Phase 2 structured extraction batch flow from retained candidates through LLM calls, accepted classification storage, public-safe malformed results, and classification-run accounting.
+[JT-121 2026-07-07] `backend/app/services/metrics.py` now includes the Phase 3 `MetricsService` foundation for deterministic foundational counts over `applications`, plus a FastAPI dependency seam for later `/metrics/*` route slices.
 
 ---
 
@@ -264,6 +265,8 @@ Provider responses must pass `app.pipeline.classify.parse_classification_generat
 For the Q-46 `story` insight, evidence is narrowed to the recent 366-day window anchored to the newest event or email timestamp, then kept chronological so the LLM receives a grounded recent search arc.
 The story prompt names Q-46 directly and asks for phases, turning points, repeated patterns, and changes over time with citation IDs for each narrative beat.
 `InsightGenerationService` builds deterministic facts and cited evidence from local SQLite, calls the configured `LLMProvider` only when regeneration is needed or forced, rejects incomplete, blank, or uncited provider output before caching, and writes accepted narrative insights through `InsightRepository`.
+`MetricsService` reads canonical `applications` records through `ApplicationRepository` and produces foundational metric snapshots with total applications, distinct normalized companies, fixed-order status counts, and a generation timestamp.
+Those foundational metric snapshots are typed Pydantic DTOs and do not call any LLM path.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 

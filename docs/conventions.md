@@ -55,6 +55,7 @@ Baseline coding standards for every agent and contributor.
 - Aggregation grouping-key assembly belongs in `app.pipeline.aggregate.build_application_grouping_key`: use normalized company and role values, trim provider thread IDs without case-folding them, prefer a present thread signal, and use the UTC date-window bucket only when the thread signal is missing.
 - Aggregation status derivation belongs in the aggregate service: combine already-persisted `application_events` with the current batch, order them by event timestamp, raw email `sent_at`, and classification timestamp, then derive `applications.current_status` from status-bearing event types without overwriting manual-lock conflicts.
 - Service layer holds business logic; FastAPI route handlers stay thin.
+- Foundational metric logic belongs in `MetricsService`, reads from `ApplicationRepository`, returns typed metric DTOs, and must not call an LLM or produce dashboard facts in route handlers.
 - FastAPI dependency injection supplies repositories, providers, and config.
 - Typed errors at API boundaries; no bare exceptions leak to the client.
 - Email-provider failures that can cross the API boundary must use stable `EmailProviderErrorCode` values and `EmailProviderUserAction` hints so clients can distinguish reconnect, scope, rate-limit, temporary outage, expired-cursor, invalid-provider-response, and generic provider-failure cases without inspecting provider payloads.
@@ -67,6 +68,7 @@ Baseline coding standards for every agent and contributor.
 ## Determinism and the LLM
 
 - Dashboard counts, rates, funnels, time math, and group-bys are deterministic SQL or typed Python.
+- Foundational metric snapshots count canonical `applications`, normalize companies for distinct-company totals, and emit application status counts in a fixed order.
 - The same input database produces the same metrics every time.
 - The LLM never produces authoritative counts and never emits raw SQL for execution.
 - Quantitative answers reconcile with deterministic queries; content answers cite real emails or applications.
@@ -94,6 +96,7 @@ Baseline coding standards for every agent and contributor.
 - Status-derivation aggregation changes: verify incremental out-of-order evidence, manual-lock preservation, event-type-only derivation, and missing-`event_at` idempotency.
 - Grouping-key-only aggregation changes: run the focused grouping-key tests plus the company and role normalization tests that feed the key.
 - Insight prompt, evidence-scope, or cache-hash changes: run the focused insight input and generation service tests, and verify grounding plus citation behavior.
+- Foundational metrics changes: run `uv run pytest tests/test_metrics_service.py -q` from `backend/`.
 - Never claim work is complete without fresh verification evidence.
 
 ## Ticket-specific conventions

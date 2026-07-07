@@ -2,6 +2,7 @@
 
 Synthetic fixtures are private-data-free JSON files for backend tests and later dashboard smoke paths.
 They model the same factual spine described in the PRD: emails, classifications, applications, and application events.
+The foundational metrics service tests use the sample fixture plus synthetic inserted applications to verify deterministic counts without private data.
 
 The Phase 2 golden-set classification fixture is separate from the SQLite smoke fixture format below.
 `backend/evals/golden_set.jsonl` is JSONL, and each line carries one private-data-free synthetic Gmail case with an expected job-vs-not label and classification category.
@@ -132,6 +133,12 @@ Validate the loader with:
 
 ```bash
 uv run pytest tests/test_synthetic_fixture_loader.py -v
+```
+
+Validate foundational metrics behavior that uses the sample fixture with:
+
+```bash
+uv run pytest tests/test_metrics_service.py -q
 ```
 
 ## Golden Set Fixture
