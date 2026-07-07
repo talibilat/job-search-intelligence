@@ -296,7 +296,10 @@ def _utcnow() -> datetime:
 
 
 def _hash_insight_input(insight_input: InsightInput) -> str:
-    payload = insight_input.model_dump(mode="json", exclude={"inputs_hash"})
+    payload = {
+        "prompt_version": INSIGHT_GENERATION_PROMPT_VERSION,
+        "input": insight_input.model_dump(mode="json", exclude={"inputs_hash"}),
+    }
     return _hash_payload(payload)
 
 

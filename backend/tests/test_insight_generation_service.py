@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import sqlite3
 from datetime import UTC, datetime
@@ -277,6 +278,54 @@ def test_weekly_actions_generation_rejects_uncited_or_wrong_count_actions(
             asyncio.run(service.generate_insight("weekly_actions"))
 
 
+def test_weekly_actions_generation_does_not_reuse_legacy_unvalidated_cache(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    content = "\n".join(
+        (
+            "1. Send Beta LLC a concise scheduling follow-up before Friday. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "2. Prepare a focused interview notes page for the Beta LLC backend role. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "3. Apply to three similar backend roles that match the same Python signals. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+        ),
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_current_application_fixture(connection)
+        repository = InsightRepository(connection)
+        insight_input = InsightInputBuilder(repository).build("weekly_actions")
+        repository.save_generated_insight(
+            insight_type="weekly_actions",
+            content="Follow up with Beta LLC next week.",
+            inputs_hash=legacy_insight_input_hash(insight_input.model_dump(mode="json")),
+            model="llama3.1",
+            generated_at=GENERATED_AT,
+        )
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=content,
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            ),
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("weekly_actions"))
+
+    assert result.cached is False
+    assert result.insight.content == content
+    assert len(provider.requests) == 1
+
+
 @pytest.mark.parametrize(
     "response",
     (
@@ -327,6 +376,13 @@ def insight_settings() -> AppSettings:
         llm_provider=LLMProviderName.OLLAMA,
         ollama_chat_model="llama3.1",
     )
+
+
+def legacy_insight_input_hash(payload: dict[str, object]) -> str:
+    payload = dict(payload)
+    payload.pop("inputs_hash")
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def insert_rejected_application_fixture(connection: sqlite3.Connection) -> None:
