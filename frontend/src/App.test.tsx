@@ -514,6 +514,23 @@ describe("App", () => {
     );
   });
 
+  it("renders Q-07 interview invitations from the metrics summary", async () => {
+    mockFetchResponses({
+      "/metrics/summary": { interview_invitation_count: 3 },
+    });
+
+    renderAtPath("/dashboard");
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 3,
+        name: "Interview invitations",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
+    expect(screen.getByText("Q-07 - Counted from interview_scheduled events")).toBeTruthy();
+  });
+
   it("renders the feature status dashboard with searchable frontend feature metadata", () => {
     renderAtPath("/features");
 

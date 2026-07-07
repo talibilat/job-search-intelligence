@@ -65,11 +65,14 @@ export function DashboardPage() {
     };
   }, []);
 
-  const distinctCompanyValue = isLoadingSummary
-    ? "Loading"
-    : summary
-      ? numberFormatter.format(summary.distinct_company_count)
-      : "Unavailable";
+  const distinctCompanyValue = summaryMetricValue(
+    isLoadingSummary,
+    summary?.distinct_company_count,
+  );
+  const interviewInvitationValue = summaryMetricValue(
+    isLoadingSummary,
+    summary?.interview_invitation_count,
+  );
 
   return (
     <main
@@ -80,11 +83,12 @@ export function DashboardPage() {
         className="dashboard-hero"
         aria-labelledby="dashboard-page-title"
       >
-        <p className="eyebrow">Phase 0 dashboard shell</p>
+        <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          This route is ready for deterministic job-search metrics once the
-          applications API and metrics endpoints exist.
+          Q-07 now reports interview invitations from the local application
+          event timeline, while the remaining dashboard questions stay clearly
+          marked as pending.
         </p>
       </section>
 
@@ -124,6 +128,13 @@ export function DashboardPage() {
                 Q-03 counted from normalized applications
               </p>
             </article>
+            <article className="metric-placeholder">
+              <h3 className="metric-placeholder__label">Interview invitations</h3>
+              <p className="metric-placeholder__value">{interviewInvitationValue}</p>
+              <p className="dashboard-card__meta">
+                Q-07 - Counted from interview_scheduled events
+              </p>
+            </article>
             {metricPlaceholders.map((metric) => (
               <article className="metric-placeholder" key={metric.label}>
                 <p className="metric-placeholder__label">{metric.label}</p>
@@ -146,4 +157,14 @@ export function DashboardPage() {
       />
     </main>
   );
+}
+
+function summaryMetricValue(isLoading: boolean, value: number | undefined) {
+  if (isLoading) {
+    return "Loading";
+  }
+  if (value === undefined) {
+    return "Unavailable";
+  }
+  return numberFormatter.format(value);
 }

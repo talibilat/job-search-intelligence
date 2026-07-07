@@ -14,7 +14,10 @@ class ResponseSilenceMetric(BaseModel):
 
 
 class MetricsSummaryResponse(BaseModel):
+    """Deterministic summary metrics for the dashboard."""
+
     distinct_company_count: int = Field(ge=0)
     ghosted_applications: int = Field(ge=0)
     ghost_threshold_days: int = Field(ge=1)
     evaluated_at: datetime
+    interview_invitation_count: int = Field(ge=0)
