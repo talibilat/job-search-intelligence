@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import cast
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from app.db.repositories import ApplicationRepository, EventRepository, InsightRepository
+from app.models.records import InsightRoleOutcomeSummary
 from app.services.insights_service import InsightInputBuilder
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -248,6 +250,112 @@ def test_weekly_actions_input_prefers_open_current_evidence(tmp_path: Path) -> N
     ]
     assert [evidence.event_id for evidence in insight_input.evidence] == [
         "event-interview-invite",
+    ]
+
+
+def test_role_fit_input_includes_role_outcome_summaries(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+        insert_application(
+            connection,
+            application_id="application-frontend-rejected",
+            company="Gamma Inc",
+            role_title="Frontend Engineer",
+            current_status="rejected",
+            first_seen_at="2026-07-03T09:00:00+00:00",
+            last_activity_at="2026-07-06T10:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="application-backend-applied",
+            company="Omega Inc",
+            current_status="applied",
+            first_seen_at="2026-07-03T08:00:00+00:00",
+            last_activity_at="2026-07-03T08:00:00+00:00",
+        )
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build("role_fit")
+
+    fact_values = {fact.name: fact.value for fact in insight_input.facts}
+    role_outcomes = cast(
+        list[InsightRoleOutcomeSummary],
+        fact_values["role_outcome_summaries"],
+    )
+
+    assert insight_input.type == "role_fit"
+    assert [outcome.model_dump() for outcome in role_outcomes] == [
+        {
+            "role_title": "Backend Engineer",
+            "application_count": 3,
+            "win_count": 1,
+            "loss_count": 1,
+            "status_counts": {"applied": 1, "interview": 1, "rejected": 1},
+            "citation_ids": [
+                "application:application-rejected|event:event-rejected-applied|email:email-applied",
+                "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+                "application:application-backend-applied",
+                "application:application-rejected|event:event-rejected-rejection|email:email-rejection",
+                "application:application-interview|event:event-interview-invite|email:email-interview",
+            ],
+        },
+        {
+            "role_title": "Frontend Engineer",
+            "application_count": 1,
+            "win_count": 0,
+            "loss_count": 1,
+            "status_counts": {"rejected": 1},
+            "citation_ids": ["application:application-frontend-rejected"],
+        },
+    ]
+    evidence_sources = [
+        (evidence.application_id, evidence.event_id) for evidence in insight_input.evidence
+    ]
+    assert evidence_sources == [
+        ("application-rejected", "event-rejected-applied"),
+        ("application-interview", "event-interview-applied"),
+        ("application-backend-applied", None),
+        ("application-frontend-rejected", None),
+        ("application-rejected", "event-rejected-rejection"),
+        ("application-interview", "event-interview-invite"),
+    ]
+
+
+def test_role_fit_outcome_summaries_include_limited_out_applications(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "role_fit",
+            max_evidence_items=1,
+        )
+
+    fact_values = {fact.name: fact.value for fact in insight_input.facts}
+    role_outcomes = cast(
+        list[InsightRoleOutcomeSummary],
+        fact_values["role_outcome_summaries"],
+    )
+
+    assert len(insight_input.evidence) == 1
+    assert [outcome.model_dump() for outcome in role_outcomes] == [
+        {
+            "role_title": "Backend Engineer",
+            "application_count": 2,
+            "win_count": 1,
+            "loss_count": 1,
+            "status_counts": {"interview": 1, "rejected": 1},
+            "citation_ids": [
+                "application:application-rejected|event:event-rejected-applied|email:email-applied",
+                "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+                "application:application-rejected|event:event-rejected-rejection|email:email-rejection",
+                "application:application-interview|event:event-interview-invite|email:email-interview",
+            ],
+        },
     ]
 
 

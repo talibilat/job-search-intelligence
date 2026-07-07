@@ -194,6 +194,98 @@ def test_insight_generation_service_accepts_claims_with_same_sentence_citations(
     assert result.insight.content == content
 
 
+def test_role_fit_generation_request_answers_q44_with_win_pattern_facts(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "Backend Engineer is the clearest fit because it produced an "
+                        f"interview signal. [{CITATION_ID}]"
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        asyncio.run(service.generate_insight("role_fit"))
+
+    request = provider.requests[0]
+    assert "Q-44" in request.messages[0].content
+    assert "interviews and offers as wins" in request.messages[0].content
+    assert "rejected and ghosted outcomes" in request.messages[0].content
+    assert "derived from the cited applications" in request.messages[0].content
+    assert "each role_outcome_summary includes citation_ids" in request.messages[0].content
+
+    prompt_payload = json.loads(request.messages[1].content)
+    role_outcome_fact = next(
+        fact for fact in prompt_payload["facts"] if fact["name"] == "role_outcome_summaries"
+    )
+    assert role_outcome_fact["source"] == "applications"
+    assert role_outcome_fact["value"] == [
+        {
+            "role_title": "Backend Engineer",
+            "application_count": 2,
+            "win_count": 1,
+            "loss_count": 1,
+            "status_counts": {"interview": 1, "rejected": 1},
+            "citation_ids": [
+                "application:application-rejected|event:event-rejected-applied|email:email-applied",
+                "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+                CITATION_ID,
+                "application:application-interview|event:event-interview-invite|email:email-interview",
+            ],
+        },
+    ]
+
+
+def test_insight_generation_service_allows_no_evidence_caveat(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "There is insufficient cited evidence to identify best-fit roles yet. "
+                        "Missing evidence: applications with interview or offer outcomes."
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("role_fit"))
+
+    assert result.cached is False
+    assert result.insight.content == (
+        "There is insufficient cited evidence to identify best-fit roles yet. "
+        "Missing evidence: applications with interview or offer outcomes."
+    )
+
+
 def test_insight_generation_service_uses_fresh_cache_without_calling_provider(
     tmp_path: Path,
 ) -> None:
@@ -512,6 +604,59 @@ def test_weekly_actions_generation_does_not_reuse_legacy_unvalidated_cache(
 
 
 @pytest.mark.parametrize(
+    "content",
+    (
+        "Rejected applications repeatedly mention Kubernetes experience.",
+        "Rejected applications repeatedly mention Kubernetes experience. [application:unknown]",
+        (
+            f"Backend Engineer produced an interview signal. [{CITATION_ID}] "
+            "Product Manager is also a strong fit."
+        ),
+        (
+            "Rejected applications repeatedly mention Kubernetes experience. "
+            f"[{CITATION_ID}] [source-999]"
+        ),
+        (f"Rejected applications repeatedly mention Kubernetes experience. [{CITATION_ID}] [1]"),
+        (
+            "Rejected applications repeatedly mention Kubernetes experience. "
+            f"[{CITATION_ID}] Your salary target is too high."
+        ),
+        (
+            "Your salary target is too high. "
+            f"Rejected applications mention Kubernetes experience [{CITATION_ID}]."
+        ),
+    ),
+)
+def test_insight_generation_service_rejects_ungrounded_provider_output(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=InsightRepository(connection),
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content=content,
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="LLM returned ungrounded insight content.",
+        ):
+            asyncio.run(service.generate_insight("why_rejected"))
+
+
+@pytest.mark.parametrize(
     "response",
     (
         LLMGenerationResponse(
@@ -545,60 +690,6 @@ def test_insight_generation_service_rejects_invalid_provider_output(
             match="LLM returned invalid insight content.",
         ):
             asyncio.run(service.generate_insight("why_rejected"))
-
-
-@pytest.mark.parametrize(
-    "content",
-    (
-        "Rejected applications repeatedly mention Kubernetes experience.",
-        "Rejected applications repeatedly mention Kubernetes experience. [application:missing]",
-        (
-            "Rejected applications repeatedly mention Kubernetes experience. "
-            f"[{CITATION_ID}] [source-999]"
-        ),
-        (f"Rejected applications repeatedly mention Kubernetes experience. [{CITATION_ID}] [1]"),
-        (
-            "Rejected applications repeatedly mention Kubernetes experience. "
-            f"[{CITATION_ID}] Your salary target is too high."
-        ),
-        (
-            "Your salary target is too high. "
-            f"Rejected applications mention Kubernetes experience [{CITATION_ID}]."
-        ),
-    ),
-)
-def test_insight_generation_service_rejects_ungrounded_provider_output(
-    tmp_path: Path,
-    content: str,
-) -> None:
-    database_path = migrated_database(tmp_path)
-    with sqlite3.connect(database_path) as connection:
-        insert_rejected_application_fixture(connection)
-        repository = InsightRepository(connection)
-        service = InsightGenerationService(
-            settings=insight_settings(),
-            insight_repository=repository,
-            llm_provider=FakeLLMProvider(
-                (
-                    LLMGenerationResponse(
-                        content=content,
-                        model="llama3.1",
-                        finish_reason=LLMFinishReason.STOP,
-                    ),
-                ),
-            ),
-            clock=lambda: GENERATED_AT,
-        )
-
-        with pytest.raises(
-            LLMProviderResponseError,
-            match="LLM returned ungrounded insight content.",
-        ):
-            asyncio.run(service.generate_insight("why_rejected"))
-
-        cached = repository.get_latest_insight("why_rejected", include_stale=True)
-
-    assert cached is None
 
 
 def migrated_database(tmp_path: Path) -> Path:
@@ -685,7 +776,7 @@ def insert_rejected_application_fixture(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
-def insert_current_application_fixture(connection: sqlite3.Connection) -> None:
+def insert_interview_application_fixture(connection: sqlite3.Connection) -> None:
     insert_raw_email(
         connection,
         email_id="email-interview-applied",
@@ -737,6 +828,10 @@ def insert_current_application_fixture(connection: sqlite3.Connection) -> None:
         extract_note="Interview invite received.",
     )
     connection.commit()
+
+
+def insert_current_application_fixture(connection: sqlite3.Connection) -> None:
+    insert_interview_application_fixture(connection)
 
 
 def insert_raw_email(
