@@ -4,7 +4,12 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from app.db.repositories.metrics import MetricsRepository
-from app.models import MetricsSummaryResponse, ResponseSilenceMetric
+from app.models import (
+    MetricRate,
+    MetricsRatesResponse,
+    MetricsSummaryResponse,
+    ResponseSilenceMetric,
+)
 
 type Clock = Callable[[], datetime]
 
@@ -45,5 +50,30 @@ class MetricsSummaryService:
         return self._metrics_repository.get_response_silence_metric()
 
 
+class MetricsRatesService:
+    """Build deterministic dashboard rate metrics from local SQLite."""
+
+    def __init__(self, *, metrics_repository: MetricsRepository) -> None:
+        self._metrics_repository = metrics_repository
+
+    def get_rates(self) -> MetricsRatesResponse:
+        response_silence = self._metrics_repository.get_response_silence_metric()
+        denominator = response_silence.total_applications
+        numerator = response_silence.human_response_count
+        return MetricsRatesResponse(
+            overall_response_rate=MetricRate(
+                numerator=numerator,
+                denominator=denominator,
+                rate=_rate(numerator=numerator, denominator=denominator),
+            )
+        )
+
+
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _rate(*, numerator: int, denominator: int) -> float | None:
+    if denominator == 0:
+        return None
+    return numerator / denominator

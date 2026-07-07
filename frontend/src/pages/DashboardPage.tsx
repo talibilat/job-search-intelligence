@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 
 import {
   ApplicationStatus,
+  getMetricsRatesMetricsRatesGet,
   getMetricsSummaryMetricsSummaryGet,
   listApplicationsApplicationsGet,
   type ApplicationRecord,
+  type MetricRate,
   type MetricsSummaryResponse,
 } from "../api";
 import { ChartPanel } from "../components/charts";
@@ -18,6 +20,7 @@ const liveApplicationStatuses = [
 ] as const;
 
 type LiveApplicationsState = "loading" | "ready" | "error";
+type ResponseRateLoadState = "loading" | "loaded" | "error";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -36,11 +39,12 @@ const metricPlaceholders = [
     label: "Total applications",
     note: "Counted from applications",
   },
-  {
-    label: "Response rate",
-    note: "Calculated deterministically",
-  },
 ] as const;
+
+const percentageFormatter = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 1,
+  style: "percent",
+});
 
 function liveApplicationsCountLabel(
   state: LiveApplicationsState,
@@ -98,6 +102,9 @@ export function DashboardPage() {
   );
   const [liveApplicationsState, setLiveApplicationsState] =
     useState<LiveApplicationsState>("loading");
+  const [responseRate, setResponseRate] = useState<MetricRate | null>(null);
+  const [responseRateLoadState, setResponseRateLoadState] =
+    useState<ResponseRateLoadState>("loading");
 
   useEffect(() => {
     let ignore = false;
@@ -172,6 +179,30 @@ export function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadResponseRate() {
+      try {
+        const response = await getMetricsRatesMetricsRatesGet();
+        if (!isCancelled) {
+          setResponseRate(response.data.overall_response_rate);
+          setResponseRateLoadState("loaded");
+        }
+      } catch {
+        if (!isCancelled) {
+          setResponseRateLoadState("error");
+        }
+      }
+    }
+
+    void loadResponseRate();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   const distinctCompanyValue = summaryMetricValue(
     isLoadingSummary,
     summary?.distinct_company_count,
@@ -197,10 +228,9 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-07 and Q-08 report interview invitations and offers from the local
-          event timeline, and Q-10 lists live applications from deterministic
-          application rows while remaining dashboard questions stay clearly
-          marked as pending.
+          Q-03, Q-07, Q-08, Q-10, and Q-11 now render from deterministic
+          application and metrics endpoints, while remaining dashboard questions
+          stay clearly marked as pending.
         </p>
       </section>
 
@@ -258,6 +288,18 @@ export function DashboardPage() {
               <p className="metric-placeholder__value">{offersReceivedValue}</p>
               <p className="dashboard-card__meta">
                 Q-08 counted from offer events
+              </p>
+            </article>
+            <article
+              aria-label="Response rate metric"
+              className="metric-placeholder"
+            >
+              <p className="metric-placeholder__label">Response rate</p>
+              <p className="metric-placeholder__value">
+                {formatResponseRateValue(responseRate, responseRateLoadState)}
+              </p>
+              <p className="dashboard-card__meta">
+                {formatResponseRateMeta(responseRate, responseRateLoadState)}
               </p>
             </article>
             {metricPlaceholders.map((metric) => (
@@ -340,11 +382,11 @@ export function DashboardPage() {
       </section>
 
       <ChartPanel
-        description="Dashboard charts stay empty until deterministic metrics endpoints can supply reconciled values from the local SQLite database."
+        description="Dashboard charts stay empty until broader deterministic metrics endpoints can supply reconciled series from the local SQLite database."
         emptyState={{
           title: "Dashboard metrics pending",
           description:
-            "Deterministic metrics will appear here after the metrics API is available.",
+            "Broader deterministic metrics will appear here as additional metrics APIs are available.",
         }}
         title="Dashboard metrics shell"
       />
@@ -360,4 +402,40 @@ function summaryMetricValue(isLoading: boolean, value: number | undefined) {
     return "Unavailable";
   }
   return numberFormatter.format(value);
+}
+
+
+function formatResponseRateValue(
+  metric: MetricRate | null,
+  loadState: ResponseRateLoadState,
+) {
+  if (loadState === "error") {
+    return "Unavailable";
+  }
+  if (loadState === "loading" || metric === null) {
+    return "Loading";
+  }
+  if (metric.rate === null) {
+    return "No data";
+  }
+  return percentageFormatter.format(metric.rate);
+}
+
+
+function formatResponseRateMeta(
+  metric: MetricRate | null,
+  loadState: ResponseRateLoadState,
+) {
+  if (loadState === "error") {
+    return "Response rate is unavailable from the local backend";
+  }
+  if (loadState === "loading" || metric === null) {
+    return "Loading deterministic numerator and denominator";
+  }
+  if (metric.denominator === 0) {
+    return "0 applications in the denominator";
+  }
+  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
+    metric.denominator,
+  )} applications have response evidence`;
 }

@@ -1878,6 +1878,52 @@
         "title": "LLMProviderName",
         "type": "string"
       },
+      "MetricRate": {
+        "properties": {
+          "denominator": {
+            "minimum": 0.0,
+            "title": "Denominator",
+            "type": "integer"
+          },
+          "numerator": {
+            "minimum": 0.0,
+            "title": "Numerator",
+            "type": "integer"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator",
+          "rate"
+        ],
+        "title": "MetricRate",
+        "type": "object"
+      },
+      "MetricsRatesResponse": {
+        "properties": {
+          "overall_response_rate": {
+            "$ref": "#/components/schemas/MetricRate"
+          }
+        },
+        "required": [
+          "overall_response_rate"
+        ],
+        "title": "MetricsRatesResponse",
+        "type": "object"
+      },
       "MetricsSummaryResponse": {
         "description": "Deterministic summary metrics for the dashboard.",
         "properties": {
@@ -3774,6 +3820,28 @@
         "summary": "Wipe local app data",
         "tags": [
           "local-data"
+        ]
+      }
+    },
+    "/metrics/rates": {
+      "get": {
+        "description": "Returns deterministic dashboard rates with explicit numerator and denominator counts from the local applications source of truth.",
+        "operationId": "get_metrics_rates_metrics_rates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsRatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Metrics Rates",
+        "tags": [
+          "metrics"
         ]
       }
     },

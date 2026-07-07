@@ -31,7 +31,7 @@ from app.services.ghost_inference import GhostInferenceService
 from app.services.insights_service import InsightGenerationService, InsightReadService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
-from app.services.metrics import MetricsSummaryService
+from app.services.metrics import MetricsRatesService, MetricsSummaryService
 from app.services.structured_extraction import StructuredExtractionService
 
 
@@ -223,6 +223,18 @@ def get_metrics_summary_service(
             metrics_repository=MetricsRepository(connection),
             ghost_threshold_days=settings.ghost_threshold_days,
         )
+    finally:
+        connection.close()
+
+
+def get_metrics_rates_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[MetricsRatesService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield MetricsRatesService(metrics_repository=MetricsRepository(connection))
     finally:
         connection.close()
 
