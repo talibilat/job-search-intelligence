@@ -680,6 +680,8 @@ export interface LLMProviderHealthCheckResponse {
 }
 
 export interface MetricsSummaryResponse {
+  /** @minimum 0 */
+  distinct_company_count: number;
   evaluated_at: string;
   /** @minimum 1 */
   ghost_threshold_days: number;

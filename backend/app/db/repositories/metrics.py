@@ -12,6 +12,18 @@ _RESPONSE_LIKE_EVENT_TYPES = RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 class MetricsRepository(BaseRepository[int]):
     """Repository seam for deterministic dashboard metric reads."""
 
+    def count_distinct_companies(self) -> int:
+        row = self.execute(
+            """
+            SELECT COUNT(DISTINCT LOWER(TRIM(company)))
+            FROM applications
+            WHERE TRIM(company) != ''
+            """,
+        ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+
     def get_response_silence_metric(self) -> ResponseSilenceMetric:
         row = self.execute(
             f"""

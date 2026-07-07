@@ -32,6 +32,7 @@ class MetricsSummaryService:
             )
         )
         return MetricsSummaryResponse(
+            distinct_company_count=self._metrics_repository.count_distinct_companies(),
             ghosted_applications=ghosted_applications,
             ghost_threshold_days=self._ghost_threshold_days,
             evaluated_at=evaluated_at,
