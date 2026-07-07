@@ -692,6 +692,11 @@ export interface MetricsSummaryResponse {
   ghosted_applications: number;
   /** @minimum 0 */
   interview_invitation_count: number;
+  /**
+   * Total applications whose canonical current status is rejected.
+   * @minimum 0
+   */
+  rejected_applications: number;
 }
 
 /**
