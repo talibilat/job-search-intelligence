@@ -39,6 +39,17 @@ def test_metrics_filter_rejects_inverted_salary_band() -> None:
         MetricsFilter(salary_min=200000, salary_max=100000)
 
 
+def test_metrics_filter_rejects_inverted_first_seen_range_after_utc_normalization() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="first_seen_from must be less than or equal to first_seen_to",
+    ):
+        MetricsFilter(
+            first_seen_from=datetime(2026, 7, 1, 0, 0, tzinfo=UTC),
+            first_seen_to=datetime(2026, 7, 1, 1, 0, tzinfo=timezone(timedelta(hours=2))),
+        )
+
+
 @pytest.mark.parametrize("field", ["first_seen_from", "first_seen_to"])
 def test_metrics_filter_rejects_naive_datetimes(field: str) -> None:
     with pytest.raises(ValidationError, match=f"{field} must include a timezone offset"):

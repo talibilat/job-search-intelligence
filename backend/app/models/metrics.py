@@ -75,7 +75,14 @@ class MetricsFilter(BaseModel):
         return stripped
 
     @model_validator(mode="after")
-    def validate_salary_band(self) -> Self:
+    def validate_ranges(self) -> Self:
+        if (
+            self.first_seen_from is not None
+            and self.first_seen_to is not None
+            and self.first_seen_from > self.first_seen_to
+        ):
+            msg = "first_seen_from must be less than or equal to first_seen_to"
+            raise ValueError(msg)
         if (
             self.salary_min is not None
             and self.salary_max is not None
