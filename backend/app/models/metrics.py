@@ -1,9 +1,26 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+class MetricRate(BaseModel):
+    numerator: int = Field(ge=0)
+    denominator: int = Field(ge=0)
+    rate: float | None = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> Self:
+        if self.numerator > self.denominator:
+            msg = "numerator must be less than or equal to denominator"
+            raise ValueError(msg)
+        return self
+
+
+class MetricsRatesResponse(BaseModel):
+    overall_response_rate: MetricRate
 
 
 class ResponseSilenceMetric(BaseModel):

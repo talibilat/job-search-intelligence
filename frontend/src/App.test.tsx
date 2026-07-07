@@ -144,6 +144,13 @@ describe("App", () => {
       "/metrics/summary": {
         distinct_company_count: 3,
       },
+      "/metrics/rates": {
+        overall_response_rate: {
+          numerator: 0,
+          denominator: 0,
+          rate: null,
+        },
+      },
     });
 
     renderAtPath("/dashboard");
@@ -152,6 +159,30 @@ describe("App", () => {
     expect(screen.getByText("Distinct companies")).toBeTruthy();
     expect(
       screen.getByText("Q-03 counted from normalized applications"),
+    ).toBeTruthy();
+  });
+
+  it("shows the deterministic response rate on the dashboard", async () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        distinct_company_count: 3,
+      },
+      "/metrics/rates": {
+        overall_response_rate: {
+          numerator: 3,
+          denominator: 5,
+          rate: 0.6,
+        },
+      },
+    });
+
+    renderAtPath("/dashboard");
+
+    const responseRateCard = screen.getByLabelText("Response rate metric");
+
+    expect(await within(responseRateCard).findByText("60%"));
+    expect(
+      within(responseRateCard).getByText("3 of 5 applications have response evidence"),
     ).toBeTruthy();
   });
 
@@ -511,7 +542,7 @@ describe("App", () => {
     });
 
     expect(emptyState.textContent).toContain(
-      "Deterministic metrics will appear here after the metrics API is available.",
+      "Broader deterministic metrics will appear here as additional metrics APIs are available.",
     );
   });
 
@@ -683,6 +714,7 @@ describe("App", () => {
       "/applications?status=in_review",
       "/applications?status=assessment",
       "/applications?status=interview",
+      "/metrics/rates",
     ]);
   });
 
