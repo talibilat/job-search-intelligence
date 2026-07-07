@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 
@@ -205,6 +206,26 @@ class InsightRepository(BaseRepository[InsightRecord]):
             """,
         ).fetchall()
         return _count_rows_to_dict(rows)
+
+    def count_rejected_application_skills(self) -> dict[str, int]:
+        rows = self.execute(
+            """
+            SELECT id, tech_stack
+            FROM applications
+            WHERE current_status = 'rejected'
+            ORDER BY id
+            """,
+        ).fetchall()
+        counts: dict[str, int] = {}
+        for row in rows:
+            skills = {
+                skill.strip()
+                for skill in json.loads(str(row["tech_stack"]))
+                if isinstance(skill, str) and skill.strip()
+            }
+            for skill in skills:
+                counts[skill] = counts.get(skill, 0) + 1
+        return dict(sorted(counts.items()))
 
     def list_input_evidence(
         self,

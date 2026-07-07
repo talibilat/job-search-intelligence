@@ -142,6 +142,65 @@ def test_insight_input_builder_keeps_debugging_bodies_out_of_evidence(
     assert "Private debugging" not in insight_input.model_dump_json()
 
 
+def test_skill_gaps_input_counts_rejected_role_skills_and_excludes_wins(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_second_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+        insert_raw_email(
+            connection,
+            email_id="email-interview-feedback",
+            subject="Interview feedback",
+            body_text="Feedback praised the candidate's Kubernetes experience.",
+            sent_at="2026-07-06T12:00:00+00:00",
+        )
+        EventRepository(connection).upsert_event(
+            id="event-interview-feedback",
+            application_id="application-interview",
+            email_id="email-interview-feedback",
+            event_type="feedback",
+            event_at="2026-07-06T12:00:00+00:00",
+            extract_note="Feedback praised Kubernetes experience.",
+        )
+        connection.commit()
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "skill_gaps",
+        )
+
+    fact_values = {fact.name: fact.value for fact in insight_input.facts}
+    assert insight_input.type == "skill_gaps"
+    assert fact_values["rejected_skill_counts"] == {"Kubernetes": 2, "Python": 2}
+    assert {evidence.application_status for evidence in insight_input.evidence} == {
+        "rejected",
+    }
+    assert {evidence.application_id for evidence in insight_input.evidence} == {
+        "application-rejected",
+        "application-second-rejected",
+    }
+
+
+def test_skill_gaps_input_counts_all_rejected_role_skills_when_evidence_is_limited(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_second_rejected_application_fixture(connection)
+        builder = InsightInputBuilder(InsightRepository(connection))
+
+        insight_input = builder.build("skill_gaps", max_evidence_items=1)
+
+    fact_values = {fact.name: fact.value for fact in insight_input.facts}
+    assert [evidence.application_id for evidence in insight_input.evidence] == [
+        "application-rejected",
+    ]
+    assert fact_values["rejected_skill_counts"] == {"Kubernetes": 2, "Python": 2}
+
+
 def test_weekly_actions_input_prefers_open_current_evidence(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
