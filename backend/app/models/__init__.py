@@ -30,6 +30,7 @@ from .insight import (
     InsightRegenerateRequest,
     InsightRegenerateResponse,
 )
+from .metrics import MetricsSummaryResponse
 from .provider_config import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
@@ -94,6 +95,7 @@ __all__ = [
     "GhostInferenceRunResponse",
     "HealthResponse",
     "LLMProviderConfigResponse",
+    "MetricsSummaryResponse",
     "ProviderConfigRequirementResponse",
     "ProviderConfigResponse",
     "ProviderConfigUpdateRequest",
