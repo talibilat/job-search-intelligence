@@ -230,6 +230,7 @@ def test_strongest_weakest_signals_input_uses_whole_history_evidence(
 
         insight_input = InsightInputBuilder(InsightRepository(connection)).build(
             "strongest_weakest_signals",
+            max_evidence_items=1,
         )
 
     assert insight_input.type == "strongest_weakest_signals"
