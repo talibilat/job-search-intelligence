@@ -1962,9 +1962,15 @@
             "minimum": 0.0,
             "title": "Rejected Applications",
             "type": "integer"
+          },
+          "total_applications": {
+            "minimum": 0.0,
+            "title": "Total Applications",
+            "type": "integer"
           }
         },
         "required": [
+          "total_applications",
           "distinct_company_count",
           "offers_received",
           "ghosted_applications",

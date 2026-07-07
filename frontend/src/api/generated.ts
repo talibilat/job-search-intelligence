@@ -711,6 +711,8 @@ export interface MetricsSummaryResponse {
    * @minimum 0
    */
   rejected_applications: number;
+  /** @minimum 0 */
+  total_applications: number;
 }
 
 /**

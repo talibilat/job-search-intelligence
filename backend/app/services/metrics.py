@@ -35,6 +35,7 @@ class MetricsSummaryService:
             cutoff_at=cutoff_at.isoformat(),
         )
         return MetricsSummaryResponse(
+            total_applications=self._metrics_repository.count_total_applications(),
             distinct_company_count=self._metrics_repository.count_distinct_companies(),
             offers_received=self._metrics_repository.count_applications_with_offer_events(),
             ghosted_applications=ghosted_applications,

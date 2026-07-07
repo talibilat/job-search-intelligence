@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import type { MetricsSummaryResponse } from "./api";
 import styles from "./index.css?raw";
 
 function renderAtPath(pathname: string) {
@@ -27,6 +28,23 @@ type MockResponse =
     };
 
 type MockResponseConfig = MockResponse | MockResponse[];
+
+function metricsSummaryResponse(
+  overrides: Partial<MetricsSummaryResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsSummaryResponse = {
+    distinct_company_count: 0,
+    evaluated_at: "2026-07-07T20:00:00Z",
+    ghost_threshold_days: 30,
+    ghosted_applications: 0,
+    interview_invitation_count: 0,
+    offers_received: 0,
+    rejected_applications: 0,
+    total_applications: 0,
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
 
 function isMockResponseConfig(
   value: MockResponse,
@@ -140,58 +158,24 @@ describe("App", () => {
   });
 
   it("renders the Q-03 distinct company count on the dashboard", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
-        const path = url.startsWith("http") ? new URL(url).pathname : url;
-
-        expect(init?.method).toBe("GET");
-
-        if (path === "/metrics/summary") {
-          return Promise.resolve(
-            new Response(JSON.stringify({ distinct_company_count: 3 }), {
-              headers: { "Content-Type": "application/json" },
-              status: 200,
-            }),
-          );
-        }
-
-        if (path === "/metrics/rates") {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({
-                overall_response_rate: {
-                  denominator: 0,
-                  numerator: 0,
-                  rate: null,
-                },
-              }),
-              {
-                headers: { "Content-Type": "application/json" },
-                status: 200,
-              },
-            ),
-          );
-        }
-
-        if (path.startsWith("/applications")) {
-          return Promise.resolve(
-            new Response(JSON.stringify([]), {
-              headers: { "Content-Type": "application/json" },
-              status: 200,
-            }),
-          );
-        }
-
-        throw new Error(`Unhandled fetch request: ${path}`);
+    mockFetchResponses({
+      "/metrics/summary": metricsSummaryResponse({
+        total_applications: 12,
+        distinct_company_count: 3,
       }),
-    );
+      "/metrics/rates": {
+        overall_response_rate: {
+          numerator: 0,
+          denominator: 0,
+          rate: null,
+        },
+      },
+      "/applications": { body: [], status: 200 },
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
+    });
 
     renderAtPath("/dashboard");
 
@@ -566,58 +550,21 @@ describe("App", () => {
   });
 
   it("renders the Q-09 application status table at the dashboard route", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
-        const path = url.startsWith("http") ? new URL(url).pathname : url;
-
-        expect(init?.method).toBe("GET");
-
-        if (path === "/metrics/summary") {
-          return Promise.resolve(
-            new Response(JSON.stringify({ distinct_company_count: 0 }), {
-              headers: { "Content-Type": "application/json" },
-              status: 200,
-            }),
-          );
-        }
-
-        if (path === "/metrics/rates") {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({
-                overall_response_rate: {
-                  denominator: 0,
-                  numerator: 0,
-                  rate: null,
-                },
-              }),
-              {
-                headers: { "Content-Type": "application/json" },
-                status: 200,
-              },
-            ),
-          );
-        }
-
-        if (path.startsWith("/applications")) {
-          return Promise.resolve(
-            new Response(JSON.stringify([]), {
-              headers: { "Content-Type": "application/json" },
-              status: 200,
-            }),
-          );
-        }
-
-        throw new Error(`Unhandled fetch request: ${path}`);
-      }),
-    );
+    mockFetchResponses({
+      "/metrics/summary": metricsSummaryResponse(),
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
+      "/applications": { body: [], status: 200 },
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
+    });
 
     renderAtPath("/dashboard");
 
@@ -655,67 +602,28 @@ describe("App", () => {
   });
 
   it("renders Q-07 interview invitations from the metrics summary", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
-        const path = url.startsWith("http") ? new URL(url).pathname : url;
-
-        expect(init?.method).toBe("GET");
-
-        if (path === "/metrics/summary") {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({
-                distinct_company_count: 7,
-                evaluated_at: "2026-07-07T12:00:00Z",
-                ghost_threshold_days: 30,
-                ghosted_applications: 2,
-                interview_invitation_count: 3,
-              }),
-              {
-                headers: { "Content-Type": "application/json" },
-                status: 200,
-              },
-            ),
-          );
-        }
-
-        if (path === "/metrics/rates") {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({
-                overall_response_rate: {
-                  denominator: 0,
-                  numerator: 0,
-                  rate: null,
-                },
-              }),
-              {
-                headers: { "Content-Type": "application/json" },
-                status: 200,
-              },
-            ),
-          );
-        }
-
-        if (path.startsWith("/applications")) {
-          return Promise.resolve(
-            new Response(JSON.stringify([]), {
-              headers: { "Content-Type": "application/json" },
-              status: 200,
-            }),
-          );
-        }
-
-        throw new Error(`Unhandled fetch request: ${path}`);
+    mockFetchResponses({
+      "/metrics/summary": metricsSummaryResponse({
+        total_applications: 12,
+        distinct_company_count: 7,
+        evaluated_at: "2026-07-07T12:00:00Z",
+        ghosted_applications: 2,
+        interview_invitation_count: 3,
+        rejected_applications: 1,
       }),
-    );
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
+      "/applications": { body: [], status: 200 },
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
+    });
 
     renderAtPath("/dashboard");
 
@@ -767,13 +675,14 @@ describe("App", () => {
 
   it("shows live applications awaiting a reply on the dashboard", async () => {
     const fetchMock = mockFetchResponses({
-      "/metrics/summary": {
+      "/metrics/summary": metricsSummaryResponse({
+        total_applications: 12,
         distinct_company_count: 7,
         evaluated_at: "2026-07-07T12:00:00Z",
-        ghost_threshold_days: 30,
         ghosted_applications: 3,
         interview_invitation_count: 4,
-      },
+        rejected_applications: 1,
+      }),
       "/metrics/rates": {
         overall_response_rate: {
           denominator: 0,
@@ -781,7 +690,6 @@ describe("App", () => {
           rate: null,
         },
       },
-      "/applications": { body: [], status: 200 },
       "/applications?status=applied": {
         body: [
           {
@@ -858,6 +766,7 @@ describe("App", () => {
         status: 200,
       },
       "/applications?status=interview": { body: [], status: 200 },
+      "/applications": { body: [], status: 200 },
     });
 
     renderAtPath("/dashboard");
@@ -896,13 +805,9 @@ describe("App", () => {
 
   it("shows an empty live applications state on the dashboard", async () => {
     mockFetchResponses({
-      "/metrics/summary": {
-        distinct_company_count: 0,
+      "/metrics/summary": metricsSummaryResponse({
         evaluated_at: "2026-07-07T12:00:00Z",
-        ghost_threshold_days: 30,
-        ghosted_applications: 0,
-        interview_invitation_count: 0,
-      },
+      }),
       "/metrics/rates": {
         overall_response_rate: {
           denominator: 0,
@@ -931,6 +836,47 @@ describe("App", () => {
         "No live applications are awaiting a reply right now.",
       ),
     ).toBeTruthy();
+  });
+
+  it("shows the lifetime applications count on the dashboard", async () => {
+    mockFetchResponses({
+      "/metrics/summary": metricsSummaryResponse({
+        total_applications: 3,
+        distinct_company_count: 2,
+      }),
+    });
+
+    renderAtPath("/dashboard");
+
+    const totalApplicationsCard = screen
+      .getByText("Total applications")
+      .closest("article");
+
+    await waitFor(() => {
+      expect(totalApplicationsCard?.textContent).toContain("3");
+    });
+    expect(totalApplicationsCard?.textContent).toContain(
+      "Q-01 reconciled from applications",
+    );
+  });
+
+  it("shows the lifetime applications count as unavailable when summary loading fails", async () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        body: { error: { code: "internal_error", message: "Failed" } },
+        status: 500,
+      },
+    });
+
+    renderAtPath("/dashboard");
+
+    const totalApplicationsCard = screen
+      .getByText("Total applications")
+      .closest("article");
+
+    await waitFor(() => {
+      expect(totalApplicationsCard?.textContent).toContain("Unavailable");
+    });
   });
 
   it("renders the feature status dashboard with searchable frontend feature metadata", () => {
@@ -984,6 +930,7 @@ describe("App", () => {
     expect(frontendApiIntegrations?.textContent).not.toContain(
       "Future GET /metrics/summary",
     );
+    expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
 
     fireEvent.change(screen.getByLabelText("Search features"), {
