@@ -514,7 +514,7 @@ describe("App", () => {
     expect(screen.getAllByText("Completed features").length).toBeGreaterThan(0);
     expect(screen.getByText("First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Dashboard route shell")).toBeTruthy();
-    expect(screen.getByText("Insights route shell")).toBeTruthy();
+    expect(screen.getByText("Insights recurring-feedback view")).toBeTruthy();
     expect(screen.getByText("Chat route shell")).toBeTruthy();
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();
@@ -538,11 +538,14 @@ describe("App", () => {
     ).parentElement;
     expect(frontendApiIntegrations).toBeTruthy();
     expect(frontendApiIntegrations?.textContent).toContain("GET /setup/status");
+    expect(frontendApiIntegrations?.textContent).toContain("GET /insights");
+    expect(frontendApiIntegrations?.textContent).toContain(
+      "POST /insights/regenerate",
+    );
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
     expect(frontendApiIntegrations?.textContent).not.toContain(
       "GET /metrics/summary",
     );
-    expect(frontendApiIntegrations?.textContent).not.toContain("GET /insights");
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
 
     fireEvent.change(screen.getByLabelText("Search features"), {
