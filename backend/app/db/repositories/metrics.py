@@ -56,7 +56,9 @@ class MetricsRepository(BaseRepository[int]):
         rejected_applications = self.count_rejected_applications()
         ghosted_applications = self._count_applications_with_current_status("ghosted")
         interviewed_applications = self._count_applications_with_event("interview_scheduled")
-        offered_applications = self.count_applications_with_offer_events()
+        offered_after_interview_applications = self._count_applications_with_events(
+            ("interview_scheduled", "offer"),
+        )
 
         return (
             _rate_metric(
@@ -81,7 +83,7 @@ class MetricsRepository(BaseRepository[int]):
             ),
             _rate_metric(
                 name="interview_to_offer",
-                numerator=offered_applications,
+                numerator=offered_after_interview_applications,
                 denominator=interviewed_applications,
             ),
         )
@@ -197,6 +199,24 @@ class MetricsRepository(BaseRepository[int]):
             (event_type,),
         )
 
+    def _count_applications_with_events(self, event_types: Sequence[str]) -> int:
+        placeholders = ", ".join("?" for _ in event_types)
+        return self._fetch_count(
+            f"""
+            SELECT COUNT(*)
+            FROM (
+                SELECT applications.id
+                FROM applications
+                INNER JOIN application_events
+                    ON application_events.application_id = applications.id
+                WHERE application_events.event_type IN ({placeholders})
+                GROUP BY applications.id
+                HAVING COUNT(DISTINCT application_events.event_type) = ?
+            )
+            """,
+            (*event_types, len(event_types)),
+        )
+
     def _get_application_breakdown(
         self,
         dimension: MetricsBreakdownDimension,
@@ -220,15 +240,42 @@ class MetricsRepository(BaseRepository[int]):
     def _get_tech_breakdown(self) -> tuple[MetricBreakdownRow, ...]:
         rows = self.execute(
             f"""
-            SELECT LOWER(TRIM(json_each.value)) AS value,
-                COUNT(DISTINCT applications.id) AS application_count,
-                COALESCE(SUM({_exists_response_case()}), 0) AS response_count,
-                COALESCE(SUM({_exists_event_case()}), 0) AS interview_count,
-                COALESCE(SUM({_exists_event_case()}), 0) AS offer_count
-            FROM applications
-            INNER JOIN json_each(applications.tech_stack)
-            WHERE TRIM(json_each.value) != ''
-            GROUP BY value
+            WITH tech_applications AS (
+                SELECT DISTINCT
+                    applications.id AS application_id,
+                    LOWER(TRIM(json_each.value)) AS value
+                FROM applications
+                INNER JOIN json_each(applications.tech_stack)
+                WHERE TRIM(json_each.value) != ''
+            )
+            SELECT tech_applications.value AS value,
+                COUNT(*) AS application_count,
+                COALESCE(SUM(
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM application_events
+                        WHERE application_events.application_id = tech_applications.application_id
+                          AND application_events.event_type IN ({_response_placeholders()})
+                    ) THEN 1 ELSE 0 END
+                ), 0) AS response_count,
+                COALESCE(SUM(
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM application_events
+                        WHERE application_events.application_id = tech_applications.application_id
+                          AND application_events.event_type = ?
+                    ) THEN 1 ELSE 0 END
+                ), 0) AS interview_count,
+                COALESCE(SUM(
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM application_events
+                        WHERE application_events.application_id = tech_applications.application_id
+                          AND application_events.event_type = ?
+                    ) THEN 1 ELSE 0 END
+                ), 0) AS offer_count
+            FROM tech_applications
+            GROUP BY tech_applications.value
             ORDER BY value ASC
             """,
             (*_RESPONSE_LIKE_EVENT_TYPES, "interview_scheduled", "offer"),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -37,6 +38,28 @@ def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> N
     }
 
 
+def test_interview_to_offer_rate_counts_offers_only_after_interviews(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-offer-without-interview",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="offer",
+            tech_stack=["Python"],
+            event_types=("applied", "offer"),
+        )
+
+        rates = {metric.name: metric for metric in MetricsRepository(connection).get_rate_metrics()}
+
+    assert rates["interview_to_offer"].numerator == 0
+    assert rates["interview_to_offer"].denominator == 0
+    assert rates["interview_to_offer"].rate == 0.0
+
+
 def test_metrics_repository_returns_application_timeseries(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -71,6 +94,36 @@ def test_metrics_repository_returns_breakdowns(tmp_path: Path) -> None:
     assert linkedin.response_count == 1
     assert linkedin.interview_count == 1
     assert linkedin.offer_count == 1
+
+
+def test_tech_breakdown_counts_event_metrics_once_per_application(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-duplicate-tech",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="offer",
+            tech_stack=["Python", " python ", "PYTHON"],
+            event_types=("applied", "response", "interview_scheduled", "offer"),
+        )
+        connection.execute(
+            "UPDATE applications SET tech_stack = ? WHERE id = ?",
+            (json.dumps(["Python", " python ", "PYTHON"]), "app-duplicate-tech"),
+        )
+
+        tech_rows = MetricsRepository(connection).get_breakdown("tech")
+
+    assert len(tech_rows) == 1
+    python = tech_rows[0]
+    assert python.value == "python"
+    assert python.application_count == 1
+    assert python.response_count == 1
+    assert python.interview_count == 1
+    assert python.offer_count == 1
 
 
 def migrated_database(tmp_path: Path) -> Path:
