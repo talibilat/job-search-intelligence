@@ -43,6 +43,39 @@ def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> N
     }
 
 
+def test_funnel_metrics_count_offers_only_after_interviews(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-offer-without-interview",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="offer",
+            tech_stack=["Python"],
+            event_types=("applied", "offer"),
+        )
+        insert_application(
+            connection,
+            application_id="app-offer-before-interview",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="interview",
+            tech_stack=["Python"],
+            event_types=("applied", "offer", "interview_scheduled"),
+        )
+
+        funnel = {
+            stage.stage: stage.count
+            for stage in MetricsRepository(connection).get_funnel_metrics()
+        }
+
+    assert funnel["applied"] == 2
+    assert funnel["response"] == 2
+    assert funnel["interview"] == 1
+    assert funnel["offer"] == 0
+
+
 def test_rate_metrics_uses_threshold_ghost_count(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:

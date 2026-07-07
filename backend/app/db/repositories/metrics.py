@@ -106,7 +106,13 @@ class MetricsRepository(BaseRepository[int]):
                 stage="interview",
                 count=self._count_applications_with_event("interview_scheduled"),
             ),
-            MetricFunnelStage(stage="offer", count=self.count_applications_with_offer_events()),
+            MetricFunnelStage(
+                stage="offer",
+                count=self._count_applications_with_later_event(
+                    first_event_type="interview_scheduled",
+                    later_event_type="offer",
+                ),
+            ),
         )
 
     def get_application_timeseries(self) -> tuple[MetricTimeseriesPoint, ...]:
