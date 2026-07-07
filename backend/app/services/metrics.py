@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from app.db.repositories.metrics import MetricsRepository
 from app.models import (
     MetricRate,
+    MetricsBreakdownDimension,
+    MetricsBreakdownResponse,
     MetricsRatesResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
@@ -222,6 +224,19 @@ class MetricsTimeseriesService:
     def get_timeseries(self) -> MetricsTimeseriesResponse:
         return MetricsTimeseriesResponse(
             points=list(self._metrics_repository.get_application_timeseries()),
+        )
+
+
+class MetricsBreakdownService:
+    """Build deterministic dashboard breakdown metrics from local SQLite."""
+
+    def __init__(self, *, metrics_repository: MetricsRepository) -> None:
+        self._metrics_repository = metrics_repository
+
+    def get_breakdown(self, dimension: MetricsBreakdownDimension) -> MetricsBreakdownResponse:
+        return MetricsBreakdownResponse(
+            dimension=dimension,
+            rows=list(self._metrics_repository.get_breakdown(dimension)),
         )
 
 

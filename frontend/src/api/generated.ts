@@ -697,6 +697,32 @@ export interface LLMProviderHealthCheckResponse {
   status: LLMModelHealthStatus;
 }
 
+export type MetricsBreakdownDimension =
+  (typeof MetricsBreakdownDimension)[keyof typeof MetricsBreakdownDimension];
+
+export const MetricsBreakdownDimension = {
+  role: "role",
+  source: "source",
+  salary: "salary",
+  tech: "tech",
+  sponsorship: "sponsorship",
+  seniority: "seniority",
+  work_mode: "work_mode",
+} as const;
+
+export interface MetricBreakdownRow {
+  /** @minimum 0 */
+  application_count: number;
+  dimension: MetricsBreakdownDimension;
+  /** @minimum 0 */
+  interview_count: number;
+  /** @minimum 0 */
+  offer_count: number;
+  /** @minimum 0 */
+  response_count: number;
+  value: string;
+}
+
 export interface MetricRate {
   /** @minimum 0 */
   denominator: number;
@@ -709,6 +735,11 @@ export interface MetricTimeseriesPoint {
   /** @minimum 0 */
   application_count: number;
   period_start: string;
+}
+
+export interface MetricsBreakdownResponse {
+  dimension: MetricsBreakdownDimension;
+  rows: MetricBreakdownRow[];
 }
 
 export interface MetricsRatesResponse {
@@ -886,6 +917,10 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
    * @minLength 1
    */
   state: string;
+};
+
+export type GetMetricsBreakdownMetricsBreakdownGetParams = {
+  dimension: MetricsBreakdownDimension;
 };
 
 export type GetMetricsSummaryMetricsSummaryGetParams = {
@@ -2164,6 +2199,75 @@ export const wipeDataLocalDataWipePost = async (
     status: res.status,
     headers: res.headers,
   } as wipeDataLocalDataWipePostResponse;
+};
+
+export type getMetricsBreakdownMetricsBreakdownGetResponse200 = {
+  data: MetricsBreakdownResponse;
+  status: 200;
+};
+
+export type getMetricsBreakdownMetricsBreakdownGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type getMetricsBreakdownMetricsBreakdownGetResponseSuccess =
+  getMetricsBreakdownMetricsBreakdownGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsBreakdownMetricsBreakdownGetResponseError =
+  getMetricsBreakdownMetricsBreakdownGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getMetricsBreakdownMetricsBreakdownGetResponse =
+  | getMetricsBreakdownMetricsBreakdownGetResponseSuccess
+  | getMetricsBreakdownMetricsBreakdownGetResponseError;
+
+export const getGetMetricsBreakdownMetricsBreakdownGetUrl = (
+  params: GetMetricsBreakdownMetricsBreakdownGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/breakdown?${stringifiedParams}`
+    : `/metrics/breakdown`;
+};
+
+/**
+ * Returns deterministic dashboard breakdown rows for a supported dimension from local applications and application_events data.
+ * @summary Get Metrics Breakdown
+ */
+export const getMetricsBreakdownMetricsBreakdownGet = async (
+  params: GetMetricsBreakdownMetricsBreakdownGetParams,
+  options?: RequestInit,
+): Promise<getMetricsBreakdownMetricsBreakdownGetResponse> => {
+  const res = await fetch(
+    getGetMetricsBreakdownMetricsBreakdownGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsBreakdownMetricsBreakdownGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsBreakdownMetricsBreakdownGetResponse;
 };
 
 export type getMetricsRatesMetricsRatesGetResponse200 = {

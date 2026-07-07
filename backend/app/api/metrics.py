@@ -6,18 +6,22 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import (
+    get_metrics_breakdown_service,
     get_metrics_rates_service,
     get_metrics_summary_service,
     get_metrics_timeseries_service,
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.models import (
+    MetricsBreakdownDimension,
+    MetricsBreakdownResponse,
     MetricsRatesResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )
 from app.services.metrics import (
+    MetricsBreakdownService,
     MetricsRatesService,
     MetricsSummaryService,
     MetricsTimeseriesService,
@@ -128,3 +132,23 @@ def get_metrics_timeseries(
     ],
 ) -> MetricsTimeseriesResponse:
     return service.get_timeseries()
+
+
+@router.get(
+    "/breakdown",
+    response_model=MetricsBreakdownResponse,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="Get Metrics Breakdown",
+    description=(
+        "Returns deterministic dashboard breakdown rows for a supported dimension "
+        "from local applications and application_events data."
+    ),
+)
+def get_metrics_breakdown(
+    service: Annotated[
+        MetricsBreakdownService,
+        Depends(get_metrics_breakdown_service),
+    ],
+    dimension: Annotated[MetricsBreakdownDimension, Query()],
+) -> MetricsBreakdownResponse:
+    return service.get_breakdown(dimension)
