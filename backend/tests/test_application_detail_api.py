@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -258,6 +259,66 @@ def test_get_application_events_returns_typed_not_found(tmp_path: Path) -> None:
     }
 
 
+def test_get_application_correction_conflicts_returns_conflicting_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="application-42", manual_lock=True)
+        insert_raw_email(connection, email_id="email-1")
+        insert_correction_conflict(
+            connection,
+            application_id="application-42",
+            conflict_key="application_summary:application-42:email-1",
+            conflict_type="application_summary",
+            existing_json={"application": {"current_status": "rejected"}},
+            proposed_json={
+                "application": {"current_status": "offer"},
+                "evidence_email_ids": ["email-1"],
+            },
+            evidence_email_id="email-1",
+        )
+
+    client = create_test_client(database_path)
+
+    response = client.get("/applications/application-42/correction-conflicts")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 1,
+            "application_id": "application-42",
+            "conflict_key": "application_summary:application-42:email-1",
+            "conflict_type": "application_summary",
+            "existing_json": {"application": {"current_status": "rejected"}},
+            "proposed_json": {
+                "application": {"current_status": "offer"},
+                "evidence_email_ids": ["email-1"],
+            },
+            "evidence_email_id": "email-1",
+            "created_at": "2026-07-31T00:00:00Z",
+        }
+    ]
+
+
+def test_get_application_correction_conflicts_returns_typed_not_found(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    client = create_test_client(database_path)
+
+    response = client.get("/applications/missing-application/correction-conflicts")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "error": {
+            "code": "not_found",
+            "message": "Application not found.",
+            "details": [],
+        }
+    }
+
+
 def test_get_application_detail_endpoint_is_documented_in_openapi() -> None:
     client = TestClient(create_app())
 
@@ -281,6 +342,21 @@ def test_application_events_endpoint_is_documented_in_openapi() -> None:
     success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     not_found_schema = operation["responses"]["404"]["content"]["application/json"]["schema"]
     assert success_schema["items"]["$ref"] == "#/components/schemas/ApplicationEventRecord"
+    assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
+
+
+def test_application_correction_conflicts_endpoint_is_documented_in_openapi() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    operation = response.json()["paths"]["/applications/{id}/correction-conflicts"]["get"]
+    success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    not_found_schema = operation["responses"]["404"]["content"]["application/json"]["schema"]
+    assert success_schema["items"]["$ref"] == (
+        "#/components/schemas/ApplicationCorrectionConflictRecord"
+    )
     assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
@@ -492,6 +568,36 @@ def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
             "[]",
             "gmail",
             "2026-07-01T09:01:00+00:00",
+        ),
+    )
+    connection.commit()
+
+
+def insert_correction_conflict(
+    connection: sqlite3.Connection,
+    *,
+    application_id: str,
+    conflict_key: str,
+    conflict_type: str,
+    existing_json: dict[str, object],
+    proposed_json: dict[str, object],
+    evidence_email_id: str | None,
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO application_correction_conflicts (
+            application_id, conflict_key, conflict_type, existing_json,
+            proposed_json, evidence_email_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            application_id,
+            conflict_key,
+            conflict_type,
+            json.dumps(existing_json, separators=(",", ":"), sort_keys=True),
+            json.dumps(proposed_json, separators=(",", ":"), sort_keys=True),
+            evidence_email_id,
+            "2026-07-31T00:00:00+00:00",
         ),
     )
     connection.commit()

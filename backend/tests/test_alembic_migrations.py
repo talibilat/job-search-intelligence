@@ -150,6 +150,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "applications",
             "application_events",
             "application_corrections",
+            "application_correction_conflicts",
             "insights",
             "chat_messages",
             "classification_runs",
@@ -249,6 +250,16 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "reason",
             "created_at",
         ]
+        assert sqlite_column_names(connection, "application_correction_conflicts") == [
+            "id",
+            "application_id",
+            "conflict_key",
+            "conflict_type",
+            "existing_json",
+            "proposed_json",
+            "evidence_email_id",
+            "created_at",
+        ]
         assert sqlite_column_names(connection, "chat_messages") == [
             "id",
             "conversation_id",
@@ -291,6 +302,10 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
         }
         assert foreign_key_targets(connection, "application_corrections") == {
             ("application_id", "applications", "id"),
+        }
+        assert foreign_key_targets(connection, "application_correction_conflicts") == {
+            ("application_id", "applications", "id"),
+            ("evidence_email_id", "raw_emails", "id"),
         }
         assert foreign_key_targets(connection, "chat_messages") == set()
 
@@ -461,6 +476,118 @@ def test_application_corrections_cascade_with_application_deletes(
         assert connection.execute(
             "SELECT COUNT(*) FROM application_corrections",
         ).fetchone() == (0,)
+
+
+def test_application_correction_conflicts_store_conflicting_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        insert_application(connection)
+        insert_raw_email(connection, email_id="email_1")
+
+        connection.execute(
+            """
+            INSERT INTO application_correction_conflicts (
+                application_id,
+                conflict_key,
+                conflict_type,
+                existing_json,
+                proposed_json,
+                evidence_email_id,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "app_1",
+                "application_summary:app_1:email_1",
+                "application_summary",
+                '{"application":{"current_status":"rejected"}}',
+                '{"application":{"current_status":"offer"}}',
+                "email_1",
+                "2026-07-31T00:00:00Z",
+            ),
+        )
+
+        row = connection.execute(
+            """
+            SELECT
+                application_id,
+                conflict_key,
+                conflict_type,
+                existing_json,
+                proposed_json,
+                evidence_email_id,
+                created_at
+            FROM application_correction_conflicts
+            """,
+        ).fetchone()
+
+    assert row == (
+        "app_1",
+        "application_summary:app_1:email_1",
+        "application_summary",
+        '{"application":{"current_status":"rejected"}}',
+        '{"application":{"current_status":"offer"}}',
+        "email_1",
+        "2026-07-31T00:00:00Z",
+    )
+
+
+def test_application_correction_conflicts_are_idempotent_by_key(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        insert_application(connection)
+        insert_raw_email(connection, email_id="email_1")
+
+        for proposed_status in ("offer", "interview"):
+            connection.execute(
+                """
+                INSERT INTO application_correction_conflicts (
+                    application_id,
+                    conflict_key,
+                    conflict_type,
+                    existing_json,
+                    proposed_json,
+                    evidence_email_id,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(conflict_key) DO UPDATE SET
+                    existing_json = excluded.existing_json,
+                    proposed_json = excluded.proposed_json,
+                    evidence_email_id = excluded.evidence_email_id
+                """,
+                (
+                    "app_1",
+                    "application_summary:app_1:email_1",
+                    "application_summary",
+                    '{"application":{"current_status":"rejected"}}',
+                    f'{{"application":{{"current_status":"{proposed_status}"}}}}',
+                    "email_1",
+                    "2026-07-31T00:00:00Z",
+                ),
+            )
+
+        row = connection.execute(
+            """
+            SELECT COUNT(*), proposed_json
+            FROM application_correction_conflicts
+            """,
+        ).fetchone()
+
+    assert row == (1, '{"application":{"current_status":"interview"}}')
 
 
 def test_chat_messages_store_compact_history_rows(tmp_path: Path) -> None:
@@ -896,6 +1023,39 @@ def insert_application(connection: sqlite3.Connection) -> None:
             "2026-07-01T00:00:00Z",
             "2026-07-01T00:00:00Z",
             "2026-07-01T00:00:00Z",
+        ),
+    )
+
+
+def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
+    connection.execute(
+        """
+        INSERT INTO raw_emails (
+            id,
+            thread_id,
+            from_addr,
+            to_addr,
+            subject,
+            sent_at,
+            body_text,
+            body_retention_state,
+            labels,
+            provider,
+            ingested_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            email_id,
+            "thread_1",
+            "jobs@example.test",
+            "applicant@example.test",
+            "Application update",
+            "2026-07-31T00:00:00Z",
+            "Synthetic retained body.",
+            "retained",
+            "[]",
+            "gmail",
+            "2026-07-31T00:00:00Z",
         ),
     )
 

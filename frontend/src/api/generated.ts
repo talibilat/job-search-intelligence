@@ -46,8 +46,28 @@ export interface ApiErrorResponse {
   error: ApiErrorBody;
 }
 
+export type CorrectionConflictType =
+  (typeof CorrectionConflictType)[keyof typeof CorrectionConflictType];
+
+export const CorrectionConflictType = {
+  application_summary: "application_summary",
+  application_event: "application_event",
+  ghost_inference: "ghost_inference",
+} as const;
+
 export interface JsonObject {
   [key: string]: unknown;
+}
+
+export interface ApplicationCorrectionConflictRecord {
+  application_id: string;
+  conflict_key: string;
+  conflict_type: CorrectionConflictType;
+  created_at: string;
+  evidence_email_id: string | null;
+  existing_json: JsonObject;
+  id: number;
+  proposed_json: JsonObject;
 }
 
 export type CorrectionType =
@@ -1297,6 +1317,75 @@ export const getApplicationDetailApplicationsIdGet = async (
     headers: res.headers,
   } as getApplicationDetailApplicationsIdGetResponse;
 };
+
+export type getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse200 =
+  {
+    data: ApplicationCorrectionConflictRecord[];
+    status: 200;
+  };
+
+export type getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse404 =
+  {
+    data: ApiErrorResponse;
+    status: 404;
+  };
+
+export type getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponseSuccess =
+  getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse200 & {
+    headers: Headers;
+  };
+export type getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponseError =
+  (
+    | getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse404
+    | getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse422
+  ) & {
+    headers: Headers;
+  };
+
+export type getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse =
+  | getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponseSuccess
+  | getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponseError;
+
+export const getGetApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetUrl =
+  (id: string) => {
+    return `/applications/${id}/correction-conflicts`;
+  };
+
+/**
+ * Returns automatic evidence conflicts recorded for one manually corrected application without exposing private email body content.
+ * @summary List Application Correction Conflicts
+ */
+export const getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGet =
+  async (
+    id: string,
+    options?: RequestInit,
+  ): Promise<getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse> => {
+    const res = await fetch(
+      getGetApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetUrl(
+        id,
+      ),
+      {
+        ...options,
+        method: "GET",
+      },
+    );
+
+    const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+    const data: getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse["data"] =
+      body ? JSON.parse(body) : {};
+    return {
+      data,
+      status: res.status,
+      headers: res.headers,
+    } as getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse;
+  };
 
 export type getApplicationEventsApplicationsIdEventsGetResponse200 = {
   data: ApplicationEventRecord[];

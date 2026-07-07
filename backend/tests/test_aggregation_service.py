@@ -7,7 +7,12 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from app.db.repositories import ApplicationRepository, EmailRepository, EventRepository
+from app.db.repositories import (
+    ApplicationRepository,
+    CorrectionConflictRepository,
+    EmailRepository,
+    EventRepository,
+)
 from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
 from app.models.classification import EmailClassificationRecord, JobEmailCategory
 from app.models.event import ApplicationEventType
@@ -744,17 +749,37 @@ def test_aggregation_reports_manual_lock_conflict_without_overwriting_applicatio
     connection.commit()
 
     result = service.run([changed_extraction])
+    rerun_result = service.run([changed_extraction])
 
     assert result.applications_upserted == 0
     assert result.events_upserted == 0
     assert result.manual_conflict_count == 1
     assert result.manual_conflict_application_ids == [stored_id[0]]
     assert result.merged_source_skip_count == 0
+    assert rerun_result.manual_conflict_count == 1
     stored_app = connection.execute(
         "SELECT company, role_title, current_status FROM applications",
     ).fetchone()
     assert stored_app is not None
     assert tuple(stored_app) == ("Acme Corp", "Software Engineer", "rejected")
+    conflict_rows = connection.execute(
+        """
+        SELECT conflict_key, conflict_type, evidence_email_id, existing_json, proposed_json
+        FROM application_correction_conflicts
+        """,
+    ).fetchall()
+    assert len(conflict_rows) == 1
+    conflict_key, conflict_type, evidence_email_id, existing_json, proposed_json = tuple(
+        conflict_rows[0]
+    )
+    assert conflict_key == f"application_summary:{stored_id[0]}:email-1"
+    assert conflict_type == "application_summary"
+    assert evidence_email_id == "email-1"
+    existing = json.loads(existing_json)
+    proposed = json.loads(proposed_json)
+    assert existing["application"]["current_status"] == "rejected"
+    assert proposed["application"]["current_status"] == "offer"
+    assert proposed["evidence_email_ids"] == ["email-1"]
 
 
 def test_aggregation_does_not_report_conflict_for_unchanged_locked_rerun(
@@ -827,7 +852,16 @@ def test_aggregation_reports_conflict_instead_of_overwriting_manual_event_edit(
         """,
         (edited_at.isoformat(), event_id),
     )
-    connection.execute("UPDATE applications SET manual_lock = 1 WHERE id = ?", (application_id,))
+    connection.execute(
+        """
+        UPDATE applications
+        SET current_status = 'interview',
+            last_activity_at = ?,
+            manual_lock = 1
+        WHERE id = ?
+        """,
+        (edited_at.isoformat(), application_id),
+    )
     connection.execute(
         """
         INSERT INTO application_corrections (
@@ -867,6 +901,23 @@ def test_aggregation_reports_conflict_instead_of_overwriting_manual_event_edit(
         edited_at.isoformat(),
         "Manual timeline correction.",
     )
+    conflict_row = connection.execute(
+        """
+        SELECT conflict_key, conflict_type, evidence_email_id, existing_json, proposed_json
+        FROM application_correction_conflicts
+        """,
+    ).fetchone()
+    assert conflict_row is not None
+    conflict_key, conflict_type, evidence_email_id, existing_json, proposed_json = tuple(
+        conflict_row
+    )
+    assert conflict_key == f"application_event:{application_id}:email-1"
+    assert conflict_type == "application_event"
+    assert evidence_email_id == "email-1"
+    existing = json.loads(existing_json)
+    proposed = json.loads(proposed_json)
+    assert existing["event"]["event_type"] == "interview_scheduled"
+    assert proposed["event"]["event_type"] == "applied"
 
 
 def test_aggregation_merges_tech_stack_from_multiple_extractions(tmp_path: Path) -> None:
@@ -1033,6 +1084,7 @@ def make_service(connection: sqlite3.Connection) -> AggregationService:
         application_repository=ApplicationRepository(connection),
         event_repository=EventRepository(connection),
         email_repository=EmailRepository(connection),
+        correction_conflict_repository=CorrectionConflictRepository(connection),
         clock=lambda: NOW,
         run_id_factory=lambda: "test-run",
     )

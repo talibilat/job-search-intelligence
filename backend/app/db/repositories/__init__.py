@@ -6,7 +6,7 @@ from .base import BaseRepository, SqlParameters
 from .chat import ChatRepository
 from .classification_run import ClassificationRunRepository
 from .connection import EmailConnectionRepository
-from .correction import CorrectionRepository
+from .correction import CorrectionConflictRepository, CorrectionRepository
 from .email import EmailRepository
 from .event import EventRepository
 from .filter_decision import EmailFilterDecisionRepository
@@ -20,6 +20,7 @@ __all__ = [
     "BaseRepository",
     "ChatRepository",
     "ClassificationRunRepository",
+    "CorrectionConflictRepository",
     "CorrectionRepository",
     "EmailRepository",
     "EmailConnectionRepository",
