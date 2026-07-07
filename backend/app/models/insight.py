@@ -44,6 +44,17 @@ class InsightRegenerateResponse(BaseModel):
     cached: bool
 
 
+class InsightRoleOutcomeSummary(BaseModel):
+    """Deterministic role-level outcome facts used to ground Q-44 synthesis."""
+
+    role_title: str
+    application_count: int
+    win_count: int
+    loss_count: int
+    status_counts: dict[str, int]
+    citation_ids: list[str]
+
+
 type InsightInputFactSource = Literal["applications", "application_events"]
 type InsightInputFactName = Literal[
     "total_applications",
@@ -53,8 +64,11 @@ type InsightInputFactName = Literal[
     "work_mode_counts",
     "event_type_counts",
     "rejected_skill_counts",
+    "role_outcome_summaries",
 ]
-type InsightInputFactValue = int | float | str | bool | dict[str, int] | list[str] | None
+type InsightInputFactValue = (
+    int | float | str | bool | dict[str, int] | list[str] | list[InsightRoleOutcomeSummary] | None
+)
 
 
 class InsightInputFact(BaseModel):

@@ -11,7 +11,13 @@ from pydantic import BaseModel, ConfigDict
 
 from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
-from app.models import InsightInput, InsightInputEvidence, InsightInputFact, InsightRecord
+from app.models import (
+    InsightInput,
+    InsightInputEvidence,
+    InsightInputFact,
+    InsightRecord,
+    InsightRoleOutcomeSummary,
+)
 from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
 from app.providers.llm import (
     LLMFinishReason,
@@ -34,7 +40,18 @@ INSIGHT_GENERATION_TEMPERATURE = 0.2
 WEEKLY_ACTIONS_VALIDATION_ERROR = "Weekly actions insight must contain exactly three cited actions."
 _CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
 _CITATION_LIKE_TOKEN_PATTERN = re.compile(r"^(?:\d+|[A-Za-z]+-\d+|\S*[:|]\S*)$")
+_ROLE_FIT_WIN_STATUSES: tuple[ApplicationStatus, ...] = ("interview", "offer")
+_ROLE_FIT_LOSS_STATUSES: tuple[ApplicationStatus, ...] = ("rejected", "ghosted")
 _SENTENCE_PATTERN = re.compile(r"[^.!?\n]+(?:[.!?]|\n|$)")
+_INSUFFICIENT_EVIDENCE_TERMS = (
+    "insufficient",
+    "not enough",
+    "missing evidence",
+    "no evidence",
+    "cannot determine",
+    "can't determine",
+    "unable to determine",
+)
 _UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
 SUPPORTED_INSIGHT_TYPES: tuple[InsightType, ...] = (
     "why_rejected",
@@ -194,7 +211,7 @@ class InsightInputBuilder:
         )
         insight_input = InsightInput(
             type=insight_type,
-            facts=self._build_facts(insight_type, evidence=evidence),
+            facts=self._build_facts(insight_type, scoped_evidence),
             evidence=evidence,
             source_fingerprint=_hash_payload(
                 [item.model_dump(mode="json") for item in scoped_evidence],
@@ -208,8 +225,7 @@ class InsightInputBuilder:
     def _build_facts(
         self,
         insight_type: InsightType,
-        *,
-        evidence: list[InsightInputEvidence],
+        scoped_evidence: list[InsightInputEvidence],
     ) -> list[InsightInputFact]:
         facts = [
             InsightInputFact(
@@ -251,6 +267,14 @@ class InsightInputBuilder:
                     source="applications",
                 ),
             )
+        if insight_type == "role_fit":
+            facts.append(
+                InsightInputFact(
+                    name="role_outcome_summaries",
+                    value=_build_role_outcome_summaries(scoped_evidence),
+                    source="applications",
+                ),
+            )
         return facts
 
 
@@ -282,6 +306,16 @@ def _insight_type_prompt(insight_type: InsightType) -> str:
             "theme, explain why each theme appears, and cite rejection-email evidence "
             "for every theme. Do not infer causes that are absent from the cited "
             "rejection evidence."
+        )
+    if insight_type == "role_fit":
+        return (
+            "For role_fit, answer Q-44: which roles genuinely suit the user best based "
+            "on patterns of wins. Treat interviews and offers as wins, compare them "
+            "against rejected and ghosted outcomes, and use role_outcome_summaries as "
+            "deterministic role-level evidence derived from the cited applications. "
+            "each role_outcome_summary includes citation_ids; cite the applications or "
+            "emails behind each role-fit claim and call out thin evidence instead of "
+            "overstating fit."
         )
     if insight_type == "skill_gaps":
         return (
@@ -349,7 +383,7 @@ def _extract_citation_ids(value: str) -> set[str]:
 
 
 def _validate_grounding_citations(content: str, insight_input: InsightInput) -> None:
-    allowed_citation_ids = {evidence.citation_id for evidence in insight_input.evidence}
+    allowed_citation_ids = _allowed_citation_ids(insight_input)
     cited_evidence_ids: set[str] = set()
     invalid_citation_ids: set[str] = set()
     valid_citation_spans: list[tuple[int, int]] = []
@@ -364,16 +398,21 @@ def _validate_grounding_citations(content: str, insight_input: InsightInput) -> 
             else:
                 invalid_citation_ids.add(citation_id)
 
+    if invalid_citation_ids:
+        raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
+    if not allowed_citation_ids and not cited_evidence_ids:
+        if _states_insufficient_evidence(content):
+            return
+        raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
     if (
         not cited_evidence_ids
-        or invalid_citation_ids
         or _has_ungrounded_claim(content, valid_citation_spans)
     ):
         raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
 
 
 def _split_citation_tokens(value: str) -> list[str]:
-    return [part.strip() for part in value.split(",") if part.strip()]
+    return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
 
 
 def _is_citation_like_token(value: str, allowed_citation_ids: set[str]) -> bool:
@@ -431,6 +470,22 @@ def _has_citation_between(
     return any(span_start >= start and span_end <= end for span_start, span_end in citation_spans)
 
 
+def _states_insufficient_evidence(content: str) -> bool:
+    normalized = content.casefold()
+    return any(term in normalized for term in _INSUFFICIENT_EVIDENCE_TERMS)
+
+
+def _allowed_citation_ids(insight_input: InsightInput) -> set[str]:
+    citation_ids = {evidence.citation_id for evidence in insight_input.evidence}
+    for fact in insight_input.facts:
+        if fact.name != "role_outcome_summaries" or not isinstance(fact.value, list):
+            continue
+        for summary in fact.value:
+            if isinstance(summary, InsightRoleOutcomeSummary):
+                citation_ids.update(summary.citation_ids)
+    return citation_ids
+
+
 def _configured_chat_model(settings: AppSettings) -> str:
     model = (
         settings.azure_openai_chat_deployment
@@ -477,10 +532,61 @@ def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
     if insight_type == "strongest_weakest_signals":
         return _EvidenceScope(include_all_evidence=True)
     if insight_type == "role_fit":
-        return _EvidenceScope(application_statuses=("interview", "offer", "rejected", "ghosted"))
+        return _EvidenceScope()
     if insight_type == "weekly_actions":
         return _EvidenceScope(
             application_statuses=("applied", "in_review", "assessment", "interview"),
             newest_first=True,
         )
     return _EvidenceScope()
+
+
+def _build_role_outcome_summaries(
+    evidence: list[InsightInputEvidence],
+) -> list[InsightRoleOutcomeSummary]:
+    application_summaries: dict[str, tuple[str, ApplicationStatus]] = {}
+    role_citation_ids: dict[str, list[str]] = {}
+    for item in evidence:
+        role_title = item.role_title.strip()
+        if not role_title:
+            continue
+        role_citation_ids.setdefault(role_title, [])
+        if item.citation_id not in role_citation_ids[role_title]:
+            role_citation_ids[role_title].append(item.citation_id)
+        if item.application_id not in application_summaries:
+            application_summaries[item.application_id] = (
+                role_title,
+                item.application_status,
+            )
+
+    role_status_counts: dict[str, dict[str, int]] = {}
+    for role_title, status in application_summaries.values():
+        role_status_counts.setdefault(role_title, {}).setdefault(status, 0)
+        role_status_counts[role_title][status] += 1
+
+    summaries = [
+        InsightRoleOutcomeSummary(
+            role_title=role_title,
+            application_count=sum(status_counts.values()),
+            win_count=sum(
+                count for status, count in status_counts.items() if status in _ROLE_FIT_WIN_STATUSES
+            ),
+            loss_count=sum(
+                count
+                for status, count in status_counts.items()
+                if status in _ROLE_FIT_LOSS_STATUSES
+            ),
+            status_counts=dict(sorted(status_counts.items())),
+            citation_ids=role_citation_ids[role_title],
+        )
+        for role_title, status_counts in role_status_counts.items()
+    ]
+    return sorted(
+        summaries,
+        key=lambda summary: (
+            -summary.win_count,
+            summary.loss_count,
+            -summary.application_count,
+            summary.role_title.casefold(),
+        ),
+    )

@@ -598,6 +598,7 @@ export type InsightType = (typeof InsightType)[keyof typeof InsightType];
 export const InsightType = {
   why_rejected: "why_rejected",
   skill_gaps: "skill_gaps",
+  strongest_weakest_signals: "strongest_weakest_signals",
   role_fit: "role_fit",
   weekly_actions: "weekly_actions",
   story: "story",
