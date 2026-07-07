@@ -163,7 +163,9 @@ class InsightInputBuilder:
             event_types=scope.event_types,
             newest_first=scope.newest_first,
         )
-        evidence = scoped_evidence if scope.include_all_evidence else scoped_evidence[:max_evidence_items]
+        evidence = (
+            scoped_evidence if scope.include_all_evidence else scoped_evidence[:max_evidence_items]
+        )
         insight_input = InsightInput(
             type=insight_type,
             facts=self._build_facts(insight_type, evidence=evidence),
