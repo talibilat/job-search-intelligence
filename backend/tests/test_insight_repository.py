@@ -6,7 +6,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from app.db.repositories import InsightRepository
+from app.db.repositories import ApplicationRepository, InsightRepository
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 GENERATED_AT = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
@@ -71,6 +71,61 @@ def test_save_generated_insight_replaces_existing_type_cache(tmp_path: Path) -> 
     assert rows[0] == second
     assert rows[0].content == "Your search is shifting toward platform roles."
     assert rows[0].inputs_hash == "facts-hash-v2"
+
+
+def test_save_generated_insight_accepts_strongest_weakest_signals_type(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    repository = InsightRepository(connection)
+
+    record = repository.save_generated_insight(
+        insight_type="strongest_weakest_signals",
+        content="Your strongest signal is backend interviews; your weakest is platform rejections.",
+        inputs_hash="facts-hash-signals-v1",
+        model="gpt-4.1-mini",
+        generated_at=GENERATED_AT,
+    )
+
+    cached = repository.get_cached_insight(
+        insight_type="strongest_weakest_signals",
+        inputs_hash="facts-hash-signals-v1",
+        model="gpt-4.1-mini",
+    )
+
+    assert record.type == "strongest_weakest_signals"
+    assert cached == record
+
+
+def test_strongest_weakest_signals_migration_preserves_staleness_triggers(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    repository = InsightRepository(connection)
+    record = repository.save_generated_insight(
+        insight_type="strongest_weakest_signals",
+        content="Your strongest and weakest signals are grounded in the whole history.",
+        inputs_hash="facts-hash-signals-v1",
+        model="gpt-4.1-mini",
+        generated_at=GENERATED_AT,
+    )
+
+    ApplicationRepository(connection).upsert_application(
+        id="application-after-insight",
+        company="Acme Corp",
+        role_title="Backend Engineer",
+        source="linkedin",
+        first_seen_at="2026-07-01T09:00:00+00:00",
+        current_status="applied",
+        last_activity_at="2026-07-01T09:00:00+00:00",
+        created_at="2026-07-01T09:00:00+00:00",
+        updated_at="2026-07-01T09:00:00+00:00",
+    )
+
+    updated = repository.fetch_insight(record.id)
+
+    assert updated is not None
+    assert updated.is_stale is True
 
 
 def test_mark_stale_except_inputs_hash_invalidates_changed_inputs(tmp_path: Path) -> None:

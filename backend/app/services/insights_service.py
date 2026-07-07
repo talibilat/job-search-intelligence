@@ -163,7 +163,9 @@ class InsightInputBuilder:
             event_types=scope.event_types,
             newest_first=scope.newest_first,
         )
-        evidence = scoped_evidence[:max_evidence_items]
+        evidence = (
+            scoped_evidence if scope.include_all_evidence else scoped_evidence[:max_evidence_items]
+        )
         insight_input = InsightInput(
             type=insight_type,
             facts=self._build_facts(insight_type, evidence=evidence),
@@ -393,6 +395,7 @@ class _EvidenceScope:
     application_statuses: tuple[ApplicationStatus, ...] = ()
     event_types: tuple[ApplicationEventType, ...] = ()
     newest_first: bool = False
+    include_all_evidence: bool = False
 
 
 def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
@@ -400,6 +403,8 @@ def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
         return _EvidenceScope(event_types=("rejection",))
     if insight_type == "skill_gaps":
         return _EvidenceScope(application_statuses=("rejected",))
+    if insight_type == "strongest_weakest_signals":
+        return _EvidenceScope(include_all_evidence=True)
     if insight_type == "role_fit":
         return _EvidenceScope(application_statuses=("interview", "offer", "rejected", "ghosted"))
     if insight_type == "weekly_actions":
