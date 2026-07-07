@@ -1,37 +1,65 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import {
+  ApplicationSource,
   ApplicationStatus,
+  SponsorshipStatus,
+  WorkMode,
   getMetricsRatesMetricsRatesGet,
   getMetricsSummaryMetricsSummaryGet,
   listApplicationsApplicationsGet,
+  type ApiErrorResponse,
   type ApplicationRecord,
+  type ApplicationSource as ApplicationSourceValue,
+  type ApplicationStatus as ApplicationStatusValue,
+  type ListApplicationsApplicationsGetParams,
   type MetricRate,
   type MetricsSummaryResponse,
+  type SponsorshipStatus as SponsorshipStatusValue,
+  type WorkMode as WorkModeValue,
 } from "../api";
 import { ChartPanel } from "../components/charts";
-import { Alert } from "../components/ui";
+import {
+  Alert,
+  Button,
+  DataTable,
+  FormField,
+  TextInput,
+} from "../components/ui";
+
+type LoadState = "loading" | "loaded" | "error";
+type LiveApplicationsState = "loading" | "ready" | "error";
+type ResponseRateLoadState = "loading" | "loaded" | "error";
+
+interface DashboardFilters {
+  firstSeenFrom: string;
+  firstSeenTo: string;
+  role: string;
+  salaryMax: string;
+  salaryMin: string;
+  source: ApplicationSourceValue | "";
+  sponsorship: SponsorshipStatusValue | "";
+  status: ApplicationStatusValue | "";
+  workMode: WorkModeValue | "";
+}
+
+const emptyFilters: DashboardFilters = {
+  firstSeenFrom: "",
+  firstSeenTo: "",
+  role: "",
+  salaryMax: "",
+  salaryMin: "",
+  source: "",
+  sponsorship: "",
+  status: "",
+  workMode: "",
+};
 
 const liveApplicationStatuses = [
   ApplicationStatus.applied,
   ApplicationStatus.in_review,
   ApplicationStatus.assessment,
   ApplicationStatus.interview,
-] as const;
-
-type LiveApplicationsState = "loading" | "ready" | "error";
-type ResponseRateLoadState = "loading" | "loaded" | "error";
-
-const numberFormatter = new Intl.NumberFormat("en-US");
-
-const filterPlaceholders = [
-  "Status",
-  "Date range",
-  "Role",
-  "Salary band",
-  "Source",
-  "Sponsorship",
-  "Work mode",
 ] as const;
 
 const metricPlaceholders = [
@@ -41,11 +69,145 @@ const metricPlaceholders = [
   },
 ] as const;
 
+const statusOptions = Object.values(ApplicationStatus);
+const sourceOptions = Object.values(ApplicationSource);
+const sponsorshipOptions = Object.values(SponsorshipStatus);
+const workModeOptions = Object.values(WorkMode);
+const numberFormatter = new Intl.NumberFormat("en-US");
 const percentageFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
   style: "percent",
 });
 
+function titleize(value: string) {
+  return value
+    .split("_")
+    .map((part, index) =>
+      index === 0 ? `${part.charAt(0).toUpperCase()}${part.slice(1)}` : part,
+    )
+    .join(" ");
+}
+
+function filterValue<TValue extends string>(
+  params: URLSearchParams,
+  key: string,
+  allowedValues: readonly TValue[],
+) {
+  const value = params.get(key);
+  return value && allowedValues.includes(value as TValue)
+    ? (value as TValue)
+    : "";
+}
+
+function numericFilterText(value: string | null) {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed.length === 0) {
+    return "";
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? trimmed : "";
+}
+
+function filtersFromSearch(search: string): DashboardFilters {
+  const params = new URLSearchParams(search);
+
+  return {
+    firstSeenFrom: params.get("first_seen_from") ?? "",
+    firstSeenTo: params.get("first_seen_to") ?? "",
+    role: params.get("role") ?? "",
+    salaryMax: numericFilterText(params.get("salary_max")),
+    salaryMin: numericFilterText(params.get("salary_min")),
+    source: filterValue(params, "source", sourceOptions),
+    sponsorship: filterValue(params, "sponsorship", sponsorshipOptions),
+    status: filterValue(params, "status", statusOptions),
+    workMode: filterValue(params, "work_mode", workModeOptions),
+  };
+}
+
+function canonicalFilters(filters: DashboardFilters): DashboardFilters {
+  return {
+    ...filters,
+    salaryMax: numericFilterText(filters.salaryMax),
+    salaryMin: numericFilterText(filters.salaryMin),
+  };
+}
+
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function optionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function queryParamsFromFilters(
+  filters: DashboardFilters,
+): ListApplicationsApplicationsGetParams {
+  return {
+    first_seen_from: optionalText(filters.firstSeenFrom),
+    first_seen_to: optionalText(filters.firstSeenTo),
+    role: optionalText(filters.role),
+    salary_max: optionalNumber(filters.salaryMax),
+    salary_min: optionalNumber(filters.salaryMin),
+    source: filters.source || undefined,
+    sponsorship: filters.sponsorship || undefined,
+    status: filters.status || undefined,
+    work_mode: filters.workMode || undefined,
+  };
+}
+
+function queryStringFromFilters(filters: DashboardFilters) {
+  const params = new URLSearchParams();
+  const apiParams = queryParamsFromFilters(filters);
+
+  for (const [key, value] of Object.entries(apiParams)) {
+    if (value !== undefined) {
+      params.set(key, String(value));
+    }
+  }
+
+  const query = params.toString();
+  return query.length > 0 ? `?${query}` : "";
+}
+
+function replaceUrlWithFilters(filters: DashboardFilters) {
+  const nextPath = `${window.location.pathname}${queryStringFromFilters(filters)}`;
+  const currentPath = `${window.location.pathname}${window.location.search}`;
+  if (nextPath !== currentPath) {
+    window.history.replaceState({}, "", nextPath);
+  }
+}
+
+function publicError(data: unknown, fallback: string) {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "error" in data &&
+    typeof (data as ApiErrorResponse).error?.message === "string"
+  ) {
+    return (data as ApiErrorResponse).error.message;
+  }
+
+  return fallback;
+}
+
+function summaryMetricValue(isLoading: boolean, value: number | undefined) {
+  if (isLoading) {
+    return "Loading";
+  }
+  if (value === undefined) {
+    return "Unavailable";
+  }
+  return numberFormatter.format(value);
+}
 function liveApplicationsCountLabel(
   state: LiveApplicationsState,
   count: number,
@@ -58,6 +220,18 @@ function liveApplicationsCountLabel(
   }
 
   return count === 1 ? "1 live application" : `${count} live applications`;
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+    timeZoneName: "short",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function statusLabel(status: ApplicationRecord["current_status"]) {
@@ -94,6 +268,41 @@ function sortedUniqueApplications(applications: ApplicationRecord[]) {
   });
 }
 
+const applicationStatusColumns = [
+  {
+    key: "company",
+    header: "Company",
+    render: (row: ApplicationRecord) => (
+      <a href={`/applications/${encodeURIComponent(row.id)}`}>{row.company}</a>
+    ),
+  },
+  { key: "role_title", header: "Role" },
+  {
+    key: "current_status",
+    header: "Status",
+    render: (row: ApplicationRecord) => (
+      <span className={`status-badge status-badge--${row.current_status}`}>
+        {titleize(row.current_status)}
+      </span>
+    ),
+  },
+  {
+    key: "first_seen_at",
+    header: "First seen",
+    render: (row: ApplicationRecord) => formatDateTime(row.first_seen_at),
+  },
+  {
+    key: "last_activity_at",
+    header: "Last activity",
+    render: (row: ApplicationRecord) => formatDateTime(row.last_activity_at),
+  },
+  {
+    key: "source",
+    header: "Source",
+    render: (row: ApplicationRecord) => titleize(row.source),
+  },
+] as const;
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -105,6 +314,14 @@ export function DashboardPage() {
   const [responseRate, setResponseRate] = useState<MetricRate | null>(null);
   const [responseRateLoadState, setResponseRateLoadState] =
     useState<ResponseRateLoadState>("loading");
+  const [filters, setFilters] = useState<DashboardFilters>(() =>
+    filtersFromSearch(window.location.search),
+  );
+  const [appliedFilters, setAppliedFilters] =
+    useState<DashboardFilters>(filters);
+  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -182,6 +399,66 @@ export function DashboardPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    async function loadApplications() {
+      setLoadState("loading");
+      setErrorMessage(null);
+      setApplications([]);
+
+      const response = await listApplicationsApplicationsGet(
+        queryParamsFromFilters(appliedFilters),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setApplications([]);
+        setErrorMessage(
+          publicError(response.data, "Application statuses are unavailable."),
+        );
+        setLoadState("error");
+        return;
+      }
+
+      setApplications(response.data);
+      setLoadState("loaded");
+    }
+
+    void loadApplications().catch(() => {
+      if (!isCancelled) {
+        setApplications([]);
+        setErrorMessage(
+          "Application statuses are unavailable. Start the local backend to load Q-09.",
+        );
+        setLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    replaceUrlWithFilters(appliedFilters);
+
+    function handlePopState() {
+      const nextFilters = filtersFromSearch(window.location.search);
+      replaceUrlWithFilters(nextFilters);
+      setFilters(nextFilters);
+      setAppliedFilters(nextFilters);
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
     async function loadResponseRate() {
       try {
         const response = await getMetricsRatesMetricsRatesGet();
@@ -203,6 +480,24 @@ export function DashboardPage() {
     };
   }, []);
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextFilters = canonicalFilters(filters);
+    const nextQuery = queryStringFromFilters(nextFilters);
+    window.history.pushState({}, "", `${window.location.pathname}${nextQuery}`);
+    setFilters(nextFilters);
+    setAppliedFilters(nextFilters);
+  }
+
+  function clearFilters() {
+    window.history.pushState({}, "", window.location.pathname);
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+  }
+
+  const shownStatusCount = new Set(
+    applications.map((application) => application.current_status),
+  ).size;
   const distinctCompanyValue = summaryMetricValue(
     isLoadingSummary,
     summary?.distinct_company_count,
@@ -228,7 +523,7 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-03, Q-07, Q-08, Q-10, and Q-11 now render from deterministic
+          Q-03, Q-07, Q-08, Q-09, Q-10, and Q-11 now render from deterministic
           application and metrics endpoints, while remaining dashboard questions
           stay clearly marked as pending.
         </p>
@@ -244,14 +539,161 @@ export function DashboardPage() {
             <h2 id="dashboard-filters-title">Dashboard filters</h2>
           </div>
           <p>
-            Filter state will live in the URL query string so every
-            deterministic metric uses the same scoped view.
+            Filter state lives in the URL query string and is passed directly to
+            the deterministic applications API.
           </p>
-          <ul className="filter-placeholder-list">
-            {filterPlaceholders.map((filter) => (
-              <li key={filter}>{filter}</li>
-            ))}
-          </ul>
+          <form className="dashboard-filter-form" onSubmit={handleSubmit}>
+            <div className="dashboard-filter-grid">
+              <FormField htmlFor="dashboard-status" label="Status">
+                <select
+                  className="ui-input"
+                  id="dashboard-status"
+                  onChange={(event) =>
+                    setFilters({
+                      ...filters,
+                      status: event.target.value as ApplicationStatusValue | "",
+                    })
+                  }
+                  value={filters.status}
+                >
+                  <option value="">All statuses</option>
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {titleize(status)}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField htmlFor="dashboard-role" label="Role">
+                <TextInput
+                  id="dashboard-role"
+                  onChange={(event) =>
+                    setFilters({ ...filters, role: event.target.value })
+                  }
+                  placeholder="Backend"
+                  value={filters.role}
+                />
+              </FormField>
+              <FormField htmlFor="dashboard-source" label="Source">
+                <select
+                  className="ui-input"
+                  id="dashboard-source"
+                  onChange={(event) =>
+                    setFilters({
+                      ...filters,
+                      source: event.target.value as ApplicationSourceValue | "",
+                    })
+                  }
+                  value={filters.source}
+                >
+                  <option value="">All sources</option>
+                  {sourceOptions.map((source) => (
+                    <option key={source} value={source}>
+                      {titleize(source)}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField htmlFor="dashboard-sponsorship" label="Sponsorship">
+                <select
+                  className="ui-input"
+                  id="dashboard-sponsorship"
+                  onChange={(event) =>
+                    setFilters({
+                      ...filters,
+                      sponsorship: event.target.value as
+                        SponsorshipStatusValue | "",
+                    })
+                  }
+                  value={filters.sponsorship}
+                >
+                  <option value="">All sponsorship</option>
+                  {sponsorshipOptions.map((sponsorship) => (
+                    <option key={sponsorship} value={sponsorship}>
+                      {titleize(sponsorship)}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField htmlFor="dashboard-work-mode" label="Work mode">
+                <select
+                  className="ui-input"
+                  id="dashboard-work-mode"
+                  onChange={(event) =>
+                    setFilters({
+                      ...filters,
+                      workMode: event.target.value as WorkModeValue | "",
+                    })
+                  }
+                  value={filters.workMode}
+                >
+                  <option value="">All work modes</option>
+                  {workModeOptions.map((workMode) => (
+                    <option key={workMode} value={workMode}>
+                      {titleize(workMode)}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField
+                htmlFor="dashboard-first-seen-from"
+                label="First seen from"
+              >
+                <TextInput
+                  id="dashboard-first-seen-from"
+                  onChange={(event) =>
+                    setFilters({
+                      ...filters,
+                      firstSeenFrom: event.target.value,
+                    })
+                  }
+                  placeholder="2026-07-01T00:00:00Z"
+                  value={filters.firstSeenFrom}
+                />
+              </FormField>
+              <FormField
+                htmlFor="dashboard-first-seen-to"
+                label="First seen to"
+              >
+                <TextInput
+                  id="dashboard-first-seen-to"
+                  onChange={(event) =>
+                    setFilters({ ...filters, firstSeenTo: event.target.value })
+                  }
+                  placeholder="2026-07-31T23:59:59Z"
+                  value={filters.firstSeenTo}
+                />
+              </FormField>
+              <FormField htmlFor="dashboard-salary-min" label="Salary min">
+                <TextInput
+                  id="dashboard-salary-min"
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setFilters({ ...filters, salaryMin: event.target.value })
+                  }
+                  placeholder="120000"
+                  value={filters.salaryMin}
+                />
+              </FormField>
+              <FormField htmlFor="dashboard-salary-max" label="Salary max">
+                <TextInput
+                  id="dashboard-salary-max"
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setFilters({ ...filters, salaryMax: event.target.value })
+                  }
+                  placeholder="180000"
+                  value={filters.salaryMax}
+                />
+              </FormField>
+            </div>
+            <div className="dashboard-filter-actions">
+              <Button type="submit">Apply filters</Button>
+              <Button onClick={clearFilters} type="button" variant="secondary">
+                Clear filters
+              </Button>
+            </div>
+          </form>
         </section>
 
         <section
@@ -290,6 +732,25 @@ export function DashboardPage() {
                 Q-08 counted from offer events
               </p>
             </article>
+            <article className="metric-placeholder">
+              <p className="metric-placeholder__label">Applications shown</p>
+              <p className="metric-placeholder__value">{applications.length}</p>
+              <p className="dashboard-card__meta">Returned by /applications</p>
+            </article>
+            <article className="metric-placeholder">
+              <p className="metric-placeholder__label">Statuses in view</p>
+              <p className="metric-placeholder__value">{shownStatusCount}</p>
+              <p className="dashboard-card__meta">
+                Derived from current_status
+              </p>
+            </article>
+            <article className="metric-placeholder">
+              <p className="metric-placeholder__label">Answer</p>
+              <p className="metric-placeholder__value">Q-09</p>
+              <p className="dashboard-card__meta">
+                Per-application status table
+              </p>
+            </article>
             <article
               aria-label="Response rate metric"
               className="metric-placeholder"
@@ -312,6 +773,35 @@ export function DashboardPage() {
           </div>
         </section>
       </div>
+
+      <section
+        className="dashboard-card status-table-card"
+        aria-labelledby="status-table-title"
+      >
+        <div>
+          <p className="eyebrow">Applications table</p>
+          <h2 id="status-table-title">Current status of every application</h2>
+        </div>
+        {loadState === "loading" ? (
+          <p className="dashboard-card__meta">Loading applications...</p>
+        ) : null}
+        {errorMessage ? (
+          <Alert title="Application statuses unavailable" tone="danger">
+            <p>{errorMessage}</p>
+          </Alert>
+        ) : null}
+        <DataTable
+          caption="Application current statuses"
+          columns={applicationStatusColumns}
+          emptyMessage={
+            loadState === "loaded"
+              ? "No applications match these filters."
+              : "No application statuses loaded yet."
+          }
+          rowKey={(row) => row.id}
+          rows={applications}
+        />
+      </section>
 
       <section
         aria-labelledby="live-applications-title"
@@ -394,17 +884,6 @@ export function DashboardPage() {
   );
 }
 
-function summaryMetricValue(isLoading: boolean, value: number | undefined) {
-  if (isLoading) {
-    return "Loading";
-  }
-  if (value === undefined) {
-    return "Unavailable";
-  }
-  return numberFormatter.format(value);
-}
-
-
 function formatResponseRateValue(
   metric: MetricRate | null,
   loadState: ResponseRateLoadState,
@@ -420,7 +899,6 @@ function formatResponseRateValue(
   }
   return percentageFormatter.format(metric.rate);
 }
-
 
 function formatResponseRateMeta(
   metric: MetricRate | null,

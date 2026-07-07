@@ -140,18 +140,58 @@ describe("App", () => {
   });
 
   it("renders the Q-03 distinct company count on the dashboard", async () => {
-    mockFetchResponses({
-      "/metrics/summary": {
-        distinct_company_count: 3,
-      },
-      "/metrics/rates": {
-        overall_response_rate: {
-          numerator: 0,
-          denominator: 0,
-          rate: null,
-        },
-      },
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        const path = url.startsWith("http") ? new URL(url).pathname : url;
+
+        expect(init?.method).toBe("GET");
+
+        if (path === "/metrics/summary") {
+          return Promise.resolve(
+            new Response(JSON.stringify({ distinct_company_count: 3 }), {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            }),
+          );
+        }
+
+        if (path === "/metrics/rates") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                overall_response_rate: {
+                  denominator: 0,
+                  numerator: 0,
+                  rate: null,
+                },
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+                status: 200,
+              },
+            ),
+          );
+        }
+
+        if (path.startsWith("/applications")) {
+          return Promise.resolve(
+            new Response(JSON.stringify([]), {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            }),
+          );
+        }
+
+        throw new Error(`Unhandled fetch request: ${path}`);
+      }),
+    );
 
     renderAtPath("/dashboard");
 
@@ -182,7 +222,9 @@ describe("App", () => {
 
     expect(await within(responseRateCard).findByText("60%"));
     expect(
-      within(responseRateCard).getByText("3 of 5 applications have response evidence"),
+      within(responseRateCard).getByText(
+        "3 of 5 applications have response evidence",
+      ),
     ).toBeTruthy();
   });
 
@@ -523,7 +565,60 @@ describe("App", () => {
     expect(styles).toContain("padding: 20px");
   });
 
-  it("renders an empty dashboard page shell at the dashboard route", () => {
+  it("renders the Q-09 application status table at the dashboard route", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        const path = url.startsWith("http") ? new URL(url).pathname : url;
+
+        expect(init?.method).toBe("GET");
+
+        if (path === "/metrics/summary") {
+          return Promise.resolve(
+            new Response(JSON.stringify({ distinct_company_count: 0 }), {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            }),
+          );
+        }
+
+        if (path === "/metrics/rates") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                overall_response_rate: {
+                  denominator: 0,
+                  numerator: 0,
+                  rate: null,
+                },
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+                status: 200,
+              },
+            ),
+          );
+        }
+
+        if (path.startsWith("/applications")) {
+          return Promise.resolve(
+            new Response(JSON.stringify([]), {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            }),
+          );
+        }
+
+        throw new Error(`Unhandled fetch request: ${path}`);
+      }),
+    );
+
     renderAtPath("/dashboard");
 
     expect(screen.getByRole("main", { name: "Dashboard" })).toBeTruthy();
@@ -536,6 +631,19 @@ describe("App", () => {
     expect(
       screen.getByRole("region", { name: "Metrics overview" }),
     ).toBeTruthy();
+    expect(
+      screen.getByRole("region", {
+        name: "Current status of every application",
+      }),
+    ).toBeTruthy();
+    expect(
+      await screen.findByRole("table", {
+        name: "Application current statuses",
+      }),
+    ).toBeTruthy();
+    expect(
+      await screen.findByText("No applications match these filters."),
+    ).toBeTruthy();
 
     const emptyState = screen.getByRole("status", {
       name: "Dashboard metrics pending",
@@ -547,15 +655,67 @@ describe("App", () => {
   });
 
   it("renders Q-07 interview invitations from the metrics summary", async () => {
-    mockFetchResponses({
-      "/metrics/summary": {
-        distinct_company_count: 7,
-        evaluated_at: "2026-07-07T12:00:00Z",
-        ghost_threshold_days: 30,
-        ghosted_applications: 2,
-        interview_invitation_count: 3,
-      },
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        const path = url.startsWith("http") ? new URL(url).pathname : url;
+
+        expect(init?.method).toBe("GET");
+
+        if (path === "/metrics/summary") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                distinct_company_count: 7,
+                evaluated_at: "2026-07-07T12:00:00Z",
+                ghost_threshold_days: 30,
+                ghosted_applications: 2,
+                interview_invitation_count: 3,
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+                status: 200,
+              },
+            ),
+          );
+        }
+
+        if (path === "/metrics/rates") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                overall_response_rate: {
+                  denominator: 0,
+                  numerator: 0,
+                  rate: null,
+                },
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+                status: 200,
+              },
+            ),
+          );
+        }
+
+        if (path.startsWith("/applications")) {
+          return Promise.resolve(
+            new Response(JSON.stringify([]), {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            }),
+          );
+        }
+
+        throw new Error(`Unhandled fetch request: ${path}`);
+      }),
+    );
 
     renderAtPath("/dashboard");
 
@@ -580,6 +740,13 @@ describe("App", () => {
         interview_invitation_count: 0,
         offers_received: 2,
         evaluated_at: "2026-07-07T12:00:00+00:00",
+      },
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
       },
     });
 
@@ -607,6 +774,14 @@ describe("App", () => {
         ghosted_applications: 3,
         interview_invitation_count: 4,
       },
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
+      "/applications": { body: [], status: 200 },
       "/applications?status=applied": {
         body: [
           {
@@ -714,6 +889,7 @@ describe("App", () => {
       "/applications?status=in_review",
       "/applications?status=assessment",
       "/applications?status=interview",
+      "/applications",
       "/metrics/rates",
     ]);
   });
@@ -727,10 +903,18 @@ describe("App", () => {
         ghosted_applications: 0,
         interview_invitation_count: 0,
       },
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
       "/applications?status=assessment": { body: [], status: 200 },
       "/applications?status=interview": { body: [], status: 200 },
+      "/applications": { body: [], status: 200 },
     });
 
     renderAtPath("/dashboard");
