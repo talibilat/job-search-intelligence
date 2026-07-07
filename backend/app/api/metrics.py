@@ -118,8 +118,7 @@ def get_metrics_rates(
     response_model=MetricsTimeseriesResponse,
     summary="Get Metrics Timeseries",
     description=(
-        "Returns deterministic application-volume timeseries points from local "
-        "applications data."
+        "Returns deterministic application-volume timeseries points from local applications data."
     ),
 )
 def get_metrics_timeseries(
