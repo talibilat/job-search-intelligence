@@ -154,6 +154,40 @@ def test_insight_generation_service_allows_bracketed_non_citation_prose(
     )
 
 
+@pytest.mark.parametrize(
+    "content",
+    (
+        f"[{CITATION_ID}] Rejected applications mention Kubernetes experience.",
+        f"According to [{CITATION_ID}], rejected applications mention Kubernetes experience.",
+    ),
+)
+def test_insight_generation_service_accepts_claims_with_same_sentence_citations(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=InsightRepository(connection),
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content=content,
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("why_rejected"))
+
+    assert result.insight.content == content
+
+
 def test_insight_generation_service_uses_fresh_cache_without_calling_provider(
     tmp_path: Path,
 ) -> None:
@@ -272,6 +306,10 @@ def test_insight_generation_service_rejects_invalid_provider_output(
         (
             "Rejected applications repeatedly mention Kubernetes experience. "
             f"[{CITATION_ID}] Your salary target is too high."
+        ),
+        (
+            "Your salary target is too high. "
+            f"Rejected applications mention Kubernetes experience [{CITATION_ID}]."
         ),
     ),
 )

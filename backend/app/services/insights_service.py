@@ -286,18 +286,11 @@ def _has_ungrounded_claim(content: str, citation_spans: list[tuple[int, int]]) -
             ):
                 pending_claim = False
             continue
-        if _has_citation_between(citation_spans, sentence_start, sentence_end):
-            last_citation_end = max(
-                span_end
-                for span_start, span_end in citation_spans
-                if span_start >= sentence_start and span_end <= sentence_end
-            )
-            if _has_claim_text(content, last_citation_end, sentence_end, citation_spans):
-                return True
-            pending_claim = False
-            continue
         if pending_claim:
             return True
+        if _has_citation_between(citation_spans, sentence_start, sentence_end):
+            pending_claim = False
+            continue
         pending_claim = True
         pending_claim_end = sentence_end
 
