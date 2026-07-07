@@ -170,6 +170,11 @@ describe("App", () => {
           rate: null,
         },
       },
+      "/applications": { body: [], status: 200 },
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
     });
 
     renderAtPath("/dashboard");
@@ -201,7 +206,9 @@ describe("App", () => {
 
     expect(await within(responseRateCard).findByText("60%"));
     expect(
-      within(responseRateCard).getByText("3 of 5 applications have response evidence"),
+      within(responseRateCard).getByText(
+        "3 of 5 applications have response evidence",
+      ),
     ).toBeTruthy();
   });
 
@@ -542,9 +549,21 @@ describe("App", () => {
     expect(styles).toContain("padding: 20px");
   });
 
-  it("renders an empty dashboard page shell at the dashboard route", () => {
+  it("renders the Q-09 application status table at the dashboard route", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
+      "/applications": { body: [], status: 200 },
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
     });
 
     renderAtPath("/dashboard");
@@ -558,6 +577,19 @@ describe("App", () => {
     ).toBeTruthy();
     expect(
       screen.getByRole("region", { name: "Metrics overview" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("region", {
+        name: "Current status of every application",
+      }),
+    ).toBeTruthy();
+    expect(
+      await screen.findByRole("table", {
+        name: "Application current statuses",
+      }),
+    ).toBeTruthy();
+    expect(
+      await screen.findByText("No applications match these filters."),
     ).toBeTruthy();
 
     const emptyState = screen.getByRole("status", {
@@ -579,6 +611,18 @@ describe("App", () => {
         interview_invitation_count: 3,
         rejected_applications: 1,
       }),
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
+      "/applications": { body: [], status: 200 },
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
     });
 
     renderAtPath("/dashboard");
@@ -604,6 +648,13 @@ describe("App", () => {
         interview_invitation_count: 0,
         offers_received: 2,
         evaluated_at: "2026-07-07T12:00:00+00:00",
+      },
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
       },
     });
 
@@ -632,6 +683,13 @@ describe("App", () => {
         interview_invitation_count: 4,
         rejected_applications: 1,
       }),
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
       "/applications?status=applied": {
         body: [
           {
@@ -708,6 +766,7 @@ describe("App", () => {
         status: 200,
       },
       "/applications?status=interview": { body: [], status: 200 },
+      "/applications": { body: [], status: 200 },
     });
 
     renderAtPath("/dashboard");
@@ -739,6 +798,7 @@ describe("App", () => {
       "/applications?status=in_review",
       "/applications?status=assessment",
       "/applications?status=interview",
+      "/applications",
       "/metrics/rates",
     ]);
   });
@@ -748,10 +808,18 @@ describe("App", () => {
       "/metrics/summary": metricsSummaryResponse({
         evaluated_at: "2026-07-07T12:00:00Z",
       }),
+      "/metrics/rates": {
+        overall_response_rate: {
+          denominator: 0,
+          numerator: 0,
+          rate: null,
+        },
+      },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
       "/applications?status=assessment": { body: [], status: 200 },
       "/applications?status=interview": { body: [], status: 200 },
+      "/applications": { body: [], status: 200 },
     });
 
     renderAtPath("/dashboard");
