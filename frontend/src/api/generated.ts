@@ -2207,7 +2207,7 @@ export type getMetricsBreakdownMetricsBreakdownGetResponse200 = {
 };
 
 export type getMetricsBreakdownMetricsBreakdownGetResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 

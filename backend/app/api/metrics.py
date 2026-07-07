@@ -137,6 +137,7 @@ def get_metrics_timeseries(
 @router.get(
     "/breakdown",
     response_model=MetricsBreakdownResponse,
+    responses={422: {"model": ApiErrorResponse}},
     summary="Get Metrics Breakdown",
     description=(
         "Returns deterministic dashboard breakdown rows for a supported dimension "

@@ -63,7 +63,9 @@ def test_metrics_breakdown_endpoint_is_documented_in_openapi() -> None:
     assert response.status_code == 200
     operation = response.json()["paths"]["/metrics/breakdown"]["get"]
     success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    validation_schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert success_schema["$ref"] == "#/components/schemas/MetricsBreakdownResponse"
+    assert validation_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
 def create_test_client(database_path: Path) -> TestClient:
