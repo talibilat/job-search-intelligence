@@ -32,10 +32,15 @@ from .insight import (
 )
 from .metrics import (
     ApplicationWindowMetric,
+    MetricBreakdownRow,
+    MetricFunnelStage,
     MetricRate,
+    MetricRateRow,
     MetricsApplicationWindow,
+    MetricsBreakdownDimension,
     MetricsRatesResponse,
     MetricsSummaryResponse,
+    MetricTimeseriesPoint,
     ResponseSilenceMetric,
 )
 from .provider_config import (
@@ -102,9 +107,14 @@ __all__ = [
     "GhostInferenceRunResponse",
     "HealthResponse",
     "LLMProviderConfigResponse",
+    "MetricBreakdownRow",
+    "MetricFunnelStage",
     "MetricRate",
+    "MetricRateRow",
+    "MetricsBreakdownDimension",
     "MetricsRatesResponse",
     "MetricsSummaryResponse",
+    "MetricTimeseriesPoint",
     "ProviderConfigRequirementResponse",
     "ProviderConfigResponse",
     "ProviderConfigUpdateRequest",
