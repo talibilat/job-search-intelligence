@@ -24,6 +24,20 @@ class MetricsRepository(BaseRepository[int]):
             return 0
         return int(row[0])
 
+    def count_applications_with_offer_events(self) -> int:
+        row = self.execute(
+            """
+            SELECT COUNT(DISTINCT application_events.application_id)
+            FROM application_events
+            INNER JOIN applications
+                ON applications.id = application_events.application_id
+            WHERE application_events.event_type = 'offer'
+            """,
+        ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+
     def get_response_silence_metric(self) -> ResponseSilenceMetric:
         row = self.execute(
             f"""

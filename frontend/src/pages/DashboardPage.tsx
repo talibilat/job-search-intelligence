@@ -180,6 +180,10 @@ export function DashboardPage() {
     isLoadingSummary,
     summary?.interview_invitation_count,
   );
+  const offersReceivedValue = summaryMetricValue(
+    isLoadingSummary,
+    summary?.offers_received,
+  );
 
   return (
     <main
@@ -193,9 +197,10 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-07 reports interview invitations from the local event timeline, and
-          Q-10 lists live applications from deterministic application rows while
-          remaining dashboard questions stay clearly marked as pending.
+          Q-07 and Q-08 report interview invitations and offers from the local
+          event timeline, and Q-10 lists live applications from deterministic
+          application rows while remaining dashboard questions stay clearly
+          marked as pending.
         </p>
       </section>
 
@@ -246,6 +251,13 @@ export function DashboardPage() {
               </p>
               <p className="dashboard-card__meta">
                 Q-07 - Counted from interview_scheduled events
+              </p>
+            </article>
+            <article className="metric-placeholder">
+              <h3 className="metric-placeholder__label">Offers received</h3>
+              <p className="metric-placeholder__value">{offersReceivedValue}</p>
+              <p className="dashboard-card__meta">
+                Q-08 counted from offer events
               </p>
             </article>
             {metricPlaceholders.map((metric) => (

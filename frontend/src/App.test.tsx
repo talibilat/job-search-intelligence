@@ -540,6 +540,33 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("renders offers received on the dashboard from the metrics summary", async () => {
+    mockFetchResponses({
+      "/metrics/summary": {
+        distinct_company_count: 3,
+        ghost_threshold_days: 30,
+        ghosted_applications: 0,
+        interview_invitation_count: 0,
+        offers_received: 2,
+        evaluated_at: "2026-07-07T12:00:00+00:00",
+      },
+    });
+
+    renderAtPath("/dashboard");
+
+    const overview = screen.getByRole("region", { name: "Metrics overview" });
+    expect(
+      await within(overview).findByRole("heading", {
+        level: 3,
+        name: "Offers received",
+      }),
+    ).toBeTruthy();
+    expect(within(overview).getByText("2")).toBeTruthy();
+    expect(
+      within(overview).getByText("Q-08 counted from offer events"),
+    ).toBeTruthy();
+  });
+
   it("shows live applications awaiting a reply on the dashboard", async () => {
     const fetchMock = mockFetchResponses({
       "/metrics/summary": {
