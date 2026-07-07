@@ -34,6 +34,8 @@ class InsightRecord(BaseModel):
 
 
 class InsightRoleOutcomeSummary(BaseModel):
+    """Deterministic role-level outcome facts used to ground Q-44 synthesis."""
+
     role_title: str
     application_count: int
     win_count: int
