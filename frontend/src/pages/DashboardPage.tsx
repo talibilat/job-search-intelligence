@@ -1,10 +1,23 @@
 import { useEffect, useState } from "react";
 
 import {
+  ApplicationStatus,
   getMetricsSummaryMetricsSummaryGet,
+  listApplicationsApplicationsGet,
+  type ApplicationRecord,
   type MetricsSummaryResponse,
 } from "../api";
 import { ChartPanel } from "../components/charts";
+import { Alert } from "../components/ui";
+
+const liveApplicationStatuses = [
+  ApplicationStatus.applied,
+  ApplicationStatus.in_review,
+  ApplicationStatus.assessment,
+  ApplicationStatus.interview,
+] as const;
+
+type LiveApplicationsState = "loading" | "ready" | "error";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -27,15 +40,64 @@ const metricPlaceholders = [
     label: "Response rate",
     note: "Calculated deterministically",
   },
-  {
-    label: "Live applications",
-    note: "Derived from event timeline",
-  },
 ] as const;
+
+function liveApplicationsCountLabel(
+  state: LiveApplicationsState,
+  count: number,
+) {
+  if (state === "loading") {
+    return "Loading";
+  }
+  if (state === "error") {
+    return "Unavailable";
+  }
+
+  return count === 1 ? "1 live application" : `${count} live applications`;
+}
+
+function statusLabel(status: ApplicationRecord["current_status"]) {
+  return status.replaceAll("_", " ");
+}
+
+function sortedUniqueApplications(applications: ApplicationRecord[]) {
+  const uniqueApplications = new Map<string, ApplicationRecord>();
+
+  for (const application of applications) {
+    uniqueApplications.set(application.id, application);
+  }
+
+  return [...uniqueApplications.values()].sort((left, right) => {
+    const activityOrder =
+      Date.parse(left.last_activity_at) - Date.parse(right.last_activity_at);
+    if (activityOrder !== 0 && !Number.isNaN(activityOrder)) {
+      return activityOrder;
+    }
+
+    const activityTextOrder = left.last_activity_at.localeCompare(
+      right.last_activity_at,
+    );
+    if (activityTextOrder !== 0) {
+      return activityTextOrder;
+    }
+
+    const companyOrder = left.company.localeCompare(right.company);
+    if (companyOrder !== 0) {
+      return companyOrder;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
+}
 
 export function DashboardPage() {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+  const [liveApplications, setLiveApplications] = useState<ApplicationRecord[]>(
+    [],
+  );
+  const [liveApplicationsState, setLiveApplicationsState] =
+    useState<LiveApplicationsState>("loading");
 
   useEffect(() => {
     let ignore = false;
@@ -65,6 +127,51 @@ export function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadLiveApplications() {
+      setLiveApplicationsState("loading");
+
+      try {
+        const responses = await Promise.all(
+          liveApplicationStatuses.map((status) =>
+            listApplicationsApplicationsGet({ status }),
+          ),
+        );
+        const nextApplications: ApplicationRecord[] = [];
+
+        for (const response of responses) {
+          if (response.status !== 200) {
+            if (!isCancelled) {
+              setLiveApplications([]);
+              setLiveApplicationsState("error");
+            }
+            return;
+          }
+
+          nextApplications.push(...response.data);
+        }
+
+        if (!isCancelled) {
+          setLiveApplications(sortedUniqueApplications(nextApplications));
+          setLiveApplicationsState("ready");
+        }
+      } catch {
+        if (!isCancelled) {
+          setLiveApplications([]);
+          setLiveApplicationsState("error");
+        }
+      }
+    }
+
+    void loadLiveApplications();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   const distinctCompanyValue = summaryMetricValue(
     isLoadingSummary,
     summary?.distinct_company_count,
@@ -86,9 +193,9 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-07 now reports interview invitations from the local application
-          event timeline, while the remaining dashboard questions stay clearly
-          marked as pending.
+          Q-07 reports interview invitations from the local event timeline, and
+          Q-10 lists live applications from deterministic application rows while
+          remaining dashboard questions stay clearly marked as pending.
         </p>
       </section>
 
@@ -123,14 +230,20 @@ export function DashboardPage() {
           <div className="dashboard-metric-grid">
             <article className="metric-placeholder">
               <p className="metric-placeholder__label">Distinct companies</p>
-              <p className="metric-placeholder__value">{distinctCompanyValue}</p>
+              <p className="metric-placeholder__value">
+                {distinctCompanyValue}
+              </p>
               <p className="dashboard-card__meta">
                 Q-03 counted from normalized applications
               </p>
             </article>
             <article className="metric-placeholder">
-              <h3 className="metric-placeholder__label">Interview invitations</h3>
-              <p className="metric-placeholder__value">{interviewInvitationValue}</p>
+              <h3 className="metric-placeholder__label">
+                Interview invitations
+              </h3>
+              <p className="metric-placeholder__value">
+                {interviewInvitationValue}
+              </p>
               <p className="dashboard-card__meta">
                 Q-07 - Counted from interview_scheduled events
               </p>
@@ -145,6 +258,74 @@ export function DashboardPage() {
           </div>
         </section>
       </div>
+
+      <section
+        aria-labelledby="live-applications-title"
+        className="dashboard-card dashboard-live-applications"
+      >
+        <div className="dashboard-live-applications__header">
+          <div>
+            <p className="eyebrow">Q-10</p>
+            <h2 id="live-applications-title">
+              Live applications awaiting response
+            </h2>
+            <p className="dashboard-card__meta">
+              Active applications are pulled from deterministic application rows
+              whose current status is applied, in review, assessment, or
+              interview.
+            </p>
+          </div>
+          <p className="dashboard-live-count" aria-live="polite" role="status">
+            {liveApplicationsCountLabel(
+              liveApplicationsState,
+              liveApplications.length,
+            )}
+          </p>
+        </div>
+
+        {liveApplicationsState === "error" ? (
+          <Alert tone="danger">
+            Live applications are unavailable. Start the local backend and try
+            again.
+          </Alert>
+        ) : liveApplicationsState === "loading" ? (
+          <p className="dashboard-live-empty">Loading live applications.</p>
+        ) : liveApplications.length > 0 ? (
+          <ul className="dashboard-live-list">
+            {liveApplications.map((application) => (
+              <li className="dashboard-live-card" key={application.id}>
+                <div>
+                  <a
+                    className="dashboard-live-card__company"
+                    href={`/applications/${encodeURIComponent(application.id)}`}
+                  >
+                    {application.company}
+                  </a>
+                  <p className="dashboard-live-card__role">
+                    {application.role_title}
+                  </p>
+                </div>
+                <div className="dashboard-live-card__meta">
+                  <span>{statusLabel(application.current_status)}</span>
+                  <span>
+                    Last activity{" "}
+                    {new Date(application.last_activity_at).toLocaleDateString(
+                      "en-US",
+                      {
+                        timeZone: "UTC",
+                      },
+                    )}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="dashboard-live-empty">
+            No live applications are awaiting a reply right now.
+          </p>
+        )}
+      </section>
 
       <ChartPanel
         description="Dashboard charts stay empty until deterministic metrics endpoints can supply reconciled values from the local SQLite database."
