@@ -73,7 +73,7 @@ Build phase: Diagnostics, Phase 3.5–4.
 
 ## Tier 5 — Narrative "Why"
 
-Capability: LLM synthesis over rejection/feedback text, cached.
+Capability: LLM synthesis over cited rejection emails, recruiter feedback, and related job-search evidence, cached.
 
 Build phase: Insights page, Phase 4.
 
@@ -83,6 +83,7 @@ Build phase: Insights page, Phase 4.
 - **Q-43:** What are my strongest and weakest signals across the whole history?
 - **Q-44:** Which roles genuinely suit me best, based on the pattern of my wins?
 - **Q-45:** What are the 3 concrete things I should do next week to improve outcomes?
+  Answer contract: the `weekly_actions` insight returns exactly three numbered, cited next-week actions.
 - **Q-46:** What's the "story" my last 6–12 months of job searching tells?
 
 ## Tier 6 — Conversational Recall

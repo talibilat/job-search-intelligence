@@ -106,6 +106,37 @@ def test_insight_input_builder_hash_covers_limited_out_evidence(tmp_path: Path) 
     assert updated.inputs_hash != original.inputs_hash
 
 
+def test_why_rejected_input_uses_only_rejection_email_evidence(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_raw_email(
+            connection,
+            email_id="email-feedback",
+            subject="Interview feedback",
+            body_text="The recruiter suggested improving system design examples.",
+            sent_at="2026-07-05T10:00:00+00:00",
+        )
+        EventRepository(connection).upsert_event(
+            id="event-feedback",
+            application_id="application-rejected",
+            email_id="email-feedback",
+            event_type="feedback",
+            event_at="2026-07-05T10:00:00+00:00",
+            extract_note="Recruiter feedback mentioned system design examples.",
+        )
+        connection.commit()
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "why_rejected",
+        )
+
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-rejected-rejection",
+    ]
+    assert {evidence.event_type for evidence in insight_input.evidence} == {"rejection"}
+
+
 def test_insight_input_builder_keeps_debugging_bodies_out_of_evidence(
     tmp_path: Path,
 ) -> None:
@@ -131,7 +162,7 @@ def test_insight_input_builder_keeps_debugging_bodies_out_of_evidence(
         connection.commit()
 
         insight_input = InsightInputBuilder(InsightRepository(connection)).build(
-            "why_rejected",
+            "skill_gaps",
         )
 
     debug_evidence = next(
@@ -325,6 +356,28 @@ def test_role_fit_outcome_summaries_include_limited_out_applications(
                 "application:application-interview|event:event-interview-invite|email:email-interview",
             ],
         },
+    ]
+
+
+def test_strongest_weakest_signals_input_uses_whole_history_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "strongest_weakest_signals",
+            max_evidence_items=1,
+        )
+
+    assert insight_input.type == "strongest_weakest_signals"
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-rejected-applied",
+        "event-interview-applied",
+        "event-rejected-rejection",
+        "event-interview-invite",
     ]
 
 
