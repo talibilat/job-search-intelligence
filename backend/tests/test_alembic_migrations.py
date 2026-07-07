@@ -1218,35 +1218,6 @@ def insert_evidence_backed_application_event(connection: sqlite3.Connection) -> 
     )
 
 
-def insert_raw_email(connection: sqlite3.Connection) -> None:
-    connection.execute(
-        """
-        INSERT INTO raw_emails (
-            id,
-            from_addr,
-            subject,
-            sent_at,
-            body_text,
-            body_retention_state,
-            labels,
-            provider,
-            ingested_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            "email_1",
-            "recruiter@example.com",
-            "Feedback on your application",
-            "2026-07-05T00:00:00Z",
-            "Initial retained feedback.",
-            "retained",
-            '["INBOX"]',
-            "gmail",
-            "2026-07-05T00:00:00Z",
-        ),
-    )
-
-
 def insert_cached_insight(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
