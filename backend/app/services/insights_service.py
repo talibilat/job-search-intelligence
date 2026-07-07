@@ -388,6 +388,8 @@ def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
         return _EvidenceScope(event_types=("rejection", "feedback"))
     if insight_type == "skill_gaps":
         return _EvidenceScope(application_statuses=("rejected",))
+    if insight_type == "strongest_weakest_signals":
+        return _EvidenceScope()
     if insight_type == "role_fit":
         return _EvidenceScope(application_statuses=("interview", "offer", "rejected", "ghosted"))
     if insight_type == "weekly_actions":

@@ -220,6 +220,27 @@ def test_weekly_actions_input_prefers_open_current_evidence(tmp_path: Path) -> N
     ]
 
 
+def test_strongest_weakest_signals_input_uses_whole_history_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "strongest_weakest_signals",
+        )
+
+    assert insight_input.type == "strongest_weakest_signals"
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-rejected-applied",
+        "event-interview-applied",
+        "event-rejected-rejection",
+        "event-interview-invite",
+    ]
+
+
 def test_insight_input_builder_rejects_empty_evidence_limit(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:

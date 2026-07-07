@@ -17,6 +17,7 @@ from app.models.event import ApplicationEventType
 type InsightType = Literal[
     "why_rejected",
     "skill_gaps",
+    "strongest_weakest_signals",
     "role_fit",
     "weekly_actions",
     "story",
