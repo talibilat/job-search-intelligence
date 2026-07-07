@@ -16,5 +16,9 @@ class ResponseSilenceMetric(BaseModel):
 class MetricsSummaryResponse(BaseModel):
     distinct_company_count: int = Field(ge=0)
     ghosted_applications: int = Field(ge=0)
+    rejected_applications: int = Field(
+        ge=0,
+        description="Total applications whose canonical current status is rejected.",
+    )
     ghost_threshold_days: int = Field(ge=1)
     evaluated_at: datetime

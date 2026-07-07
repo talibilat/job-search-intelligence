@@ -687,6 +687,11 @@ export interface MetricsSummaryResponse {
   ghost_threshold_days: number;
   /** @minimum 0 */
   ghosted_applications: number;
+  /**
+   * Total applications whose canonical current status is rejected.
+   * @minimum 0
+   */
+  rejected_applications: number;
 }
 
 /**

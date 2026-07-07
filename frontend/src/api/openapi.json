@@ -1899,11 +1899,18 @@
             "minimum": 0.0,
             "title": "Ghosted Applications",
             "type": "integer"
+          },
+          "rejected_applications": {
+            "description": "Total applications whose canonical current status is rejected.",
+            "minimum": 0.0,
+            "title": "Rejected Applications",
+            "type": "integer"
           }
         },
         "required": [
           "distinct_company_count",
           "ghosted_applications",
+          "rejected_applications",
           "ghost_threshold_days",
           "evaluated_at"
         ],

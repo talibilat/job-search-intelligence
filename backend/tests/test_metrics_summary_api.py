@@ -96,6 +96,7 @@ def test_get_metrics_summary_counts_ghosted_applications_from_threshold(
     assert response.status_code == 200
     body = response.json()
     assert body["ghosted_applications"] == 2
+    assert body["rejected_applications"] == 0
     assert body["ghost_threshold_days"] == 45
     assert "evaluated_at" in body
     with sqlite3.connect(database_path) as connection:
@@ -134,6 +135,22 @@ def test_get_metrics_summary_returns_distinct_company_count_from_applications(
     body = response.json()
     assert body["distinct_company_count"] == 2
     assert body["ghosted_applications"] == 0
+
+
+def test_get_metrics_summary_counts_rejected_applications(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="rejected-1", current_status="rejected")
+        insert_application(connection, application_id="rejected-2", current_status="rejected")
+        insert_application(connection, application_id="interview-1", current_status="interview")
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.get("/metrics/summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rejected_applications"] == 2
 
 
 def test_metrics_summary_endpoint_is_documented_in_openapi() -> None:

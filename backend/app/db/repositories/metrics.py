@@ -52,6 +52,15 @@ class MetricsRepository(BaseRepository[int]):
             silent_count=total_applications - human_response_count,
         )
 
+    def count_rejected_applications(self) -> int:
+        row = self.execute(
+            "SELECT COUNT(*) FROM applications WHERE current_status = ?",
+            ("rejected",),
+        ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+
     def count_threshold_ghosted_applications(self, *, cutoff_at: str) -> int:
         row = self.execute(
             f"""
