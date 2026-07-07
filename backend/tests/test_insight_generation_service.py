@@ -246,6 +246,40 @@ def test_role_fit_generation_request_answers_q44_with_win_pattern_facts(
     ]
 
 
+def test_insight_generation_service_allows_no_evidence_caveat(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "There is insufficient cited evidence to identify best-fit roles yet. "
+                        "Missing evidence: applications with interview or offer outcomes."
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("role_fit"))
+
+    assert result.cached is False
+    assert result.insight.content == (
+        "There is insufficient cited evidence to identify best-fit roles yet. "
+        "Missing evidence: applications with interview or offer outcomes."
+    )
+
+
 def test_insight_generation_service_uses_fresh_cache_without_calling_provider(
     tmp_path: Path,
 ) -> None:
@@ -357,6 +391,10 @@ def test_skill_gaps_generation_request_focuses_on_rejected_role_technology_gaps(
     (
         "Rejected applications repeatedly mention Kubernetes experience.",
         "Rejected applications repeatedly mention Kubernetes experience. [application:unknown]",
+        (
+            f"Backend Engineer produced an interview signal. [{CITATION_ID}] "
+            "Product Manager is also a strong fit."
+        ),
     ),
 )
 def test_insight_generation_service_rejects_ungrounded_provider_output(

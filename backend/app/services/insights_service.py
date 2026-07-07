@@ -43,6 +43,16 @@ _SENTENCE_PATTERN = re.compile(r"[^.!?\n]+(?:[.!?]|\n|$)")
 _UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
 _ROLE_FIT_WIN_STATUSES: tuple[ApplicationStatus, ...] = ("interview", "offer")
 _ROLE_FIT_LOSS_STATUSES: tuple[ApplicationStatus, ...] = ("rejected", "ghosted")
+_CLAIM_SENTENCE_PATTERN = re.compile(r"[^.!?\n]+[.!?](?:\s*\[[^\[\]]+\])*")
+_INSUFFICIENT_EVIDENCE_TERMS = (
+    "insufficient",
+    "not enough",
+    "missing evidence",
+    "no evidence",
+    "cannot determine",
+    "can't determine",
+    "unable to determine",
+)
 
 
 class InsightGenerationResult(BaseModel):
@@ -380,11 +390,44 @@ def _has_citation_between(
 
 
 def _content_uses_allowed_citations(content: str, insight_input: InsightInput) -> bool:
+    allowed_citation_ids = _allowed_citation_ids(insight_input)
     citation_ids = _extract_citation_ids(content)
+    if not allowed_citation_ids:
+        return not citation_ids and _states_insufficient_evidence(content)
     if not citation_ids:
         return False
-    allowed_citation_ids = _allowed_citation_ids(insight_input)
-    return all(citation_id in allowed_citation_ids for citation_id in citation_ids)
+    if any(citation_id not in allowed_citation_ids for citation_id in citation_ids):
+        return False
+    return _all_claim_units_grounded(content)
+
+
+def _all_claim_units_grounded(content: str) -> bool:
+    return all(
+        _extract_citation_ids(unit) or _states_insufficient_evidence(unit)
+        for unit in _content_claim_units(content)
+    )
+
+
+def _content_claim_units(content: str) -> list[str]:
+    units: list[str] = []
+    for line in content.splitlines():
+        stripped_line = line.strip().lstrip("-*0123456789. )\t")
+        if not stripped_line:
+            continue
+        matches = list(_CLAIM_SENTENCE_PATTERN.finditer(stripped_line))
+        if not matches:
+            units.append(stripped_line)
+            continue
+        units.extend(match.group(0).strip() for match in matches)
+        remainder = stripped_line[matches[-1].end() :].strip()
+        if remainder:
+            units.append(remainder)
+    return units
+
+
+def _states_insufficient_evidence(content: str) -> bool:
+    normalized = content.casefold()
+    return any(term in normalized for term in _INSUFFICIENT_EVIDENCE_TERMS)
 
 
 def _extract_citation_ids(content: str) -> list[str]:
