@@ -381,6 +381,27 @@ def test_strongest_weakest_signals_input_uses_whole_history_evidence(
     ]
 
 
+def test_story_input_uses_recent_chronological_search_window(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_old_application_fixture(connection)
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build("story")
+
+    assert insight_input.type == "story"
+    assert [evidence.event_id for evidence in insight_input.evidence] == [
+        "event-rejected-applied",
+        "event-interview-applied",
+        "event-rejected-rejection",
+        "event-interview-invite",
+    ]
+    assert "event-old-application" not in {
+        evidence.event_id for evidence in insight_input.evidence
+    }
+
+
 def test_insight_input_builder_rejects_empty_evidence_limit(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -507,6 +528,32 @@ def insert_second_rejected_application_fixture(connection: sqlite3.Connection) -
         event_type="rejection",
         event_at="2026-07-06T10:00:00+00:00",
         extract_note="Second rejection mentioned platform engineering experience.",
+    )
+    connection.commit()
+
+
+def insert_old_application_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-old-application",
+        subject="Application received last year",
+        body_text="Thanks for applying to OldCo.",
+        sent_at="2025-05-01T09:00:00+00:00",
+    )
+    insert_application(
+        connection,
+        application_id="application-old",
+        company="OldCo",
+        first_seen_at="2025-05-01T09:00:00+00:00",
+        last_activity_at="2025-05-01T09:00:00+00:00",
+    )
+    EventRepository(connection).upsert_event(
+        id="event-old-application",
+        application_id="application-old",
+        email_id="email-old-application",
+        event_type="applied",
+        event_at="2025-05-01T09:00:00+00:00",
+        extract_note="Old application outside the recent story window.",
     )
     connection.commit()
 

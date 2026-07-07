@@ -358,6 +358,47 @@ def test_insight_generation_service_bypasses_cache_from_previous_prompt_identity
     assert len(provider.requests) == 1
 
 
+def test_insight_generation_service_uses_q46_story_prompt(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "The recent search story shows a backend-focused search with "
+                        f"clear rejection evidence. [{CITATION_ID}]"
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("story"))
+
+    assert result.cached is False
+    assert result.insight.type == "story"
+    assert len(provider.requests) == 1
+
+    request = provider.requests[0]
+    system_prompt = request.messages[0].content
+    assert "Q-46" in system_prompt
+    assert "last 6 to 12 months" in system_prompt
+    assert "chronological" in system_prompt
+    assert "Use only the provided citation_id values" in system_prompt
+
+    prompt_payload = json.loads(request.messages[1].content)
+    assert prompt_payload["type"] == "story"
+
+
 def test_insight_generation_service_force_regenerate_bypasses_cache(
     tmp_path: Path,
 ) -> None:
