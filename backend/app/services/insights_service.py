@@ -31,6 +31,7 @@ type Clock = Callable[[], datetime]
 INSIGHT_GENERATION_PROMPT_VERSION = "v2"
 INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
 INSIGHT_GENERATION_TEMPERATURE = 0.2
+WEEKLY_ACTIONS_VALIDATION_ERROR = "Weekly actions insight must contain exactly three cited actions."
 _CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
 _CITATION_LIKE_TOKEN_PATTERN = re.compile(r"^(?:\d+|[A-Za-z]+-\d+|\S*[:|]\S*)$")
 _SENTENCE_PATTERN = re.compile(r"[^.!?\n]+(?:[.!?]|\n|$)")
@@ -72,7 +73,7 @@ class InsightGenerationService:
         max_evidence_items: int = 100,
         force: bool = False,
     ) -> InsightGenerationResult:
-        """Return a cached insight or synthesize and persist a fresh one."""
+        """Return a cached insight or synthesize, validate, and persist a fresh one."""
 
         insight_input = self._input_builder.build(
             insight_type,
@@ -264,6 +265,16 @@ def _insight_type_prompt(insight_type: InsightType) -> str:
             "values, and cited rejection or feedback evidence. Do not treat skills from "
             "interviews or offers as gaps unless they also appear in rejected-role evidence."
         )
+    if insight_type == "weekly_actions":
+        return (
+            "For weekly_actions insights, answer Q-45: What are the 3 concrete things I "
+            "should do next week to improve outcomes? Return exactly three numbered "
+            "actions, one per line, numbered 1. through 3. Each action must be concrete, "
+            "specific to the provided evidence, and executable during the next week. "
+            "Each action line must cite at least one provided citation_id in square "
+            "brackets. Do not include an introduction, recap, or extra action beyond "
+            "the three lines."
+        )
     return ""
 
 
@@ -274,8 +285,42 @@ def _validated_insight_content(
     content = response.content.strip()
     if response.finish_reason is not LLMFinishReason.STOP or not content:
         raise LLMProviderResponseError(public_message="LLM returned invalid insight content.")
+    if insight_input.type == "weekly_actions":
+        _validate_weekly_actions_content(
+            content,
+            {evidence.citation_id for evidence in insight_input.evidence},
+        )
     _validate_grounding_citations(content, insight_input)
     return content
+
+
+def _validate_weekly_actions_content(
+    content: str,
+    allowed_citation_ids: set[str],
+) -> None:
+    action_lines = [line.strip() for line in content.splitlines() if line.strip()]
+    if len(action_lines) != 3:
+        raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
+
+    for expected_number, action_line in enumerate(action_lines, start=1):
+        line_prefix = f"{expected_number}. "
+        if not action_line.startswith(line_prefix):
+            raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
+        citation_ids = _extract_citation_ids(action_line)
+        if not citation_ids or citation_ids - allowed_citation_ids:
+            raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
+        action_text = _CITATION_PATTERN.sub("", action_line.removeprefix(line_prefix)).strip()
+        if not re.search(r"[A-Za-z0-9]", action_text):
+            raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
+
+
+def _extract_citation_ids(value: str) -> set[str]:
+    citation_ids: set[str] = set()
+    for bracket_content in _CITATION_PATTERN.findall(value):
+        citation_ids.update(
+            _split_citation_tokens(bracket_content),
+        )
+    return citation_ids
 
 
 def _validate_grounding_citations(content: str, insight_input: InsightInput) -> None:
@@ -349,7 +394,8 @@ def _has_claim_text(
         parts.append(content[cursor : max(cursor, span_start)])
         cursor = max(cursor, span_end)
     parts.append(content[cursor:end])
-    return bool(re.sub(r"[\s.!?]+", "", "".join(parts)))
+    claim_text = re.sub(r"^\s*\d+\.\s*", "", "".join(parts))
+    return bool(re.sub(r"[\s.!?]+", "", claim_text))
 
 
 def _has_citation_between(
