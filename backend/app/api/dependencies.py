@@ -13,6 +13,7 @@ from app.db.repositories import (
     CorrectionConflictRepository,
     CorrectionRepository,
     EventRepository,
+    InsightRepository,
 )
 from app.db.repositories.classification_run import ClassificationRunRepository
 from app.db.repositories.connection import EmailConnectionRepository
@@ -26,6 +27,7 @@ from app.services.applications import (
     ApplicationEventsService,
 )
 from app.services.ghost_inference import GhostInferenceService
+from app.services.insights_service import InsightGenerationService, InsightReadService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.structured_extraction import StructuredExtractionService
@@ -235,6 +237,35 @@ def get_application_correction_service(
             application_repository=ApplicationRepository(connection),
             event_repository=EventRepository(connection),
             correction_repository=CorrectionRepository(connection),
+        )
+    finally:
+        connection.close()
+
+
+def get_insight_read_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[InsightReadService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield InsightReadService(InsightRepository(connection))
+    finally:
+        connection.close()
+
+
+def get_insight_generation_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+) -> Iterator[InsightGenerationService]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    try:
+        yield InsightGenerationService(
+            settings=settings,
+            insight_repository=InsightRepository(connection),
+            llm_provider=llm_provider,
         )
     finally:
         connection.close()

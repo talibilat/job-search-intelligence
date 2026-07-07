@@ -1634,6 +1634,95 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "InsightRecord": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "inputs_hash": {
+            "title": "Inputs Hash",
+            "type": "string"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/InsightType"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "content",
+          "inputs_hash",
+          "is_stale",
+          "model",
+          "generated_at"
+        ],
+        "title": "InsightRecord",
+        "type": "object"
+      },
+      "InsightRegenerateRequest": {
+        "properties": {
+          "max_evidence_items": {
+            "default": 100,
+            "minimum": 1.0,
+            "title": "Max Evidence Items",
+            "type": "integer"
+          },
+          "type": {
+            "$ref": "#/components/schemas/InsightType"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "InsightRegenerateRequest",
+        "type": "object"
+      },
+      "InsightRegenerateResponse": {
+        "properties": {
+          "cached": {
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "insight": {
+            "$ref": "#/components/schemas/InsightRecord"
+          }
+        },
+        "required": [
+          "insight",
+          "cached"
+        ],
+        "title": "InsightRegenerateResponse",
+        "type": "object"
+      },
+      "InsightType": {
+        "enum": [
+          "why_rejected",
+          "skill_gaps",
+          "strongest_weakest_signals",
+          "role_fit",
+          "weekly_actions",
+          "story"
+        ],
+        "type": "string"
+      },
       "JsonObject": {
         "additionalProperties": true,
         "type": "object"
@@ -3440,6 +3529,94 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/insights": {
+      "get": {
+        "description": "Returns the latest cached narrative insights from local SQLite, including stale records so clients can show when user-triggered regeneration is needed.",
+        "operationId": "list_insights_insights_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InsightRecord"
+                  },
+                  "title": "Response List Insights Insights Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Cached Insights",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/insights/regenerate": {
+      "post": {
+        "description": "Forces one cached narrative insight to be regenerated through the configured LLM provider using deterministic facts and cited evidence from local SQLite.",
+        "operationId": "regenerate_insight_insights_regenerate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsightRegenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightRegenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Regenerate Insight",
+        "tags": [
+          "insights"
         ]
       }
     },
