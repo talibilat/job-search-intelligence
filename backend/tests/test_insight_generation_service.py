@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import sqlite3
 from datetime import UTC, datetime
@@ -84,6 +85,8 @@ def test_insight_generation_service_generates_and_persists_grounded_narrative(
     assert "Never produce authoritative counts" in request.messages[0].content
     assert "Never emit raw SQL" in request.messages[0].content
     assert "Use only the provided citation_id values" in request.messages[0].content
+    assert "Q-40" in request.messages[0].content
+    assert "recurring rejection themes" in request.messages[0].content
 
     prompt_payload = json.loads(request.messages[1].content)
     assert prompt_payload["type"] == "why_rejected"
@@ -217,6 +220,47 @@ def test_insight_generation_service_uses_fresh_cache_without_calling_provider(
     assert result.insight == cached
     assert result.input.inputs_hash == insight_input.inputs_hash
     assert provider.requests == []
+
+
+def test_insight_generation_service_bypasses_cache_from_previous_prompt_identity(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        repository = InsightRepository(connection)
+        insight_input = InsightInputBuilder(repository).build("why_rejected")
+        legacy_payload = insight_input.model_dump(mode="json", exclude={"inputs_hash"})
+        legacy_inputs_hash = sha256_payload(legacy_payload)
+        repository.save_generated_insight(
+            insight_type="why_rejected",
+            content=f"Cached broad rejection narrative. [{CITATION_ID}]",
+            inputs_hash=legacy_inputs_hash,
+            model="llama3.1",
+            generated_at=GENERATED_AT,
+        )
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=f"Fresh recurring rejection theme. [{CITATION_ID}]",
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("why_rejected"))
+
+    assert legacy_inputs_hash != insight_input.inputs_hash
+    assert result.cached is False
+    assert result.insight.content == f"Fresh recurring rejection theme. [{CITATION_ID}]"
+    assert len(provider.requests) == 1
 
 
 def test_insight_generation_service_force_regenerate_bypasses_cache(
@@ -398,6 +442,11 @@ def insight_settings() -> AppSettings:
         llm_provider=LLMProviderName.OLLAMA,
         ollama_chat_model="llama3.1",
     )
+
+
+def sha256_payload(payload: object) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def insert_rejected_application_fixture(connection: sqlite3.Connection) -> None:
