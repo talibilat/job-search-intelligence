@@ -4,6 +4,7 @@ import asyncio
 import json
 import sqlite3
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +79,7 @@ def test_phase2_pipeline_smoke_runs_filter_classify_extract_and_aggregate(
     llm_provider = FixtureLLMProvider(
         responses_by_email_id=classification_responses_by_email_id(fixture),
     )
+    classification_run_repository = ClassificationRunRepository(connection)
     extraction_result = asyncio.run(
         StructuredExtractionService(
             settings=AppSettings(
@@ -89,7 +91,7 @@ def test_phase2_pipeline_smoke_runs_filter_classify_extract_and_aggregate(
                 classification_batch_size=10,
             ),
             email_repository=email_repository,
-            classification_run_repository=ClassificationRunRepository(connection),
+            classification_run_repository=classification_run_repository,
             llm_provider=llm_provider,
             clock=lambda: NOW,
             run_id_factory=lambda: "phase2-smoke-run",
@@ -102,6 +104,17 @@ def test_phase2_pipeline_smoke_runs_filter_classify_extract_and_aggregate(
     assert extraction_result.run_record.candidate_count == len(fixture.classifications)
     assert extraction_result.run_record.classified_count == len(fixture.classifications)
     assert extraction_result.malformed_results == ()
+    stored_run = classification_run_repository.fetch_run("phase2-smoke-run")
+    assert stored_run is not None
+    assert stored_run.provider == "ollama"
+    assert stored_run.model == "phase2-smoke-model"
+    assert stored_run.prompt_version == "phase2-smoke-v1"
+    assert stored_run.candidate_count == len(fixture.classifications)
+    assert stored_run.classified_count == len(fixture.classifications)
+    assert stored_run.prompt_tokens == 10 * len(fixture.classifications)
+    assert stored_run.completion_tokens == 5 * len(fixture.classifications)
+    assert stored_run.total_tokens == 15 * len(fixture.classifications)
+    assert stored_run.estimated_cost_usd == Decimal("0")
 
     aggregation_service = AggregationService(
         application_repository=ApplicationRepository(connection),
