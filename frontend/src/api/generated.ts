@@ -275,6 +275,24 @@ export interface ApplicationStatusEditResponse {
   correction: ApplicationCorrectionRecord;
 }
 
+export type MetricsApplicationWindow =
+  (typeof MetricsApplicationWindow)[keyof typeof MetricsApplicationWindow];
+
+export const MetricsApplicationWindow = {
+  week: "week",
+  month: "month",
+  year: "year",
+  custom: "custom",
+} as const;
+
+export interface ApplicationWindowMetric {
+  /** @minimum 0 */
+  application_count: number;
+  end_at: string;
+  start_at: string;
+  window: MetricsApplicationWindow;
+}
+
 export type ClassificationMode =
   (typeof ClassificationMode)[keyof typeof ClassificationMode];
 
@@ -695,6 +713,7 @@ export interface MetricsRatesResponse {
  * Deterministic summary metrics for the dashboard.
  */
 export interface MetricsSummaryResponse {
+  application_windows: ApplicationWindowMetric[];
   /** @minimum 0 */
   distinct_company_count: number;
   evaluated_at: string;
@@ -857,6 +876,21 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
    * @minLength 1
    */
   state: string;
+};
+
+export type GetMetricsSummaryMetricsSummaryGetParams = {
+  /**
+   * Timezone-aware instant used to derive this week, month, and year.
+   */
+  anchor_at?: string | null;
+  /**
+   * Inclusive timezone-aware custom window start.
+   */
+  custom_start_at?: string | null;
+  /**
+   * Exclusive timezone-aware custom window end.
+   */
+  custom_end_at?: string | null;
 };
 
 export type listApplicationsApplicationsGetResponse200 = {
@@ -2209,25 +2243,51 @@ export type getMetricsSummaryMetricsSummaryGetResponse200 = {
   status: 200;
 };
 
+export type getMetricsSummaryMetricsSummaryGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type getMetricsSummaryMetricsSummaryGetResponseSuccess =
   getMetricsSummaryMetricsSummaryGetResponse200 & {
     headers: Headers;
   };
-export type getMetricsSummaryMetricsSummaryGetResponse =
-  getMetricsSummaryMetricsSummaryGetResponseSuccess;
+export type getMetricsSummaryMetricsSummaryGetResponseError =
+  getMetricsSummaryMetricsSummaryGetResponse422 & {
+    headers: Headers;
+  };
 
-export const getGetMetricsSummaryMetricsSummaryGetUrl = () => {
-  return `/metrics/summary`;
+export type getMetricsSummaryMetricsSummaryGetResponse =
+  | getMetricsSummaryMetricsSummaryGetResponseSuccess
+  | getMetricsSummaryMetricsSummaryGetResponseError;
+
+export const getGetMetricsSummaryMetricsSummaryGetUrl = (
+  params?: GetMetricsSummaryMetricsSummaryGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/summary?${stringifiedParams}`
+    : `/metrics/summary`;
 };
 
 /**
- * Returns deterministic dashboard summary metrics from the local SQLite applications and event timeline source of truth.
+ * Returns deterministic dashboard summary metrics and application counts by date window from the local SQLite source of truth.
  * @summary Get Metrics Summary
  */
 export const getMetricsSummaryMetricsSummaryGet = async (
+  params?: GetMetricsSummaryMetricsSummaryGetParams,
   options?: RequestInit,
 ): Promise<getMetricsSummaryMetricsSummaryGetResponse> => {
-  const res = await fetch(getGetMetricsSummaryMetricsSummaryGetUrl(), {
+  const res = await fetch(getGetMetricsSummaryMetricsSummaryGetUrl(params), {
     ...options,
     method: "GET",
   });
