@@ -23,6 +23,9 @@ TRIGGER_NAMES = (
     "trg_insights_stale_after_application_events_insert",
     "trg_insights_stale_after_application_events_update",
     "trg_insights_stale_after_application_events_delete",
+    "trg_insights_stale_after_raw_emails_insert",
+    "trg_insights_stale_after_raw_emails_update",
+    "trg_insights_stale_after_raw_emails_delete",
 )
 
 
@@ -109,6 +112,69 @@ def upgrade() -> None:
         """
         CREATE TRIGGER trg_insights_stale_after_application_events_delete
         AFTER DELETE ON application_events
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_raw_emails_insert
+        AFTER INSERT ON raw_emails
+        WHEN EXISTS (
+            SELECT 1
+            FROM application_events
+            WHERE application_events.email_id = NEW.id
+        )
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_raw_emails_update
+        AFTER UPDATE ON raw_emails
+        WHEN (
+            OLD.id IS NOT NEW.id
+            OR OLD.from_addr IS NOT NEW.from_addr
+            OR OLD.subject IS NOT NEW.subject
+            OR OLD.sent_at IS NOT NEW.sent_at
+            OR OLD.body_text IS NOT NEW.body_text
+            OR OLD.body_retention_state IS NOT NEW.body_retention_state
+        )
+        AND (
+            EXISTS (
+                SELECT 1
+                FROM application_events
+                WHERE application_events.email_id = OLD.id
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM application_events
+                WHERE application_events.email_id = NEW.id
+            )
+        )
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_raw_emails_delete
+        AFTER DELETE ON raw_emails
+        WHEN EXISTS (
+            SELECT 1
+            FROM application_events
+            WHERE application_events.email_id = OLD.id
+        )
         BEGIN
             UPDATE insights
             SET is_stale = 1

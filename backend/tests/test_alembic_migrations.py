@@ -986,6 +986,37 @@ def test_application_event_source_changes_mark_cached_insights_stale(
         assert cached_insight_is_stale(connection)
 
 
+def test_cited_raw_email_source_changes_mark_cached_insights_stale(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    config = alembic_config(f"sqlite+aiosqlite:///{database_path}")
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        insert_application(connection)
+        insert_raw_email(connection)
+        insert_evidence_backed_application_event(connection)
+        insert_cached_insight(connection)
+
+        connection.execute(
+            "UPDATE raw_emails SET body_text = ? WHERE id = ?",
+            ("Updated retained feedback.", "email_1"),
+        )
+
+        assert cached_insight_is_stale(connection)
+
+        set_cached_insight_stale(connection, False)
+        connection.execute(
+            "UPDATE raw_emails SET labels = ? WHERE id = ?",
+            ('["INBOX", "STARRED"]', "email_1"),
+        )
+
+        assert not cached_insight_is_stale(connection)
+
+
 def test_application_timestamp_only_update_keeps_cached_insights_fresh(
     tmp_path: Path,
 ) -> None:
@@ -1160,6 +1191,58 @@ def insert_application_event(connection: sqlite3.Connection) -> None:
             "ghost_inferred",
             "2026-08-01T00:00:00Z",
             "Ghosted after thirty days.",
+        ),
+    )
+
+
+def insert_evidence_backed_application_event(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        INSERT INTO application_events (
+            id,
+            application_id,
+            email_id,
+            event_type,
+            event_at,
+            extract_note
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "event_1",
+            "app_1",
+            "email_1",
+            "feedback",
+            "2026-07-05T00:00:00Z",
+            "Feedback mentioned platform depth.",
+        ),
+    )
+
+
+def insert_raw_email(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        INSERT INTO raw_emails (
+            id,
+            from_addr,
+            subject,
+            sent_at,
+            body_text,
+            body_retention_state,
+            labels,
+            provider,
+            ingested_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "email_1",
+            "recruiter@example.com",
+            "Feedback on your application",
+            "2026-07-05T00:00:00Z",
+            "Initial retained feedback.",
+            "retained",
+            '["INBOX"]',
+            "gmail",
+            "2026-07-05T00:00:00Z",
         ),
     )
 
