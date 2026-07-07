@@ -1,0 +1,123 @@
+"""Mark cached insights stale when source data changes.
+
+Revision ID: 20260707_0183
+Revises: 20260706_0107
+Create Date: 2026-07-07 00:00:00.000000
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "20260707_0183"
+down_revision: str | None = "20260706_0107"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+TRIGGER_NAMES = (
+    "trg_insights_stale_after_applications_insert",
+    "trg_insights_stale_after_applications_update",
+    "trg_insights_stale_after_applications_delete",
+    "trg_insights_stale_after_application_events_insert",
+    "trg_insights_stale_after_application_events_update",
+    "trg_insights_stale_after_application_events_delete",
+)
+
+
+def upgrade() -> None:
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_applications_insert
+        AFTER INSERT ON applications
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_applications_update
+        AFTER UPDATE ON applications
+        WHEN OLD.id IS NOT NEW.id
+          OR OLD.company IS NOT NEW.company
+          OR OLD.role_title IS NOT NEW.role_title
+          OR OLD.source IS NOT NEW.source
+          OR OLD.first_seen_at IS NOT NEW.first_seen_at
+          OR OLD.current_status IS NOT NEW.current_status
+          OR OLD.salary_min IS NOT NEW.salary_min
+          OR OLD.salary_max IS NOT NEW.salary_max
+          OR OLD.currency IS NOT NEW.currency
+          OR OLD.location IS NOT NEW.location
+          OR OLD.work_mode IS NOT NEW.work_mode
+          OR OLD.seniority IS NOT NEW.seniority
+          OR OLD.sponsorship IS NOT NEW.sponsorship
+          OR OLD.tech_stack IS NOT NEW.tech_stack
+          OR OLD.last_activity_at IS NOT NEW.last_activity_at
+          OR OLD.manual_lock IS NOT NEW.manual_lock
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_applications_delete
+        AFTER DELETE ON applications
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_application_events_insert
+        AFTER INSERT ON application_events
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_application_events_update
+        AFTER UPDATE ON application_events
+        WHEN OLD.id IS NOT NEW.id
+          OR OLD.application_id IS NOT NEW.application_id
+          OR OLD.email_id IS NOT NEW.email_id
+          OR OLD.event_type IS NOT NEW.event_type
+          OR OLD.event_at IS NOT NEW.event_at
+          OR OLD.extract_note IS NOT NEW.extract_note
+          OR OLD.extracted_status IS NOT NEW.extracted_status
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_insights_stale_after_application_events_delete
+        AFTER DELETE ON application_events
+        BEGIN
+            UPDATE insights
+            SET is_stale = 1
+            WHERE is_stale = 0;
+        END
+        """,
+    )
+
+
+def downgrade() -> None:
+    for trigger_name in TRIGGER_NAMES:
+        op.execute(f"DROP TRIGGER IF EXISTS {trigger_name}")
