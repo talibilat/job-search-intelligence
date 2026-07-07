@@ -184,9 +184,13 @@ class InsightInputBuilder:
         )
         if insight_type == "story":
             scoped_evidence = _recent_story_evidence(scoped_evidence)
-        evidence = (
-            scoped_evidence if scope.include_all_evidence else scoped_evidence[:max_evidence_items]
-        )
+            evidence = scoped_evidence[-max_evidence_items:]
+        else:
+            evidence = (
+                scoped_evidence
+                if scope.include_all_evidence
+                else scoped_evidence[:max_evidence_items]
+            )
         insight_input = InsightInput(
             type=insight_type,
             facts=self._build_facts(insight_type, scoped_evidence),
@@ -330,12 +334,12 @@ def _recent_story_evidence(
 ) -> list[InsightInputEvidence]:
     timestamps = [_as_utc(timestamp) for item in evidence if (timestamp := _story_timestamp(item))]
     if not timestamps:
-        return evidence
+        return []
     cutoff = max(timestamps) - timedelta(days=STORY_EVIDENCE_WINDOW_DAYS)
     return [
         item
         for item in evidence
-        if (timestamp := _story_timestamp(item)) is None or _as_utc(timestamp) >= cutoff
+        if (timestamp := _story_timestamp(item)) is not None and _as_utc(timestamp) >= cutoff
     ]
 
 
