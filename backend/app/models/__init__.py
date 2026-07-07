@@ -30,7 +30,7 @@ from .insight import (
     InsightRegenerateRequest,
     InsightRegenerateResponse,
 )
-from .metrics import MetricsSummaryResponse
+from .metrics import MetricsSummaryResponse, ResponseSilenceMetric
 from .provider_config import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
@@ -149,6 +149,7 @@ __all__ = [
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
+    "ResponseSilenceMetric",
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",

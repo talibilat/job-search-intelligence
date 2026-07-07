@@ -742,6 +742,16 @@ export interface ProviderConfigUpdateRequest {
   ollama_embedding_model?: string | null;
 }
 
+export interface ResponseSilenceMetric {
+  /** @minimum 0 */
+  human_response_count: number;
+  question_id?: "Q-04";
+  /** @minimum 0 */
+  silent_count: number;
+  /** @minimum 0 */
+  total_applications: number;
+}
+
 /**
  * First-run setup readiness and selected non-secret provider settings.
  */
@@ -2084,6 +2094,48 @@ export const wipeDataLocalDataWipePost = async (
     status: res.status,
     headers: res.headers,
   } as wipeDataLocalDataWipePostResponse;
+};
+
+export type getResponseSilenceMetricMetricsResponseSilenceGetResponse200 = {
+  data: ResponseSilenceMetric;
+  status: 200;
+};
+
+export type getResponseSilenceMetricMetricsResponseSilenceGetResponseSuccess =
+  getResponseSilenceMetricMetricsResponseSilenceGetResponse200 & {
+    headers: Headers;
+  };
+export type getResponseSilenceMetricMetricsResponseSilenceGetResponse =
+  getResponseSilenceMetricMetricsResponseSilenceGetResponseSuccess;
+
+export const getGetResponseSilenceMetricMetricsResponseSilenceGetUrl = () => {
+  return `/metrics/response-silence`;
+};
+
+/**
+ * Answers Q-04 by counting applications with at least one response-like timeline event versus applications with total silence. Counts are deterministic SQLite reads from applications and application_events.
+ * @summary Get Response Versus Silence Metric
+ */
+export const getResponseSilenceMetricMetricsResponseSilenceGet = async (
+  options?: RequestInit,
+): Promise<getResponseSilenceMetricMetricsResponseSilenceGetResponse> => {
+  const res = await fetch(
+    getGetResponseSilenceMetricMetricsResponseSilenceGetUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getResponseSilenceMetricMetricsResponseSilenceGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getResponseSilenceMetricMetricsResponseSilenceGetResponse;
 };
 
 export type getMetricsSummaryMetricsSummaryGetResponse200 = {

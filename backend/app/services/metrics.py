@@ -4,7 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from app.db.repositories.metrics import MetricsRepository
-from app.models import MetricsSummaryResponse
+from app.models import MetricsSummaryResponse, ResponseSilenceMetric
 
 type Clock = Callable[[], datetime]
 
@@ -37,6 +37,9 @@ class MetricsSummaryService:
             ghost_threshold_days=self._ghost_threshold_days,
             evaluated_at=evaluated_at,
         )
+
+    def get_response_silence_metric(self) -> ResponseSilenceMetric:
+        return self._metrics_repository.get_response_silence_metric()
 
 
 def _utcnow() -> datetime:

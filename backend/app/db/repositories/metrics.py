@@ -3,15 +3,10 @@ from __future__ import annotations
 import sqlite3
 
 from app.db.repositories.base import BaseRepository
+from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES
+from app.models.metrics import ResponseSilenceMetric
 
-_RESPONSE_LIKE_EVENT_TYPES = (
-    "assessment",
-    "feedback",
-    "interview_scheduled",
-    "offer",
-    "rejection",
-    "response",
-)
+_RESPONSE_LIKE_EVENT_TYPES = RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 
 
 class MetricsRepository(BaseRepository[int]):
@@ -28,6 +23,34 @@ class MetricsRepository(BaseRepository[int]):
         if row is None:
             return 0
         return int(row[0])
+
+    def get_response_silence_metric(self) -> ResponseSilenceMetric:
+        row = self.execute(
+            f"""
+            SELECT
+                COUNT(*) AS total_applications,
+                COALESCE(
+                    SUM(
+                        CASE WHEN EXISTS (
+                            SELECT 1
+                            FROM application_events
+                            WHERE application_events.application_id = applications.id
+                              AND application_events.event_type IN ({_response_placeholders()})
+                        ) THEN 1 ELSE 0 END
+                    ),
+                    0
+                ) AS human_response_count
+            FROM applications
+            """,
+            _RESPONSE_LIKE_EVENT_TYPES,
+        ).fetchone()
+        total_applications = int(row["total_applications"] if row is not None else 0)
+        human_response_count = int(row["human_response_count"] if row is not None else 0)
+        return ResponseSilenceMetric(
+            total_applications=total_applications,
+            human_response_count=human_response_count,
+            silent_count=total_applications - human_response_count,
+        )
 
     def count_threshold_ghosted_applications(self, *, cutoff_at: str) -> int:
         row = self.execute(
