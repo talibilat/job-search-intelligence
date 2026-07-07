@@ -30,6 +30,9 @@ GENERATED_AT = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
 CITATION_ID = (
     "application:application-rejected|event:event-rejected-rejection|email:email-rejection"
 )
+WEEKLY_ACTIONS_CITATION_ID = (
+    "application:application-interview|event:event-interview-invite|email:email-interview"
+)
 
 
 def test_insight_generation_service_generates_and_persists_grounded_narrative(
@@ -69,8 +72,7 @@ def test_insight_generation_service_generates_and_persists_grounded_narrative(
     assert result.cached is False
     assert result.insight.type == "why_rejected"
     assert result.insight.content == (
-        "Rejected applications repeatedly mention Kubernetes experience. "
-        f"[{CITATION_ID}]"
+        f"Rejected applications repeatedly mention Kubernetes experience. [{CITATION_ID}]"
     )
     assert result.insight.model == "llama3.1"
     assert result.insight.generated_at == GENERATED_AT
@@ -192,6 +194,89 @@ def test_insight_generation_service_force_regenerate_bypasses_cache(
     assert len(provider.requests) == 1
 
 
+def test_weekly_actions_generation_requires_three_cited_next_week_actions(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    content = "\n".join(
+        (
+            "1. Send Beta LLC a concise scheduling follow-up before Friday. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "2. Prepare a focused interview notes page for the Beta LLC backend role. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+            "3. Apply to three similar backend roles that match the same Python signals. "
+            f"[{WEEKLY_ACTIONS_CITATION_ID}]",
+        ),
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_current_application_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=content,
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            ),
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("weekly_actions"))
+
+    assert result.cached is False
+    assert result.insight.type == "weekly_actions"
+    assert result.insight.content == content
+    request = provider.requests[0]
+    assert "For weekly_actions insights, answer Q-45" in request.messages[0].content
+    assert "Return exactly three numbered actions" in request.messages[0].content
+    assert "executable during the next week" in request.messages[0].content
+    assert "Each action line must cite at least one provided citation_id" in (
+        request.messages[0].content
+    )
+
+    prompt_payload = json.loads(request.messages[1].content)
+    assert prompt_payload["type"] == "weekly_actions"
+    assert [evidence["citation_id"] for evidence in prompt_payload["evidence"]] == [
+        WEEKLY_ACTIONS_CITATION_ID,
+        "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+    ]
+
+
+def test_weekly_actions_generation_rejects_uncited_or_wrong_count_actions(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_current_application_fixture(connection)
+        repository = InsightRepository(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content="Follow up with Beta LLC next week.",
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="Weekly actions insight must contain exactly three cited actions.",
+        ):
+            asyncio.run(service.generate_insight("weekly_actions"))
+
+
 @pytest.mark.parametrize(
     "response",
     (
@@ -296,6 +381,60 @@ def insert_rejected_application_fixture(connection: sqlite3.Connection) -> None:
         event_type="rejection",
         event_at="2026-07-04T10:00:00+00:00",
         extract_note="Rejection mentioned Kubernetes experience.",
+    )
+    connection.commit()
+
+
+def insert_current_application_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-interview-applied",
+        subject="Thanks for applying",
+        body_text="Thanks for applying to Beta LLC.",
+        sent_at="2026-07-02T09:00:00+00:00",
+    )
+    insert_raw_email(
+        connection,
+        email_id="email-interview",
+        subject="Interview invitation",
+        body_text="We would like to invite you to interview with Beta LLC.",
+        sent_at="2026-07-05T10:00:00+00:00",
+    )
+    ApplicationRepository(connection).upsert_application(
+        id="application-interview",
+        company="Beta LLC",
+        role_title="Backend Engineer",
+        source="linkedin",
+        first_seen_at="2026-07-02T09:00:00+00:00",
+        current_status="interview",
+        last_activity_at="2026-07-05T10:00:00+00:00",
+        created_at="2026-07-02T09:00:00+00:00",
+        updated_at="2026-07-05T10:00:00+00:00",
+        salary_min=None,
+        salary_max=None,
+        currency=None,
+        location="Remote",
+        work_mode="remote",
+        seniority="senior",
+        sponsorship="unknown",
+        tech_stack=["Python", "Kubernetes"],
+    )
+    event_repository = EventRepository(connection)
+    event_repository.upsert_event(
+        id="event-interview-applied",
+        application_id="application-interview",
+        email_id="email-interview-applied",
+        event_type="applied",
+        event_at="2026-07-02T09:00:00+00:00",
+        extract_note="Application confirmation received.",
+    )
+    event_repository.upsert_event(
+        id="event-interview-invite",
+        application_id="application-interview",
+        email_id="email-interview",
+        event_type="interview_scheduled",
+        event_at="2026-07-05T10:00:00+00:00",
+        extract_note="Interview invite received.",
     )
     connection.commit()
 

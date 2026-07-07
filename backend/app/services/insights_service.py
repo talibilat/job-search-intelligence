@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,6 +31,8 @@ type Clock = Callable[[], datetime]
 INSIGHT_GENERATION_PROMPT_VERSION = "v1"
 INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
 INSIGHT_GENERATION_TEMPERATURE = 0.2
+WEEKLY_ACTIONS_VALIDATION_ERROR = "Weekly actions insight must contain exactly three cited actions."
+_CITATION_PATTERN = re.compile(r"\[([^\]]+)\]")
 
 
 class InsightGenerationResult(BaseModel):
@@ -91,7 +94,7 @@ class InsightGenerationService:
         response = await self._llm_provider.generate(
             build_insight_generation_request(insight_input, model=model),
         )
-        content = _validated_insight_content(response)
+        content = _validated_insight_content(response, insight_input)
         insight = self._insight_repository.save_generated_insight(
             insight_type=insight_type,
             content=content,
@@ -117,7 +120,7 @@ def build_insight_generation_request(
         messages=(
             LLMMessage(
                 role=LLMMessageRole.SYSTEM,
-                content=_insight_system_prompt(),
+                content=_insight_system_prompt(insight_input.type),
             ),
             LLMMessage(
                 role=LLMMessageRole.USER,
@@ -206,29 +209,73 @@ class InsightInputBuilder:
         ]
 
 
-def _insight_system_prompt() -> str:
-    return "\n".join(
-        (
-            "You generate cached narrative insights for JobTracker.",
-            f"Prompt version: {INSIGHT_GENERATION_PROMPT_VERSION}",
-            "Use only the deterministic facts and cited evidence in the user payload.",
-            "Never produce authoritative counts, rates, or group-by numbers beyond the "
-            "provided deterministic facts.",
-            "Never emit raw SQL.",
-            "Every claim about a pattern, reason, skill, role, or action must cite one "
-            "or more source evidence citation_id values.",
-            "Use only the provided citation_id values and format citations in square brackets.",
-            "If the evidence is insufficient, say what is missing instead of guessing.",
-            "Return plain text only. Do not wrap the answer in JSON or Markdown tables.",
-        ),
-    )
+def _insight_system_prompt(insight_type: InsightType) -> str:
+    lines = [
+        "You generate cached narrative insights for JobTracker.",
+        f"Prompt version: {INSIGHT_GENERATION_PROMPT_VERSION}",
+        "Use only the deterministic facts and cited evidence in the user payload.",
+        "Never produce authoritative counts, rates, or group-by numbers beyond the "
+        "provided deterministic facts.",
+        "Never emit raw SQL.",
+        "Every claim about a pattern, reason, skill, role, or action must cite one "
+        "or more source evidence citation_id values.",
+        "Use only the provided citation_id values and format citations in square brackets.",
+        "If the evidence is insufficient, say what is missing instead of guessing.",
+        "Return plain text only. Do not wrap the answer in JSON or Markdown tables.",
+    ]
+    if insight_type == "weekly_actions":
+        lines.extend(
+            (
+                "For weekly_actions insights, answer Q-45: What are the 3 concrete "
+                "things I should do next week to improve outcomes?",
+                "Return exactly three numbered actions, one per line, numbered 1. through 3.",
+                "Each action must be concrete, specific to the provided evidence, and "
+                "executable during the next week.",
+                "Each action line must cite at least one provided citation_id in square brackets.",
+                "Do not include an introduction, recap, or extra action beyond the three lines.",
+            ),
+        )
+    return "\n".join(lines)
 
 
-def _validated_insight_content(response: LLMGenerationResponse) -> str:
+def _validated_insight_content(
+    response: LLMGenerationResponse,
+    insight_input: InsightInput,
+) -> str:
     content = response.content.strip()
     if response.finish_reason is not LLMFinishReason.STOP or not content:
         raise LLMProviderResponseError(public_message="LLM returned invalid insight content.")
+    if insight_input.type == "weekly_actions":
+        _validate_weekly_actions_content(
+            content,
+            {evidence.citation_id for evidence in insight_input.evidence},
+        )
     return content
+
+
+def _validate_weekly_actions_content(
+    content: str,
+    allowed_citation_ids: set[str],
+) -> None:
+    action_lines = [line.strip() for line in content.splitlines() if line.strip()]
+    if len(action_lines) != 3:
+        raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
+
+    for expected_number, action_line in enumerate(action_lines, start=1):
+        if not action_line.startswith(f"{expected_number}. "):
+            raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
+        citation_ids = _extract_citation_ids(action_line)
+        if not citation_ids or citation_ids - allowed_citation_ids:
+            raise LLMProviderResponseError(public_message=WEEKLY_ACTIONS_VALIDATION_ERROR)
+
+
+def _extract_citation_ids(value: str) -> set[str]:
+    citation_ids: set[str] = set()
+    for bracket_content in _CITATION_PATTERN.findall(value):
+        citation_ids.update(
+            citation_id.strip() for citation_id in bracket_content.split(",") if citation_id.strip()
+        )
+    return citation_ids
 
 
 def _configured_chat_model(settings: AppSettings) -> str:
