@@ -41,6 +41,7 @@ type InsightInputFactName = Literal[
     "sponsorship_counts",
     "work_mode_counts",
     "event_type_counts",
+    "rejected_skill_counts",
 ]
 type InsightInputFactValue = int | float | str | bool | dict[str, int] | list[str] | None
 

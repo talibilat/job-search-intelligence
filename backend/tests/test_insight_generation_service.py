@@ -192,6 +192,46 @@ def test_insight_generation_service_force_regenerate_bypasses_cache(
     assert len(provider.requests) == 1
 
 
+def test_skill_gaps_generation_request_focuses_on_rejected_role_technology_gaps(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "Kubernetes appears as a rejected-role gap. "
+                        f"[{CITATION_ID}]"
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("skill_gaps"))
+
+    request = provider.requests[0]
+    prompt_payload = json.loads(request.messages[1].content)
+    assert result.insight.type == "skill_gaps"
+    assert prompt_payload["type"] == "skill_gaps"
+    assert {fact["name"]: fact["value"] for fact in prompt_payload["facts"]}[
+        "rejected_skill_counts"
+    ] == {"Kubernetes": 1, "Python": 1}
+    assert "For skill_gaps" in request.messages[0].content
+    assert "technologies and skills that recur in rejected roles" in request.messages[0].content
+    assert "Do not treat skills from interviews or offers as gaps" in request.messages[0].content
+
+
 @pytest.mark.parametrize(
     "response",
     (

@@ -117,7 +117,7 @@ def build_insight_generation_request(
         messages=(
             LLMMessage(
                 role=LLMMessageRole.SYSTEM,
-                content=_insight_system_prompt(),
+                content=_insight_system_prompt(insight_input.type),
             ),
             LLMMessage(
                 role=LLMMessageRole.USER,
@@ -160,7 +160,7 @@ class InsightInputBuilder:
         )
         insight_input = InsightInput(
             type=insight_type,
-            facts=self._build_facts(),
+            facts=self._build_facts(insight_type),
             evidence=scoped_evidence[:max_evidence_items],
             source_fingerprint=_hash_payload(
                 [item.model_dump(mode="json") for item in scoped_evidence],
@@ -171,8 +171,8 @@ class InsightInputBuilder:
             update={"inputs_hash": _hash_insight_input(insight_input)},
         )
 
-    def _build_facts(self) -> list[InsightInputFact]:
-        return [
+    def _build_facts(self, insight_type: InsightType) -> list[InsightInputFact]:
+        facts = [
             InsightInputFact(
                 name="total_applications",
                 value=self._insight_repository.count_applications(),
@@ -204,23 +204,44 @@ class InsightInputBuilder:
                 source="application_events",
             ),
         ]
+        if insight_type == "skill_gaps":
+            facts.append(
+                InsightInputFact(
+                    name="rejected_skill_counts",
+                    value=self._insight_repository.count_rejected_applications_by_skill(),
+                    source="applications",
+                ),
+            )
+        return facts
 
 
-def _insight_system_prompt() -> str:
+def _insight_system_prompt(insight_type: InsightType) -> str:
+    lines = [
+        "You generate cached narrative insights for JobTracker.",
+        f"Prompt version: {INSIGHT_GENERATION_PROMPT_VERSION}",
+        "Use only the deterministic facts and cited evidence in the user payload.",
+        "Never produce authoritative counts, rates, or group-by numbers beyond the "
+        "provided deterministic facts.",
+        "Never emit raw SQL.",
+        "Every claim about a pattern, reason, skill, role, or action must cite one "
+        "or more source evidence citation_id values.",
+        "Use only the provided citation_id values and format citations in square brackets.",
+        "If the evidence is insufficient, say what is missing instead of guessing.",
+    ]
+    if insight_type == "skill_gaps":
+        lines.extend(
+            (
+                "For skill_gaps, answer Q-42: identify technologies and skills that recur "
+                "in rejected roles.",
+                "Use rejected_skill_counts, rejected application tech_stack values, and "
+                "cited rejection or feedback evidence.",
+                "Do not treat skills from interviews or offers as gaps unless they also "
+                "appear in rejected-role evidence.",
+            ),
+        )
+    lines.append("Return plain text only. Do not wrap the answer in JSON or Markdown tables.")
     return "\n".join(
-        (
-            "You generate cached narrative insights for JobTracker.",
-            f"Prompt version: {INSIGHT_GENERATION_PROMPT_VERSION}",
-            "Use only the deterministic facts and cited evidence in the user payload.",
-            "Never produce authoritative counts, rates, or group-by numbers beyond the "
-            "provided deterministic facts.",
-            "Never emit raw SQL.",
-            "Every claim about a pattern, reason, skill, role, or action must cite one "
-            "or more source evidence citation_id values.",
-            "Use only the provided citation_id values and format citations in square brackets.",
-            "If the evidence is insufficient, say what is missing instead of guessing.",
-            "Return plain text only. Do not wrap the answer in JSON or Markdown tables.",
-        ),
+        lines,
     )
 
 
@@ -266,8 +287,10 @@ class _EvidenceScope:
 
 
 def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
-    if insight_type in {"why_rejected", "skill_gaps"}:
+    if insight_type == "why_rejected":
         return _EvidenceScope(event_types=("rejection", "feedback"))
+    if insight_type == "skill_gaps":
+        return _EvidenceScope(application_statuses=("rejected",))
     if insight_type == "role_fit":
         return _EvidenceScope(application_statuses=("interview", "offer", "rejected", "ghosted"))
     if insight_type == "weekly_actions":
