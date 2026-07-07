@@ -143,7 +143,7 @@ job-search-intelligence/
   [JT-107 2026-07-06] - **`application_events`** also stores nullable `extracted_status` using the same status enum as `applications.current_status` so status replay can preserve extraction-provided status on status-neutral event types.
 - **`application_corrections`** - `id`, `application_id` (FK to `applications.id` with cascade delete), `correction_type` (`merge | split | status_edit | event_edit | reset_lock`), valid JSON `before_json`, valid JSON `after_json`, `reason`, `created_at`.
 - **`insights`** - `id`, `type` (`why_rejected | skill_gaps | strongest_weakest_signals | role_fit | weekly_actions | story`), `content`, `inputs_hash`, `is_stale`, `model`, `generated_at`.
-  `inputs_hash` is computed from deterministic insight inputs plus `INSIGHT_GENERATION_PROMPT_VERSION`, so prompt-template changes bypass legacy cached rows without a schema change.
+  [JT-195 2026-07-07] Insight cache `inputs_hash` includes the insight generation prompt version so prompt changes invalidate stale cached narratives without source-data changes.
 - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, `embedding`.
   [JT-020 2026-07-05 v2] - **`email_chunks`** (sqlite-vec) - `email_id`, `chunk_index`, `content`, 1536-dimensional `embedding`.
 - **`chat_messages`** - `id`, `conversation_id`, `role`, `content`, `citations_json`, `tool_outputs_json`, `created_at`.
@@ -259,6 +259,9 @@ Phase 1 reconciliation compares provider metadata pages against local `raw_email
 Classification prompt requests are built by `app.pipeline.classify.build_classification_prompt_request`, require retained email body text, request `LLMResponseFormat.JSON_OBJECT`, use temperature `0`, and embed `CLASSIFICATION_PROMPT_VERSION` in the system prompt.
 Provider responses must pass `app.pipeline.classify.parse_classification_generation_response` before any downstream classification storage or aggregation.
 `StructuredExtractionService` lists non-empty retained candidates stale for the configured model or prompt version, calls the configured `LLMProvider`, stores only accepted classification records through `EmailRepository`, writes completed-run accounting through `ClassificationRunRepository`, and returns accepted extraction facts plus public-safe malformed results without writing applications or events.
+`InsightInputBuilder` builds cached narrative insight inputs from deterministic application/event facts plus cited source evidence, keeps debugging retained bodies out of LLM payloads, and hashes the insight prompt version with the source fingerprint so prompt changes invalidate the cache.
+For the Q-46 `story` insight, evidence is narrowed to the recent 366-day window anchored to the newest event or email timestamp, then kept chronological so the LLM receives a grounded recent search arc.
+The story prompt names Q-46 directly and asks for phases, turning points, repeated patterns, and changes over time with citation IDs for each narrative beat.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 
@@ -359,6 +362,7 @@ Metrics endpoints + React dashboard (Recharts + small accessible component layer
 Insights service + page (why-rejected, skill-gaps, strongest/weakest signals, role-fit, weekly actions, story); cached with prompt-versioned input hashes, `regenerate`, stale detection, and user-triggered regeneration.
 The Q-40 `why_rejected` insight uses rejection-event evidence only and prompts for recurring themes across rejection emails; feedback-specific summaries belong to Q-41.
 `weekly_actions` answers Q-45 as exactly three numbered, cited actions that are executable during the next week, and invalid provider output is rejected before caching.
+The Q-46 story insight uses recent chronological evidence from the last 6 to 12 months of search history, anchored to the newest cited event or email timestamp.
 **DoD:** insights render and cite the applications/emails they're drawn from.
 
 **Phase 5 - RAG chat (LangGraph)** -> Tier 6

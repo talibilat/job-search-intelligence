@@ -22,6 +22,7 @@ Baseline coding standards for every agent and contributor.
 - Classification prompt requests go through `app.pipeline.classify.build_classification_prompt_request`, request `LLMResponseFormat.JSON_OBJECT`, embed `CLASSIFICATION_PROMPT_VERSION`, and send only retained email candidate fields needed for classification.
 - Classification service orchestration belongs in `app.services.classification`: it calls the configured `LLMProvider`, validates responses before storage, returns accepted and malformed DTOs, aggregates token usage, and leaves persistence plus aggregation to later pipeline stages.
 - Structured extraction batches go through `StructuredExtractionService`; services may store accepted `email_classifications` rows and `classification_runs` accounting, but malformed provider output must remain public-safe and aggregation writes stay in the later aggregate stage.
+- Insight generation must build deterministic facts and cited evidence before calling the LLM, keep debugging retained bodies out of provider payloads, include the insight prompt version in cache hashes, and keep Q-46 `story` evidence chronological within the recent search window.
 - `EmailProvider` implementations expose metadata pages separately from retained body batches, reject body-derived metadata snippets, normalize retained HTML bodies to plain text, reject raw HTML retention fields, keep provider sync cursors opaque, require a cursor for incremental metadata sync, and do not expose attachment content in v1.
 - Gmail metadata listing must keep full backfill and incremental sync metadata-only: use message list pages for full backfill, `users.history.list` `messageAdded` records for incremental sync, withhold replacement history cursors until paginated listing is fully drained, and map Gmail history `404` responses to expired-cursor recovery.
 - Sync services persist provider-owned cursors through `SyncStateRepository`, keyed by provider and account, without treating cursor values as OAuth token material or email content.
@@ -92,6 +93,7 @@ Baseline coding standards for every agent and contributor.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Status-derivation aggregation changes: verify incremental out-of-order evidence, manual-lock preservation, event-type-only derivation, and missing-`event_at` idempotency.
 - Grouping-key-only aggregation changes: run the focused grouping-key tests plus the company and role normalization tests that feed the key.
+- Insight prompt, evidence-scope, or cache-hash changes: run the focused insight input and generation service tests, and verify grounding plus citation behavior.
 - Never claim work is complete without fresh verification evidence.
 
 ## Ticket-specific conventions
