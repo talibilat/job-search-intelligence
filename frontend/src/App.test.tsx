@@ -572,12 +572,13 @@ describe("App", () => {
     expect(frontendApiIntegrations).toBeTruthy();
     expect(frontendApiIntegrations?.textContent).toContain("GET /setup/status");
     expect(frontendApiIntegrations?.textContent).toContain("GET /insights");
+    expect(frontendApiIntegrations?.textContent).toContain("GET /metrics/summary");
     expect(frontendApiIntegrations?.textContent).toContain(
       "POST /insights/regenerate",
     );
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
     expect(frontendApiIntegrations?.textContent).not.toContain(
-      "GET /metrics/summary",
+      "Future GET /metrics/summary",
     );
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
 
