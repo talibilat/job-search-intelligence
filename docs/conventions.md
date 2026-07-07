@@ -90,6 +90,7 @@ Baseline coding standards for every agent and contributor.
 - Heuristic filter changes: run `uv run python -m evals.run_eval --filter` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
 - Classification changes to prompts, models, categories, extraction schemas, or parser behavior: run `uv run python -m evals.run_eval` from `backend/`; regressions below 90 percent precision or 85 percent recall block merges unless explicitly accepted.
 - Golden-set fixture changes: run `uv run pytest tests/test_golden_set_fixture.py -v` from `backend/`.
+- Phase 2 pipeline smoke coverage: run `uv run pytest tests/test_phase2_pipeline_smoke.py -q` from `backend/` when checking the integrated filter, classify, extract, and aggregate path over synthetic fixtures.
 - Aggregation changes: verify idempotency and no duplicate applications.
 - Status-derivation aggregation changes: verify incremental out-of-order evidence, manual-lock preservation, event-type-only derivation, and missing-`event_at` idempotency.
 - Grouping-key-only aggregation changes: run the focused grouping-key tests plus the company and role normalization tests that feed the key.

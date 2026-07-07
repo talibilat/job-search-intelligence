@@ -378,7 +378,7 @@ Hybrid router + tools, sqlite-vec embeddings for retained job-related bodies, ch
 
 ## 9. Testing (minimal + one carve-out)
 
-- **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
+- **Minimal:** no broad e2e suites, no coverage targets. A few pytest smoke tests on the pipeline and metrics math, including a deterministic Phase 2 path over private-data-free synthetic fixtures. Focused Vitest checks cover frontend behavior that protects accessibility or component contracts.
 - **Tiny Playwright smoke suite:** starts with the Phase 0 shell for setup copy, overview sync affordance, and dashboard empty-state coverage; later critical paths add dashboard fixture load and chat citation smoke checks as those pages exist.
 - **Carve-out - the golden set:** ~30 private-data-free labeled email cases in `backend/evals/golden_set.jsonl`; `uv run python -m evals.run_eval --filter` from `backend/` validates metadata-only heuristic filter retention against each row's `expected_to_pass_filter` label, and `uv run python -m evals.run_eval` validates records through the classification contract. Both reports include precision/recall and fail below 90 percent precision or 85 percent recall. Run the filter eval whenever heuristic filter signals change, and run the classification eval whenever the classify prompt, model, categories, extraction schema, or parser behavior changes. _This is the one thing that keeps the dashboard honest._
 
