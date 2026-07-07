@@ -440,6 +440,119 @@ def test_aggregation_is_idempotent(tmp_path: Path) -> None:
     assert stored_events[0] == 1
 
 
+def test_aggregation_full_rerun_keeps_one_application_and_timeline_events(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    insert_raw_email(connection, "email-2", thread_id="thread-abc")
+    connection.commit()
+
+    extraction_1 = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+    )
+    extraction_2 = make_extraction(
+        email_id="email-2",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.REJECTION,
+        status="rejected",
+        event_type="rejection",
+        event_at=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+        rejection_reason="Position filled",
+    )
+    service = make_service(connection)
+
+    service.run([extraction_1, extraction_2])
+    first_application_ids = connection.execute(
+        "SELECT id FROM applications ORDER BY id",
+    ).fetchall()
+    first_events = connection.execute(
+        """
+        SELECT id, event_type, email_id, event_at, extract_note
+        FROM application_events
+        ORDER BY event_at, email_id
+        """,
+    ).fetchall()
+    rerun_result = service.run([extraction_1, extraction_2])
+
+    rerun_application_ids = connection.execute(
+        "SELECT id FROM applications ORDER BY id",
+    ).fetchall()
+    rerun_events = connection.execute(
+        """
+        SELECT id, event_type, email_id, event_at, extract_note
+        FROM application_events
+        ORDER BY event_at, email_id
+        """,
+    ).fetchall()
+
+    assert rerun_result.extraction_count == 2
+    assert len(rerun_application_ids) == 1
+    assert rerun_application_ids == first_application_ids
+    assert len(rerun_events) == 2
+    assert rerun_events == first_events
+
+
+def test_aggregation_replayed_incremental_batch_does_not_duplicate_existing_event(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    insert_raw_email(connection, "email-2", thread_id="thread-abc")
+    connection.commit()
+
+    extraction_1 = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+    )
+    extraction_2 = make_extraction(
+        email_id="email-2",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.INTERVIEW_INVITE,
+        status="interview",
+        event_type="interview_scheduled",
+        event_at=datetime(2026, 7, 8, 10, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([extraction_1])
+    service.run([extraction_1, extraction_2])
+    event_rows_after_incremental = connection.execute(
+        """
+        SELECT id, event_type, email_id, event_at
+        FROM application_events
+        ORDER BY event_at, email_id
+        """,
+    ).fetchall()
+    service.run([extraction_1, extraction_2])
+
+    application_count = connection.execute("SELECT COUNT(*) FROM applications").fetchone()
+    event_rows_after_replay = connection.execute(
+        """
+        SELECT id, event_type, email_id, event_at
+        FROM application_events
+        ORDER BY event_at, email_id
+        """,
+    ).fetchall()
+
+    assert application_count is not None
+    assert application_count[0] == 1
+    assert len(event_rows_after_replay) == 2
+    assert event_rows_after_replay == event_rows_after_incremental
+    assert_current_status(connection, "interview")
+
+
 def test_aggregation_uses_email_sent_at_for_missing_event_at_idempotency(
     tmp_path: Path,
 ) -> None:
