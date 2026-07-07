@@ -223,6 +223,14 @@ class InsightInputBuilder:
                     source="applications",
                 ),
             )
+        if insight_type == "role_fit":
+            facts.append(
+                InsightInputFact(
+                    name="role_outcome_summaries",
+                    value=self._insight_repository.list_role_outcome_summaries(),
+                    source="applications",
+                ),
+            )
         return facts
 
 
@@ -250,10 +258,20 @@ def _insight_system_prompt(insight_type: InsightType) -> str:
                 "appear in rejected-role evidence.",
             ),
         )
+    if insight_type == "role_fit":
+        lines.extend(
+            (
+                "For role_fit, answer Q-44: which roles genuinely suit the user best "
+                "based on patterns of wins.",
+                "For role_fit, treat interviews and offers as wins, compare them against "
+                "rejected and ghosted outcomes, and use role_outcome_summaries as "
+                "deterministic role-level evidence.",
+                "For role_fit, cite the applications or emails behind each role-fit claim "
+                "and call out thin evidence instead of overstating fit.",
+            ),
+        )
     lines.append("Return plain text only. Do not wrap the answer in JSON or Markdown tables.")
-    return "\n".join(
-        lines,
-    )
+    return "\n".join(lines)
 
 
 def _validated_insight_content(

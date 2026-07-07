@@ -33,6 +33,14 @@ class InsightRecord(BaseModel):
     generated_at: datetime
 
 
+class InsightRoleOutcomeSummary(BaseModel):
+    role_title: str
+    application_count: int
+    win_count: int
+    loss_count: int
+    status_counts: dict[str, int]
+
+
 type InsightInputFactSource = Literal["applications", "application_events"]
 type InsightInputFactName = Literal[
     "total_applications",
@@ -42,8 +50,11 @@ type InsightInputFactName = Literal[
     "work_mode_counts",
     "event_type_counts",
     "rejected_skill_counts",
+    "role_outcome_summaries",
 ]
-type InsightInputFactValue = int | float | str | bool | dict[str, int] | list[str] | None
+type InsightInputFactValue = (
+    int | float | str | bool | dict[str, int] | list[str] | list[InsightRoleOutcomeSummary] | None
+)
 
 
 class InsightInputFact(BaseModel):
