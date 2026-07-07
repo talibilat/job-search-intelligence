@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import (
+    get_application_correction_conflict_service,
     get_application_correction_service,
     get_application_detail_service,
     get_application_events_service,
@@ -15,6 +16,7 @@ from app.api.dependencies import (
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.models import (
+    ApplicationCorrectionConflictRecord,
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
     ApplicationEventRecord,
@@ -39,6 +41,7 @@ from app.services.application_corrections import (
     ApplicationNotFoundError as ApplicationCorrectionNotFoundError,
 )
 from app.services.applications import (
+    ApplicationCorrectionConflictService,
     ApplicationDetailService,
     ApplicationEventsService,
     ApplicationFilterValidationError,
@@ -172,6 +175,33 @@ def get_application_events(
 ) -> list[ApplicationEventRecord]:
     try:
         return service.list_application_events(id)
+    except ApplicationReadNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message="Application not found.",
+        ) from error
+
+
+@router.get(
+    "/{id}/correction-conflicts",
+    response_model=list[ApplicationCorrectionConflictRecord],
+    responses={404: {"model": ApiErrorResponse}},
+    summary="List Application Correction Conflicts",
+    description=(
+        "Returns automatic evidence conflicts recorded for one manually corrected "
+        "application without exposing private email body content."
+    ),
+)
+def get_application_correction_conflicts(
+    id: str,
+    service: Annotated[
+        ApplicationCorrectionConflictService,
+        Depends(get_application_correction_conflict_service),
+    ],
+) -> list[ApplicationCorrectionConflictRecord]:
+    try:
+        return service.list_application_conflicts(id)
     except ApplicationReadNotFoundError as error:
         raise ApiError(
             status_code=404,

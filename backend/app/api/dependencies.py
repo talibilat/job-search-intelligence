@@ -8,14 +8,23 @@ from fastapi import Depends
 
 from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
-from app.db.repositories import ApplicationRepository, CorrectionRepository, EventRepository
+from app.db.repositories import (
+    ApplicationRepository,
+    CorrectionConflictRepository,
+    CorrectionRepository,
+    EventRepository,
+)
 from app.db.repositories.classification_run import ClassificationRunRepository
 from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
 from app.services.application_corrections import ApplicationCorrectionService
-from app.services.applications import ApplicationDetailService, ApplicationEventsService
+from app.services.applications import (
+    ApplicationCorrectionConflictService,
+    ApplicationDetailService,
+    ApplicationEventsService,
+)
 from app.services.ghost_inference import GhostInferenceService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
@@ -132,6 +141,21 @@ def get_application_events_service(
         yield ApplicationEventsService(
             application_repository=ApplicationRepository(connection),
             event_repository=EventRepository(connection),
+        )
+    finally:
+        connection.close()
+
+
+def get_application_correction_conflict_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ApplicationCorrectionConflictService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield ApplicationCorrectionConflictService(
+            application_repository=ApplicationRepository(connection),
+            conflict_repository=CorrectionConflictRepository(connection),
         )
     finally:
         connection.close()

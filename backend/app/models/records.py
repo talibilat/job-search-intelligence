@@ -18,7 +18,9 @@ from app.models.classification import (
 )
 from app.models.connection import EmailConnectionRecord
 from app.models.correction import (
+    ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
+    CorrectionConflictType,
     CorrectionType,
     JsonObject,
     JsonObjectList,
@@ -44,6 +46,7 @@ from app.models.sync_state import (
 )
 
 __all__ = [
+    "ApplicationCorrectionConflictRecord",
     "ApplicationCorrectionRecord",
     "ApplicationEventRecord",
     "ApplicationEventType",
@@ -53,6 +56,7 @@ __all__ = [
     "ChatMessageRecord",
     "ChatMessageRole",
     "ClassificationRunRecord",
+    "CorrectionConflictType",
     "CorrectionType",
     "EmailBackfillStateRecord",
     "EmailBackfillStatus",

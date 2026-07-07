@@ -93,6 +93,59 @@
         "title": "ApiErrorResponse",
         "type": "object"
       },
+      "ApplicationCorrectionConflictRecord": {
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "conflict_key": {
+            "title": "Conflict Key",
+            "type": "string"
+          },
+          "conflict_type": {
+            "$ref": "#/components/schemas/CorrectionConflictType"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "evidence_email_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Email Id"
+          },
+          "existing_json": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "proposed_json": {
+            "$ref": "#/components/schemas/JsonObject"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "conflict_key",
+          "conflict_type",
+          "existing_json",
+          "proposed_json",
+          "evidence_email_id",
+          "created_at"
+        ],
+        "title": "ApplicationCorrectionConflictRecord",
+        "type": "object"
+      },
       "ApplicationCorrectionRecord": {
         "properties": {
           "after_json": {
@@ -1173,6 +1226,14 @@
         ],
         "title": "ClassificationRunResponse",
         "type": "object"
+      },
+      "CorrectionConflictType": {
+        "enum": [
+          "application_summary",
+          "application_event",
+          "ghost_inference"
+        ],
+        "type": "string"
       },
       "CorrectionType": {
         "enum": [
@@ -2996,6 +3057,63 @@
           }
         },
         "summary": "Get Application Detail",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/applications/{id}/correction-conflicts": {
+      "get": {
+        "description": "Returns automatic evidence conflicts recorded for one manually corrected application without exposing private email body content.",
+        "operationId": "get_application_correction_conflicts_applications__id__correction_conflicts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationCorrectionConflictRecord"
+                  },
+                  "title": "Response Get Application Correction Conflicts Applications  Id  Correction Conflicts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Application Correction Conflicts",
         "tags": [
           "applications"
         ]

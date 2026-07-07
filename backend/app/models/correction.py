@@ -22,6 +22,11 @@ type CorrectionType = Literal[
     "event_edit",
     "reset_lock",
 ]
+type CorrectionConflictType = Literal[
+    "application_summary",
+    "application_event",
+    "ghost_inference",
+]
 type JsonObject = dict[str, object]
 type JsonObjectList = list[JsonObject]
 
@@ -36,6 +41,22 @@ class ApplicationCorrectionRecord(BaseModel):
     created_at: datetime
 
     @field_validator("before_json", "after_json", mode="before")
+    @classmethod
+    def parse_json_objects(cls, value: object) -> object:
+        return parse_json_column(value)
+
+
+class ApplicationCorrectionConflictRecord(BaseModel):
+    id: int
+    application_id: str
+    conflict_key: str
+    conflict_type: CorrectionConflictType
+    existing_json: JsonObject
+    proposed_json: JsonObject
+    evidence_email_id: str | None
+    created_at: datetime
+
+    @field_validator("existing_json", "proposed_json", mode="before")
     @classmethod
     def parse_json_objects(cls, value: object) -> object:
         return parse_json_column(value)

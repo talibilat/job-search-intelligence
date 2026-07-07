@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.db.repositories import ApplicationRepository, EventRepository
-from app.models import ApplicationEventRecord, ApplicationRecord
+from app.db.repositories import ApplicationRepository, CorrectionConflictRepository, EventRepository
+from app.models import (
+    ApplicationCorrectionConflictRecord,
+    ApplicationEventRecord,
+    ApplicationRecord,
+)
 from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 
 
@@ -70,6 +74,26 @@ class ApplicationEventsService:
         if application is None:
             raise ApplicationNotFoundError(application_id)
         return self._event_repository.list_by_application_id(application_id)
+
+
+class ApplicationCorrectionConflictService:
+    def __init__(
+        self,
+        *,
+        application_repository: ApplicationRepository,
+        conflict_repository: CorrectionConflictRepository,
+    ) -> None:
+        self._application_repository = application_repository
+        self._conflict_repository = conflict_repository
+
+    def list_application_conflicts(
+        self,
+        application_id: str,
+    ) -> list[ApplicationCorrectionConflictRecord]:
+        application = self._application_repository.get_by_id(application_id)
+        if application is None:
+            raise ApplicationNotFoundError(application_id)
+        return self._conflict_repository.list_by_application_id(application_id)
 
 
 def _validate_salary_band(*, salary_min: int | None, salary_max: int | None) -> None:
