@@ -597,6 +597,7 @@ export type InsightType = (typeof InsightType)[keyof typeof InsightType];
 
 export const InsightType = {
   why_rejected: "why_rejected",
+  recurring_feedback: "recurring_feedback",
   skill_gaps: "skill_gaps",
   strongest_weakest_signals: "strongest_weakest_signals",
   role_fit: "role_fit",
@@ -614,6 +615,10 @@ export interface InsightRecord {
   type: InsightType;
 }
 
+export interface InsightListResponse {
+  insights: InsightRecord[];
+}
+
 export interface InsightRegenerateRequest {
   /** @minimum 1 */
   max_evidence_items?: number;
@@ -622,6 +627,7 @@ export interface InsightRegenerateRequest {
 
 export interface InsightRegenerateResponse {
   cached: boolean;
+  evidence_citation_ids: string[];
   insight: InsightRecord;
 }
 
@@ -1904,7 +1910,7 @@ export const healthHealthGet = async (
 };
 
 export type listInsightsInsightsGetResponse200 = {
-  data: InsightRecord[];
+  data: InsightListResponse;
   status: 200;
 };
 

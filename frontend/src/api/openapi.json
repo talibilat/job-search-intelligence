@@ -1634,6 +1634,22 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "InsightListResponse": {
+        "properties": {
+          "insights": {
+            "items": {
+              "$ref": "#/components/schemas/InsightRecord"
+            },
+            "title": "Insights",
+            "type": "array"
+          }
+        },
+        "required": [
+          "insights"
+        ],
+        "title": "InsightListResponse",
+        "type": "object"
+      },
       "InsightRecord": {
         "properties": {
           "content": {
@@ -1701,13 +1717,21 @@
             "title": "Cached",
             "type": "boolean"
           },
+          "evidence_citation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Citation Ids",
+            "type": "array"
+          },
           "insight": {
             "$ref": "#/components/schemas/InsightRecord"
           }
         },
         "required": [
           "insight",
-          "cached"
+          "cached",
+          "evidence_citation_ids"
         ],
         "title": "InsightRegenerateResponse",
         "type": "object"
@@ -1715,6 +1739,7 @@
       "InsightType": {
         "enum": [
           "why_rejected",
+          "recurring_feedback",
           "skill_gaps",
           "strongest_weakest_signals",
           "role_fit",
@@ -3541,11 +3566,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/InsightRecord"
-                  },
-                  "title": "Response List Insights Insights Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/InsightListResponse"
                 }
               }
             },

@@ -56,6 +56,7 @@ _UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
 STORY_EVIDENCE_WINDOW_DAYS = 366
 SUPPORTED_INSIGHT_TYPES: tuple[InsightType, ...] = (
     "why_rejected",
+    "recurring_feedback",
     "skill_gaps",
     "strongest_weakest_signals",
     "role_fit",
@@ -137,6 +138,21 @@ class InsightGenerationService:
                     input=insight_input,
                     cached=True,
                 )
+
+        insufficient_content = _insufficient_recurring_feedback_content(insight_input)
+        if insufficient_content is not None:
+            insight = self._insight_repository.save_generated_insight(
+                insight_type=insight_type,
+                content=insufficient_content,
+                inputs_hash=insight_input.inputs_hash,
+                model=model,
+                generated_at=self._clock(),
+            )
+            return InsightGenerationResult(
+                insight=insight,
+                input=insight_input,
+                cached=False,
+            )
 
         response = await self._llm_provider.generate(
             build_insight_generation_request(insight_input, model=model),
@@ -332,6 +348,13 @@ def _insight_type_prompt(insight_type: InsightType) -> str:
             "values, and cited rejection or feedback evidence. Do not treat skills from "
             "interviews or offers as gaps unless they also appear in rejected-role evidence."
         )
+    if insight_type == "recurring_feedback":
+        return (
+            "For recurring_feedback, answer Q-41: identify recruiter or interviewer "
+            "feedback themes about what to improve. Do not say feedback is consistent "
+            "or recurring unless at least two distinct feedback evidence items support "
+            "the same improvement. Cite feedback evidence for every theme."
+        )
     if insight_type == "weekly_actions":
         return (
             "For weekly_actions insights, answer Q-45: What are the 3 concrete things I "
@@ -353,6 +376,25 @@ def _insight_type_prompt(insight_type: InsightType) -> str:
             ),
         )
     return ""
+
+
+def _insufficient_recurring_feedback_content(insight_input: InsightInput) -> str | None:
+    if insight_input.type != "recurring_feedback" or len(insight_input.evidence) >= 2:
+        return None
+
+    if not insight_input.evidence:
+        return (
+            "Recurring recruiter or interviewer feedback cannot be determined yet. "
+            "No feedback items are available, so JobTracker needs at least two feedback "
+            "sources before calling a theme consistent."
+        )
+
+    return (
+        "Recurring recruiter or interviewer feedback cannot be determined yet. "
+        "Only one feedback item is available, so JobTracker needs at least one more "
+        "feedback source before calling a theme consistent. "
+        f"[{insight_input.evidence[0].citation_id}]"
+    )
 
 
 def _recent_story_evidence(
@@ -567,6 +609,8 @@ class _EvidenceScope:
 
 
 def _evidence_scope(insight_type: InsightType) -> _EvidenceScope:
+    if insight_type == "recurring_feedback":
+        return _EvidenceScope(event_types=("feedback",))
     if insight_type == "why_rejected":
         return _EvidenceScope(event_types=("rejection",))
     if insight_type == "skill_gaps":

@@ -46,6 +46,28 @@ def test_save_generated_insight_persists_and_fetches_exact_cache_hit(tmp_path: P
     assert wrong_hash is None
 
 
+def test_save_generated_insight_accepts_recurring_feedback_type(tmp_path: Path) -> None:
+    connection = migrated_connection(tmp_path)
+    repository = InsightRepository(connection)
+
+    record = repository.save_generated_insight(
+        insight_type="recurring_feedback",
+        content="Feedback repeatedly recommends deeper system design examples.",
+        inputs_hash="feedback-hash-v1",
+        model="gpt-4.1-mini",
+        generated_at=GENERATED_AT,
+    )
+
+    cached = repository.get_cached_insight(
+        insight_type="recurring_feedback",
+        inputs_hash="feedback-hash-v1",
+        model="gpt-4.1-mini",
+    )
+
+    assert record.type == "recurring_feedback"
+    assert cached == record
+
+
 def test_save_generated_insight_replaces_existing_type_cache(tmp_path: Path) -> None:
     connection = migrated_connection(tmp_path)
     repository = InsightRepository(connection)

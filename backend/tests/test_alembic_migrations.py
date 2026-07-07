@@ -59,6 +59,12 @@ def test_sqlite_sync_database_url_preserves_sqlite_slash_forms(tmp_path: Path) -
     )
 
 
+def test_core_schema_revision_does_not_include_later_recurring_feedback_type() -> None:
+    migration = import_module("app.db.migrations.versions.20260705_0002_core_schema")
+
+    assert "recurring_feedback" not in migration.INSIGHT_TYPES
+
+
 def test_virtual_tables_are_excluded_from_autogenerate() -> None:
     metadata = MetaData()
     regular_table = Table("raw_emails", metadata, Column("id", Integer, primary_key=True))

@@ -31,6 +31,9 @@ GENERATED_AT = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
 CITATION_ID = (
     "application:application-rejected|event:event-rejected-rejection|email:email-rejection"
 )
+FEEDBACK_CITATION_ID = (
+    "application:application-rejected|event:event-rejected-feedback|email:email-feedback"
+)
 WEEKLY_ACTIONS_CITATION_ID = (
     "application:application-interview|event:event-interview-invite|email:email-interview"
 )
@@ -158,6 +161,82 @@ def test_insight_generation_service_allows_bracketed_non_citation_prose(
     assert result.insight.content == (
         f"Focus on Kubernetes [especially production experience]. [{CITATION_ID}]"
     )
+
+
+def test_insight_generation_service_requires_repeated_recurring_feedback(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_feedback_event_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(())
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("recurring_feedback"))
+
+    assert result.cached is False
+    assert result.insight.type == "recurring_feedback"
+    assert result.insight.content == (
+        "Recurring recruiter or interviewer feedback cannot be determined yet. "
+        "Only one feedback item is available, so JobTracker needs at least one more "
+        f"feedback source before calling a theme consistent. [{FEEDBACK_CITATION_ID}]"
+    )
+    assert provider.requests == []
+
+
+def test_insight_generation_service_generates_recurring_feedback_theme_from_repeated_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_feedback_event_fixture(connection)
+        insert_second_feedback_event_fixture(connection)
+        repository = InsightRepository(connection)
+        provider = FakeLLMProvider(
+            (
+                LLMGenerationResponse(
+                    content=(
+                        "Recruiter feedback consistently recommends stronger system design "
+                        f"examples. [{FEEDBACK_CITATION_ID}]"
+                    ),
+                    model="llama3.1",
+                    finish_reason=LLMFinishReason.STOP,
+                ),
+            )
+        )
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=repository,
+            llm_provider=provider,
+            clock=lambda: GENERATED_AT,
+        )
+
+        result = asyncio.run(service.generate_insight("recurring_feedback"))
+
+    assert result.cached is False
+    assert result.insight.type == "recurring_feedback"
+    assert result.insight.content == (
+        "Recruiter feedback consistently recommends stronger system design "
+        f"examples. [{FEEDBACK_CITATION_ID}]"
+    )
+    assert "For recurring_feedback" in provider.requests[0].messages[0].content
+    prompt_payload = json.loads(provider.requests[0].messages[1].content)
+    assert prompt_payload["type"] == "recurring_feedback"
+    assert [evidence["event_type"] for evidence in prompt_payload["evidence"]] == [
+        "feedback",
+        "feedback",
+    ]
+    assert FEEDBACK_CITATION_ID in [
+        evidence["citation_id"] for evidence in prompt_payload["evidence"]
+    ]
 
 
 @pytest.mark.parametrize(
@@ -817,6 +896,25 @@ def insert_rejected_application_fixture(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
+def insert_feedback_event_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-feedback",
+        subject="Interview feedback",
+        body_text="The interviewer recommended improving system design examples.",
+        sent_at="2026-07-05T10:00:00+00:00",
+    )
+    EventRepository(connection).upsert_event(
+        id="event-rejected-feedback",
+        application_id="application-rejected",
+        email_id="email-feedback",
+        event_type="feedback",
+        event_at="2026-07-05T10:00:00+00:00",
+        extract_note="Recruiter feedback recommended improving system design examples.",
+    )
+    connection.commit()
+
+
 def insert_interview_application_fixture(connection: sqlite3.Connection) -> None:
     insert_raw_email(
         connection,
@@ -867,6 +965,25 @@ def insert_interview_application_fixture(connection: sqlite3.Connection) -> None
         event_type="interview_scheduled",
         event_at="2026-07-05T10:00:00+00:00",
         extract_note="Interview invite received.",
+    )
+    connection.commit()
+
+
+def insert_second_feedback_event_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-feedback-2",
+        subject="Final interview feedback",
+        body_text="The recruiter again suggested clearer system design examples.",
+        sent_at="2026-07-06T10:00:00+00:00",
+    )
+    EventRepository(connection).upsert_event(
+        id="event-rejected-feedback-2",
+        application_id="application-rejected",
+        email_id="email-feedback-2",
+        event_type="feedback",
+        event_at="2026-07-06T10:00:00+00:00",
+        extract_note="Recruiter again recommended clearer system design examples.",
     )
     connection.commit()
 

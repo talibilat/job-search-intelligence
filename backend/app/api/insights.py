@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies import get_insight_generation_service, get_insight_read_service
 from app.api.errors import ApiErrorResponse
-from app.models import InsightRecord, InsightRegenerateRequest, InsightRegenerateResponse
+from app.models import (
+    InsightListResponse,
+    InsightRegenerateRequest,
+    InsightRegenerateResponse,
+)
 from app.services.insights_service import InsightGenerationService, InsightReadService
 
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -14,7 +18,7 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 
 @router.get(
     "",
-    response_model=list[InsightRecord],
+    response_model=InsightListResponse,
     summary="List Cached Insights",
     description=(
         "Returns the latest cached narrative insights from local SQLite, including "
@@ -23,8 +27,8 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 )
 async def list_insights(
     service: Annotated[InsightReadService, Depends(get_insight_read_service)],
-) -> list[InsightRecord]:
-    return service.list_latest_insights()
+) -> InsightListResponse:
+    return InsightListResponse(insights=service.list_latest_insights())
 
 
 @router.post(
@@ -53,4 +57,8 @@ async def regenerate_insight(
         max_evidence_items=request.max_evidence_items,
         force=True,
     )
-    return InsightRegenerateResponse(insight=result.insight, cached=result.cached)
+    return InsightRegenerateResponse(
+        insight=result.insight,
+        cached=result.cached,
+        evidence_citation_ids=[item.citation_id for item in result.input.evidence],
+    )

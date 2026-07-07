@@ -16,6 +16,7 @@ from app.models.event import ApplicationEventType
 
 type InsightType = Literal[
     "why_rejected",
+    "recurring_feedback",
     "skill_gaps",
     "strongest_weakest_signals",
     "role_fit",
@@ -34,6 +35,10 @@ class InsightRecord(BaseModel):
     generated_at: datetime
 
 
+class InsightListResponse(BaseModel):
+    insights: list[InsightRecord]
+
+
 class InsightRegenerateRequest(BaseModel):
     type: InsightType
     max_evidence_items: int = Field(default=100, ge=1)
@@ -42,6 +47,7 @@ class InsightRegenerateRequest(BaseModel):
 class InsightRegenerateResponse(BaseModel):
     insight: InsightRecord
     cached: bool
+    evidence_citation_ids: list[str]
 
 
 class InsightRoleOutcomeSummary(BaseModel):

@@ -65,6 +65,36 @@ def get_llm_provider(
     )
 
 
+def get_insight_repository(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[InsightRepository]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    try:
+        yield InsightRepository(connection)
+    finally:
+        connection.close()
+
+
+def get_insight_generation_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    insight_repository: Annotated[
+        InsightRepository,
+        Depends(get_insight_repository),
+    ],
+    llm_provider: Annotated[
+        LLMProvider,
+        Depends(get_llm_provider),
+    ],
+) -> InsightGenerationService:
+    return InsightGenerationService(
+        settings=settings,
+        insight_repository=insight_repository,
+        llm_provider=llm_provider,
+    )
+
+
 def get_writable_email_repository(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> Iterator[EmailRepository]:
@@ -250,22 +280,5 @@ def get_insight_read_service(
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
         yield InsightReadService(InsightRepository(connection))
-    finally:
-        connection.close()
-
-
-def get_insight_generation_service(
-    settings: Annotated[AppSettings, Depends(get_settings)],
-    llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
-) -> Iterator[InsightGenerationService]:
-    database_path = sqlite_database_path(settings.database_url)
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path, check_same_thread=False)
-    try:
-        yield InsightGenerationService(
-            settings=settings,
-            insight_repository=InsightRepository(connection),
-            llm_provider=llm_provider,
-        )
     finally:
         connection.close()

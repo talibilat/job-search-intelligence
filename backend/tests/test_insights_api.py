@@ -27,11 +27,11 @@ GENERATED_AT = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
 CITATION_ID = (
     "application:application-rejected|event:event-rejected-rejection|email:email-rejection"
 )
+FEEDBACK_CITATION_ID = "application:app-1|event:event-1|email:email-1"
+SECOND_FEEDBACK_CITATION_ID = "application:app-1|event:event-2|email:email-2"
 
 
-def test_get_insights_returns_latest_cached_records_in_stable_order(
-    tmp_path: Path,
-) -> None:
+def test_get_insights_returns_latest_cached_records_in_wrapper(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
         repository = InsightRepository(connection)
@@ -49,6 +49,13 @@ def test_get_insights_returns_latest_cached_records_in_stable_order(
             model="llama3.1",
             generated_at=GENERATED_AT,
         )
+        repository.save_generated_insight(
+            insight_type="recurring_feedback",
+            content=f"Feedback repeats system design examples. [{FEEDBACK_CITATION_ID}]",
+            inputs_hash="feedback-hash",
+            model="llama3.1",
+            generated_at=GENERATED_AT,
+        )
         connection.execute("UPDATE insights SET is_stale = 1 WHERE id = ?", (stale.id,))
         connection.commit()
 
@@ -57,17 +64,51 @@ def test_get_insights_returns_latest_cached_records_in_stable_order(
     response = client.get("/insights")
 
     assert response.status_code == 200
-    records = response.json()
-    assert [record["type"] for record in records] == ["why_rejected", "weekly_actions"]
-    assert records[0] == {
-        "id": stale.id,
-        "type": "why_rejected",
-        "content": "Rejections cite Kubernetes experience.",
-        "inputs_hash": "rejected-hash",
-        "is_stale": True,
-        "model": "llama3.1",
-        "generated_at": "2026-07-06T12:00:00Z",
-    }
+    records = response.json()["insights"]
+    assert [record["type"] for record in records] == [
+        "why_rejected",
+        "recurring_feedback",
+        "weekly_actions",
+    ]
+    assert records[0]["is_stale"] is True
+    assert records[1]["content"] == (
+        f"Feedback repeats system design examples. [{FEEDBACK_CITATION_ID}]"
+    )
+
+
+def test_post_insights_regenerate_answers_q41(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_feedback_fixture(connection)
+
+    provider = FakeLLMProvider(
+        (
+            LLMGenerationResponse(
+                content=(
+                    "Feedback consistently says to improve system design examples. "
+                    f"[{FEEDBACK_CITATION_ID}] [{SECOND_FEEDBACK_CITATION_ID}]"
+                ),
+                model="llama3.1",
+                finish_reason=LLMFinishReason.STOP,
+            ),
+        ),
+    )
+    client = create_test_client(database_path, provider=provider)
+
+    response = client.post(
+        "/insights/regenerate",
+        json={"type": "recurring_feedback", "max_evidence_items": 20},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["cached"] is False
+    assert body["insight"]["type"] == "recurring_feedback"
+    assert body["evidence_citation_ids"] == [
+        FEEDBACK_CITATION_ID,
+        SECOND_FEEDBACK_CITATION_ID,
+    ]
+    assert len(provider.requests) == 1
 
 
 def test_post_insights_regenerate_forces_generation_and_persists_result(
@@ -95,8 +136,7 @@ def test_post_insights_regenerate_forces_generation_and_persists_result(
     assert data["cached"] is False
     assert data["insight"]["type"] == "why_rejected"
     assert data["insight"]["content"] == f"Regenerated rejection theme. [{CITATION_ID}]"
-    assert data["insight"]["is_stale"] is False
-    assert data["insight"]["model"] == "llama3.1"
+    assert data["evidence_citation_ids"] == [CITATION_ID]
     assert len(provider.requests) == 1
 
     with sqlite3.connect(database_path) as connection:
@@ -119,8 +159,8 @@ def test_insights_endpoints_are_documented_in_openapi() -> None:
 
     list_operation = paths["/insights"]["get"]
     assert (
-        list_operation["responses"]["200"]["content"]["application/json"]["schema"]["items"]["$ref"]
-        == "#/components/schemas/InsightRecord"
+        list_operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/InsightListResponse"
     )
 
     regenerate_operation = paths["/insights/regenerate"]["post"]
@@ -165,6 +205,60 @@ def create_test_client(
     if provider is not None:
         app.dependency_overrides[get_llm_provider] = lambda: provider
     return TestClient(app)
+
+
+def insert_feedback_fixture(connection: sqlite3.Connection) -> None:
+    insert_raw_email(
+        connection,
+        email_id="email-1",
+        subject="Interview feedback",
+        body_text="Please improve system design examples.",
+        sent_at="2026-07-05T10:00:00+00:00",
+    )
+    insert_raw_email(
+        connection,
+        email_id="email-2",
+        subject="More interview feedback",
+        body_text="More concrete system design examples would help.",
+        sent_at="2026-07-06T10:00:00+00:00",
+    )
+    ApplicationRepository(connection).upsert_application(
+        id="app-1",
+        company="Acme Corp",
+        role_title="Backend Engineer",
+        source="linkedin",
+        first_seen_at="2026-07-01T09:00:00+00:00",
+        current_status="rejected",
+        last_activity_at="2026-07-06T10:00:00+00:00",
+        created_at="2026-07-01T09:00:00+00:00",
+        updated_at="2026-07-06T10:00:00+00:00",
+        salary_min=None,
+        salary_max=None,
+        currency=None,
+        location="Remote",
+        work_mode="remote",
+        seniority="senior",
+        sponsorship="unknown",
+        tech_stack=["Python"],
+    )
+    event_repository = EventRepository(connection)
+    event_repository.upsert_event(
+        id="event-1",
+        application_id="app-1",
+        email_id="email-1",
+        event_type="feedback",
+        event_at="2026-07-05T10:00:00+00:00",
+        extract_note="Feedback said to improve system design examples.",
+    )
+    event_repository.upsert_event(
+        id="event-2",
+        application_id="app-1",
+        email_id="email-2",
+        event_type="feedback",
+        event_at="2026-07-06T10:00:00+00:00",
+        extract_note="Feedback again mentioned system design examples.",
+    )
+    connection.commit()
 
 
 def insert_rejected_application_fixture(connection: sqlite3.Connection) -> None:

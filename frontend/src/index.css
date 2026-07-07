@@ -262,6 +262,44 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.insights-panel {
+  align-items: start;
+}
+
+.insights-panel > div,
+.insights-panel__body,
+.insights-panel__insight {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.insights-panel p:not(.eyebrow) {
+  margin-bottom: 0;
+  color: #4e5e53;
+}
+
+.insights-panel__insight,
+.insights-panel__empty {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #d8d0bf;
+  border-radius: 20px;
+  background: #fffdf7;
+  overflow-wrap: anywhere;
+}
+
+.insights-panel__insight p:not(.eyebrow) {
+  color: #203f2c;
+  font-weight: 700;
+}
+
+.insights-panel__insight .insights-panel__meta {
+  color: #657167;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .chart-panel {
   display: grid;
   gap: 24px;
