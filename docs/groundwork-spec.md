@@ -257,6 +257,7 @@ Phase 1 reconciliation compares provider metadata pages against local `raw_email
 Classification prompt requests are built by `app.pipeline.classify.build_classification_prompt_request`, require retained email body text, request `LLMResponseFormat.JSON_OBJECT`, use temperature `0`, and embed `CLASSIFICATION_PROMPT_VERSION` in the system prompt.
 Provider responses must pass `app.pipeline.classify.parse_classification_generation_response` before any downstream classification storage or aggregation.
 `StructuredExtractionService` lists non-empty retained candidates stale for the configured model or prompt version, calls the configured `LLMProvider`, stores only accepted classification records through `EmailRepository`, writes completed-run accounting through `ClassificationRunRepository`, and returns accepted extraction facts plus public-safe malformed results without writing applications or events.
+`InsightGenerationService` builds deterministic cited `InsightInput` payloads, includes the insight prompt version in the cache input hash, and validates `weekly_actions` generations before persistence so Q-45 returns exactly three numbered next-week actions with citations to provided evidence.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 
@@ -355,6 +356,7 @@ Metrics endpoints + React dashboard (Recharts + small accessible component layer
 
 **Phase 4 - Insights (cached LLM narrative)** -> Tier 5
 Insights service + page (why-rejected, skill-gaps, role-fit, weekly actions, story); cached with `regenerate`, stale detection, and user-triggered regeneration.
+Weekly-actions generations must answer Q-45 with exactly three numbered, cited, next-week actions, and the cache key must include the insight prompt version so prompt changes do not reuse old content.
 **DoD:** insights render and cite the applications/emails they're drawn from.
 
 **Phase 5 - RAG chat (LangGraph)** -> Tier 6
