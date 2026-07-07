@@ -32,6 +32,8 @@ INSIGHT_GENERATION_PROMPT_VERSION = "v1"
 INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
 INSIGHT_GENERATION_TEMPERATURE = 0.2
 _CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
+_CITATION_LIKE_TOKEN_PATTERN = re.compile(r"^(?:\d+|[A-Za-z]+-\d+|\S*[:|]\S*)$")
+_SENTENCE_PATTERN = re.compile(r"[^.!?\n]+(?:[.!?]|\n|$)")
 _UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
 
 
@@ -242,20 +244,89 @@ def _validate_grounding_citations(content: str, insight_input: InsightInput) -> 
     allowed_citation_ids = {evidence.citation_id for evidence in insight_input.evidence}
     cited_evidence_ids: set[str] = set()
     invalid_citation_ids: set[str] = set()
+    valid_citation_spans: list[tuple[int, int]] = []
 
     for match in _CITATION_PATTERN.finditer(content):
         for citation_id in _split_citation_tokens(match.group(1)):
+            if not _is_citation_like_token(citation_id, allowed_citation_ids):
+                continue
             if citation_id in allowed_citation_ids:
                 cited_evidence_ids.add(citation_id)
+                valid_citation_spans.append(match.span())
             else:
                 invalid_citation_ids.add(citation_id)
 
-    if not cited_evidence_ids or invalid_citation_ids:
+    if (
+        not cited_evidence_ids
+        or invalid_citation_ids
+        or _has_ungrounded_claim(content, valid_citation_spans)
+    ):
         raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
 
 
 def _split_citation_tokens(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _is_citation_like_token(value: str, allowed_citation_ids: set[str]) -> bool:
+    return value in allowed_citation_ids or bool(_CITATION_LIKE_TOKEN_PATTERN.fullmatch(value))
+
+
+def _has_ungrounded_claim(content: str, citation_spans: list[tuple[int, int]]) -> bool:
+    pending_claim = False
+    pending_claim_end = 0
+
+    for match in _SENTENCE_PATTERN.finditer(content):
+        sentence_start, sentence_end = match.span()
+        if not _has_claim_text(content, sentence_start, sentence_end, citation_spans):
+            if pending_claim and _has_citation_between(
+                citation_spans,
+                pending_claim_end,
+                sentence_end,
+            ):
+                pending_claim = False
+            continue
+        if _has_citation_between(citation_spans, sentence_start, sentence_end):
+            last_citation_end = max(
+                span_end
+                for span_start, span_end in citation_spans
+                if span_start >= sentence_start and span_end <= sentence_end
+            )
+            if _has_claim_text(content, last_citation_end, sentence_end, citation_spans):
+                return True
+            pending_claim = False
+            continue
+        if pending_claim:
+            return True
+        pending_claim = True
+        pending_claim_end = sentence_end
+
+    return pending_claim
+
+
+def _has_claim_text(
+    content: str,
+    start: int,
+    end: int,
+    citation_spans: list[tuple[int, int]],
+) -> bool:
+    parts: list[str] = []
+    cursor = start
+    for span_start, span_end in citation_spans:
+        if span_end <= start or span_start >= end:
+            continue
+        parts.append(content[cursor:max(cursor, span_start)])
+        cursor = max(cursor, span_end)
+    parts.append(content[cursor:end])
+    return bool(re.sub(r"[\s.!?]+", "", "".join(parts)))
+
+
+def _has_citation_between(
+    citation_spans: list[tuple[int, int]],
+    start: int,
+    end: int,
+) -> bool:
+    return any(span_start >= start and span_end <= end for span_start, span_end in citation_spans)
 
 
 def _configured_chat_model(settings: AppSettings) -> str:
