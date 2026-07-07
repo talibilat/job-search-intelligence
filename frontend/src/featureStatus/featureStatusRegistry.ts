@@ -151,7 +151,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     ],
     blockers: [],
     components: ["DashboardPage", "ChartPanel"],
-    connectedModules: ["Metrics summary API", "GET /metrics/rates"],
+    connectedModules: ["Metrics summary API", "GET /metrics/rates", "Future metrics APIs"],
     completedDate: "2026-07-05",
     dependencies: [
       "GET /metrics/summary",
@@ -159,7 +159,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       "Future GET /metrics/funnel",
     ],
     description:
-      "Deterministic dashboard route with Q-03 distinct-company, Q-07 interview-invitation, and Q-11 response-rate cards plus placeholders for remaining dashboard metrics.",
+      "Deterministic dashboard route with summary metric cards, a Q-11 response-rate card, and placeholders for remaining dashboard metrics.",
     endpoints: ["GET /metrics/summary", "GET /metrics/rates"],
     files: [
       "frontend/src/pages/DashboardPage.tsx",
@@ -167,12 +167,13 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     ],
     howToUse: {
       expectedBehaviour:
-        "The dashboard renders Q-03, Q-07, and Q-11 from deterministic metrics APIs and keeps unrelated metrics marked as pending.",
+        "The dashboard renders deterministic summary metric cards and Q-11 from deterministic metrics APIs while keeping later metrics marked pending.",
       expectedSuccessResult:
-        "QA can confirm the response-rate percentage reconciles to its numerator and denominator while all displayed counts remain deterministic.",
+        "QA can confirm summary metric cards and the response-rate percentage reconcile to deterministic backend data without fabricated counts.",
       navigationPath: "Primary navigation -> Dashboard",
       prerequisites: ["Frontend dev server"],
       qaValidationPoints: [
+        "The Total applications card shows a loaded count or an unavailable state.",
         "Distinct companies card shows a loaded count or an unavailable state.",
         "The Interview invitations card shows a loaded count or an unavailable state.",
         "Response rate card shows deterministic numerator, denominator, and percentage.",
@@ -182,6 +183,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       ],
       steps: [
         "Open /dashboard.",
+        "Review the Q-01 Total applications card.",
         "Review the Q-03 distinct companies card.",
         "Review the Q-07 interview invitations card.",
         "Confirm the response-rate card loads from GET /metrics/rates.",
@@ -190,7 +192,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     },
     id: "frontend-dashboard-shell",
     implementationStatus:
-      "Implemented as Phase 3 Q-03, Q-07, and Q-11 slices with no fabricated metrics.",
+      "Implemented as a Phase 3 dashboard slice with deterministic summary metrics and no fabricated counts.",
     name: "Dashboard route shell",
     relationship: [
       { label: "Dashboard", type: "screen" },
@@ -200,6 +202,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "metrics router", type: "controller" },
       { label: "MetricsSummaryService", type: "service" },
       { label: "MetricsRatesService", type: "service" },
+      { label: "applications", type: "database" },
       { label: "application_events", type: "database" },
     ],
     remainingWork: [],
@@ -218,6 +221,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       exampleInputs: ["No application data required"],
       expectedOutputs: [
         "Dashboard shell renders",
+        "Total applications card renders a deterministic count or unavailable state",
         "Distinct companies card renders a deterministic count or unavailable state",
         "Interview invitations card renders a deterministic count or unavailable state",
         "Response-rate metric renders",

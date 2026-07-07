@@ -866,6 +866,7 @@ describe("App", () => {
     expect(frontendApiIntegrations?.textContent).not.toContain(
       "Future GET /metrics/summary",
     );
+    expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
 
     fireEvent.change(screen.getByLabelText("Search features"), {
