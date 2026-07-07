@@ -679,6 +679,9 @@ export interface LLMProviderHealthCheckResponse {
   status: LLMModelHealthStatus;
 }
 
+/**
+ * Deterministic summary metrics for the dashboard.
+ */
 export interface MetricsSummaryResponse {
   /** @minimum 0 */
   distinct_company_count: number;
@@ -687,6 +690,8 @@ export interface MetricsSummaryResponse {
   ghost_threshold_days: number;
   /** @minimum 0 */
   ghosted_applications: number;
+  /** @minimum 0 */
+  interview_invitation_count: number;
   /**
    * Total applications whose canonical current status is rejected.
    * @minimum 0

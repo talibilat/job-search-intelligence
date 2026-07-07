@@ -61,6 +61,18 @@ class MetricsRepository(BaseRepository[int]):
             return 0
         return int(row[0])
 
+    def count_interview_invitation_events(self) -> int:
+        row = self.execute(
+            """
+            SELECT COUNT(*)
+            FROM application_events
+            WHERE event_type = 'interview_scheduled'
+            """,
+        ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+
     def count_threshold_ghosted_applications(self, *, cutoff_at: str) -> int:
         row = self.execute(
             f"""

@@ -35,6 +35,9 @@ class MetricsSummaryService:
             rejected_applications=self._metrics_repository.count_rejected_applications(),
             ghost_threshold_days=self._ghost_threshold_days,
             evaluated_at=evaluated_at,
+            interview_invitation_count=(
+                self._metrics_repository.count_interview_invitation_events()
+            ),
         )
 
     def get_response_silence_metric(self) -> ResponseSilenceMetric:

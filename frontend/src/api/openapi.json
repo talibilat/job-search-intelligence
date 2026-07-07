@@ -1879,6 +1879,7 @@
         "type": "string"
       },
       "MetricsSummaryResponse": {
+        "description": "Deterministic summary metrics for the dashboard.",
         "properties": {
           "distinct_company_count": {
             "minimum": 0.0,
@@ -1900,6 +1901,11 @@
             "title": "Ghosted Applications",
             "type": "integer"
           },
+          "interview_invitation_count": {
+            "minimum": 0.0,
+            "title": "Interview Invitation Count",
+            "type": "integer"
+          },
           "rejected_applications": {
             "description": "Total applications whose canonical current status is rejected.",
             "minimum": 0.0,
@@ -1912,7 +1918,8 @@
           "ghosted_applications",
           "rejected_applications",
           "ghost_threshold_days",
-          "evaluated_at"
+          "evaluated_at",
+          "interview_invitation_count"
         ],
         "title": "MetricsSummaryResponse",
         "type": "object"
