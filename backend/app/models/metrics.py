@@ -149,6 +149,11 @@ class MetricBreakdownRow(BaseModel):
     offer_count: int = Field(ge=0)
 
 
+class MetricsBreakdownResponse(BaseModel):
+    dimension: MetricsBreakdownDimension
+    rows: list[MetricBreakdownRow]
+
+
 class MetricsSummaryResponse(BaseModel):
     """Deterministic summary metrics for the dashboard."""
 

@@ -1908,6 +1908,47 @@
         "title": "LLMProviderName",
         "type": "string"
       },
+      "MetricBreakdownRow": {
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/MetricsBreakdownDimension"
+          },
+          "interview_count": {
+            "minimum": 0.0,
+            "title": "Interview Count",
+            "type": "integer"
+          },
+          "offer_count": {
+            "minimum": 0.0,
+            "title": "Offer Count",
+            "type": "integer"
+          },
+          "response_count": {
+            "minimum": 0.0,
+            "title": "Response Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "value",
+          "application_count",
+          "response_count",
+          "interview_count",
+          "offer_count"
+        ],
+        "title": "MetricBreakdownRow",
+        "type": "object"
+      },
       "MetricRate": {
         "properties": {
           "denominator": {
@@ -1970,6 +2011,38 @@
         ],
         "title": "MetricsApplicationWindow",
         "type": "string"
+      },
+      "MetricsBreakdownDimension": {
+        "enum": [
+          "role",
+          "source",
+          "salary",
+          "tech",
+          "sponsorship",
+          "seniority",
+          "work_mode"
+        ],
+        "type": "string"
+      },
+      "MetricsBreakdownResponse": {
+        "properties": {
+          "dimension": {
+            "$ref": "#/components/schemas/MetricsBreakdownDimension"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/MetricBreakdownRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dimension",
+          "rows"
+        ],
+        "title": "MetricsBreakdownResponse",
+        "type": "object"
       },
       "MetricsRatesResponse": {
         "properties": {
@@ -3909,6 +3982,48 @@
         "summary": "Wipe local app data",
         "tags": [
           "local-data"
+        ]
+      }
+    },
+    "/metrics/breakdown": {
+      "get": {
+        "description": "Returns deterministic dashboard breakdown rows for a supported dimension from local applications and application_events data.",
+        "operationId": "get_metrics_breakdown_metrics_breakdown_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dimension",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MetricsBreakdownDimension"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsBreakdownResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Metrics Breakdown",
+        "tags": [
+          "metrics"
         ]
       }
     },
