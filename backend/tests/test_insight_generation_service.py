@@ -233,6 +233,14 @@ def test_insight_generation_service_rejects_invalid_provider_output(
     (
         "Rejected applications repeatedly mention Kubernetes experience.",
         "Rejected applications repeatedly mention Kubernetes experience. [application:missing]",
+        (
+            "Rejected applications repeatedly mention Kubernetes experience. "
+            f"[{CITATION_ID}] [source-999]"
+        ),
+        (
+            "Rejected applications repeatedly mention Kubernetes experience. "
+            f"[{CITATION_ID}] [1]"
+        ),
     ),
 )
 def test_insight_generation_service_rejects_ungrounded_provider_output(

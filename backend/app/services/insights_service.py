@@ -247,7 +247,7 @@ def _validate_grounding_citations(content: str, insight_input: InsightInput) -> 
         for citation_id in _split_citation_tokens(match.group(1)):
             if citation_id in allowed_citation_ids:
                 cited_evidence_ids.add(citation_id)
-            elif _looks_like_source_citation(citation_id):
+            else:
                 invalid_citation_ids.add(citation_id)
 
     if not cited_evidence_ids or invalid_citation_ids:
@@ -256,10 +256,6 @@ def _validate_grounding_citations(content: str, insight_input: InsightInput) -> 
 
 def _split_citation_tokens(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
-
-
-def _looks_like_source_citation(value: str) -> bool:
-    return value.startswith(("application:", "event:", "email:"))
 
 
 def _configured_chat_model(settings: AppSettings) -> str:
