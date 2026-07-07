@@ -300,7 +300,9 @@ def classification_responses_by_email_id(
     return {
         classification.email_id: classification_response(
             classification=classification,
-            application=applications_by_id[events_by_email_id[classification.email_id].application_id],
+            application=applications_by_id[
+                events_by_email_id[classification.email_id].application_id
+            ],
             event=events_by_email_id[classification.email_id],
         )
         for classification in fixture.classifications
