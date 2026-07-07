@@ -17,6 +17,7 @@ class MetricsSummaryResponse(BaseModel):
     """Deterministic summary metrics for the dashboard."""
 
     distinct_company_count: int = Field(ge=0)
+    offers_received: int = Field(ge=0)
     ghosted_applications: int = Field(ge=0)
     rejected_applications: int = Field(
         ge=0,

@@ -153,6 +153,58 @@ def test_get_metrics_summary_counts_rejected_applications(tmp_path: Path) -> Non
     assert body["rejected_applications"] == 2
 
 
+def test_get_metrics_summary_counts_offers_received_from_event_history(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="application-offer",
+            current_status="offer",
+        )
+        insert_event(
+            connection,
+            event_id="event-offer-first",
+            application_id="application-offer",
+            event_type="offer",
+            event_at="2026-07-02T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-offer-follow-up",
+            application_id="application-offer",
+            event_type="offer",
+            event_at="2026-07-03T09:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="application-status-only",
+            current_status="offer",
+        )
+        insert_application(
+            connection,
+            application_id="application-rejected",
+            current_status="rejected",
+        )
+        insert_event(
+            connection,
+            event_id="event-rejected",
+            application_id="application-rejected",
+            event_type="rejection",
+            event_at="2026-07-04T09:00:00+00:00",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=30)
+
+    response = client.get("/metrics/summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["offers_received"] == 1
+    assert body["ghosted_applications"] == 0
+
+
 def test_metrics_summary_endpoint_is_documented_in_openapi() -> None:
     client = TestClient(create_app())
 

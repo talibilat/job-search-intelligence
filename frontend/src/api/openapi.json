@@ -1906,6 +1906,11 @@
             "title": "Interview Invitation Count",
             "type": "integer"
           },
+          "offers_received": {
+            "minimum": 0.0,
+            "title": "Offers Received",
+            "type": "integer"
+          },
           "rejected_applications": {
             "description": "Total applications whose canonical current status is rejected.",
             "minimum": 0.0,
@@ -1915,6 +1920,7 @@
         },
         "required": [
           "distinct_company_count",
+          "offers_received",
           "ghosted_applications",
           "rejected_applications",
           "ghost_threshold_days",
