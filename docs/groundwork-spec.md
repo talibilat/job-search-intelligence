@@ -257,7 +257,6 @@ Phase 1 reconciliation compares provider metadata pages against local `raw_email
 Classification prompt requests are built by `app.pipeline.classify.build_classification_prompt_request`, require retained email body text, request `LLMResponseFormat.JSON_OBJECT`, use temperature `0`, and embed `CLASSIFICATION_PROMPT_VERSION` in the system prompt.
 Provider responses must pass `app.pipeline.classify.parse_classification_generation_response` before any downstream classification storage or aggregation.
 `StructuredExtractionService` lists non-empty retained candidates stale for the configured model or prompt version, calls the configured `LLMProvider`, stores only accepted classification records through `EmailRepository`, writes completed-run accounting through `ClassificationRunRepository`, and returns accepted extraction facts plus public-safe malformed results without writing applications or events.
-`InsightInputBuilder` prepares deterministic facts and cited evidence before cached narrative generation; for `role_fit`, it adds `role_outcome_summaries` that group included cited applications by role title, count interview and offer outcomes as wins, count rejected and ghosted outcomes as losses, preserve per-status totals, and carry citation IDs for the applications or emails behind each role-fit claim.
 
 **Split metrics from narrative:** dashboard numbers are **deterministic SQL/pandas** (accurate, free, instant). "Why / what to improve / role fit" is **LLM, cached, regenerate-on-demand**. Never let the LLM produce the counts.
 

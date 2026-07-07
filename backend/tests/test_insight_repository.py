@@ -6,7 +6,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from app.db.repositories import ApplicationRepository, InsightRepository
+from app.db.repositories import InsightRepository
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 GENERATED_AT = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
@@ -116,31 +116,3 @@ def migrated_connection(tmp_path: Path) -> sqlite3.Connection:
     config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
     command.upgrade(config, "head")
     return sqlite3.connect(database_path)
-
-
-def insert_application(
-    connection: sqlite3.Connection,
-    *,
-    application_id: str,
-    role_title: str,
-    current_status: str,
-) -> None:
-    ApplicationRepository(connection).upsert_application(
-        id=application_id,
-        company="Example Corp",
-        role_title=role_title,
-        source="linkedin",
-        first_seen_at="2026-07-01T09:00:00+00:00",
-        current_status=current_status,
-        last_activity_at="2026-07-02T09:00:00+00:00",
-        created_at="2026-07-01T09:00:00+00:00",
-        updated_at="2026-07-02T09:00:00+00:00",
-        salary_min=None,
-        salary_max=None,
-        currency=None,
-        location="Remote",
-        work_mode="remote",
-        seniority="senior",
-        sponsorship="unknown",
-        tech_stack=["Python"],
-    )
