@@ -1880,6 +1880,11 @@
       },
       "MetricsSummaryResponse": {
         "properties": {
+          "distinct_company_count": {
+            "minimum": 0.0,
+            "title": "Distinct Company Count",
+            "type": "integer"
+          },
           "evaluated_at": {
             "format": "date-time",
             "title": "Evaluated At",
@@ -1897,6 +1902,7 @@
           }
         },
         "required": [
+          "distinct_company_count",
           "ghosted_applications",
           "ghost_threshold_days",
           "evaluated_at"

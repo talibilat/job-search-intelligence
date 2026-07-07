@@ -1,4 +1,12 @@
+import { useEffect, useState } from "react";
+
+import {
+  getMetricsSummaryMetricsSummaryGet,
+  type MetricsSummaryResponse,
+} from "../api";
 import { ChartPanel } from "../components/charts";
+
+const numberFormatter = new Intl.NumberFormat("en-US");
 
 const filterPlaceholders = [
   "Status",
@@ -26,6 +34,43 @@ const metricPlaceholders = [
 ] as const;
 
 export function DashboardPage() {
+  const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSummary() {
+      setIsLoadingSummary(true);
+      try {
+        const response = await getMetricsSummaryMetricsSummaryGet();
+        if (response.status === 200 && !ignore) {
+          setSummary(response.data);
+        }
+      } catch {
+        if (!ignore) {
+          setSummary(null);
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoadingSummary(false);
+        }
+      }
+    }
+
+    void loadSummary();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const distinctCompanyValue = isLoadingSummary
+    ? "Loading"
+    : summary
+      ? numberFormatter.format(summary.distinct_company_count)
+      : "Unavailable";
+
   return (
     <main
       aria-labelledby="dashboard-page-title"
@@ -72,6 +117,13 @@ export function DashboardPage() {
             <h2 id="metrics-overview-title">Metrics overview</h2>
           </div>
           <div className="dashboard-metric-grid">
+            <article className="metric-placeholder">
+              <p className="metric-placeholder__label">Distinct companies</p>
+              <p className="metric-placeholder__value">{distinctCompanyValue}</p>
+              <p className="dashboard-card__meta">
+                Q-03 counted from normalized applications
+              </p>
+            </article>
             {metricPlaceholders.map((metric) => (
               <article className="metric-placeholder" key={metric.label}>
                 <p className="metric-placeholder__label">{metric.label}</p>

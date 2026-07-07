@@ -17,6 +17,18 @@ _RESPONSE_LIKE_EVENT_TYPES = (
 class MetricsRepository(BaseRepository[int]):
     """Repository seam for deterministic dashboard metric reads."""
 
+    def count_distinct_companies(self) -> int:
+        row = self.execute(
+            """
+            SELECT COUNT(DISTINCT LOWER(TRIM(company)))
+            FROM applications
+            WHERE TRIM(company) != ''
+            """,
+        ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+
     def count_threshold_ghosted_applications(self, *, cutoff_at: str) -> int:
         row = self.execute(
             f"""
