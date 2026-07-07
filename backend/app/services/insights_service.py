@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,6 +31,8 @@ type Clock = Callable[[], datetime]
 INSIGHT_GENERATION_PROMPT_VERSION = "v1"
 INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
 INSIGHT_GENERATION_TEMPERATURE = 0.2
+_CITATION_PATTERN = re.compile(r"\[([^\[\]]+)\]")
+_UNGROUNDED_INSIGHT_MESSAGE = "LLM returned ungrounded insight content."
 
 
 class InsightGenerationResult(BaseModel):
@@ -91,7 +94,7 @@ class InsightGenerationService:
         response = await self._llm_provider.generate(
             build_insight_generation_request(insight_input, model=model),
         )
-        content = _validated_insight_content(response)
+        content = _validated_insight_content(response, insight_input)
         insight = self._insight_repository.save_generated_insight(
             insight_type=insight_type,
             content=content,
@@ -224,11 +227,39 @@ def _insight_system_prompt() -> str:
     )
 
 
-def _validated_insight_content(response: LLMGenerationResponse) -> str:
+def _validated_insight_content(
+    response: LLMGenerationResponse,
+    insight_input: InsightInput,
+) -> str:
     content = response.content.strip()
     if response.finish_reason is not LLMFinishReason.STOP or not content:
         raise LLMProviderResponseError(public_message="LLM returned invalid insight content.")
+    _validate_grounding_citations(content, insight_input)
     return content
+
+
+def _validate_grounding_citations(content: str, insight_input: InsightInput) -> None:
+    allowed_citation_ids = {evidence.citation_id for evidence in insight_input.evidence}
+    cited_evidence_ids: set[str] = set()
+    invalid_citation_ids: set[str] = set()
+
+    for match in _CITATION_PATTERN.finditer(content):
+        for citation_id in _split_citation_tokens(match.group(1)):
+            if citation_id in allowed_citation_ids:
+                cited_evidence_ids.add(citation_id)
+            elif _looks_like_source_citation(citation_id):
+                invalid_citation_ids.add(citation_id)
+
+    if not cited_evidence_ids or invalid_citation_ids:
+        raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
+
+
+def _split_citation_tokens(value: str) -> list[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _looks_like_source_citation(value: str) -> bool:
+    return value.startswith(("application:", "event:", "email:"))
 
 
 def _configured_chat_model(settings: AppSettings) -> str:
