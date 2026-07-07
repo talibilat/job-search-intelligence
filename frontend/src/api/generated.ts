@@ -599,6 +599,7 @@ export const InsightType = {
   why_rejected: "why_rejected",
   recurring_feedback: "recurring_feedback",
   skill_gaps: "skill_gaps",
+  strongest_weakest_signals: "strongest_weakest_signals",
   role_fit: "role_fit",
   weekly_actions: "weekly_actions",
   story: "story",

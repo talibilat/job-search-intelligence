@@ -281,10 +281,10 @@ def _insight_type_prompt(insight_type: InsightType) -> str:
         )
     if insight_type == "recurring_feedback":
         return (
-            "For Q-41 / recurring_feedback, identify recruiter or interviewer feedback "
-            "themes about what to improve. Do not say feedback is consistent or recurring "
-            "unless at least two distinct feedback evidence items support the same "
-            "improvement. Cite feedback evidence for every theme."
+            "For recurring_feedback, answer Q-41: identify recruiter or interviewer "
+            "feedback themes about what to improve. Do not say feedback is consistent "
+            "or recurring unless at least two distinct feedback evidence items support "
+            "the same improvement. Cite feedback evidence for every theme."
         )
     return ""
 
