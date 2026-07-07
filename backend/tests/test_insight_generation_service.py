@@ -84,6 +84,8 @@ def test_insight_generation_service_generates_and_persists_grounded_narrative(
     assert "Never produce authoritative counts" in request.messages[0].content
     assert "Never emit raw SQL" in request.messages[0].content
     assert "Use only the provided citation_id values" in request.messages[0].content
+    assert "Q-40" in request.messages[0].content
+    assert "recurring rejection themes" in request.messages[0].content
 
     prompt_payload = json.loads(request.messages[1].content)
     assert prompt_payload["type"] == "why_rejected"
