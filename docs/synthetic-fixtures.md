@@ -104,7 +104,6 @@ Fixture enum values mirror the planned database contract:
 
 The initial sample fixture is `backend/tests/fixtures/synthetic/basic_job_search.json`.
 It contains one application confirmation and one later rejection for the same synthetic application.
-The Phase 2 pipeline smoke test uses this fixture as raw email evidence, adds one metadata-only non-candidate, feeds retained candidates through a fake local LLM provider, and verifies idempotent aggregation into one application timeline.
 
 ## Loader
 
@@ -133,12 +132,6 @@ Validate the loader with:
 
 ```bash
 uv run pytest tests/test_synthetic_fixture_loader.py -v
-```
-
-Run the Phase 2 pipeline smoke test from `backend/` with:
-
-```bash
-uv run pytest tests/test_phase2_pipeline_smoke.py -q
 ```
 
 ## Golden Set Fixture
