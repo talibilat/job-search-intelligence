@@ -183,7 +183,7 @@ def test_skill_gaps_input_counts_rejected_role_skills_and_excludes_wins(
     }
 
 
-def test_skill_gaps_input_counts_only_cited_rejected_role_skills(
+def test_skill_gaps_input_counts_all_rejected_role_skills_when_evidence_is_limited(
     tmp_path: Path,
 ) -> None:
     database_path = migrated_database(tmp_path)
@@ -198,7 +198,7 @@ def test_skill_gaps_input_counts_only_cited_rejected_role_skills(
     assert [evidence.application_id for evidence in insight_input.evidence] == [
         "application-rejected",
     ]
-    assert fact_values["rejected_skill_counts"] == {"Kubernetes": 1, "Python": 1}
+    assert fact_values["rejected_skill_counts"] == {"Kubernetes": 2, "Python": 2}
 
 
 def test_weekly_actions_input_prefers_open_current_evidence(tmp_path: Path) -> None:

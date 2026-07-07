@@ -214,28 +214,11 @@ class InsightInputBuilder:
             facts.append(
                 InsightInputFact(
                     name="rejected_skill_counts",
-                    value=_count_rejected_skills_from_evidence(evidence),
+                    value=self._insight_repository.count_rejected_application_skills(),
                     source="applications",
                 ),
             )
         return facts
-
-
-def _count_rejected_skills_from_evidence(
-    evidence: list[InsightInputEvidence],
-) -> dict[str, int]:
-    skills_by_application: dict[str, set[str]] = {}
-    for item in evidence:
-        application_skills = skills_by_application.setdefault(item.application_id, set())
-        application_skills.update(
-            skill.strip() for skill in item.tech_stack if isinstance(skill, str) and skill.strip()
-        )
-
-    counts: dict[str, int] = {}
-    for skills in skills_by_application.values():
-        for skill in skills:
-            counts[skill] = counts.get(skill, 0) + 1
-    return dict(sorted(counts.items()))
 
 
 def _insight_system_prompt(insight_type: InsightType) -> str:
