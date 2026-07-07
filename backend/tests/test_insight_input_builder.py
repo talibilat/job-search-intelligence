@@ -291,6 +291,43 @@ def test_role_fit_input_includes_role_outcome_summaries(tmp_path: Path) -> None:
     ]
 
 
+def test_role_fit_outcome_summaries_include_limited_out_applications(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        insert_interview_application_fixture(connection)
+
+        insight_input = InsightInputBuilder(InsightRepository(connection)).build(
+            "role_fit",
+            max_evidence_items=1,
+        )
+
+    fact_values = {fact.name: fact.value for fact in insight_input.facts}
+    role_outcomes = cast(
+        list[InsightRoleOutcomeSummary],
+        fact_values["role_outcome_summaries"],
+    )
+
+    assert len(insight_input.evidence) == 1
+    assert [outcome.model_dump() for outcome in role_outcomes] == [
+        {
+            "role_title": "Backend Engineer",
+            "application_count": 2,
+            "win_count": 1,
+            "loss_count": 1,
+            "status_counts": {"interview": 1, "rejected": 1},
+            "citation_ids": [
+                "application:application-rejected|event:event-rejected-applied|email:email-applied",
+                "application:application-interview|event:event-interview-applied|email:email-interview-applied",
+                "application:application-rejected|event:event-rejected-rejection|email:email-rejection",
+                "application:application-interview|event:event-interview-invite|email:email-interview",
+            ],
+        },
+    ]
+
+
 def test_insight_input_builder_rejects_empty_evidence_limit(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:

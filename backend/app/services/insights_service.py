@@ -174,7 +174,7 @@ class InsightInputBuilder:
         included_evidence = scoped_evidence[:max_evidence_items]
         insight_input = InsightInput(
             type=insight_type,
-            facts=self._build_facts(insight_type, included_evidence),
+            facts=self._build_facts(insight_type, scoped_evidence),
             evidence=included_evidence,
             source_fingerprint=_hash_payload(
                 [item.model_dump(mode="json") for item in scoped_evidence],
@@ -188,7 +188,7 @@ class InsightInputBuilder:
     def _build_facts(
         self,
         insight_type: InsightType,
-        included_evidence: list[InsightInputEvidence],
+        scoped_evidence: list[InsightInputEvidence],
     ) -> list[InsightInputFact]:
         facts = [
             InsightInputFact(
@@ -234,7 +234,7 @@ class InsightInputBuilder:
             facts.append(
                 InsightInputFact(
                     name="role_outcome_summaries",
-                    value=_build_role_outcome_summaries(included_evidence),
+                    value=_build_role_outcome_summaries(scoped_evidence),
                     source="applications",
                 ),
             )
@@ -287,14 +287,18 @@ def _validated_insight_content(
     insight_input: InsightInput,
 ) -> str:
     content = response.content.strip()
-    if response.finish_reason is not LLMFinishReason.STOP or not content:
+    if (
+        response.finish_reason is not LLMFinishReason.STOP
+        or not content
+        or not _content_uses_allowed_citations(content, insight_input)
+    ):
         raise LLMProviderResponseError(public_message="LLM returned invalid insight content.")
     _validate_grounding_citations(content, insight_input)
     return content
 
 
 def _validate_grounding_citations(content: str, insight_input: InsightInput) -> None:
-    allowed_citation_ids = {evidence.citation_id for evidence in insight_input.evidence}
+    allowed_citation_ids = _allowed_citation_ids(insight_input)
     cited_evidence_ids: set[str] = set()
     invalid_citation_ids: set[str] = set()
     valid_citation_spans: list[tuple[int, int]] = []
@@ -318,7 +322,7 @@ def _validate_grounding_citations(content: str, insight_input: InsightInput) -> 
 
 
 def _split_citation_tokens(value: str) -> list[str]:
-    return [part.strip() for part in value.split(",") if part.strip()]
+    return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
 
 
 def _is_citation_like_token(value: str, allowed_citation_ids: set[str]) -> bool:
@@ -373,6 +377,36 @@ def _has_citation_between(
     end: int,
 ) -> bool:
     return any(span_start >= start and span_end <= end for span_start, span_end in citation_spans)
+
+
+def _content_uses_allowed_citations(content: str, insight_input: InsightInput) -> bool:
+    citation_ids = _extract_citation_ids(content)
+    if not citation_ids:
+        return False
+    allowed_citation_ids = _allowed_citation_ids(insight_input)
+    return all(citation_id in allowed_citation_ids for citation_id in citation_ids)
+
+
+def _extract_citation_ids(content: str) -> list[str]:
+    citation_ids: list[str] = []
+    for match in _CITATION_PATTERN.finditer(content):
+        citation_ids.extend(
+            citation_id.strip()
+            for citation_id in match.group(1).replace(";", ",").split(",")
+            if citation_id.strip()
+        )
+    return citation_ids
+
+
+def _allowed_citation_ids(insight_input: InsightInput) -> set[str]:
+    citation_ids = {evidence.citation_id for evidence in insight_input.evidence}
+    for fact in insight_input.facts:
+        if fact.name != "role_outcome_summaries" or not isinstance(fact.value, list):
+            continue
+        for summary in fact.value:
+            if isinstance(summary, InsightRoleOutcomeSummary):
+                citation_ids.update(summary.citation_ids)
+    return citation_ids
 
 
 def _configured_chat_model(settings: AppSettings) -> str:

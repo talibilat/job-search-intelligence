@@ -353,6 +353,42 @@ def test_skill_gaps_generation_request_focuses_on_rejected_role_technology_gaps(
 
 
 @pytest.mark.parametrize(
+    "content",
+    (
+        "Rejected applications repeatedly mention Kubernetes experience.",
+        "Rejected applications repeatedly mention Kubernetes experience. [application:unknown]",
+    ),
+)
+def test_insight_generation_service_rejects_ungrounded_provider_output(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+        service = InsightGenerationService(
+            settings=insight_settings(),
+            insight_repository=InsightRepository(connection),
+            llm_provider=FakeLLMProvider(
+                (
+                    LLMGenerationResponse(
+                        content=content,
+                        model="llama3.1",
+                        finish_reason=LLMFinishReason.STOP,
+                    ),
+                ),
+            ),
+            clock=lambda: GENERATED_AT,
+        )
+
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="LLM returned invalid insight content.",
+        ):
+            asyncio.run(service.generate_insight("why_rejected"))
+
+
+@pytest.mark.parametrize(
     "response",
     (
         LLMGenerationResponse(
