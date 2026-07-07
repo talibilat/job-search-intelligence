@@ -2,11 +2,138 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
+from pydantic import BaseModel, ConfigDict
+
+from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
-from app.models import InsightInput, InsightInputFact
+from app.models import InsightInput, InsightInputFact, InsightRecord
 from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
+from app.providers.llm import (
+    LLMFinishReason,
+    LLMGenerationOptions,
+    LLMGenerationRequest,
+    LLMGenerationResponse,
+    LLMMessage,
+    LLMMessageRole,
+    LLMProvider,
+    LLMProviderResponseError,
+    LLMProviderUnavailableError,
+    LLMResponseFormat,
+)
+
+type Clock = Callable[[], datetime]
+
+INSIGHT_GENERATION_PROMPT_VERSION = "v1"
+INSIGHT_GENERATION_MAX_OUTPUT_TOKENS = 1200
+INSIGHT_GENERATION_TEMPERATURE = 0.2
+
+
+class InsightGenerationResult(BaseModel):
+    """Provider-backed narrative insight generation result."""
+
+    model_config = ConfigDict(frozen=True)
+
+    insight: InsightRecord
+    input: InsightInput
+    cached: bool
+
+
+class InsightGenerationService:
+    """Generate cached narrative insights through the configured LLM provider."""
+
+    def __init__(
+        self,
+        *,
+        settings: AppSettings,
+        insight_repository: InsightRepository,
+        llm_provider: LLMProvider,
+        input_builder: InsightInputBuilder | None = None,
+        clock: Clock | None = None,
+    ) -> None:
+        self._settings = settings
+        self._insight_repository = insight_repository
+        self._llm_provider = llm_provider
+        self._input_builder = input_builder or InsightInputBuilder(insight_repository)
+        self._clock = clock or _utcnow
+
+    async def generate_insight(
+        self,
+        insight_type: InsightType,
+        *,
+        max_evidence_items: int = 100,
+        force: bool = False,
+    ) -> InsightGenerationResult:
+        """Return a cached insight or synthesize and persist a fresh one."""
+
+        insight_input = self._input_builder.build(
+            insight_type,
+            max_evidence_items=max_evidence_items,
+        )
+        model = _configured_chat_model(self._settings)
+
+        if not force:
+            cached = self._insight_repository.get_cached_insight(
+                insight_type=insight_type,
+                inputs_hash=insight_input.inputs_hash,
+                model=model,
+            )
+            if cached is not None:
+                return InsightGenerationResult(
+                    insight=cached,
+                    input=insight_input,
+                    cached=True,
+                )
+
+        response = await self._llm_provider.generate(
+            build_insight_generation_request(insight_input, model=model),
+        )
+        content = _validated_insight_content(response)
+        insight = self._insight_repository.save_generated_insight(
+            insight_type=insight_type,
+            content=content,
+            inputs_hash=insight_input.inputs_hash,
+            model=model,
+            generated_at=self._clock(),
+        )
+        return InsightGenerationResult(
+            insight=insight,
+            input=insight_input,
+            cached=False,
+        )
+
+
+def build_insight_generation_request(
+    insight_input: InsightInput,
+    *,
+    model: str,
+) -> LLMGenerationRequest:
+    """Build a provider-neutral narrative insight generation request."""
+
+    return LLMGenerationRequest(
+        messages=(
+            LLMMessage(
+                role=LLMMessageRole.SYSTEM,
+                content=_insight_system_prompt(),
+            ),
+            LLMMessage(
+                role=LLMMessageRole.USER,
+                content=json.dumps(
+                    insight_input.model_dump(mode="json"),
+                    sort_keys=False,
+                ),
+            ),
+        ),
+        model=model,
+        response_format=LLMResponseFormat.TEXT,
+        options=LLMGenerationOptions(
+            temperature=INSIGHT_GENERATION_TEMPERATURE,
+            max_output_tokens=INSIGHT_GENERATION_MAX_OUTPUT_TOKENS,
+        ),
+    )
 
 
 class InsightInputBuilder:
@@ -77,6 +204,48 @@ class InsightInputBuilder:
                 source="application_events",
             ),
         ]
+
+
+def _insight_system_prompt() -> str:
+    return "\n".join(
+        (
+            "You generate cached narrative insights for JobTracker.",
+            f"Prompt version: {INSIGHT_GENERATION_PROMPT_VERSION}",
+            "Use only the deterministic facts and cited evidence in the user payload.",
+            "Never produce authoritative counts, rates, or group-by numbers beyond the "
+            "provided deterministic facts.",
+            "Never emit raw SQL.",
+            "Every claim about a pattern, reason, skill, role, or action must cite one "
+            "or more source evidence citation_id values.",
+            "Use only the provided citation_id values and format citations in square brackets.",
+            "If the evidence is insufficient, say what is missing instead of guessing.",
+            "Return plain text only. Do not wrap the answer in JSON or Markdown tables.",
+        ),
+    )
+
+
+def _validated_insight_content(response: LLMGenerationResponse) -> str:
+    content = response.content.strip()
+    if response.finish_reason is not LLMFinishReason.STOP or not content:
+        raise LLMProviderResponseError(public_message="LLM returned invalid insight content.")
+    return content
+
+
+def _configured_chat_model(settings: AppSettings) -> str:
+    model = (
+        settings.azure_openai_chat_deployment
+        if settings.llm_provider is LLMProviderName.AZURE_OPENAI
+        else settings.ollama_chat_model
+    ).strip()
+    if not model:
+        raise LLMProviderUnavailableError(
+            public_message="Configured LLM provider chat model is missing.",
+        )
+    return model
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 def _hash_insight_input(insight_input: InsightInput) -> str:
