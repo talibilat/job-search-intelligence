@@ -26,10 +26,8 @@ class MetricsSummaryService:
     def get_summary(self) -> MetricsSummaryResponse:
         evaluated_at = self._clock()
         cutoff_at = evaluated_at - timedelta(days=self._ghost_threshold_days)
-        ghosted_applications = (
-            self._metrics_repository.count_threshold_ghosted_applications(
-                cutoff_at=cutoff_at.isoformat(),
-            )
+        ghosted_applications = self._metrics_repository.count_threshold_ghosted_applications(
+            cutoff_at=cutoff_at.isoformat(),
         )
         return MetricsSummaryResponse(
             distinct_company_count=self._metrics_repository.count_distinct_companies(),
