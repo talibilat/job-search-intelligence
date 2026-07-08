@@ -30,8 +30,13 @@ def test_metrics_repository_matches_basic_synthetic_fixture() -> None:
         }
         funnel = {stage.stage: stage.count for stage in repository.get_funnel_metrics()}
         timeseries = repository.get_application_timeseries()
+        role_rows = repository.get_breakdown("role")
         source_rows = repository.get_breakdown("source")
+        salary_rows = repository.get_breakdown("salary")
         tech_rows = repository.get_breakdown("tech")
+        sponsorship_rows = repository.get_breakdown("sponsorship")
+        seniority_rows = repository.get_breakdown("seniority")
+        work_mode_rows = repository.get_breakdown("work_mode")
 
     assert total_applications == 1
     assert rejected_applications == 1
@@ -52,12 +57,27 @@ def test_metrics_repository_matches_basic_synthetic_fixture() -> None:
     assert [(point.period_start, point.application_count) for point in timeseries] == [
         ("2026-07-04", 1),
     ]
+    assert [(row.value, row.application_count, row.response_count) for row in role_rows] == [
+        ("backend engineer", 1, 1),
+    ]
     assert [(row.value, row.application_count, row.response_count) for row in source_rows] == [
         ("company_site", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in salary_rows] == [
+        ("100k_149k", 1, 1),
     ]
     assert [(row.value, row.application_count, row.response_count) for row in tech_rows] == [
         ("fastapi", 1, 1),
         ("python", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in sponsorship_rows] == [
+        ("unknown", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in seniority_rows] == [
+        ("senior", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in work_mode_rows] == [
+        ("remote", 1, 1),
     ]
 
 
