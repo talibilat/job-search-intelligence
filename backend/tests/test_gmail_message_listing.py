@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from email.message import Message
 from io import BytesIO
 from urllib.error import HTTPError
@@ -164,6 +164,29 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
         assert "body" not in metadata_fields
         for header in GMAIL_METADATA_HEADERS:
             assert ("metadataHeaders", header) in query
+
+
+def test_gmail_message_lister_applies_full_backfill_date_bounds() -> None:
+    transport = FakeGmailTransport()
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=transport,
+    )
+
+    asyncio.run(
+        lister.list_message_metadata(
+            _connection(),
+            EmailMetadataListRequest(
+                mode=EmailSyncMode.FULL_BACKFILL,
+                page_size=2,
+                since_date=date(2026, 1, 1),
+                before_date=date(2026, 7, 1),
+            ),
+        )
+    )
+
+    _list_path, list_query, _list_token = transport.calls[1]
+    assert dict(list_query)["q"] == "after:2026/01/01 before:2026/07/01"
 
 
 def test_gmail_message_lister_normalizes_metadata_fields() -> None:

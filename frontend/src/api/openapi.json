@@ -1462,6 +1462,77 @@
         "title": "EmailSyncMode",
         "type": "string"
       },
+      "EmailSyncOptions": {
+        "additionalProperties": false,
+        "description": "User-selected bounds for a manual extraction run.",
+        "properties": {
+          "before_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Date"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "max_messages": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Messages"
+          },
+          "max_pages": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pages"
+          },
+          "since_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since Date"
+          }
+        },
+        "title": "EmailSyncOptions",
+        "type": "object"
+      },
       "EmailSyncRunState": {
         "enum": [
           "idle",
@@ -1531,6 +1602,13 @@
             "title": "Page Count",
             "type": "integer"
           },
+          "progress": {
+            "default": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Progress",
+            "type": "number"
+          },
           "provider": {
             "anyOf": [
               {
@@ -1566,6 +1644,18 @@
           },
           "state": {
             "$ref": "#/components/schemas/EmailSyncRunState"
+          },
+          "target_message_count": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Message Count"
           }
         },
         "required": [
@@ -2459,6 +2549,141 @@
           "classification_mode"
         ],
         "title": "ProviderSelection",
+        "type": "object"
+      },
+      "RawEmailBodyRetentionState": {
+        "description": "Explicit body retention state for raw email DTO boundaries.",
+        "enum": [
+          "metadata_only",
+          "retained",
+          "debugging"
+        ],
+        "title": "RawEmailBodyRetentionState",
+        "type": "string"
+      },
+      "RawEmailPreviewRecord": {
+        "description": "Public-safe raw email metadata preview without body text.",
+        "properties": {
+          "body_retention_state": {
+            "$ref": "#/components/schemas/RawEmailBodyRetentionState"
+          },
+          "filter_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter Outcome"
+          },
+          "filter_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter Reason"
+          },
+          "from_addr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Addr"
+          },
+          "has_retained_body": {
+            "title": "Has Retained Body",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ingested_at": {
+            "format": "date-time",
+            "title": "Ingested At",
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "to_addr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Addr"
+          }
+        },
+        "required": [
+          "id",
+          "thread_id",
+          "from_addr",
+          "to_addr",
+          "subject",
+          "sent_at",
+          "body_retention_state",
+          "has_retained_body",
+          "labels",
+          "provider",
+          "ingested_at"
+        ],
+        "title": "RawEmailPreviewRecord",
         "type": "object"
       },
       "ResponseSilenceMetric": {
@@ -4261,6 +4486,23 @@
     "/sync": {
       "post": {
         "operationId": "sync_now_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EmailSyncOptions"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Options"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -4312,6 +4554,16 @@
             },
             "description": "Conflict"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -4344,6 +4596,54 @@
           }
         },
         "summary": "Sync Now",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
+    "/sync/recent-emails": {
+      "get": {
+        "description": "Return recently stored raw-email metadata without body text.",
+        "operationId": "sync_recent_emails_sync_recent_emails_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RawEmailPreviewRecord"
+                  },
+                  "title": "Response Sync Recent Emails Sync Recent Emails Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Recent Emails",
         "tags": [
           "sync"
         ]

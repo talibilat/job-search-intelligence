@@ -39,7 +39,7 @@ from app.models.insight import (
     InsightRoleOutcomeSummary,
     InsightType,
 )
-from app.models.raw_email import RawEmailBodyRetentionState, RawEmailRecord
+from app.models.raw_email import RawEmailBodyRetentionState, RawEmailPreviewRecord, RawEmailRecord
 from app.models.sync_state import (
     EmailBackfillStateRecord,
     EmailBackfillStatus,
@@ -80,6 +80,7 @@ __all__ = [
     "JsonObject",
     "JsonObjectList",
     "RawEmailBodyRetentionState",
+    "RawEmailPreviewRecord",
     "RawEmailRecord",
     "SponsorshipStatus",
     "WorkMode",

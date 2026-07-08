@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from typing import Protocol, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.config import EmailProviderName
 from app.db.repositories import (
@@ -143,8 +143,49 @@ class EmailSyncStatus(BaseModel):
     page_count: int = Field(default=0, ge=0)
     message_count: int = Field(default=0, ge=0)
     raw_email_count: int = Field(default=0, ge=0)
+    target_message_count: int | None = Field(default=None, ge=1)
+    progress: float = Field(default=0, ge=0, le=1)
     recovered_from_expired_cursor: bool = False
     last_error: str | None = None
+
+
+class EmailSyncOptions(BaseModel):
+    """User-selected bounds for a manual extraction run."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_messages: int | None = Field(default=None, ge=1, le=100_000)
+    since_date: date | None = None
+    before_date: date | None = None
+    max_age_days: int | None = Field(default=None, ge=1, le=3650)
+    max_pages: int | None = Field(default=None, ge=1, le=10_000)
+
+    def effective_since_date(self, *, now: datetime) -> date | None:
+        age_since_date = (
+            (now - timedelta(days=self.max_age_days)).date()
+            if self.max_age_days is not None
+            else None
+        )
+        if self.since_date is None:
+            return age_since_date
+        if age_since_date is None:
+            return self.since_date
+        return max(self.since_date, age_since_date)
+
+    @property
+    def target_message_count(self) -> int | None:
+        return self.max_messages
+
+    @model_validator(mode="after")
+    def validate_date_window(self) -> EmailSyncOptions:
+        if (
+            self.since_date is not None
+            and self.before_date is not None
+            and self.since_date >= self.before_date
+        ):
+            msg = "since_date must be before before_date"
+            raise ValueError(msg)
+        return self
 
 
 class SyncAlreadyRunningError(RuntimeError):
@@ -156,7 +197,7 @@ class SyncConnectionNotConfiguredError(RuntimeError):
 
 
 class EmailSyncRuntime(Protocol):
-    async def run_manual_sync(self) -> EmailSyncStatus:
+    async def run_manual_sync(self, options: EmailSyncOptions | None = None) -> EmailSyncStatus:
         """Run a manual sync for the configured account."""
         ...
 
@@ -470,9 +511,15 @@ class EmailSyncService:
     def current_status(self) -> EmailSyncStatus:
         return self._status
 
-    async def run_manual_sync(self, *, connection: EmailConnection) -> EmailSyncStatus:
+    async def run_manual_sync(
+        self,
+        *,
+        connection: EmailConnection,
+        options: EmailSyncOptions | None = None,
+    ) -> EmailSyncStatus:
         """Run metadata sync and retain bodies for broad job-search candidates."""
 
+        sync_options = options or EmailSyncOptions()
         if self._email_repository is None or self._sync_service is None:
             raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
         if self._status.state is EmailSyncRunState.RUNNING:
@@ -501,6 +548,7 @@ class EmailSyncService:
                 state=EmailSyncRunState.RUNNING,
                 mode=requested_mode,
                 started_at=started_at,
+                target_message_count=sync_options.target_message_count,
             )
         )
 
@@ -511,6 +559,7 @@ class EmailSyncService:
                 initial_mode=resume_mode,
                 initial_page_token=resume_page_token,
                 started_at=started_at,
+                options=sync_options,
             )
         except Exception as error:
             self._set_status(
@@ -539,6 +588,8 @@ class EmailSyncService:
         mode: EmailSyncMode | None = None,
         sync_cursor: EmailProviderCursor | None = None,
         page_token: str | None = None,
+        options: EmailSyncOptions | None = None,
+        started_at: datetime | None = None,
     ) -> EmailSyncPageResult:
         """List one metadata page, falling back when an incremental cursor expires.
 
@@ -547,6 +598,12 @@ class EmailSyncService:
         returned provider page keeps its `next_page_token` and `next_sync_cursor`
         so the caller can persist progress and continue the reconciliation.
         """
+
+        sync_options = options or EmailSyncOptions()
+        request_started_at = started_at or self._clock()
+        remaining_messages = sync_options.max_messages
+        page_size = min(self._page_size, remaining_messages or self._page_size)
+        since_date = sync_options.effective_since_date(now=request_started_at)
 
         if page_token is not None and sync_cursor is not None and mode is None:
             msg = "mode is required when continuing paginated sync with a cursor"
@@ -557,7 +614,13 @@ class EmailSyncService:
         )
 
         if sync_mode is EmailSyncMode.FULL_BACKFILL:
-            page = await self._list_full_backfill_page(connection, page_token=page_token)
+            page = await self._list_full_backfill_page(
+                connection,
+                page_token=page_token,
+                page_size=page_size,
+                since_date=since_date,
+                before_date=sync_options.before_date,
+            )
             return EmailSyncPageResult(mode=EmailSyncMode.FULL_BACKFILL, page=page)
 
         if sync_cursor is None:
@@ -569,13 +632,21 @@ class EmailSyncService:
                 connection,
                 EmailMetadataListRequest(
                     mode=EmailSyncMode.INCREMENTAL,
-                    page_size=self._page_size,
+                    page_size=page_size,
                     page_token=page_token,
                     sync_cursor=sync_cursor,
+                    since_date=since_date,
+                    before_date=sync_options.before_date,
                 ),
             )
         except EmailSyncCursorExpiredError:
-            page = await self._list_full_backfill_page(connection, page_token=None)
+            page = await self._list_full_backfill_page(
+                connection,
+                page_token=None,
+                page_size=page_size,
+                since_date=since_date,
+                before_date=sync_options.before_date,
+            )
             return EmailSyncPageResult(
                 mode=EmailSyncMode.FULL_BACKFILL,
                 page=page,
@@ -590,19 +661,25 @@ class EmailSyncService:
         connection: EmailConnection,
         backfill_state_service: BackfillStateService,
         updated_at: datetime | None = None,
+        options: EmailSyncOptions | None = None,
     ) -> EmailBackfillPageResult:
         """List one page; callers persist raw emails before recording page progress."""
 
         timestamp = updated_at or datetime.now(UTC)
+        sync_options = options or EmailSyncOptions()
         state = backfill_state_service.start_or_resume_backfill(
             connection.account,
             started_at=timestamp,
         )
+        page_size = min(self._page_size, sync_options.max_messages or self._page_size)
 
         try:
             page = await self._list_full_backfill_page(
                 connection,
                 page_token=state.next_page_token,
+                page_size=page_size,
+                since_date=sync_options.effective_since_date(now=timestamp),
+                before_date=sync_options.before_date,
             )
         except EmailProviderError as error:
             backfill_state_service.mark_backfill_failed(
@@ -622,9 +699,11 @@ class EmailSyncService:
         *,
         connection: EmailConnection,
         backfill_state_service: BackfillStateService,
+        options: EmailSyncOptions | None = None,
     ) -> EmailSyncStatus:
         """Run a resumable full metadata backfill and retain candidate bodies."""
 
+        sync_options = options or EmailSyncOptions()
         if self._email_repository is None:
             raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
         if self._status.state is EmailSyncRunState.RUNNING:
@@ -638,6 +717,7 @@ class EmailSyncService:
                 state=EmailSyncRunState.RUNNING,
                 mode=EmailSyncMode.FULL_BACKFILL,
                 started_at=started_at,
+                target_message_count=sync_options.target_message_count,
             )
         )
 
@@ -649,6 +729,7 @@ class EmailSyncService:
                     connection=connection,
                     backfill_state_service=backfill_state_service,
                     updated_at=self._clock(),
+                    options=_remaining_options(sync_options, processed_messages=message_count),
                 )
                 page = page_result.page
                 if page.messages:
@@ -693,9 +774,18 @@ class EmailSyncService:
                         raw_email_count=self._email_repository.count_raw_emails(
                             provider=connection.account.provider,
                         ),
+                        target_message_count=sync_options.target_message_count,
+                        progress=_sync_progress(
+                            processed_messages=message_count,
+                            target_messages=sync_options.target_message_count,
+                        ),
                     )
                 )
-                if state.status is EmailBackfillStatus.COMPLETED:
+                if state.status is EmailBackfillStatus.COMPLETED or _sync_limit_reached(
+                    options=sync_options,
+                    page_count=page_count,
+                    message_count=message_count,
+                ):
                     break
         except Exception as error:
             public_error = _public_sync_error_message(error)
@@ -726,6 +816,12 @@ class EmailSyncService:
             message_count=message_count,
             raw_email_count=self._email_repository.count_raw_emails(
                 provider=connection.account.provider,
+            ),
+            target_message_count=sync_options.target_message_count,
+            progress=_sync_progress(
+                processed_messages=message_count,
+                target_messages=sync_options.target_message_count,
+                finished=True,
             ),
         )
         self._set_status(status)
@@ -786,13 +882,18 @@ class EmailSyncService:
         connection: EmailConnection,
         *,
         page_token: str | None,
+        page_size: int | None = None,
+        since_date: date | None = None,
+        before_date: date | None = None,
     ) -> EmailMetadataPage:
         return await self._provider.list_message_metadata(
             connection,
             EmailMetadataListRequest(
                 mode=EmailSyncMode.FULL_BACKFILL,
-                page_size=self._page_size,
+                page_size=page_size or self._page_size,
                 page_token=page_token,
+                since_date=since_date,
+                before_date=before_date,
             ),
         )
 
@@ -804,6 +905,7 @@ class EmailSyncService:
         initial_mode: EmailSyncMode | None,
         initial_page_token: str | None,
         started_at: datetime,
+        options: EmailSyncOptions,
     ) -> EmailSyncStatus:
         if self._email_repository is None or self._sync_service is None:
             raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
@@ -823,11 +925,14 @@ class EmailSyncService:
         )
 
         while True:
+            remaining_options = _remaining_options(options, processed_messages=message_count)
             page_result = await self.list_metadata_page(
                 connection=connection,
                 mode=mode,
                 sync_cursor=sync_cursor,
                 page_token=page_token,
+                options=remaining_options,
+                started_at=started_at,
             )
             final_mode = page_result.mode
             recovered_from_expired_cursor = (
@@ -871,9 +976,18 @@ class EmailSyncService:
                         provider=connection.account.provider,
                     ),
                     recovered_from_expired_cursor=recovered_from_expired_cursor,
+                    target_message_count=options.target_message_count,
+                    progress=_sync_progress(
+                        processed_messages=message_count,
+                        target_messages=options.target_message_count,
+                    ),
                 )
             )
-            if page_result.page.next_page_token is None:
+            if page_result.page.next_page_token is None or _sync_limit_reached(
+                options=options,
+                page_count=page_count,
+                message_count=message_count,
+            ):
                 break
 
             page_token = page_result.page.next_page_token
@@ -912,6 +1026,12 @@ class EmailSyncService:
                 provider=connection.account.provider,
             ),
             recovered_from_expired_cursor=recovered_from_expired_cursor,
+            target_message_count=options.target_message_count,
+            progress=_sync_progress(
+                processed_messages=message_count,
+                target_messages=options.target_message_count,
+                finished=True,
+            ),
         )
 
     def _persist_filter_decisions(
@@ -954,6 +1074,39 @@ def _raise_for_retained_body_failures(body_batch: EmailBodyBatch) -> None:
         raise EmailProviderError(
             public_message="One or more retained email bodies could not be fetched."
         )
+
+
+def _sync_progress(
+    *,
+    processed_messages: int,
+    target_messages: int | None,
+    finished: bool = False,
+) -> float:
+    if target_messages is None:
+        return 1 if finished else 0
+    return min(processed_messages / target_messages, 1)
+
+
+def _sync_limit_reached(
+    *,
+    options: EmailSyncOptions,
+    page_count: int,
+    message_count: int,
+) -> bool:
+    if options.max_pages is not None and page_count >= options.max_pages:
+        return True
+    return options.max_messages is not None and message_count >= options.max_messages
+
+
+def _remaining_options(
+    options: EmailSyncOptions,
+    *,
+    processed_messages: int,
+) -> EmailSyncOptions:
+    if options.max_messages is None:
+        return options
+    remaining_messages = max(options.max_messages - processed_messages, 1)
+    return options.model_copy(update={"max_messages": remaining_messages})
 
 
 def _chunk_refs(

@@ -14,7 +14,7 @@ from app.models.classification import (
     EmailClassificationCandidate,
     EmailClassificationRecord,
 )
-from app.models.records import RawEmailBodyRetentionState, RawEmailRecord
+from app.models.records import RawEmailBodyRetentionState, RawEmailPreviewRecord, RawEmailRecord
 from app.providers.email import EmailAddress, EmailMessageBody, EmailMessageMetadata
 
 
@@ -181,6 +181,59 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         if row is None:
             return 0
         return int(row[0])
+
+    def list_recent_email_previews(
+        self,
+        *,
+        provider: EmailProviderName | None = None,
+        limit: int = 10,
+    ) -> tuple[RawEmailPreviewRecord, ...]:
+        """Return recent raw-email metadata without exposing body text."""
+
+        if limit < 1:
+            msg = "limit must be at least 1"
+            raise ValueError(msg)
+
+        parameters: tuple[object, ...]
+        provider_clause = ""
+        if provider is None:
+            parameters = (limit,)
+        else:
+            provider_clause = "WHERE raw_emails.provider = ?"
+            parameters = (provider.value, limit)
+
+        rows = self.execute(
+            f"""
+            SELECT
+                raw_emails.id,
+                raw_emails.thread_id,
+                raw_emails.from_addr,
+                raw_emails.to_addr,
+                raw_emails.subject,
+                raw_emails.sent_at,
+                raw_emails.body_retention_state,
+                CASE
+                    WHEN raw_emails.body_retention_state IN ('retained', 'debugging')
+                        AND raw_emails.body_text IS NOT NULL
+                    THEN 1 ELSE 0
+                END AS has_retained_body,
+                raw_emails.labels,
+                raw_emails.provider,
+                raw_emails.ingested_at,
+                email_filter_decisions.outcome AS filter_outcome,
+                email_filter_decisions.reason AS filter_reason
+            FROM raw_emails
+            LEFT JOIN email_filter_decisions
+                ON email_filter_decisions.email_id = raw_emails.id
+                AND email_filter_decisions.strategy = 'broad_job_search'
+            {provider_clause}
+            ORDER BY raw_emails.ingested_at DESC, raw_emails.sent_at DESC, raw_emails.id DESC
+            LIMIT ?
+            """,
+            parameters,
+        ).fetchall()
+
+        return tuple(RawEmailPreviewRecord.model_validate(row_to_dict(row)) for row in rows)
 
     def get_classification_candidate_stats(
         self,

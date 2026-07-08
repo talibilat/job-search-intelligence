@@ -5,7 +5,7 @@ import threading
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 
 from app.api.auth import get_gmail_secret_store
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
@@ -18,12 +18,13 @@ from app.db.repositories import (
     SyncStateRepository,
 )
 from app.db.sqlite_url import sqlite_database_path
-from app.models.records import EmailBackfillStatus
+from app.models.records import EmailBackfillStatus, RawEmailPreviewRecord
 from app.providers.email import EmailConnection, EmailProvider
 from app.providers.email.gmail import GmailEmailProvider
 from app.security import SecretStore
 from app.services.sync_service import (
     BackfillStateService,
+    EmailSyncOptions,
     EmailSyncRunState,
     EmailSyncRuntime,
     EmailSyncService,
@@ -69,7 +70,7 @@ class ConfiguredEmailSyncRuntime:
         self._connection_resolver = connection_resolver
         self._status_store = status_store
 
-    async def run_manual_sync(self) -> EmailSyncStatus:
+    async def run_manual_sync(self, options: EmailSyncOptions | None = None) -> EmailSyncStatus:
         connection = self._connection_resolver()
         if connection is None:
             raise SyncConnectionNotConfiguredError("Gmail connection is not configured yet.")
@@ -108,8 +109,9 @@ class ConfiguredEmailSyncRuntime:
                             backfill_state_repository=backfill_state_repository,
                             sync_state_repository=sync_state_repository,
                         ),
+                        options=options,
                     )
-                return await sync_service.run_manual_sync(connection=connection)
+                return await sync_service.run_manual_sync(connection=connection, options=options)
         finally:
             self._status_store.release_run()
 
@@ -180,9 +182,10 @@ def get_email_sync_runtime(
 )
 async def sync_now(
     sync_runtime: Annotated[EmailSyncRuntime, Depends(get_email_sync_runtime)],
+    options: Annotated[EmailSyncOptions | None, Body()] = None,
 ) -> EmailSyncStatus:
     try:
-        return await sync_runtime.run_manual_sync()
+        return await sync_runtime.run_manual_sync(options)
     except SyncConnectionNotConfiguredError as error:
         raise ApiError(
             status_code=400,
@@ -204,3 +207,24 @@ def sync_status(
     """Report the current email sync job status without exposing provider payloads."""
 
     return sync_runtime.current_status()
+
+
+@router.get("/recent-emails", response_model=list[RawEmailPreviewRecord])
+def sync_recent_emails(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    limit: int = 10,
+) -> list[RawEmailPreviewRecord]:
+    """Return recently stored raw-email metadata without body text."""
+
+    database_path = sqlite_database_path(settings.database_url)
+    if not database_path.exists():
+        return []
+
+    bounded_limit = min(max(limit, 1), 50)
+    with sqlite3.connect(database_path) as sqlite_connection:
+        return list(
+            EmailRepository(sqlite_connection).list_recent_email_previews(
+                provider=settings.email_provider,
+                limit=bounded_limit,
+            )
+        )
