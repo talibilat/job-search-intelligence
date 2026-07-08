@@ -223,6 +223,9 @@ class MetricsRatesService:
         application_to_interview_numerator = (
             self._metrics_repository.count_applications_with_interview_events()
         )
+        interview_to_offer_numerator = (
+            self._metrics_repository.count_applications_with_offer_after_interview_events()
+        )
         return MetricsRatesResponse(
             overall_response_rate=MetricRate(
                 numerator=response_numerator,
@@ -245,6 +248,14 @@ class MetricsRatesService:
                 rate=_rate(
                     numerator=application_to_interview_numerator,
                     denominator=denominator,
+                ),
+            ),
+            interview_to_offer_rate=MetricRate(
+                numerator=interview_to_offer_numerator,
+                denominator=application_to_interview_numerator,
+                rate=_rate(
+                    numerator=interview_to_offer_numerator,
+                    denominator=application_to_interview_numerator,
                 ),
             ),
         )

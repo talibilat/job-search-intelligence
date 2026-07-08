@@ -27,7 +27,7 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
         insert_application_with_events(
             connection,
             "app-multiple-responses",
-            ("applied", "response", "interview_scheduled"),
+            ("applied", "response", "interview_scheduled", "offer"),
         )
         insert_application_with_events(
             connection,
@@ -67,6 +67,11 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
             "denominator": 5,
             "rate": 0.2,
         },
+        "interview_to_offer_rate": {
+            "numerator": 1,
+            "denominator": 1,
+            "rate": 1.0,
+        },
     }
 
 
@@ -93,6 +98,11 @@ def test_metrics_rates_returns_null_rate_when_no_applications(tmp_path: Path) ->
             "rate": None,
         },
         "application_to_interview_rate": {
+            "numerator": 0,
+            "denominator": 0,
+            "rate": None,
+        },
+        "interview_to_offer_rate": {
             "numerator": 0,
             "denominator": 0,
             "rate": None,

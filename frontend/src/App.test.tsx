@@ -71,6 +71,11 @@ function metricsRatesResponse(
       numerator: 0,
       rate: null,
     },
+    interview_to_offer_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
     ...overrides,
   };
   return response as unknown as MockObjectResponseBody;
