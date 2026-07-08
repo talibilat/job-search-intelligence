@@ -29,11 +29,18 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
             "app-multiple-responses",
             ("applied", "response", "interview_scheduled"),
         )
-        insert_application_with_events(connection, "app-silent", ("applied",))
+        insert_application_with_events(
+            connection,
+            "app-silent",
+            ("applied",),
+            event_date_prefix="2020-01",
+        )
         insert_application_with_events(
             connection,
             "app-ghosted",
             ("applied", "ghost_inferred"),
+            current_status="ghosted",
+            event_date_prefix="2020-02",
         )
 
     response = create_test_client(database_path).get("/metrics/rates")
@@ -49,6 +56,11 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
             "numerator": 1,
             "denominator": 5,
             "rate": 0.2,
+        },
+        "ghost_rate": {
+            "numerator": 2,
+            "denominator": 5,
+            "rate": 0.4,
         },
     }
 
@@ -70,6 +82,11 @@ def test_metrics_rates_returns_null_rate_when_no_applications(tmp_path: Path) ->
             "denominator": 0,
             "rate": None,
         },
+        "ghost_rate": {
+            "numerator": 0,
+            "denominator": 0,
+            "rate": None,
+        },
     }
 
 
@@ -86,6 +103,7 @@ def create_test_client(database_path: Path) -> TestClient:
     settings = AppSettings(
         _env_file=None,
         database_url=f"sqlite+aiosqlite:///{database_path}",
+        ghost_threshold_days=30,
         sync_on_open=False,
     )
     app = create_app(settings=settings)
@@ -107,6 +125,7 @@ def insert_application_with_events(
     event_types: tuple[str, ...],
     *,
     current_status: str = "applied",
+    event_date_prefix: str = "2026-07",
 ) -> None:
     repository = ApplicationRepository(connection)
     repository.upsert_application(
@@ -131,7 +150,7 @@ def insert_application_with_events(
             application_id=application_id,
             email_id=email_id,
             event_type=event_type,
-            event_at=f"2026-07-{index + 1:02d}T09:00:00+00:00",
+            event_at=f"{event_date_prefix}-{index + 1:02d}T09:00:00+00:00",
         )
     connection.commit()
 
