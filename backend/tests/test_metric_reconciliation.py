@@ -8,9 +8,21 @@ from typing import TypedDict
 from alembic import command
 from alembic.config import Config
 from app.config import AppSettings, get_settings
-from app.db.repositories import ApplicationRepository, EventRepository, MetricsRepository
+from app.db.repositories import (
+    ApplicationRepository,
+    EmailRepository,
+    EventRepository,
+    MetricsRepository,
+)
 from app.main import create_app
-from app.models import MetricRate, MetricRateRow, MetricsRatesResponse, MetricsSummaryResponse
+from app.models import (
+    MetricRate,
+    MetricRateRow,
+    MetricsRatesResponse,
+    MetricsSummaryResponse,
+    RawEmailBodyRetentionState,
+    RawEmailRecord,
+)
 from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -291,24 +303,20 @@ def insert_application_with_events(
 
 
 def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
-    connection.execute(
-        """
-        INSERT INTO raw_emails (
-            id, thread_id, from_addr, to_addr, subject, sent_at, body_text,
-            body_retention_state, labels, provider, ingested_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+    EmailRepository(connection).upsert_raw_emails(
         (
-            email_id,
-            f"thread-{email_id}",
-            "jobs@example.test",
-            "applicant@example.test",
-            "Application update",
-            "2026-07-01T09:00:00+00:00",
-            "Synthetic retained body.",
-            "retained",
-            "[]",
-            "gmail",
-            "2026-07-01T09:01:00+00:00",
+            RawEmailRecord(
+                id=email_id,
+                thread_id=f"thread-{email_id}",
+                from_addr="jobs@example.test",
+                to_addr="applicant@example.test",
+                subject="Application update",
+                sent_at=datetime(2026, 7, 1, 9, 0, tzinfo=UTC),
+                body_text="Synthetic retained body.",
+                body_retention_state=RawEmailBodyRetentionState.RETAINED,
+                labels=[],
+                provider="gmail",
+                ingested_at=datetime(2026, 7, 1, 9, 1, tzinfo=UTC),
+            ),
         ),
     )
