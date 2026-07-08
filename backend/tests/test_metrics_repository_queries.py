@@ -6,9 +6,79 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from app.db.repositories import ApplicationRepository, EventRepository, MetricsRepository
+from app.db.repositories import (
+    ApplicationRepository,
+    EventRepository,
+    MetricsRepository,
+    SyntheticFixtureRepository,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SYNTHETIC_FIXTURE_PATH = BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "basic_job_search.json"
+
+
+def test_metrics_repository_matches_basic_synthetic_fixture() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(SYNTHETIC_FIXTURE_PATH)
+        repository = MetricsRepository(connection)
+
+        total_applications = repository.count_total_applications()
+        rejected_applications = repository.count_rejected_applications()
+        rates = {
+            metric.name: metric
+            for metric in repository.get_rate_metrics(ghost_cutoff_at="2026-08-01T00:00:00+00:00")
+        }
+        funnel = {stage.stage: stage.count for stage in repository.get_funnel_metrics()}
+        timeseries = repository.get_application_timeseries()
+        role_rows = repository.get_breakdown("role")
+        source_rows = repository.get_breakdown("source")
+        salary_rows = repository.get_breakdown("salary")
+        tech_rows = repository.get_breakdown("tech")
+        sponsorship_rows = repository.get_breakdown("sponsorship")
+        seniority_rows = repository.get_breakdown("seniority")
+        work_mode_rows = repository.get_breakdown("work_mode")
+
+    assert total_applications == 1
+    assert rejected_applications == 1
+    assert rates["response"].numerator == 1
+    assert rates["response"].denominator == 1
+    assert rates["response"].rate == 1.0
+    assert rates["rejection"].rate == 1.0
+    assert rates["ghost"].rate == 0.0
+    assert rates["application_to_interview"].rate == 0.0
+    assert rates["interview_to_offer"].rate is None
+    assert funnel == {
+        "applied": 1,
+        "response": 1,
+        "assessment": 0,
+        "interview": 0,
+        "offer": 0,
+    }
+    assert [(point.period_start, point.application_count) for point in timeseries] == [
+        ("2026-07-04", 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in role_rows] == [
+        ("backend engineer", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in source_rows] == [
+        ("company_site", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in salary_rows] == [
+        ("100k_149k", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in tech_rows] == [
+        ("fastapi", 1, 1),
+        ("python", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in sponsorship_rows] == [
+        ("unknown", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in seniority_rows] == [
+        ("senior", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in work_mode_rows] == [
+        ("remote", 1, 1),
+    ]
 
 
 def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> None:
