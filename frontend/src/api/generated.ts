@@ -743,6 +743,7 @@ export interface MetricsBreakdownResponse {
 }
 
 export interface MetricsRatesResponse {
+  application_to_interview_rate: MetricRate;
   ghost_rate: MetricRate;
   overall_response_rate: MetricRate;
   rejection_rate: MetricRate;

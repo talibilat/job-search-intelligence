@@ -220,6 +220,9 @@ class MetricsRatesService:
         ghost_numerator = self._metrics_repository.count_threshold_ghosted_applications(
             cutoff_at=cutoff_at.isoformat(),
         )
+        application_to_interview_numerator = (
+            self._metrics_repository.count_applications_with_interview_events()
+        )
         return MetricsRatesResponse(
             overall_response_rate=MetricRate(
                 numerator=response_numerator,
@@ -235,6 +238,14 @@ class MetricsRatesService:
                 numerator=ghost_numerator,
                 denominator=denominator,
                 rate=_rate(numerator=ghost_numerator, denominator=denominator),
+            ),
+            application_to_interview_rate=MetricRate(
+                numerator=application_to_interview_numerator,
+                denominator=denominator,
+                rate=_rate(
+                    numerator=application_to_interview_numerator,
+                    denominator=denominator,
+                ),
             ),
         )
 
