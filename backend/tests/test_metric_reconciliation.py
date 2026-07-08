@@ -29,7 +29,7 @@ def test_metrics_summary_reconciles_with_repository_queries(tmp_path: Path) -> N
         repository = MetricsRepository(connection)
         ghost_cutoff_at = datetime.now(UTC) - timedelta(days=30)
 
-        expected = {
+        query_values = {
             "total_applications": repository.count_total_applications(),
             "distinct_company_count": repository.count_distinct_companies(),
             "offers_received": repository.count_applications_with_offer_events(),
@@ -39,13 +39,55 @@ def test_metrics_summary_reconciles_with_repository_queries(tmp_path: Path) -> N
             "rejected_applications": repository.count_rejected_applications(),
             "interview_invitation_count": repository.count_interview_invitation_events(),
         }
+        query_window_counts = {
+            "week": repository.count_applications_between(
+                start_at="2026-07-13T00:00:00+00:00",
+                end_at="2026-07-20T00:00:00+00:00",
+            ),
+            "month": repository.count_applications_between(
+                start_at="2026-07-01T00:00:00+00:00",
+                end_at="2026-08-01T00:00:00+00:00",
+            ),
+            "year": repository.count_applications_between(
+                start_at="2026-01-01T00:00:00+00:00",
+                end_at="2027-01-01T00:00:00+00:00",
+            ),
+        }
 
-    response = create_test_client(database_path).get("/metrics/summary")
+    manual_values = {
+        "total_applications": 5,
+        "distinct_company_count": 3,
+        "offers_received": 1,
+        "ghosted_applications": 1,
+        "rejected_applications": 1,
+        "interview_invitation_count": 2,
+    }
+    manual_window_counts = {"week": 0, "month": 4, "year": 4}
+
+    response = create_test_client(database_path).get(
+        "/metrics/summary?anchor_at=2026-07-15T12:00:00Z",
+    )
 
     assert response.status_code == 200
     body = response.json()
-    for field, expected_value in expected.items():
-        assert_reconciles(field=field, displayed_value=body[field], query_value=expected_value)
+    for field, manual_value in manual_values.items():
+        assert_reconciles(field=field, displayed_value=body[field], query_value=query_values[field])
+        assert_reconciles(field=field, displayed_value=body[field], query_value=manual_value)
+
+    displayed_window_counts = {
+        window["window"]: window["application_count"] for window in body["application_windows"]
+    }
+    for window, manual_count in manual_window_counts.items():
+        assert_reconciles(
+            field=f"application_windows.{window}",
+            displayed_value=displayed_window_counts[window],
+            query_value=query_window_counts[window],
+        )
+        assert_reconciles(
+            field=f"application_windows.{window}",
+            displayed_value=displayed_window_counts[window],
+            query_value=manual_count,
+        )
 
 
 def test_metrics_rates_reconcile_with_repository_queries(tmp_path: Path) -> None:
@@ -55,9 +97,16 @@ def test_metrics_rates_reconcile_with_repository_queries(tmp_path: Path) -> None
         repository = MetricsRepository(connection)
         ghost_cutoff_at = datetime.now(UTC) - timedelta(days=30)
         expected_rates = {
-            metric.name: metric
+            metric.name: rate_payload(metric)
             for metric in repository.get_rate_metrics(ghost_cutoff_at=ghost_cutoff_at.isoformat())
         }
+    manual_rates: dict[str, DisplayedRate] = {
+        "overall_response_rate": {"numerator": 4, "denominator": 5, "rate": 0.8},
+        "rejection_rate": {"numerator": 1, "denominator": 5, "rate": 0.2},
+        "ghost_rate": {"numerator": 1, "denominator": 5, "rate": 0.2},
+        "application_to_interview_rate": {"numerator": 2, "denominator": 5, "rate": 0.4},
+        "interview_to_offer_rate": {"numerator": 1, "denominator": 2, "rate": 0.5},
+    }
 
     response = create_test_client(database_path).get("/metrics/rates")
 
@@ -67,21 +116,31 @@ def test_metrics_rates_reconcile_with_repository_queries(tmp_path: Path) -> None
         field="overall_response_rate",
         displayed=body["overall_response_rate"],
         query=expected_rates["response"],
+        manual=manual_rates["overall_response_rate"],
     )
     assert_rate_reconciles(
         field="rejection_rate",
         displayed=body["rejection_rate"],
         query=expected_rates["rejection"],
+        manual=manual_rates["rejection_rate"],
     )
     assert_rate_reconciles(
         field="ghost_rate",
         displayed=body["ghost_rate"],
         query=expected_rates["ghost"],
+        manual=manual_rates["ghost_rate"],
     )
     assert_rate_reconciles(
         field="application_to_interview_rate",
         displayed=body["application_to_interview_rate"],
         query=expected_rates["application_to_interview"],
+        manual=manual_rates["application_to_interview_rate"],
+    )
+    assert_rate_reconciles(
+        field="interview_to_offer_rate",
+        displayed=body["interview_to_offer_rate"],
+        query=expected_rates["interview_to_offer"],
+        manual=manual_rates["interview_to_offer_rate"],
     )
 
 
@@ -93,21 +152,41 @@ def assert_rate_reconciles(
     *,
     field: str,
     displayed: DisplayedRate,
-    query: MetricRateRow,
+    query: DisplayedRate,
+    manual: DisplayedRate,
 ) -> None:
     assert_reconciles(
         field=f"{field}.numerator",
         displayed_value=displayed["numerator"],
-        query_value=query.numerator,
+        query_value=query["numerator"],
+    )
+    assert_reconciles(
+        field=f"{field}.numerator",
+        displayed_value=displayed["numerator"],
+        query_value=manual["numerator"],
     )
     assert_reconciles(
         field=f"{field}.denominator",
         displayed_value=displayed["denominator"],
-        query_value=query.denominator,
+        query_value=query["denominator"],
     )
-    assert displayed["rate"] == query.rate, (
+    assert_reconciles(
+        field=f"{field}.denominator",
+        displayed_value=displayed["denominator"],
+        query_value=manual["denominator"],
+    )
+    assert displayed["rate"] == query["rate"], (
         f"{field}.rate did not reconcile with repository query"
     )
+    assert displayed["rate"] == manual["rate"], f"{field}.rate did not match manual count"
+
+
+def rate_payload(metric: MetricRateRow) -> DisplayedRate:
+    return {
+        "numerator": metric.numerator,
+        "denominator": metric.denominator,
+        "rate": metric.rate,
+    }
 
 
 def create_test_client(database_path: Path) -> TestClient:
