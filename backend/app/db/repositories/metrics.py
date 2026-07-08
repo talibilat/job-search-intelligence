@@ -193,6 +193,12 @@ class MetricsRepository(BaseRepository[int]):
     def count_applications_with_interview_events(self) -> int:
         return self._count_applications_with_event("interview_scheduled")
 
+    def count_applications_with_offer_after_interview_events(self) -> int:
+        return self._count_applications_with_later_event(
+            first_event_type="interview_scheduled",
+            later_event_type="offer",
+        )
+
     def _count_applications_with_current_status(self, status: str) -> int:
         return self._fetch_count(
             "SELECT COUNT(*) FROM applications WHERE current_status = ?",

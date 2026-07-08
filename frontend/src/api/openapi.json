@@ -2052,6 +2052,9 @@
           "ghost_rate": {
             "$ref": "#/components/schemas/MetricRate"
           },
+          "interview_to_offer_rate": {
+            "$ref": "#/components/schemas/MetricRate"
+          },
           "overall_response_rate": {
             "$ref": "#/components/schemas/MetricRate"
           },
@@ -2063,7 +2066,8 @@
           "overall_response_rate",
           "rejection_rate",
           "ghost_rate",
-          "application_to_interview_rate"
+          "application_to_interview_rate",
+          "interview_to_offer_rate"
         ],
         "title": "MetricsRatesResponse",
         "type": "object"

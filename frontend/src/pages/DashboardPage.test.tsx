@@ -71,6 +71,11 @@ function mockApplicationResponses() {
               numerator: 1,
               rate: 0.2,
             },
+            interview_to_offer_rate: {
+              denominator: 1,
+              numerator: 1,
+              rate: 1,
+            },
           }),
           {
             headers: { "Content-Type": "application/json" },
@@ -281,6 +286,20 @@ describe("DashboardPage", () => {
     expect(await within(metric).findByText("20%")).toBeTruthy();
     expect(
       within(metric).getByText("1 of 5 applications reached interview"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-15 interview to offer rate from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Interview to offer rate metric");
+
+    expect(await within(metric).findByText("100%")).toBeTruthy();
+    expect(
+      within(metric).getByText("1 of 1 interviewed applications reached offer"),
     ).toBeTruthy();
   });
 });
