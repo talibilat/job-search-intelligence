@@ -199,14 +199,27 @@ def _next_month_start(month_start: datetime) -> datetime:
 class MetricsRatesService:
     """Build deterministic dashboard rate metrics from local SQLite."""
 
-    def __init__(self, *, metrics_repository: MetricsRepository) -> None:
+    def __init__(
+        self,
+        *,
+        metrics_repository: MetricsRepository,
+        ghost_threshold_days: int,
+        clock: Clock | None = None,
+    ) -> None:
         self._metrics_repository = metrics_repository
+        self._ghost_threshold_days = ghost_threshold_days
+        self._clock = clock or _utcnow
 
     def get_rates(self) -> MetricsRatesResponse:
+        evaluated_at = self._clock()
+        cutoff_at = evaluated_at - timedelta(days=self._ghost_threshold_days)
         response_silence = self._metrics_repository.get_response_silence_metric()
         denominator = response_silence.total_applications
         response_numerator = response_silence.human_response_count
         rejection_numerator = self._metrics_repository.count_rejected_applications()
+        ghost_numerator = self._metrics_repository.count_threshold_ghosted_applications(
+            cutoff_at=cutoff_at.isoformat(),
+        )
         return MetricsRatesResponse(
             overall_response_rate=MetricRate(
                 numerator=response_numerator,
@@ -217,6 +230,11 @@ class MetricsRatesService:
                 numerator=rejection_numerator,
                 denominator=denominator,
                 rate=_rate(numerator=rejection_numerator, denominator=denominator),
+            ),
+            ghost_rate=MetricRate(
+                numerator=ghost_numerator,
+                denominator=denominator,
+                rate=_rate(numerator=ghost_numerator, denominator=denominator),
             ),
         )
 

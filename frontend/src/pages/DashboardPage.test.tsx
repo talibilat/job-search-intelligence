@@ -61,6 +61,11 @@ function mockApplicationResponses() {
               numerator: 1,
               rate: 0.2,
             },
+            ghost_rate: {
+              denominator: 5,
+              numerator: 2,
+              rate: 0.4,
+            },
           }),
           {
             headers: { "Content-Type": "application/json" },
@@ -243,6 +248,20 @@ describe("DashboardPage", () => {
     expect(await within(metric).findByText("20%")).toBeTruthy();
     expect(
       within(metric).getByText("1 of 5 applications are rejected"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-13 ghost rate from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Ghost rate metric");
+
+    expect(await within(metric).findByText("40%")).toBeTruthy();
+    expect(
+      within(metric).getByText("2 of 5 applications are ghosted or silent past threshold"),
     ).toBeTruthy();
   });
 });

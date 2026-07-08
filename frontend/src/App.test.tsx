@@ -61,6 +61,11 @@ function metricsRatesResponse(
       numerator: 0,
       rate: null,
     },
+    ghost_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
     ...overrides,
   };
   return response as unknown as MockObjectResponseBody;

@@ -239,7 +239,10 @@ def get_metrics_rates_service(
     connection_target = str(database_path) if database_path.exists() else ":memory:"
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
-        yield MetricsRatesService(metrics_repository=MetricsRepository(connection))
+        yield MetricsRatesService(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=settings.ghost_threshold_days,
+        )
     finally:
         connection.close()
 
