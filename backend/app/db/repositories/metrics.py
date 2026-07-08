@@ -190,6 +190,9 @@ class MetricsRepository(BaseRepository[int]):
             return 0
         return int(row[0])
 
+    def count_applications_with_interview_events(self) -> int:
+        return self._count_applications_with_event("interview_scheduled")
+
     def _count_applications_with_current_status(self, status: str) -> int:
         return self._fetch_count(
             "SELECT COUNT(*) FROM applications WHERE current_status = ?",

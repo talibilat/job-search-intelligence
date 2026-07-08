@@ -26,6 +26,7 @@ class MetricsRatesResponse(BaseModel):
     overall_response_rate: MetricRate
     rejection_rate: MetricRate
     ghost_rate: MetricRate
+    application_to_interview_rate: MetricRate
 
 
 class MetricsApplicationWindow(StrEnum):

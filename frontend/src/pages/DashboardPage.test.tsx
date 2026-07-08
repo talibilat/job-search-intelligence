@@ -66,6 +66,11 @@ function mockApplicationResponses() {
               numerator: 2,
               rate: 0.4,
             },
+            application_to_interview_rate: {
+              denominator: 5,
+              numerator: 1,
+              rate: 0.2,
+            },
           }),
           {
             headers: { "Content-Type": "application/json" },
@@ -262,6 +267,20 @@ describe("DashboardPage", () => {
     expect(await within(metric).findByText("40%")).toBeTruthy();
     expect(
       within(metric).getByText("2 of 5 applications are ghosted or silent past threshold"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-14 application to interview rate from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Application to interview rate metric");
+
+    expect(await within(metric).findByText("20%")).toBeTruthy();
+    expect(
+      within(metric).getByText("1 of 5 applications reached interview"),
     ).toBeTruthy();
   });
 });

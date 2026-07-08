@@ -62,6 +62,11 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
             "denominator": 5,
             "rate": 0.4,
         },
+        "application_to_interview_rate": {
+            "numerator": 1,
+            "denominator": 5,
+            "rate": 0.2,
+        },
     }
 
 
@@ -83,6 +88,11 @@ def test_metrics_rates_returns_null_rate_when_no_applications(tmp_path: Path) ->
             "rate": None,
         },
         "ghost_rate": {
+            "numerator": 0,
+            "denominator": 0,
+            "rate": None,
+        },
+        "application_to_interview_rate": {
             "numerator": 0,
             "denominator": 0,
             "rate": None,

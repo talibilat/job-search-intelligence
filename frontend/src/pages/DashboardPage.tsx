@@ -309,6 +309,8 @@ export function DashboardPage() {
   const [responseRate, setResponseRate] = useState<MetricRate | null>(null);
   const [rejectionRate, setRejectionRate] = useState<MetricRate | null>(null);
   const [ghostRate, setGhostRate] = useState<MetricRate | null>(null);
+  const [applicationToInterviewRate, setApplicationToInterviewRate] =
+    useState<MetricRate | null>(null);
   const [responseRateLoadState, setResponseRateLoadState] =
     useState<ResponseRateLoadState>("loading");
   const [filters, setFilters] = useState<DashboardFilters>(() =>
@@ -463,6 +465,7 @@ export function DashboardPage() {
           setResponseRate(response.data.overall_response_rate);
           setRejectionRate(response.data.rejection_rate);
           setGhostRate(response.data.ghost_rate);
+          setApplicationToInterviewRate(response.data.application_to_interview_rate);
           setResponseRateLoadState("loaded");
         }
       } catch {
@@ -526,9 +529,9 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, and Q-13 now render
-          from deterministic application and metrics endpoints, while remaining
-          dashboard questions stay clearly marked as pending.
+          Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, and Q-14 now
+          render from deterministic application and metrics endpoints, while
+          remaining dashboard questions stay clearly marked as pending.
         </p>
       </section>
 
@@ -796,6 +799,26 @@ export function DashboardPage() {
                 {formatGhostRateMeta(ghostRate, responseRateLoadState)}
               </p>
             </article>
+            <article
+              aria-label="Application to interview rate metric"
+              className="metric-placeholder"
+            >
+              <p className="metric-placeholder__label">
+                Application to interview rate
+              </p>
+              <p className="metric-placeholder__value">
+                {formatRateValue(
+                  applicationToInterviewRate,
+                  responseRateLoadState,
+                )}
+              </p>
+              <p className="dashboard-card__meta">
+                {formatApplicationToInterviewRateMeta(
+                  applicationToInterviewRate,
+                  responseRateLoadState,
+                )}
+              </p>
+            </article>
             {metricPlaceholders.map((metric) => (
               <article className="metric-placeholder" key={metric.label}>
                 <p className="metric-placeholder__label">{metric.label}</p>
@@ -987,4 +1010,22 @@ function formatGhostRateMeta(
   return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
     metric.denominator,
   )} applications are ghosted or silent past threshold`;
+}
+
+function formatApplicationToInterviewRateMeta(
+  metric: MetricRate | null,
+  loadState: ResponseRateLoadState,
+) {
+  if (loadState === "error") {
+    return "Application to interview rate is unavailable from the local backend";
+  }
+  if (loadState === "loading" || metric === null) {
+    return "Loading deterministic numerator and denominator";
+  }
+  if (metric.denominator === 0) {
+    return "0 applications in the denominator";
+  }
+  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
+    metric.denominator,
+  )} applications reached interview`;
 }
