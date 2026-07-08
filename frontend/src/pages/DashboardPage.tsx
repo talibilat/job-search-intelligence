@@ -307,6 +307,7 @@ export function DashboardPage() {
   const [liveApplicationsState, setLiveApplicationsState] =
     useState<LiveApplicationsState>("loading");
   const [responseRate, setResponseRate] = useState<MetricRate | null>(null);
+  const [rejectionRate, setRejectionRate] = useState<MetricRate | null>(null);
   const [responseRateLoadState, setResponseRateLoadState] =
     useState<ResponseRateLoadState>("loading");
   const [filters, setFilters] = useState<DashboardFilters>(() =>
@@ -459,6 +460,7 @@ export function DashboardPage() {
         const response = await getMetricsRatesMetricsRatesGet();
         if (!isCancelled) {
           setResponseRate(response.data.overall_response_rate);
+          setRejectionRate(response.data.rejection_rate);
           setResponseRateLoadState("loaded");
         }
       } catch {
@@ -522,7 +524,7 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, and Q-11 now render from
+          Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, and Q-12 now render from
           deterministic application and metrics endpoints, while remaining
           dashboard questions stay clearly marked as pending.
         </p>
@@ -765,10 +767,22 @@ export function DashboardPage() {
             >
               <p className="metric-placeholder__label">Response rate</p>
               <p className="metric-placeholder__value">
-                {formatResponseRateValue(responseRate, responseRateLoadState)}
+                {formatRateValue(responseRate, responseRateLoadState)}
               </p>
               <p className="dashboard-card__meta">
                 {formatResponseRateMeta(responseRate, responseRateLoadState)}
+              </p>
+            </article>
+            <article
+              aria-label="Rejection rate metric"
+              className="metric-placeholder"
+            >
+              <p className="metric-placeholder__label">Rejection rate</p>
+              <p className="metric-placeholder__value">
+                {formatRateValue(rejectionRate, responseRateLoadState)}
+              </p>
+              <p className="dashboard-card__meta">
+                {formatRejectionRateMeta(rejectionRate, responseRateLoadState)}
               </p>
             </article>
             {metricPlaceholders.map((metric) => (
@@ -892,7 +906,7 @@ export function DashboardPage() {
   );
 }
 
-function formatResponseRateValue(
+function formatRateValue(
   metric: MetricRate | null,
   loadState: ResponseRateLoadState,
 ) {
@@ -924,4 +938,24 @@ function formatResponseRateMeta(
   return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
     metric.denominator,
   )} applications have response evidence`;
+}
+
+function formatRejectionRateMeta(
+  metric: MetricRate | null,
+  loadState: ResponseRateLoadState,
+) {
+  if (loadState === "error") {
+    return "Rejection rate is unavailable from the local backend";
+  }
+  if (loadState === "loading" || metric === null) {
+    return "Loading deterministic numerator and denominator";
+  }
+  if (metric.denominator === 0) {
+    return "0 applications in the denominator";
+  }
+  const applicationLabel =
+    metric.denominator === 1 ? "application is" : "applications are";
+  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
+    metric.denominator,
+  )} ${applicationLabel} rejected`;
 }

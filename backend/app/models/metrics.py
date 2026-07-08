@@ -24,6 +24,7 @@ class MetricRate(BaseModel):
 
 class MetricsRatesResponse(BaseModel):
     overall_response_rate: MetricRate
+    rejection_rate: MetricRate
 
 
 class MetricsApplicationWindow(StrEnum):

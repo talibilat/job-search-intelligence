@@ -52,9 +52,14 @@ function mockApplicationResponses() {
         new Response(
           JSON.stringify({
             overall_response_rate: {
-              denominator: 0,
-              numerator: 0,
-              rate: null,
+              denominator: 5,
+              numerator: 3,
+              rate: 0.6,
+            },
+            rejection_rate: {
+              denominator: 5,
+              numerator: 1,
+              rate: 0.2,
             },
           }),
           {
@@ -225,5 +230,19 @@ describe("DashboardPage", () => {
       "/applications",
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("renders Q-12 rejection rate from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Rejection rate metric");
+
+    expect(await within(metric).findByText("20%")).toBeTruthy();
+    expect(
+      within(metric).getByText("1 of 5 applications are rejected"),
+    ).toBeTruthy();
   });
 });

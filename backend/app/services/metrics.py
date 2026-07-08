@@ -205,13 +205,19 @@ class MetricsRatesService:
     def get_rates(self) -> MetricsRatesResponse:
         response_silence = self._metrics_repository.get_response_silence_metric()
         denominator = response_silence.total_applications
-        numerator = response_silence.human_response_count
+        response_numerator = response_silence.human_response_count
+        rejection_numerator = self._metrics_repository.count_rejected_applications()
         return MetricsRatesResponse(
             overall_response_rate=MetricRate(
-                numerator=numerator,
+                numerator=response_numerator,
                 denominator=denominator,
-                rate=_rate(numerator=numerator, denominator=denominator),
-            )
+                rate=_rate(numerator=response_numerator, denominator=denominator),
+            ),
+            rejection_rate=MetricRate(
+                numerator=rejection_numerator,
+                denominator=denominator,
+                rate=_rate(numerator=rejection_numerator, denominator=denominator),
+            ),
         )
 
 

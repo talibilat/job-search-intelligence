@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import type { MetricsSummaryResponse } from "./api";
+import type { MetricsRatesResponse, MetricsSummaryResponse } from "./api";
 import styles from "./index.css?raw";
 
 function renderAtPath(pathname: string) {
@@ -42,6 +42,25 @@ function metricsSummaryResponse(
     offers_received: 0,
     rejected_applications: 0,
     total_applications: 0,
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
+function metricsRatesResponse(
+  overrides: Partial<MetricsRatesResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsRatesResponse = {
+    overall_response_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
+    rejection_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
     ...overrides,
   };
   return response as unknown as MockObjectResponseBody;
@@ -164,13 +183,7 @@ describe("App", () => {
         total_applications: 12,
         distinct_company_count: 3,
       }),
-      "/metrics/rates": {
-        overall_response_rate: {
-          numerator: 0,
-          denominator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications": { body: [], status: 200 },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
@@ -192,13 +205,13 @@ describe("App", () => {
       "/metrics/summary": {
         distinct_company_count: 3,
       },
-      "/metrics/rates": {
+      "/metrics/rates": metricsRatesResponse({
         overall_response_rate: {
           numerator: 3,
           denominator: 5,
           rate: 0.6,
         },
-      },
+      }),
     });
 
     renderAtPath("/dashboard");
@@ -553,13 +566,7 @@ describe("App", () => {
   it("renders the Q-09 application status table at the dashboard route", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications": { body: [], status: 200 },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
@@ -612,13 +619,7 @@ describe("App", () => {
         interview_invitation_count: 3,
         rejected_applications: 1,
       }),
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications": { body: [], status: 200 },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
@@ -650,13 +651,7 @@ describe("App", () => {
         offers_received: 2,
         evaluated_at: "2026-07-07T12:00:00+00:00",
       },
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
     });
 
     renderAtPath("/dashboard");
@@ -684,13 +679,7 @@ describe("App", () => {
         interview_invitation_count: 4,
         rejected_applications: 1,
       }),
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications?status=applied": {
         body: [
           {
@@ -809,13 +798,7 @@ describe("App", () => {
       "/metrics/summary": metricsSummaryResponse({
         evaluated_at: "2026-07-07T12:00:00Z",
       }),
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
       "/applications?status=assessment": { body: [], status: 200 },

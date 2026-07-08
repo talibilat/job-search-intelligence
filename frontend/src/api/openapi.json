@@ -2048,10 +2048,14 @@
         "properties": {
           "overall_response_rate": {
             "$ref": "#/components/schemas/MetricRate"
+          },
+          "rejection_rate": {
+            "$ref": "#/components/schemas/MetricRate"
           }
         },
         "required": [
-          "overall_response_rate"
+          "overall_response_rate",
+          "rejection_rate"
         ],
         "title": "MetricsRatesResponse",
         "type": "object"

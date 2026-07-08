@@ -18,7 +18,12 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
         insert_application_with_events(connection, "app-response", ("applied", "response"))
-        insert_application_with_events(connection, "app-rejection", ("applied", "rejection"))
+        insert_application_with_events(
+            connection,
+            "app-rejection",
+            ("applied", "rejection"),
+            current_status="rejected",
+        )
         insert_application_with_events(
             connection,
             "app-multiple-responses",
@@ -39,7 +44,12 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
             "numerator": 3,
             "denominator": 5,
             "rate": 0.6,
-        }
+        },
+        "rejection_rate": {
+            "numerator": 1,
+            "denominator": 5,
+            "rate": 0.2,
+        },
     }
 
 
@@ -54,7 +64,12 @@ def test_metrics_rates_returns_null_rate_when_no_applications(tmp_path: Path) ->
             "numerator": 0,
             "denominator": 0,
             "rate": None,
-        }
+        },
+        "rejection_rate": {
+            "numerator": 0,
+            "denominator": 0,
+            "rate": None,
+        },
     }
 
 
@@ -90,6 +105,8 @@ def insert_application_with_events(
     connection: sqlite3.Connection,
     application_id: str,
     event_types: tuple[str, ...],
+    *,
+    current_status: str = "applied",
 ) -> None:
     repository = ApplicationRepository(connection)
     repository.upsert_application(
@@ -98,7 +115,7 @@ def insert_application_with_events(
         role_title="Software Engineer",
         source="linkedin",
         first_seen_at="2026-07-01T09:00:00+00:00",
-        current_status="applied",
+        current_status=current_status,
         last_activity_at="2026-07-01T09:00:00+00:00",
         created_at="2026-07-01T09:01:00+00:00",
         updated_at="2026-07-01T09:01:00+00:00",
