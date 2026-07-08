@@ -10,7 +10,7 @@ from alembic.config import Config
 from app.config import AppSettings, get_settings
 from app.db.repositories import ApplicationRepository, EventRepository, MetricsRepository
 from app.main import create_app
-from app.models import MetricRateRow
+from app.models import MetricRate, MetricRateRow, MetricsRatesResponse, MetricsSummaryResponse
 from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -69,13 +69,18 @@ def test_metrics_summary_reconciles_with_repository_queries(tmp_path: Path) -> N
     )
 
     assert response.status_code == 200
-    body = response.json()
+    body = MetricsSummaryResponse.model_validate(response.json())
     for field, manual_value in manual_values.items():
-        assert_reconciles(field=field, displayed_value=body[field], query_value=query_values[field])
-        assert_reconciles(field=field, displayed_value=body[field], query_value=manual_value)
+        displayed_value = getattr(body, field)
+        assert_reconciles(
+            field=field,
+            displayed_value=displayed_value,
+            query_value=query_values[field],
+        )
+        assert_reconciles(field=field, displayed_value=displayed_value, query_value=manual_value)
 
     displayed_window_counts = {
-        window["window"]: window["application_count"] for window in body["application_windows"]
+        window.window.value: window.application_count for window in body.application_windows
     }
     for window, manual_count in manual_window_counts.items():
         assert_reconciles(
@@ -111,34 +116,34 @@ def test_metrics_rates_reconcile_with_repository_queries(tmp_path: Path) -> None
     response = create_test_client(database_path).get("/metrics/rates")
 
     assert response.status_code == 200
-    body = response.json()
+    body = MetricsRatesResponse.model_validate(response.json())
     assert_rate_reconciles(
         field="overall_response_rate",
-        displayed=body["overall_response_rate"],
+        displayed=rate_payload(body.overall_response_rate),
         query=expected_rates["response"],
         manual=manual_rates["overall_response_rate"],
     )
     assert_rate_reconciles(
         field="rejection_rate",
-        displayed=body["rejection_rate"],
+        displayed=rate_payload(body.rejection_rate),
         query=expected_rates["rejection"],
         manual=manual_rates["rejection_rate"],
     )
     assert_rate_reconciles(
         field="ghost_rate",
-        displayed=body["ghost_rate"],
+        displayed=rate_payload(body.ghost_rate),
         query=expected_rates["ghost"],
         manual=manual_rates["ghost_rate"],
     )
     assert_rate_reconciles(
         field="application_to_interview_rate",
-        displayed=body["application_to_interview_rate"],
+        displayed=rate_payload(body.application_to_interview_rate),
         query=expected_rates["application_to_interview"],
         manual=manual_rates["application_to_interview_rate"],
     )
     assert_rate_reconciles(
         field="interview_to_offer_rate",
-        displayed=body["interview_to_offer_rate"],
+        displayed=rate_payload(body.interview_to_offer_rate),
         query=expected_rates["interview_to_offer"],
         manual=manual_rates["interview_to_offer_rate"],
     )
@@ -181,7 +186,7 @@ def assert_rate_reconciles(
     assert displayed["rate"] == manual["rate"], f"{field}.rate did not match manual count"
 
 
-def rate_payload(metric: MetricRateRow) -> DisplayedRate:
+def rate_payload(metric: MetricRate | MetricRateRow) -> DisplayedRate:
     return {
         "numerator": metric.numerator,
         "denominator": metric.denominator,
