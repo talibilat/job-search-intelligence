@@ -13,6 +13,7 @@ from app.models.metrics import (
     MetricsBreakdownDimension,
     MetricTimeseriesPoint,
     ResponseSilenceMetric,
+    TimeToFirstResponseMetric,
 )
 
 _RESPONSE_LIKE_EVENT_TYPES = RESPONSE_LIKE_APPLICATION_EVENT_TYPES
@@ -49,6 +50,38 @@ class MetricsRepository(BaseRepository[int]):
 
     def count_applications_with_offer_events(self) -> int:
         return self._count_applications_with_event("offer")
+
+    def get_time_to_first_response_metric(self) -> TimeToFirstResponseMetric:
+        row = self.execute(
+            f"""
+            WITH first_response AS (
+                SELECT
+                    applications.id AS application_id,
+                    julianday(applications.first_seen_at) AS application_seen_day,
+                    MIN(julianday(application_events.event_at)) AS response_day
+                FROM applications
+                INNER JOIN application_events
+                    ON application_events.application_id = applications.id
+                WHERE application_events.event_type IN ({_response_placeholders()})
+                  AND julianday(application_events.event_at) >= (
+                    julianday(applications.first_seen_at)
+                  )
+                GROUP BY applications.id
+            )
+            SELECT
+                COUNT(*) AS application_count,
+                AVG((response_day - application_seen_day) * 24.0) AS average_hours
+            FROM first_response
+            """,
+            _RESPONSE_LIKE_EVENT_TYPES,
+        ).fetchone()
+        if row is None:
+            return TimeToFirstResponseMetric(application_count=0, average_hours=None)
+        average_hours = row["average_hours"]
+        return TimeToFirstResponseMetric(
+            application_count=int(row["application_count"]),
+            average_hours=None if average_hours is None else round(float(average_hours), 6),
+        )
 
     def get_rate_metrics(self, *, ghost_cutoff_at: str) -> tuple[MetricRateRow, ...]:
         total_applications = self.count_total_applications()
