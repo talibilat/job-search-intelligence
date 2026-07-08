@@ -223,8 +223,56 @@ def test_metrics_summary_returns_zero_without_applications(tmp_path: Path) -> No
     assert body["ghosted_applications"] == 0
     assert body["rejected_applications"] == 0
     assert body["interview_invitation_count"] == 0
+    assert body["average_time_to_first_response"] == {
+        "application_count": 0,
+        "average_hours": None,
+    }
     assert body["ghost_threshold_days"] == 30
     assert "evaluated_at" in body
+
+
+def test_metrics_summary_returns_average_time_to_first_response(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="fast-response",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="fast-response-event",
+            application_id="fast-response",
+            event_type="response",
+            event_at="2026-07-02T09:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="slow-response",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="slow-response-event",
+            application_id="slow-response",
+            event_type="interview_scheduled",
+            event_at="2026-07-03T09:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="silent-application",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+        )
+
+    response = create_test_client(database_path).get("/metrics/summary")
+
+    assert response.status_code == 200
+    assert response.json()["average_time_to_first_response"] == {
+        "application_count": 2,
+        "average_hours": 36.0,
+    }
 
 
 def test_metrics_summary_endpoint_is_documented_in_openapi() -> None:

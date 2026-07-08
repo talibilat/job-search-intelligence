@@ -40,7 +40,13 @@ function mockApplicationResponses() {
 
     if (url === "/metrics/summary") {
       return Promise.resolve(
-        new Response(JSON.stringify({ distinct_company_count: 1 }), {
+        new Response(JSON.stringify({
+          average_time_to_first_response: {
+            application_count: 2,
+            average_hours: 36,
+          },
+          distinct_company_count: 1,
+        }), {
           headers: { "Content-Type": "application/json" },
           status: 200,
         }),
@@ -300,6 +306,20 @@ describe("DashboardPage", () => {
     expect(await within(metric).findByText("100%")).toBeTruthy();
     expect(
       within(metric).getByText("1 of 1 interviewed applications reached offer"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-17 average time to first response from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Average time to first response metric");
+
+    expect(await within(metric).findByText("1.5 days")).toBeTruthy();
+    expect(
+      within(metric).getByText("Averaged across 2 applications with response evidence"),
     ).toBeTruthy();
   });
 });

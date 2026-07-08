@@ -158,6 +158,11 @@ class MetricsBreakdownResponse(BaseModel):
     rows: list[MetricBreakdownRow]
 
 
+class TimeToFirstResponseMetric(BaseModel):
+    application_count: int = Field(ge=0)
+    average_hours: float | None = Field(default=None, ge=0)
+
+
 class MetricsSummaryResponse(BaseModel):
     """Deterministic summary metrics for the dashboard."""
 
@@ -172,4 +177,5 @@ class MetricsSummaryResponse(BaseModel):
     ghost_threshold_days: int = Field(ge=1)
     evaluated_at: datetime
     interview_invitation_count: int = Field(ge=0)
+    average_time_to_first_response: TimeToFirstResponseMetric
     application_windows: list[ApplicationWindowMetric]

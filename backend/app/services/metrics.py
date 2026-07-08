@@ -68,6 +68,9 @@ class MetricsSummaryService:
             interview_invitation_count=(
                 self._metrics_repository.count_interview_invitation_events()
             ),
+            average_time_to_first_response=(
+                self._metrics_repository.get_time_to_first_response_metric()
+            ),
             application_windows=self._application_windows(
                 anchor_at=anchor,
                 custom_start_at=custom_start_at,

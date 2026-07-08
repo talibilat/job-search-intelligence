@@ -34,6 +34,10 @@ function metricsSummaryResponse(
 ): MockObjectResponseBody {
   const response: MetricsSummaryResponse = {
     application_windows: [],
+    average_time_to_first_response: {
+      application_count: 0,
+      average_hours: null,
+    },
     distinct_company_count: 0,
     evaluated_at: "2026-07-07T20:00:00Z",
     ghost_threshold_days: 30,

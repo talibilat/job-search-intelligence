@@ -750,11 +750,18 @@ export interface MetricsRatesResponse {
   rejection_rate: MetricRate;
 }
 
+export interface TimeToFirstResponseMetric {
+  /** @minimum 0 */
+  application_count: number;
+  average_hours?: number | null;
+}
+
 /**
  * Deterministic summary metrics for the dashboard.
  */
 export interface MetricsSummaryResponse {
   application_windows: ApplicationWindowMetric[];
+  average_time_to_first_response: TimeToFirstResponseMetric;
   /** @minimum 0 */
   distinct_company_count: number;
   evaluated_at: string;

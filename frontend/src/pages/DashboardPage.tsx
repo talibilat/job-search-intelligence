@@ -15,6 +15,7 @@ import {
   type ListApplicationsApplicationsGetParams,
   type MetricRate,
   type MetricsSummaryResponse,
+  type TimeToFirstResponseMetric,
   type SponsorshipStatus as SponsorshipStatusValue,
   type WorkMode as WorkModeValue,
 } from "../api";
@@ -72,6 +73,9 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 const percentageFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
   style: "percent",
+});
+const durationFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
 });
 
 function titleize(value: string) {
@@ -203,6 +207,44 @@ function summaryMetricValue(isLoading: boolean, value: number | undefined) {
   }
   return numberFormatter.format(value);
 }
+
+function formatTimeToFirstResponseValue(
+  isLoading: boolean,
+  metric: TimeToFirstResponseMetric | undefined,
+) {
+  if (isLoading) {
+    return "Loading";
+  }
+  if (metric === undefined) {
+    return "Unavailable";
+  }
+  const averageHours = metric.average_hours;
+  if (averageHours == null) {
+    return "No data";
+  }
+  if (averageHours < 24) {
+    return `${durationFormatter.format(averageHours)} hours`;
+  }
+  return `${durationFormatter.format(averageHours / 24)} days`;
+}
+
+function formatTimeToFirstResponseMeta(
+  isLoading: boolean,
+  metric: TimeToFirstResponseMetric | undefined,
+) {
+  if (isLoading || metric === undefined) {
+    return "Loading deterministic response timing";
+  }
+  if (metric.application_count === 0) {
+    return "No applications have response evidence yet";
+  }
+  const applicationLabel =
+    metric.application_count === 1 ? "application" : "applications";
+  return `Averaged across ${numberFormatter.format(
+    metric.application_count,
+  )} ${applicationLabel} with response evidence`;
+}
+
 function liveApplicationsCountLabel(
   state: LiveApplicationsState,
   count: number,
@@ -519,6 +561,14 @@ export function DashboardPage() {
     isLoadingSummary,
     summary?.offers_received,
   );
+  const averageFirstResponseValue = formatTimeToFirstResponseValue(
+    isLoadingSummary,
+    summary?.average_time_to_first_response,
+  );
+  const averageFirstResponseMeta = formatTimeToFirstResponseMeta(
+    isLoadingSummary,
+    summary?.average_time_to_first_response,
+  );
 
   return (
     <main
@@ -533,8 +583,9 @@ export function DashboardPage() {
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
           Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
-          Q-15 now render from deterministic application and metrics endpoints, while
-          remaining dashboard questions stay clearly marked as pending.
+          Q-15, and Q-17 now render from deterministic application and metrics
+          endpoints, while remaining dashboard questions stay clearly marked as
+          pending.
         </p>
       </section>
 
@@ -749,6 +800,18 @@ export function DashboardPage() {
               <p className="dashboard-card__meta">
                 Q-08 counted from offer events
               </p>
+            </article>
+            <article
+              aria-label="Average time to first response metric"
+              className="metric-placeholder"
+            >
+              <h3 className="metric-placeholder__label">
+                Avg time to first response
+              </h3>
+              <p className="metric-placeholder__value">
+                {averageFirstResponseValue}
+              </p>
+              <p className="dashboard-card__meta">{averageFirstResponseMeta}</p>
             </article>
             <article className="metric-placeholder">
               <p className="metric-placeholder__label">Applications shown</p>

@@ -2082,6 +2082,9 @@
             "title": "Application Windows",
             "type": "array"
           },
+          "average_time_to_first_response": {
+            "$ref": "#/components/schemas/TimeToFirstResponseMetric"
+          },
           "distinct_company_count": {
             "minimum": 0.0,
             "title": "Distinct Company Count",
@@ -2133,6 +2136,7 @@
           "ghost_threshold_days",
           "evaluated_at",
           "interview_invitation_count",
+          "average_time_to_first_response",
           "application_windows"
         ],
         "title": "MetricsSummaryResponse",
@@ -2756,6 +2760,32 @@
           "unknown"
         ],
         "type": "string"
+      },
+      "TimeToFirstResponseMetric": {
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "average_hours": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Hours"
+          }
+        },
+        "required": [
+          "application_count"
+        ],
+        "title": "TimeToFirstResponseMetric",
+        "type": "object"
       },
       "ValidationError": {
         "properties": {
