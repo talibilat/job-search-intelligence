@@ -15,6 +15,7 @@ from .classification import (
     ClassificationReprocessingStats,
     ClassificationRunResponse,
 )
+from .company_profile import CompanyProfileRecord, CompanyProfileSource, CompanyType
 from .correction import (
     ApplicationResetLockRequest,
     ApplicationResetLockResponse,
@@ -111,6 +112,9 @@ from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
     "ClassificationPromptOutput",
+    "CompanyProfileRecord",
+    "CompanyProfileSource",
+    "CompanyType",
     "DiagnosticSegmentComparison",
     "EmailProviderConfigResponse",
     "GhostInferenceRunResponse",

@@ -491,6 +491,8 @@ class MetricsRepository(BaseRepository[int]):
                 COALESCE(SUM({_exists_event_case()}), 0) AS interview_count,
                 COALESCE(SUM({_exists_event_case()}), 0) AS offer_count
             FROM applications
+            LEFT JOIN company_profiles
+                ON company_profiles.normalized_company = LOWER(TRIM(applications.company))
             {where_clause}
             GROUP BY value
             ORDER BY {_breakdown_order_expression(dimension)}
@@ -712,25 +714,35 @@ def _rate_or_none(*, numerator: int, denominator: int) -> float | None:
 
 def _dimension_expression(dimension: MetricsBreakdownDimension) -> str:
     if dimension == "role":
-        return "COALESCE(NULLIF(LOWER(TRIM(role_title)), ''), 'unknown')"
+        return "COALESCE(NULLIF(LOWER(TRIM(applications.role_title)), ''), 'unknown')"
     if dimension == "source":
-        return "COALESCE(NULLIF(source, ''), 'unknown')"
+        return "COALESCE(NULLIF(applications.source, ''), 'unknown')"
     if dimension == "salary":
         return """
         CASE
-            WHEN salary_min IS NULL AND salary_max IS NULL THEN 'unknown'
-            WHEN COALESCE(salary_max, salary_min) < 100000 THEN 'under_100k'
-            WHEN COALESCE(salary_min, salary_max) >= 150000 THEN '150k_plus'
+            WHEN applications.salary_min IS NULL AND applications.salary_max IS NULL THEN 'unknown'
+            WHEN COALESCE(
+                applications.salary_max,
+                applications.salary_min
+            ) < 100000 THEN 'under_100k'
+            WHEN COALESCE(
+                applications.salary_min,
+                applications.salary_max
+            ) >= 150000 THEN '150k_plus'
             ELSE '100k_149k'
         END
         """
+    if dimension == "company_type":
+        return "COALESCE(NULLIF(company_profiles.company_type, ''), 'unknown')"
+    if dimension == "industry":
+        return "COALESCE(NULLIF(LOWER(TRIM(company_profiles.industry)), ''), 'unknown')"
     if dimension == "sponsorship":
-        return "COALESCE(NULLIF(sponsorship, ''), 'unknown')"
+        return "COALESCE(NULLIF(applications.sponsorship, ''), 'unknown')"
     if dimension == "seniority":
         normalized_seniority = _normalized_seniority_expression()
         return f"""
         CASE
-            WHEN TRIM(COALESCE(seniority, '')) = '' THEN 'unknown'
+            WHEN TRIM(COALESCE(applications.seniority, '')) = '' THEN 'unknown'
             WHEN {normalized_seniority} LIKE '% lead %'
               OR {normalized_seniority} LIKE '% staff %'
               OR {normalized_seniority} LIKE '% principal %' THEN 'lead'
@@ -747,7 +759,7 @@ def _dimension_expression(dimension: MetricsBreakdownDimension) -> str:
         END
         """
     if dimension == "work_mode":
-        return "COALESCE(NULLIF(work_mode, ''), 'unknown')"
+        return "COALESCE(NULLIF(applications.work_mode, ''), 'unknown')"
     msg = f"Unsupported breakdown dimension: {dimension}"
     raise ValueError(msg)
 
@@ -757,7 +769,7 @@ def _normalized_seniority_expression() -> str:
     (' ' || REPLACE(
         REPLACE(
             REPLACE(
-                REPLACE(LOWER(TRIM(COALESCE(seniority, ''))), '.', ' '),
+                REPLACE(LOWER(TRIM(COALESCE(applications.seniority, ''))), '.', ' '),
                 '-',
                 ' '
             ),
@@ -793,31 +805,31 @@ def _metrics_filter_where_clause(filters: MetricsFilter | None) -> tuple[str, tu
     clauses: list[str] = []
     parameters: list[object] = []
     if filters.status is not None:
-        clauses.append("current_status = ?")
+        clauses.append("applications.current_status = ?")
         parameters.append(str(filters.status))
     if filters.source is not None:
-        clauses.append("source = ?")
+        clauses.append("applications.source = ?")
         parameters.append(str(filters.source))
     if filters.sponsorship is not None:
-        clauses.append("sponsorship = ?")
+        clauses.append("applications.sponsorship = ?")
         parameters.append(str(filters.sponsorship))
     if filters.first_seen_from is not None:
-        clauses.append("first_seen_at >= ?")
+        clauses.append("applications.first_seen_at >= ?")
         parameters.append(filters.first_seen_from.isoformat())
     if filters.first_seen_to is not None:
-        clauses.append("first_seen_at <= ?")
+        clauses.append("applications.first_seen_at <= ?")
         parameters.append(filters.first_seen_to.isoformat())
     if filters.role is not None:
-        clauses.append("LOWER(role_title) LIKE ? ESCAPE '\\'")
+        clauses.append("LOWER(applications.role_title) LIKE ? ESCAPE '\\'")
         parameters.append(f"%{_escape_like(filters.role.lower())}%")
     if filters.salary_min is not None:
-        clauses.append("COALESCE(salary_max, salary_min) >= ?")
+        clauses.append("COALESCE(applications.salary_max, applications.salary_min) >= ?")
         parameters.append(filters.salary_min)
     if filters.salary_max is not None:
-        clauses.append("COALESCE(salary_min, salary_max) <= ?")
+        clauses.append("COALESCE(applications.salary_min, applications.salary_max) <= ?")
         parameters.append(filters.salary_max)
     if filters.work_mode is not None:
-        clauses.append("work_mode = ?")
+        clauses.append("applications.work_mode = ?")
         parameters.append(str(filters.work_mode))
 
     if not clauses:

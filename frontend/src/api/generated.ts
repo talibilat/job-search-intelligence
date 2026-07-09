@@ -432,6 +432,8 @@ export const MetricsBreakdownDimension = {
   role: "role",
   source: "source",
   salary: "salary",
+  company_type: "company_type",
+  industry: "industry",
   tech: "tech",
   sponsorship: "sponsorship",
   seniority: "seniority",

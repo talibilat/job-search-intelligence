@@ -550,6 +550,10 @@ export function DashboardPage() {
   const [roleConversionLoadState, setRoleConversionLoadState] =
     useState<BreakdownLoadState>("loading");
   const [roleConversionError, setRoleConversionError] = useState<string | null>(null);
+  const [companyTypeRows, setCompanyTypeRows] = useState<MetricBreakdownRow[]>([]);
+  const [companyTypeLoadState, setCompanyTypeLoadState] =
+    useState<BreakdownLoadState>("loading");
+  const [companyTypeError, setCompanyTypeError] = useState<string | null>(null);
   const [timeseriesPoints, setTimeseriesPoints] = useState<
     MetricTimeseriesPoint[]
   >([]);
@@ -606,6 +610,51 @@ export function DashboardPage() {
 
     return () => {
       ignore = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadCompanyTypes() {
+      setCompanyTypeLoadState("loading");
+      setCompanyTypeError(null);
+      setCompanyTypeRows([]);
+
+      const response = await getMetricsBreakdownMetricsBreakdownGet({
+        dimension: MetricsBreakdownDimension.company_type,
+        ...queryParamsFromFilters(appliedFilters),
+      });
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setCompanyTypeRows([]);
+        setCompanyTypeError(
+          publicError(response.data, "Company type outcomes are unavailable."),
+        );
+        setCompanyTypeLoadState("error");
+        return;
+      }
+
+      setCompanyTypeRows(sortedBreakdownRows(response.data.rows));
+      setCompanyTypeLoadState("loaded");
+    }
+
+    void loadCompanyTypes().catch(() => {
+      if (!isCancelled) {
+        setCompanyTypeRows([]);
+        setCompanyTypeError(
+          "Company type outcomes are unavailable. Start the local backend to load Q-24.",
+        );
+        setCompanyTypeLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
     };
   }, [appliedFilters]);
 
@@ -1683,6 +1732,56 @@ export function DashboardPage() {
                   {roleConversionLoadState === "loading"
                     ? "Fetching role conversions"
                     : "No title conversion data"}
+                </span>
+              </div>
+            </li>
+          )}
+        </ol>
+      </section>
+
+      <section
+        aria-labelledby="company-type-outcomes-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div>
+          <p className="eyebrow">Q-24</p>
+          <h2 id="company-type-outcomes-title">Company type outcomes</h2>
+          <p className="dashboard-card__meta">
+            Company type outcomes come from deterministic company profile metadata joined to applications.
+          </p>
+        </div>
+
+        {companyTypeError ? (
+          <Alert title="Company type outcomes unavailable" tone="danger">
+            <p>{companyTypeError}</p>
+          </Alert>
+        ) : null}
+
+        <ol className="dashboard-breakdown-ranks">
+          {companyTypeRows.length > 0 ? (
+            companyTypeRows.slice(0, 5).map((row) => (
+              <li key={`${row.dimension}-${row.value}`}>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {titleize(row.value)}
+                  </span>
+                  <span>{countLabel(row.application_count, "application")}</span>
+                </div>
+                <p>
+                  <span>{countLabel(row.response_count, "response")}</span>, <span>{countLabel(row.interview_count, "interview")}</span>, <span>{countLabel(row.offer_count, "offer")}</span>
+                </p>
+              </li>
+            ))
+          ) : (
+            <li>
+              <div>
+                <span className="dashboard-breakdown-rank__label">
+                  {companyTypeLoadState === "loading" ? "Loading" : "No rows"}
+                </span>
+                <span>
+                  {companyTypeLoadState === "loading"
+                    ? "Fetching company types"
+                    : "No company type data"}
                 </span>
               </div>
             </li>
