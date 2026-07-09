@@ -59,6 +59,9 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
     assert payload["sponsorship_response_impact"]["dimension"] == "sponsorship"
     assert [segment["value"] for segment in payload["selling_skill_segments"]] == ["python"]
     assert payload["dead_weight_skill_segments"] == []
+    assert [segment["value"] for segment in payload["adjacent_role_suggestions"]] == [
+        "software engineer",
+    ]
     assert payload["successful_application_segments"] == [
         {
             "dimension": "source",

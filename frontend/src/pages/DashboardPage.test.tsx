@@ -492,6 +492,26 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
                 value: "python",
               },
             ],
+            adjacent_role_suggestions: [
+              {
+                application_count: 5,
+                dimension: "role",
+                interview_count: 1,
+                interview_rate: 0.2,
+                offer_count: 1,
+                offer_rate: 0.2,
+                response_count: 3,
+                response_rate: 0.6,
+                response_rate_lift: 0,
+                success_count: 1,
+                success_rate: 0.2,
+                success_rate_lift: -0.2,
+                negative_count: 2,
+                negative_rate: 0.4,
+                negative_rate_lift: 0,
+                value: "software engineer",
+              },
+            ],
             baseline_negative_count: 2,
             baseline_negative_rate: 0.4,
             negative_outcome_segments: [
@@ -636,6 +656,7 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             best_roi_source: null,
             sponsorship_response_impact: null,
             dead_weight_skill_segments: [],
+            adjacent_role_suggestions: [],
             negative_outcome_segments: [],
             segments: [],
             selling_skill_segments: [],
@@ -909,6 +930,9 @@ describe("DashboardPage", () => {
       .toBeTruthy();
     expect(within(diagnostics).getByText("Q-38 selling vs dead-weight skills")).toBeTruthy();
     expect(within(diagnostics).getByText("Python is selling"))
+      .toBeTruthy();
+    expect(within(diagnostics).getByText("Q-39 adjacent role suggestions")).toBeTruthy();
+    expect(within(diagnostics).getByText("Software engineer is your strongest adjacent role signal"))
       .toBeTruthy();
     expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
     expect(within(diagnostics).getAllByText("Linkedin (Source)").length).toBeGreaterThan(

@@ -850,6 +850,7 @@ export interface MetricsBreakdownResponse {
 }
 
 export interface MetricsDiagnosticsResponse {
+  adjacent_role_suggestions: DiagnosticSegmentComparison[];
   /** @minimum 0 */
   baseline_negative_count: number;
   baseline_negative_rate?: number | null;

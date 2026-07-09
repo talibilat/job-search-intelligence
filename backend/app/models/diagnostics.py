@@ -43,3 +43,4 @@ class MetricsDiagnosticsResponse(BaseModel):
     negative_outcome_segments: list[DiagnosticSegmentComparison]
     selling_skill_segments: list[DiagnosticSegmentComparison]
     dead_weight_skill_segments: list[DiagnosticSegmentComparison]
+    adjacent_role_suggestions: list[DiagnosticSegmentComparison]

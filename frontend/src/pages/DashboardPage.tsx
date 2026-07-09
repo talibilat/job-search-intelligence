@@ -1202,6 +1202,7 @@ export function DashboardPage() {
   const sponsorshipImpact = diagnostics?.sponsorship_response_impact;
   const sellingSkill = diagnostics?.selling_skill_segments[0];
   const deadWeightSkill = diagnostics?.dead_weight_skill_segments[0];
+  const adjacentRoleSuggestion = diagnostics?.adjacent_role_suggestions[0];
 
   return (
     <main
@@ -2473,6 +2474,32 @@ export function DashboardPage() {
               {deadWeightSkill
                 ? `; ${titleize(deadWeightSkill.value)} is below response baseline`
                 : ""}
+            </p>
+          </article>
+
+          <article className="metric-placeholder">
+            <h3 className="metric-placeholder__label">
+              Q-39 adjacent role suggestions
+            </h3>
+            <p className="metric-placeholder__value">
+              {diagnosticsError
+                ? "Unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading"
+                : adjacentRoleSuggestion
+                ? titleize(adjacentRoleSuggestion.value)
+                : "No role suggestion"}
+            </p>
+            <p className="dashboard-card__meta">
+              {diagnosticsError
+                ? "Adjacent role suggestions are unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading role conversion signals"
+                : adjacentRoleSuggestion
+                ? `${titleize(
+                    adjacentRoleSuggestion.value,
+                  )} is your strongest adjacent role signal`
+                : "No role has interview or offer evidence yet"}
             </p>
           </article>
         </div>

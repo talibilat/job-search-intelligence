@@ -2483,6 +2483,13 @@
       },
       "MetricsDiagnosticsResponse": {
         "properties": {
+          "adjacent_role_suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Adjacent Role Suggestions",
+            "type": "array"
+          },
           "baseline_negative_count": {
             "minimum": 0.0,
             "title": "Baseline Negative Count",
@@ -2641,7 +2648,8 @@
           "successful_application_segments",
           "negative_outcome_segments",
           "selling_skill_segments",
-          "dead_weight_skill_segments"
+          "dead_weight_skill_segments",
+          "adjacent_role_suggestions"
         ],
         "title": "MetricsDiagnosticsResponse",
         "type": "object"

@@ -155,6 +155,7 @@ function metricsDiagnosticsResponse(
   overrides: Partial<MetricsDiagnosticsResponse> = {},
 ): MockObjectResponseBody {
   const response: MetricsDiagnosticsResponse = {
+    adjacent_role_suggestions: [],
     best_roi_source: null,
     sponsorship_response_impact: null,
     dead_weight_skill_segments: [],
