@@ -574,6 +574,83 @@ h3 {
   gap: 24px;
 }
 
+.dashboard-breakdown-card {
+  overflow: hidden;
+}
+
+.dashboard-breakdown-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 18px;
+  align-items: end;
+  min-width: 0;
+}
+
+.dashboard-breakdown-header > div {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-breakdown-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
+  gap: 18px;
+  min-width: 0;
+}
+
+.dashboard-breakdown-chart-card,
+.dashboard-breakdown-ranks {
+  min-width: 0;
+}
+
+.dashboard-breakdown-chart-card .chart-panel {
+  height: 100%;
+  margin-top: 0;
+}
+
+.dashboard-breakdown-ranks {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-breakdown-ranks li {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #edf6eb;
+  color: #203f2c;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-breakdown-ranks div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 900;
+}
+
+.dashboard-breakdown-ranks p {
+  margin-bottom: 0;
+  color: #4e5e53;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.dashboard-breakdown-rank__label {
+  color: #102417;
+  font-size: 1.05rem;
+}
+
 .dashboard-live-applications__header {
   display: flex;
   flex-wrap: wrap;
@@ -1167,6 +1244,8 @@ h3 {
   }
 
   .dashboard-layout,
+  .dashboard-breakdown-header,
+  .dashboard-breakdown-layout,
   .dashboard-live-card,
   .application-detail-grid,
   .filter-placeholder-list,

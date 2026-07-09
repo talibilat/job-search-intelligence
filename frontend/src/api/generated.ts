@@ -932,6 +932,15 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
 
 export type GetMetricsBreakdownMetricsBreakdownGetParams = {
   dimension: MetricsBreakdownDimension;
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
 };
 
 export type GetMetricsSummaryMetricsSummaryGetParams = {

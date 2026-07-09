@@ -1,10 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 
 import {
   ApplicationSource,
   ApplicationStatus,
+  MetricsBreakdownDimension,
   SponsorshipStatus,
   WorkMode,
+  getMetricsBreakdownMetricsBreakdownGet,
   getMetricsRatesMetricsRatesGet,
   getMetricsSummaryMetricsSummaryGet,
   listApplicationsApplicationsGet,
@@ -13,7 +16,9 @@ import {
   type ApplicationSource as ApplicationSourceValue,
   type ApplicationStatus as ApplicationStatusValue,
   type ListApplicationsApplicationsGetParams,
+  type MetricBreakdownRow,
   type MetricRate,
+  type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
   type MetricsSummaryResponse,
   type TimeToFirstResponseMetric,
   type SponsorshipStatus as SponsorshipStatusValue,
@@ -29,6 +34,7 @@ import {
 } from "../components/ui";
 
 type LoadState = "loading" | "loaded" | "error";
+type BreakdownLoadState = "loading" | "loaded" | "error";
 type LiveApplicationsState = "loading" | "ready" | "error";
 type ResponseRateLoadState = "loading" | "loaded" | "error";
 
@@ -69,6 +75,7 @@ const statusOptions = Object.values(ApplicationStatus);
 const sourceOptions = Object.values(ApplicationSource);
 const sponsorshipOptions = Object.values(SponsorshipStatus);
 const workModeOptions = Object.values(WorkMode);
+const breakdownDimensionOptions = Object.values(MetricsBreakdownDimension);
 const numberFormatter = new Intl.NumberFormat("en-US");
 const percentageFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
@@ -340,6 +347,32 @@ const applicationStatusColumns = [
   },
 ] as const;
 
+const breakdownColumns = [
+  {
+    key: "value",
+    header: "Group",
+    render: (row: MetricBreakdownRow) => titleize(row.value),
+  },
+  { key: "application_count", header: "Applications", align: "right" },
+  { key: "response_count", header: "Responses", align: "right" },
+  { key: "interview_count", header: "Interviews", align: "right" },
+  { key: "offer_count", header: "Offers", align: "right" },
+] as const;
+
+function countLabel(count: number, singular: string) {
+  return `${numberFormatter.format(count)} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function sortedBreakdownRows(rows: MetricBreakdownRow[]) {
+  return [...rows].sort((left, right) => {
+    const applicationOrder = right.application_count - left.application_count;
+    if (applicationOrder !== 0) {
+      return applicationOrder;
+    }
+    return left.value.localeCompare(right.value);
+  });
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -357,6 +390,12 @@ export function DashboardPage() {
     useState<MetricRate | null>(null);
   const [responseRateLoadState, setResponseRateLoadState] =
     useState<ResponseRateLoadState>("loading");
+  const [breakdownDimension, setBreakdownDimension] =
+    useState<MetricsBreakdownDimensionValue>(MetricsBreakdownDimension.source);
+  const [breakdownRows, setBreakdownRows] = useState<MetricBreakdownRow[]>([]);
+  const [breakdownLoadState, setBreakdownLoadState] =
+    useState<BreakdownLoadState>("loading");
+  const [breakdownError, setBreakdownError] = useState<string | null>(null);
   const [filters, setFilters] = useState<DashboardFilters>(() =>
     filtersFromSearch(window.location.search),
   );
@@ -502,6 +541,51 @@ export function DashboardPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    async function loadBreakdown() {
+      setBreakdownLoadState("loading");
+      setBreakdownError(null);
+      setBreakdownRows([]);
+
+      const response = await getMetricsBreakdownMetricsBreakdownGet({
+        dimension: breakdownDimension,
+        ...queryParamsFromFilters(appliedFilters),
+      });
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setBreakdownRows([]);
+        setBreakdownError(
+          publicError(response.data, "Metric breakdowns are unavailable."),
+        );
+        setBreakdownLoadState("error");
+        return;
+      }
+
+      setBreakdownRows(sortedBreakdownRows(response.data.rows));
+      setBreakdownLoadState("loaded");
+    }
+
+    void loadBreakdown().catch(() => {
+      if (!isCancelled) {
+        setBreakdownRows([]);
+        setBreakdownError(
+          "Metric breakdowns are unavailable. Start the local backend to load segmentation metrics.",
+        );
+        setBreakdownLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters, breakdownDimension]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
     async function loadResponseRate() {
       try {
         const response = await getMetricsRatesMetricsRatesGet();
@@ -583,7 +667,7 @@ export function DashboardPage() {
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
           Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
-          Q-15, and Q-17 now render from deterministic application and metrics
+          Q-15, Q-17, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
         </p>
@@ -939,6 +1023,135 @@ export function DashboardPage() {
           }
           rowKey={(row) => row.id}
           rows={applications}
+        />
+      </section>
+
+      <section
+        aria-labelledby="dashboard-breakdown-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div className="dashboard-breakdown-header">
+          <div>
+            <p className="eyebrow">Tier 3 segmentation</p>
+            <h2 id="dashboard-breakdown-title">
+              {titleize(breakdownDimension)} breakdown
+            </h2>
+            <p className="dashboard-card__meta">
+              Grouped metrics come from deterministic SQLite breakdown rows over
+              applications and application_events.
+            </p>
+          </div>
+          <FormField htmlFor="dashboard-breakdown-dimension" label="Dimension">
+            <select
+              className="ui-input"
+              id="dashboard-breakdown-dimension"
+              onChange={(event) =>
+                setBreakdownDimension(
+                  event.target.value as MetricsBreakdownDimensionValue,
+                )
+              }
+              value={breakdownDimension}
+            >
+              {breakdownDimensionOptions.map((dimension) => (
+                <option key={dimension} value={dimension}>
+                  {titleize(dimension)}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+
+        {breakdownError ? (
+          <Alert title="Metric breakdowns unavailable" tone="danger">
+            <p>{breakdownError}</p>
+          </Alert>
+        ) : null}
+
+        <div className="dashboard-breakdown-layout">
+          <div className="dashboard-breakdown-chart-card">
+            <ChartPanel
+              description={`Application counts grouped by ${titleize(
+                breakdownDimension,
+              ).toLowerCase()}. Response, interview, and offer counts are listed in the ranked summary and table.`}
+              emptyState={{
+                title:
+                  breakdownLoadState === "loading"
+                    ? "Loading breakdown"
+                    : "No breakdown rows yet",
+                description:
+                  breakdownLoadState === "loading"
+                    ? "Loading deterministic grouped metrics from the local backend."
+                    : "No applications exist for this breakdown dimension yet.",
+              }}
+              height={260}
+              title={`${titleize(breakdownDimension)} applications`}
+            >
+              {breakdownRows.length > 0 ? (
+                <BarChart
+                  data={breakdownRows.map((row) => ({
+                    applications: row.application_count,
+                    group: titleize(row.value),
+                  }))}
+                  layout="vertical"
+                  margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+                >
+                  <CartesianGrid horizontal={false} stroke="rgba(255, 250, 240, 0.16)" />
+                  <XAxis allowDecimals={false} stroke="#c9d8ce" type="number" />
+                  <YAxis
+                    dataKey="group"
+                    stroke="#c9d8ce"
+                    tick={{ fontSize: 12 }}
+                    type="category"
+                    width={96}
+                  />
+                  <Tooltip />
+                  <Bar dataKey="applications" fill="#b8e2af" radius={[0, 8, 8, 0]} />
+                </BarChart>
+              ) : undefined}
+            </ChartPanel>
+          </div>
+          <ol className="dashboard-breakdown-ranks">
+            {breakdownRows.length > 0 ? (
+              breakdownRows.slice(0, 4).map((row) => (
+                <li key={`${row.dimension}-${row.value}`}>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {titleize(row.value)}
+                    </span>
+                    <span>{countLabel(row.application_count, "application")}</span>
+                  </div>
+                  <p>
+                    {countLabel(row.response_count, "response")}, {countLabel(row.interview_count, "interview")}, {countLabel(row.offer_count, "offer")}
+                  </p>
+                </li>
+              ))
+            ) : (
+              <li>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {breakdownLoadState === "loading" ? "Loading" : "No rows"}
+                  </span>
+                  <span>
+                    {breakdownLoadState === "loading"
+                      ? "Fetching breakdowns"
+                      : "No grouped metrics"}
+                  </span>
+                </div>
+              </li>
+            )}
+          </ol>
+        </div>
+
+        <DataTable
+          caption={`${titleize(breakdownDimension)} metric breakdown`}
+          columns={breakdownColumns}
+          emptyMessage={
+            breakdownLoadState === "loaded"
+              ? "No breakdown rows to show."
+              : "No breakdown rows loaded yet."
+          }
+          rowKey={(row) => `${row.dimension}-${row.value}`}
+          rows={breakdownRows}
         />
       </section>
 
