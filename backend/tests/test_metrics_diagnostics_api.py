@@ -26,6 +26,8 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
     assert payload["total_applications"] == 5
     assert payload["baseline_response_count"] == 3
     assert payload["baseline_response_rate"] == 0.6
+    assert payload["baseline_success_count"] == 1
+    assert payload["baseline_success_rate"] == 0.2
     assert payload["strongest_response_segments"][0] == {
         "dimension": "source",
         "value": "company_site",
@@ -33,11 +35,31 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
         "response_count": 2,
         "interview_count": 0,
         "offer_count": 0,
+        "success_count": 0,
         "response_rate": 1.0,
         "interview_rate": 0.0,
         "offer_rate": 0.0,
+        "success_rate": 0.0,
         "response_rate_lift": 0.4,
+        "success_rate_lift": -0.2,
     }
+    assert payload["successful_application_segments"] == [
+        {
+            "dimension": "source",
+            "value": "linkedin",
+            "application_count": 3,
+            "response_count": 1,
+            "interview_count": 1,
+            "offer_count": 1,
+            "success_count": 1,
+            "response_rate": 1 / 3,
+            "interview_rate": 1 / 3,
+            "offer_rate": 1 / 3,
+            "success_rate": 1 / 3,
+            "response_rate_lift": (1 / 3) - 0.6,
+            "success_rate_lift": (1 / 3) - 0.2,
+        },
+    ]
     assert any(
         segment["dimension"] == "source"
         and segment["value"] == "linkedin"
@@ -59,6 +81,8 @@ def test_metrics_diagnostics_composes_filters(tmp_path: Path) -> None:
     assert payload["total_applications"] == 3
     assert payload["baseline_response_count"] == 1
     assert payload["baseline_response_rate"] == 1 / 3
+    assert payload["baseline_success_count"] == 1
+    assert payload["baseline_success_rate"] == 1 / 3
     source_segments = [
         segment for segment in payload["segments"] if segment["dimension"] == "source"
     ]
@@ -70,10 +94,13 @@ def test_metrics_diagnostics_composes_filters(tmp_path: Path) -> None:
             "response_count": 1,
             "interview_count": 1,
             "offer_count": 1,
+            "success_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
+            "success_rate": 1 / 3,
             "response_rate_lift": 0.0,
+            "success_rate_lift": 0.0,
         },
     ]
 

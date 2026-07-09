@@ -45,9 +45,17 @@ class DiagnosticsService:
             numerator=response_silence.human_response_count,
             denominator=response_silence.total_applications,
         )
+        baseline_success_count = self._metrics_repository.count_successful_applications(
+            filters=filters,
+        )
+        baseline_success_rate = _rate(
+            numerator=baseline_success_count,
+            denominator=response_silence.total_applications,
+        )
         segments = self._segments_for_dimensions(
             dimensions=dimensions,
             baseline_response_rate=baseline_response_rate,
+            baseline_success_rate=baseline_success_rate,
             filters=filters,
         )
 
@@ -55,12 +63,18 @@ class DiagnosticsService:
             total_applications=response_silence.total_applications,
             baseline_response_count=response_silence.human_response_count,
             baseline_response_rate=baseline_response_rate,
+            baseline_success_count=baseline_success_count,
+            baseline_success_rate=baseline_success_rate,
             segments=segments,
             strongest_response_segments=_strongest_segments(
                 segments,
                 limit=self._highlight_limit,
             ),
             weakest_response_segments=_weakest_segments(
+                segments,
+                limit=self._highlight_limit,
+            ),
+            successful_application_segments=_successful_application_segments(
                 segments,
                 limit=self._highlight_limit,
             ),
@@ -71,15 +85,22 @@ class DiagnosticsService:
         *,
         dimensions: Sequence[MetricsBreakdownDimension],
         baseline_response_rate: float | None,
+        baseline_success_rate: float | None,
         filters: MetricsFilter | None,
     ) -> list[DiagnosticSegmentComparison]:
         segments: list[DiagnosticSegmentComparison] = []
         for dimension in dimensions:
+            success_counts = self._metrics_repository.get_successful_application_breakdown(
+                dimension,
+                filters=filters,
+            )
             for row in self._metrics_repository.get_breakdown(dimension, filters=filters):
                 segments.append(
                     _diagnostic_segment(
                         row=row,
+                        success_count=success_counts.get(row.value, 0),
                         baseline_response_rate=baseline_response_rate,
+                        baseline_success_rate=baseline_success_rate,
                     ),
                 )
         return sorted(
@@ -96,10 +117,16 @@ class DiagnosticsService:
 def _diagnostic_segment(
     *,
     row: MetricBreakdownRow,
+    success_count: int,
     baseline_response_rate: float | None,
+    baseline_success_rate: float | None,
 ) -> DiagnosticSegmentComparison:
     response_rate = _rate(
         numerator=row.response_count,
+        denominator=row.application_count,
+    )
+    success_rate = _rate(
+        numerator=success_count,
         denominator=row.application_count,
     )
     return DiagnosticSegmentComparison(
@@ -109,6 +136,7 @@ def _diagnostic_segment(
         response_count=row.response_count,
         interview_count=row.interview_count,
         offer_count=row.offer_count,
+        success_count=success_count,
         response_rate=response_rate,
         interview_rate=_rate(
             numerator=row.interview_count,
@@ -118,9 +146,13 @@ def _diagnostic_segment(
             numerator=row.offer_count,
             denominator=row.application_count,
         ),
+        success_rate=success_rate,
         response_rate_lift=None
         if response_rate is None or baseline_response_rate is None
         else response_rate - baseline_response_rate,
+        success_rate_lift=None
+        if success_rate is None or baseline_success_rate is None
+        else success_rate - baseline_success_rate,
     )
 
 
@@ -165,6 +197,30 @@ def _weakest_segments(
         negative_segments,
         key=lambda segment: (
             float(segment.response_rate_lift or 0),
+            -segment.application_count,
+            segment.dimension,
+            segment.value,
+        ),
+    )[:limit]
+
+
+def _successful_application_segments(
+    segments: Sequence[DiagnosticSegmentComparison],
+    *,
+    limit: int,
+) -> list[DiagnosticSegmentComparison]:
+    successful_segments = [
+        segment
+        for segment in segments
+        if segment.success_count > 0
+        and segment.success_rate_lift is not None
+        and segment.success_rate_lift > 0
+    ]
+    return sorted(
+        successful_segments,
+        key=lambda segment: (
+            -float(segment.success_rate_lift or 0),
+            -segment.success_count,
             -segment.application_count,
             segment.dimension,
             segment.value,

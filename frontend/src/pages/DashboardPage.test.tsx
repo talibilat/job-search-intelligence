@@ -433,6 +433,8 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
           JSON.stringify({
             baseline_response_count: 3,
             baseline_response_rate: 0.6,
+            baseline_success_count: 2,
+            baseline_success_rate: 0.4,
             segments: [],
             strongest_response_segments: [
               {
@@ -445,6 +447,26 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
                 response_count: 2,
                 response_rate: 1,
                 response_rate_lift: 0.4,
+                success_count: 2,
+                success_rate: 1,
+                success_rate_lift: 0.6,
+                value: "referral",
+              },
+            ],
+            successful_application_segments: [
+              {
+                application_count: 2,
+                dimension: "source",
+                interview_count: 1,
+                interview_rate: 0.5,
+                offer_count: 1,
+                offer_rate: 0.5,
+                response_count: 2,
+                response_rate: 1,
+                response_rate_lift: 0.4,
+                success_count: 2,
+                success_rate: 1,
+                success_rate_lift: 0.6,
                 value: "referral",
               },
             ],
@@ -460,6 +482,9 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
                 response_count: 1,
                 response_rate: 1 / 3,
                 response_rate_lift: (1 / 3) - 0.6,
+                success_count: 0,
+                success_rate: 0,
+                success_rate_lift: -0.4,
                 value: "linkedin",
               },
             ],
@@ -478,8 +503,11 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
           JSON.stringify({
             baseline_response_count: 1,
             baseline_response_rate: 1,
+            baseline_success_count: 0,
+            baseline_success_rate: 0,
             segments: [],
             strongest_response_segments: [],
+            successful_application_segments: [],
             total_applications: 1,
             weakest_response_segments: [],
           }),
@@ -722,8 +750,13 @@ describe("DashboardPage", () => {
     expect(within(diagnostics).getByText("Baseline response rate")).toBeTruthy();
     expect(within(diagnostics).getByText("60%")).toBeTruthy();
     expect(within(diagnostics).getByText("Strongest response signals")).toBeTruthy();
-    expect(within(diagnostics).getByText("Referral (Source)")).toBeTruthy();
+    expect(within(diagnostics).getAllByText("Referral (Source)").length).toBeGreaterThan(
+      0,
+    );
     expect(within(diagnostics).getByText("+40 pp vs baseline")).toBeTruthy();
+    expect(within(diagnostics).getByText("Q-32 successful application traits")).toBeTruthy();
+    expect(within(diagnostics).getByText("40% baseline success rate")).toBeTruthy();
+    expect(within(diagnostics).getByText("+60 pp success lift")).toBeTruthy();
     expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
     expect(within(diagnostics).getByText("Linkedin (Source)")).toBeTruthy();
     expect(within(diagnostics).getByText("-26.7 pp vs baseline")).toBeTruthy();

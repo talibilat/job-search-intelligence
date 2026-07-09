@@ -157,8 +157,11 @@ function metricsDiagnosticsResponse(
   const response: MetricsDiagnosticsResponse = {
     baseline_response_count: 0,
     baseline_response_rate: null,
+    baseline_success_count: 0,
+    baseline_success_rate: null,
     segments: [],
     strongest_response_segments: [],
+    successful_application_segments: [],
     total_applications: 0,
     weakest_response_segments: [],
     ...overrides,
