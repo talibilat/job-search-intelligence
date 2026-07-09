@@ -89,6 +89,12 @@ def test_get_insights_returns_latest_cached_records_in_wrapper(tmp_path: Path) -
     ]
     assert estimates[0]["cost"]["estimated_cost_usd"] == 0.0
     assert estimates[0]["cost"]["actual_cost_usd"] is None
+    recurring_feedback_estimate = next(
+        estimate for estimate in estimates if estimate["type"] == "recurring_feedback"
+    )
+    assert recurring_feedback_estimate["cost"]["estimated_cost_usd"] == 0.0
+    assert recurring_feedback_estimate["cost"]["actual_cost_usd"] is None
+    assert recurring_feedback_estimate["cost"]["actual_total_tokens"] is None
 
 
 def test_post_insights_regenerate_answers_q41(tmp_path: Path) -> None:

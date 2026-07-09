@@ -181,7 +181,10 @@ class InsightGenerationService:
                 insight=insight,
                 input=insight_input,
                 cached=False,
-                cost=_no_llm_cost("insufficient evidence response did not call an LLM"),
+                cost=_no_llm_cost(
+                    "insufficient evidence response did not call an LLM",
+                    include_actual=True,
+                ),
             )
 
         request = build_insight_generation_request(insight_input, model=model)
@@ -277,7 +280,10 @@ def _estimate_regeneration_cost_for_input(
     insight_input: InsightInput,
 ) -> InsightRegenerationCost:
     if _insufficient_recurring_feedback_content(insight_input) is not None:
-        return _no_llm_cost("insufficient evidence response does not call an LLM")
+        return _no_llm_cost(
+            "insufficient evidence response does not call an LLM",
+            include_actual=False,
+        )
 
     return _estimate_regeneration_cost(
         settings=settings,
@@ -318,16 +324,20 @@ def _with_actual_regeneration_cost(
     )
 
 
-def _no_llm_cost(token_estimate_method: str) -> InsightRegenerationCost:
+def _no_llm_cost(
+    token_estimate_method: str,
+    *,
+    include_actual: bool = False,
+) -> InsightRegenerationCost:
     return InsightRegenerationCost(
         estimated_prompt_tokens=0,
         estimated_completion_tokens=0,
         estimated_total_tokens=0,
         estimated_cost_usd=0.0,
-        actual_prompt_tokens=0,
-        actual_completion_tokens=0,
-        actual_total_tokens=0,
-        actual_cost_usd=0.0,
+        actual_prompt_tokens=0 if include_actual else None,
+        actual_completion_tokens=0 if include_actual else None,
+        actual_total_tokens=0 if include_actual else None,
+        actual_cost_usd=0.0 if include_actual else None,
         currency="USD",
         cost_estimate_available=True,
         token_estimate_method=token_estimate_method,
