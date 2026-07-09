@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Literal, Self
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.db.repositories import MetricsRepository
+from app.models import MetricsBreakdownDimension, MetricsFilter
+
+StructuredQueryTemplate = Literal["total_applications", "rates", "funnel", "breakdown"]
+StructuredQueryScalar = str | int | float | None
+
+
+class StructuredQueryRequest(BaseModel):
+    """Constrained quantitative query request with no raw-SQL surface."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    template: StructuredQueryTemplate
+    filters: MetricsFilter | None = None
+    breakdown_dimension: MetricsBreakdownDimension | None = None
+
+    @model_validator(mode="after")
+    def validate_template_parameters(self) -> Self:
+        if self.template == "breakdown" and self.breakdown_dimension is None:
+            msg = "breakdown_dimension is required for breakdown structured queries"
+            raise ValueError(msg)
+        if self.template != "breakdown" and self.breakdown_dimension is not None:
+            msg = "breakdown_dimension is only accepted for breakdown structured queries"
+            raise ValueError(msg)
+        return self
+
+
+class StructuredQueryRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    label: str = Field(min_length=1)
+    values: dict[str, StructuredQueryScalar]
+
+
+class StructuredQueryResult(BaseModel):
+    """Grounded deterministic tool output for later chat synthesis."""
+
+    model_config = ConfigDict(frozen=True)
+
+    tool: Literal["structured_query"] = "structured_query"
+    template: StructuredQueryTemplate
+    rows: tuple[StructuredQueryRow, ...]
+    source: Literal["metrics_repository"] = "metrics_repository"
+
+
+class StructuredQueryTool:
+    """Run whitelisted deterministic metric templates for quantitative chat questions."""
+
+    def __init__(
+        self,
+        *,
+        metrics_repository: MetricsRepository,
+        ghost_threshold_days: int,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if ghost_threshold_days < 1:
+            msg = "ghost_threshold_days must be at least 1"
+            raise ValueError(msg)
+        self._metrics_repository = metrics_repository
+        self._ghost_threshold_days = ghost_threshold_days
+        self._clock = clock or _utcnow
+
+    def run(self, request: StructuredQueryRequest) -> StructuredQueryResult:
+        if request.template == "total_applications":
+            return StructuredQueryResult(
+                template=request.template,
+                rows=(
+                    StructuredQueryRow(
+                        label="total_applications",
+                        values={
+                            "application_count": self._metrics_repository.count_total_applications(
+                                filters=request.filters,
+                            ),
+                        },
+                    ),
+                ),
+            )
+
+        if request.template == "rates":
+            ghost_cutoff_at = self._clock().astimezone(UTC) - timedelta(
+                days=self._ghost_threshold_days,
+            )
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=rate.name,
+                        values={
+                            "numerator": rate.numerator,
+                            "denominator": rate.denominator,
+                            "rate": rate.rate,
+                        },
+                    )
+                    for rate in self._metrics_repository.get_rate_metrics(
+                        ghost_cutoff_at=ghost_cutoff_at.isoformat(),
+                        filters=request.filters,
+                    )
+                ),
+            )
+
+        if request.template == "funnel":
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(label=stage.stage, values={"count": stage.count})
+                    for stage in self._metrics_repository.get_funnel_metrics(
+                        filters=request.filters
+                    )
+                ),
+            )
+
+        dimension = request.breakdown_dimension
+        if dimension is None:
+            raise ValueError("breakdown_dimension is required for breakdown structured queries")
+        return StructuredQueryResult(
+            template=request.template,
+            rows=tuple(
+                StructuredQueryRow(
+                    label=row.value,
+                    values={
+                        "dimension": row.dimension,
+                        "application_count": row.application_count,
+                        "response_count": row.response_count,
+                        "response_rate": row.response_rate,
+                        "interview_count": row.interview_count,
+                        "interview_rate": row.interview_rate,
+                        "offer_count": row.offer_count,
+                        "offer_rate": row.offer_rate,
+                    },
+                )
+                for row in self._metrics_repository.get_breakdown(
+                    dimension, filters=request.filters
+                )
+            ),
+        )
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
