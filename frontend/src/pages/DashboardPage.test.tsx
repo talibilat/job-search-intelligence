@@ -29,7 +29,7 @@ const baseApplication = {
   work_mode: "remote",
 };
 
-function mockApplicationResponses() {
+function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url =
       typeof input === "string"
@@ -410,6 +410,24 @@ function mockApplicationResponses() {
     }
 
     if (url === "/metrics/diagnostics") {
+      if (options.diagnosticsStatus !== undefined && options.diagnosticsStatus !== 200) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "diagnostics_unavailable",
+                details: [],
+                message: "Diagnostics are unavailable.",
+              },
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: options.diagnosticsStatus,
+            },
+          ),
+        );
+      }
+
       return Promise.resolve(
         new Response(
           JSON.stringify({
@@ -721,10 +739,48 @@ describe("DashboardPage", () => {
         "These are directional comparisons, not proof that a segment caused an outcome.",
       ),
     ).toBeTruthy();
+    expect(
+      within(diagnostics).getByText(
+        "Filtered baseline response rate is the response rate for every application currently included by the dashboard filters.",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(diagnostics).getByText(
+        "A response means the application has response evidence in application_events, including interviews, offers, or other human replies.",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(diagnostics).getByText(
+        "Strongest and weakest signals are segments ranked by positive or negative lift, not recommendations by themselves.",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(diagnostics).getByText(
+        "Rankings use only local applications and application_events currently included by the dashboard filters.",
+      ),
+    ).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/diagnostics",
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("does not show diagnostic explainability notes when diagnostics fail", async () => {
+    mockApplicationResponses({ diagnosticsStatus: 500 });
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+
+    expect(
+      within(diagnostics).getByText("Diagnostics are unavailable."),
+    ).toBeTruthy();
+    expect(
+      within(diagnostics).queryByText("How to read these diagnostics"),
+    ).toBeNull();
   });
 
   it("renders Q-17 average time to first response from deterministic metrics", async () => {

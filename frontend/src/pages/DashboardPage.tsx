@@ -2218,21 +2218,36 @@ export function DashboardPage() {
           </p>
         </article>
 
-        <article className="metric-placeholder">
-          <h3 className="metric-placeholder__label">How to read these diagnostics</h3>
-          <p className="dashboard-card__meta">
-            Response-rate lift is the segment response rate minus the filtered
-            baseline response rate.
-          </p>
-          <p className="dashboard-card__meta">
-            Strongest and weakest signals are ranked only from local applications
-            and application_events currently included by the dashboard filters.
-          </p>
-          <p className="dashboard-card__meta">
-            These are directional comparisons, not proof that a segment caused an
-            outcome.
-          </p>
-        </article>
+        {diagnostics && diagnosticsLoadState === "loaded" && !diagnosticsError ? (
+          <article className="metric-placeholder">
+            <h3 className="metric-placeholder__label">How to read these diagnostics</h3>
+            <p className="dashboard-card__meta">
+              Response-rate lift is the segment response rate minus the filtered
+              baseline response rate.
+            </p>
+            <p className="dashboard-card__meta">
+              Filtered baseline response rate is the response rate for every
+              application currently included by the dashboard filters.
+            </p>
+            <p className="dashboard-card__meta">
+              A response means the application has response evidence in
+              application_events, including interviews, offers, or other human
+              replies.
+            </p>
+            <p className="dashboard-card__meta">
+              Strongest and weakest signals are segments ranked by positive or
+              negative lift, not recommendations by themselves.
+            </p>
+            <p className="dashboard-card__meta">
+              Rankings use only local applications and application_events currently
+              included by the dashboard filters.
+            </p>
+            <p className="dashboard-card__meta">
+              These are directional comparisons, not proof that a segment caused an
+              outcome.
+            </p>
+          </article>
+        ) : null}
       </section>
 
       <section
