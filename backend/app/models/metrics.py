@@ -178,6 +178,11 @@ class TimeToFirstResponseMetric(BaseModel):
     average_hours: float | None = Field(default=None, ge=0)
 
 
+class TimeToRejectionMetric(BaseModel):
+    application_count: int = Field(ge=0)
+    average_hours: float | None = Field(default=None, ge=0)
+
+
 class MetricsSummaryResponse(BaseModel):
     """Deterministic summary metrics for the dashboard."""
 
@@ -193,4 +198,5 @@ class MetricsSummaryResponse(BaseModel):
     evaluated_at: datetime
     interview_invitation_count: int = Field(ge=0)
     average_time_to_first_response: TimeToFirstResponseMetric
+    average_time_to_rejection: TimeToRejectionMetric
     application_windows: list[ApplicationWindowMetric]

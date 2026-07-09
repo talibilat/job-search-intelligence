@@ -45,6 +45,10 @@ function metricsSummaryResponse(
       application_count: 0,
       average_hours: null,
     },
+    average_time_to_rejection: {
+      application_count: 0,
+      average_hours: null,
+    },
     distinct_company_count: 0,
     evaluated_at: "2026-07-07T20:00:00Z",
     ghost_threshold_days: 30,
