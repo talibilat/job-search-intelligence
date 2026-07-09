@@ -6,6 +6,10 @@ from typing import Any, get_type_hints
 import pytest
 from app.api.provider_config import get_configured_llm_provider
 from app.providers.llm import (
+    LLMEmbedding,
+    LLMEmbeddingProvider,
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMFinishReason,
     LLMGenerationOptions,
     LLMGenerationRequest,
@@ -28,6 +32,8 @@ from app.providers.llm import (
 )
 from pydantic import BaseModel, ValidationError
 
+EMBEDDING_1536 = tuple(0.001 for _ in range(1536))
+
 
 class FakeLLMProvider:
     provider_name = "fake"
@@ -42,6 +48,13 @@ class FakeLLMProvider:
                 completion_tokens=5,
                 total_tokens=8,
             ),
+        )
+
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        return LLMEmbeddingResponse(
+            model=request.model or "fake-embedding-model",
+            embeddings=(LLMEmbedding(index=0, embedding=EMBEDDING_1536),),
+            usage=LLMTokenUsage(prompt_tokens=4, total_tokens=4),
         )
 
     async def health_check(
@@ -76,14 +89,50 @@ class MissingHealthCheckLLMProvider:
         )
 
 
+class MissingEmbeddingLLMProvider:
+    provider_name = "missing-embedding"
+
+    async def generate(self, request: LLMGenerationRequest) -> LLMGenerationResponse:
+        return LLMGenerationResponse(
+            content=request.messages[-1].content,
+            model=request.model or "fake-model",
+        )
+
+    async def health_check(
+        self,
+        request: LLMProviderHealthCheckRequest,
+    ) -> LLMProviderHealthCheckResponse:
+        return LLMProviderHealthCheckResponse(
+            provider_name=self.provider_name,
+            status=LLMModelHealthStatus.AVAILABLE,
+            checks=(
+                LLMModelHealthCheck(
+                    kind=LLMModelKind.CHAT,
+                    model=request.chat_model,
+                    status=LLMModelHealthStatus.AVAILABLE,
+                ),
+            ),
+        )
+
+
 def test_fake_provider_satisfies_llm_provider_protocol() -> None:
     provider: LLMProvider = FakeLLMProvider()
 
     assert isinstance(provider, LLMProvider)
 
 
+def test_fake_provider_satisfies_llm_embedding_provider_protocol() -> None:
+    provider: LLMEmbeddingProvider = FakeLLMProvider()
+
+    assert isinstance(provider, LLMEmbeddingProvider)
+
+
 def test_llm_provider_protocol_requires_health_check() -> None:
     assert not isinstance(MissingHealthCheckLLMProvider(), LLMProvider)
+
+
+def test_llm_provider_protocol_requires_embedding_generation() -> None:
+    assert not isinstance(MissingEmbeddingLLMProvider(), LLMEmbeddingProvider)
 
 
 def test_configured_llm_provider_dependency_returns_protocol() -> None:
@@ -148,9 +197,39 @@ def test_llm_provider_health_check_round_trip() -> None:
     )
 
 
+def test_llm_provider_embedding_round_trip() -> None:
+    provider = FakeLLMProvider()
+    request = LLMEmbeddingRequest(
+        inputs=("Retained recruiter email chunk.",),
+        model="fake-embedding-model",
+    )
+
+    response = asyncio.run(provider.embed(request))
+
+    assert response.model == "fake-embedding-model"
+    assert response.embeddings == (LLMEmbedding(index=0, embedding=EMBEDDING_1536),)
+    assert response.usage == LLMTokenUsage(prompt_tokens=4, total_tokens=4)
+
+
 def test_generation_request_requires_at_least_one_message() -> None:
     with pytest.raises(ValidationError):
         LLMGenerationRequest(messages=())
+
+
+def test_embedding_request_requires_at_least_one_input_and_hides_content_from_repr() -> None:
+    request = LLMEmbeddingRequest(inputs=("Private retained body text.",))
+
+    assert "Private retained body text" not in repr(request)
+    with pytest.raises(ValidationError):
+        LLMEmbeddingRequest(inputs=())
+
+
+def test_embedding_vector_validates_sqlite_vec_dimensions_and_hides_values() -> None:
+    embedding = LLMEmbedding(index=0, embedding=EMBEDDING_1536)
+
+    assert "0.001" not in repr(embedding)
+    with pytest.raises(ValidationError, match="embeddings must have 1536 dimensions"):
+        LLMEmbedding(index=0, embedding=(0.0, 1.0))
 
 
 def test_generation_message_requires_content() -> None:
@@ -218,6 +297,9 @@ def test_llm_boundary_models_do_not_define_credential_fields() -> None:
         LLMGenerationOptions,
         LLMGenerationRequest,
         LLMGenerationResponse,
+        LLMEmbeddingRequest,
+        LLMEmbeddingResponse,
+        LLMEmbedding,
         LLMModelHealthCheck,
         LLMProviderHealthCheckRequest,
         LLMProviderHealthCheckResponse,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class LLMMessageRole(StrEnum):
@@ -62,6 +62,42 @@ class LLMGenerationRequest(BaseModel):
     model: str | None = Field(default=None, min_length=1)
     response_format: LLMResponseFormat = LLMResponseFormat.TEXT
     options: LLMGenerationOptions = Field(default_factory=LLMGenerationOptions)
+
+
+class LLMEmbeddingRequest(BaseModel):
+    """Provider-neutral request for embedding retained local text chunks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    inputs: tuple[str, ...] = Field(min_length=1, repr=False)
+    model: str | None = Field(default=None, min_length=1)
+
+
+class LLMEmbedding(BaseModel):
+    """One provider-neutral sqlite-vec compatible embedding vector."""
+
+    model_config = ConfigDict(frozen=True)
+
+    index: int = Field(ge=0)
+    embedding: tuple[float, ...] = Field(repr=False)
+
+    @field_validator("embedding")
+    @classmethod
+    def validate_embedding_dimensions(cls, value: tuple[float, ...]) -> tuple[float, ...]:
+        if len(value) != 1536:
+            msg = "embeddings must have 1536 dimensions"
+            raise ValueError(msg)
+        return value
+
+
+class LLMEmbeddingResponse(BaseModel):
+    """Provider-neutral embedding response and token accounting."""
+
+    model_config = ConfigDict(frozen=True)
+
+    model: str = Field(min_length=1)
+    embeddings: tuple[LLMEmbedding, ...] = Field(min_length=1)
+    usage: LLMTokenUsage | None = None
 
 
 class LLMProviderHealthCheckRequest(BaseModel):

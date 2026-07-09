@@ -20,6 +20,9 @@ from .errors import (
     LLMProviderUnavailableError,
 )
 from .types import (
+    LLMEmbedding,
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMFinishReason,
     LLMGenerationOptions,
     LLMGenerationRequest,
@@ -36,6 +39,7 @@ from .types import (
 )
 
 _OLLAMA_CHAT_PATH = "/api/chat"
+_OLLAMA_EMBED_PATH = "/api/embed"
 _OLLAMA_JSON_FORMAT = "json"
 _INVALID_RESPONSE_MESSAGE = "Ollama returned invalid generation data."
 
@@ -46,6 +50,13 @@ class OllamaTransport(Protocol):
         request: OllamaChatTransportRequest,
     ) -> OllamaChatResponse:
         """POST a JSON request to Ollama without logging prompt content."""
+        ...
+
+    async def post_embedding_json(
+        self,
+        request: OllamaEmbeddingTransportRequest,
+    ) -> OllamaEmbeddingResponse:
+        """POST an embedding request to Ollama without logging retained text."""
         ...
 
 
@@ -73,6 +84,15 @@ class UrllibOllamaTransport:
     ) -> OllamaChatResponse:
         return await asyncio.to_thread(
             self._post_json_sync,
+            request,
+        )
+
+    async def post_embedding_json(
+        self,
+        request: OllamaEmbeddingTransportRequest,
+    ) -> OllamaEmbeddingResponse:
+        return await asyncio.to_thread(
+            self._post_embedding_json_sync,
             request,
         )
 
@@ -120,6 +140,50 @@ class UrllibOllamaTransport:
         except ValidationError:
             raise OllamaTransportInvalidResponseError from None
 
+    def _post_embedding_json_sync(
+        self,
+        transport_request: OllamaEmbeddingTransportRequest,
+    ) -> OllamaEmbeddingResponse:
+        http_request = Request(
+            _join_ollama_url(self._base_url, transport_request.path),
+            data=json.dumps(
+                transport_request.payload.model_dump(mode="json"),
+                separators=(",", ":"),
+            ).encode("utf-8"),
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with self._opener.open(
+                http_request,
+                timeout=transport_request.timeout_seconds,
+            ) as response:
+                response_body = response.read()
+        except TimeoutError as error:
+            raise OllamaTransportTimeoutError from error
+        except HTTPError as error:
+            raise OllamaTransportError(status_code=error.code) from error
+        except URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                raise OllamaTransportTimeoutError from error
+            raise OllamaTransportError(status_code=None) from error
+
+        try:
+            decoded_response = json.loads(response_body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise OllamaTransportInvalidResponseError from error
+
+        if not isinstance(decoded_response, dict):
+            raise OllamaTransportInvalidResponseError
+        try:
+            return OllamaEmbeddingResponse.model_validate(cast(dict[str, object], decoded_response))
+        except ValidationError:
+            raise OllamaTransportInvalidResponseError from None
+
 
 class OllamaChatMessagePayload(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -153,6 +217,29 @@ class OllamaChatTransportRequest(BaseModel):
     timeout_seconds: int = Field(ge=1)
 
 
+class OllamaEmbeddingRequestPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    model: str = Field(min_length=1)
+    input: tuple[str, ...] = Field(min_length=1, repr=False)
+
+
+class OllamaEmbeddingTransportRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    path: str = Field(min_length=1)
+    payload: OllamaEmbeddingRequestPayload
+    timeout_seconds: int = Field(ge=1)
+
+
+class OllamaEmbeddingResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    model: str | None = Field(default=None, min_length=1)
+    embeddings: tuple[tuple[float, ...], ...] = Field(min_length=1, repr=False)
+    prompt_eval_count: int | None = Field(default=None, ge=0)
+
+
 class OllamaChatResponseMessage(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -184,6 +271,7 @@ class OllamaLLMProvider:
     ) -> None:
         _validate_local_base_url(settings.ollama_base_url)
         self._chat_model = settings.ollama_chat_model
+        self._embedding_model = settings.ollama_embedding_model
         self._timeout_seconds = settings.llm_timeout_seconds
         self._max_retries = settings.llm_max_retries
         self._transport = transport or UrllibOllamaTransport(base_url=settings.ollama_base_url)
@@ -214,6 +302,36 @@ class OllamaLLMProvider:
                 raise LLMProviderRequestError(public_message="Ollama request failed.") from error
 
         return _generation_response(response)
+
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        transport_request = OllamaEmbeddingTransportRequest(
+            path=_OLLAMA_EMBED_PATH,
+            payload=OllamaEmbeddingRequestPayload(
+                model=request.model or self._embedding_model,
+                input=request.inputs,
+            ),
+            timeout_seconds=self._timeout_seconds,
+        )
+        for attempt_index in range(self._max_retries + 1):
+            try:
+                response = await self._transport.post_embedding_json(transport_request)
+                break
+            except OllamaTransportTimeoutError as error:
+                if attempt_index < self._max_retries:
+                    continue
+                raise LLMProviderTimeoutError(public_message="Ollama request timed out.") from error
+            except OllamaTransportInvalidResponseError as error:
+                raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from error
+            except OllamaTransportError as error:
+                if _is_unavailable_status(error.status_code):
+                    if attempt_index < self._max_retries:
+                        continue
+                    raise LLMProviderUnavailableError(
+                        public_message="Ollama is unavailable."
+                    ) from error
+                raise LLMProviderRequestError(public_message="Ollama request failed.") from error
+
+        return _embedding_response(response, default_model=transport_request.payload.model)
 
     async def health_check(
         self,
@@ -291,6 +409,21 @@ def _generation_response(response: OllamaChatResponse) -> LLMGenerationResponse:
     )
 
 
+def _embedding_response(
+    response: OllamaEmbeddingResponse,
+    *,
+    default_model: str,
+) -> LLMEmbeddingResponse:
+    return LLMEmbeddingResponse(
+        model=response.model or default_model,
+        embeddings=tuple(
+            LLMEmbedding(index=index, embedding=embedding)
+            for index, embedding in enumerate(response.embeddings)
+        ),
+        usage=_embedding_token_usage(response),
+    )
+
+
 def _finish_reason(done_reason: str | None) -> LLMFinishReason:
     if done_reason == "stop":
         return LLMFinishReason.STOP
@@ -309,6 +442,15 @@ def _token_usage(response: OllamaChatResponse) -> LLMTokenUsage | None:
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=prompt_tokens + completion_tokens,
+    )
+
+
+def _embedding_token_usage(response: OllamaEmbeddingResponse) -> LLMTokenUsage | None:
+    if response.prompt_eval_count is None:
+        return None
+    return LLMTokenUsage(
+        prompt_tokens=response.prompt_eval_count,
+        total_tokens=response.prompt_eval_count,
     )
 
 

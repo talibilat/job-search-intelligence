@@ -6,6 +6,9 @@ from typing import cast
 import pytest
 from app.config import AppSettings
 from app.providers.llm import (
+    LLMEmbedding,
+    LLMEmbeddingProvider,
+    LLMEmbeddingRequest,
     LLMFinishReason,
     LLMGenerationOptions,
     LLMGenerationRequest,
@@ -25,6 +28,8 @@ from app.providers.llm import (
 from app.providers.llm.ollama import (
     OllamaChatResponse,
     OllamaChatTransportRequest,
+    OllamaEmbeddingResponse,
+    OllamaEmbeddingTransportRequest,
     OllamaLLMProvider,
     OllamaTransportError,
     OllamaTransportInvalidResponseError,
@@ -32,17 +37,22 @@ from app.providers.llm.ollama import (
     UrllibOllamaTransport,
 )
 
+EMBEDDING_1536 = tuple(0.003 for _ in range(1536))
+
 
 class FakeOllamaTransport:
     def __init__(
         self,
         *,
         response: OllamaChatResponse | None = None,
+        embedding_response: OllamaEmbeddingResponse | None = None,
         error: Exception | None = None,
     ) -> None:
         self._response = response or _ollama_response()
+        self._embedding_response = embedding_response or _ollama_embedding_response()
         self._error = error
         self.calls: list[OllamaChatTransportRequest] = []
+        self.embedding_calls: list[OllamaEmbeddingTransportRequest] = []
 
     async def post_json(
         self,
@@ -52,6 +62,15 @@ class FakeOllamaTransport:
         if self._error is not None:
             raise self._error
         return self._response
+
+    async def post_embedding_json(
+        self,
+        request: OllamaEmbeddingTransportRequest,
+    ) -> OllamaEmbeddingResponse:
+        self.embedding_calls.append(request)
+        if self._error is not None:
+            raise self._error
+        return self._embedding_response
 
 
 class SequencedOllamaTransport:
@@ -68,6 +87,12 @@ class SequencedOllamaTransport:
         if isinstance(outcome, Exception):
             raise outcome
         return outcome
+
+    async def post_embedding_json(
+        self,
+        request: OllamaEmbeddingTransportRequest,
+    ) -> OllamaEmbeddingResponse:
+        raise AssertionError("embedding requests are not used by retry tests")
 
 
 def _settings() -> AppSettings:
@@ -119,6 +144,19 @@ def _ollama_response(
     )
 
 
+def _ollama_embedding_response(
+    *,
+    model: str = "nomic-embed-text",
+) -> OllamaEmbeddingResponse:
+    return OllamaEmbeddingResponse.model_validate(
+        {
+            "model": model,
+            "embeddings": [list(EMBEDDING_1536), list(EMBEDDING_1536)],
+            "prompt_eval_count": 13,
+        }
+    )
+
+
 def test_ollama_provider_satisfies_protocol_and_builds_chat_payload() -> None:
     transport = FakeOllamaTransport()
     provider = OllamaLLMProvider(settings=_settings(), transport=transport)
@@ -132,6 +170,7 @@ def test_ollama_provider_satisfies_protocol_and_builds_chat_payload() -> None:
     )
 
     assert isinstance(provider, LLMProvider)
+    assert isinstance(provider, LLMEmbeddingProvider)
     assert provider.provider_name == "ollama"
     assert response.content == "application_confirmation"
     assert response.model == "llama3.1"
@@ -181,6 +220,35 @@ def test_ollama_provider_uses_request_model_override_and_json_format() -> None:
     assert payload["model"] == "mistral"
     assert payload["format"] == "json"
     assert "options" not in payload
+
+
+def test_ollama_provider_posts_embedding_request() -> None:
+    transport = FakeOllamaTransport()
+    provider = OllamaLLMProvider(settings=_settings(), transport=transport)
+
+    response = asyncio.run(
+        provider.embed(
+            LLMEmbeddingRequest(
+                inputs=("first retained chunk", "second retained chunk"),
+            )
+        )
+    )
+
+    assert len(transport.embedding_calls) == 1
+    transport_request = transport.embedding_calls[0]
+    payload = transport_request.payload.model_dump(mode="json")
+    assert transport_request.path == "/api/embed"
+    assert transport_request.timeout_seconds == 12
+    assert payload == {
+        "model": "nomic-embed-text",
+        "input": ["first retained chunk", "second retained chunk"],
+    }
+    assert response.model == "nomic-embed-text"
+    assert response.embeddings == (
+        LLMEmbedding(index=0, embedding=EMBEDDING_1536),
+        LLMEmbedding(index=1, embedding=EMBEDDING_1536),
+    )
+    assert response.usage == LLMTokenUsage(prompt_tokens=13, total_tokens=13)
 
 
 def test_ollama_provider_health_check_reports_configured_models_available() -> None:

@@ -19,6 +19,9 @@ from app.providers.llm.errors import (
     LLMProviderUnavailableError,
 )
 from app.providers.llm.types import (
+    LLMEmbedding,
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMFinishReason,
     LLMGenerationOptions,
     LLMGenerationRequest,
@@ -71,6 +74,21 @@ class AzureOpenAIChatCompletionResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     choices: tuple[AzureOpenAIChatChoiceResponse, ...] = Field(min_length=1)
+    model: str | None = Field(default=None, min_length=1)
+    usage: AzureOpenAIUsageResponse | None = None
+
+
+class AzureOpenAIEmbeddingDataResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    index: int = Field(ge=0)
+    embedding: tuple[float, ...]
+
+
+class AzureOpenAIEmbeddingResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    data: tuple[AzureOpenAIEmbeddingDataResponse, ...] = Field(min_length=1)
     model: str | None = Field(default=None, min_length=1)
     usage: AzureOpenAIUsageResponse | None = None
 
@@ -178,6 +196,7 @@ class AzureOpenAIProvider:
         self._endpoint = settings.azure_openai_endpoint.strip().rstrip("/")
         self._api_version = settings.azure_openai_api_version.strip()
         self._chat_deployment = settings.azure_openai_chat_deployment.strip()
+        self._embedding_deployment = settings.azure_openai_embedding_deployment.strip()
         self._timeout_seconds = settings.llm_timeout_seconds
         self._secret_store = secret_store
         self._transport = transport or UrllibAzureOpenAITransport()
@@ -216,6 +235,42 @@ class AzureOpenAIProvider:
             content=content,
             model=azure_response.model or deployment,
             finish_reason=finish_reason,
+            usage=_token_usage(azure_response.usage),
+        )
+
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        deployment = (request.model or self._embedding_deployment).strip()
+        if not self._endpoint or not self._api_version or not deployment:
+            raise LLMProviderUnavailableError(
+                public_message="Azure OpenAI embedding provider is not configured."
+            )
+
+        api_key = await self._read_api_key()
+        try:
+            response_payload = await self._transport.post_json(
+                _embeddings_url(
+                    endpoint=self._endpoint,
+                    deployment=deployment,
+                    api_version=self._api_version,
+                ),
+                api_key=api_key,
+                payload={"input": list(request.inputs)},
+                timeout_seconds=self._timeout_seconds,
+            )
+        except AzureOpenAITransportError as error:
+            _raise_provider_error_for_transport_error(error)
+
+        try:
+            azure_response = AzureOpenAIEmbeddingResponse.model_validate(response_payload)
+        except ValidationError as error:
+            raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from error
+
+        return LLMEmbeddingResponse(
+            model=azure_response.model or deployment,
+            embeddings=tuple(
+                LLMEmbedding(index=item.index, embedding=item.embedding)
+                for item in sorted(azure_response.data, key=lambda item: item.index)
+            ),
             usage=_token_usage(azure_response.usage),
         )
 
@@ -295,6 +350,12 @@ def _chat_completions_url(*, endpoint: str, deployment: str, api_version: str) -
     query = urlencode({"api-version": api_version})
     encoded_deployment = quote(deployment, safe="")
     return f"{endpoint}/openai/deployments/{encoded_deployment}/chat/completions?{query}"
+
+
+def _embeddings_url(*, endpoint: str, deployment: str, api_version: str) -> str:
+    query = urlencode({"api-version": api_version})
+    encoded_deployment = quote(deployment, safe="")
+    return f"{endpoint}/openai/deployments/{encoded_deployment}/embeddings?{query}"
 
 
 def _finish_reason(raw_finish_reason: str | None) -> LLMFinishReason:
