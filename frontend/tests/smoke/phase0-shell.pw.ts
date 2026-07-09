@@ -179,6 +179,21 @@ function sourceBreakdownRows() {
   );
 }
 
+function timeseriesPoints() {
+  const byDay = new Map<string, number>();
+  for (const application of applications) {
+    const day = application.first_seen_at.slice(0, 10);
+    byDay.set(day, (byDay.get(day) ?? 0) + 1);
+  }
+
+  return [...byDay.entries()]
+    .sort(([leftDay], [rightDay]) => leftDay.localeCompare(rightDay))
+    .map(([period_start, application_count]) => ({
+      application_count,
+      period_start,
+    }));
+}
+
 test("renders setup, sync, and fixture-backed dashboard metrics", async ({
   page,
 }) => {
@@ -312,6 +327,15 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
       status: 200,
     });
   });
+  await page.route("**/metrics/timeseries**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        points: timeseriesPoints(),
+      },
+      status: 200,
+    });
+  });
 
   await page.goto("/");
 
@@ -407,6 +431,10 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
   await expect(
     page.getByRole("table", { name: "Source metric breakdown" }),
   ).toBeVisible();
+
+  const trend = page.getByRole("region", { name: "Application volume trend" });
+  await expect(trend.getByText("Application volume trend")).toBeVisible();
+  await expect(trend.getByText("3 applications on Jul 1, 2026")).toBeVisible();
 
   await page.getByRole("link", { name: "Setup" }).click();
 
