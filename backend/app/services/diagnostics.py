@@ -109,6 +109,10 @@ class DiagnosticsService:
                 segments,
                 limit=self._highlight_limit,
             ),
+            adjacent_role_suggestions=_adjacent_role_suggestions(
+                segments,
+                limit=self._highlight_limit,
+            ),
         )
 
     def _segments_for_dimensions(
@@ -379,6 +383,25 @@ def _dead_weight_skill_segments(
         skill_segments,
         key=lambda segment: (
             float(segment.response_rate_lift or 0),
+            -segment.application_count,
+            segment.value,
+        ),
+    )[:limit]
+
+
+def _adjacent_role_suggestions(
+    segments: Sequence[DiagnosticSegmentComparison],
+    *,
+    limit: int,
+) -> list[DiagnosticSegmentComparison]:
+    role_segments = [
+        segment for segment in segments if segment.dimension == "role" and segment.success_count > 0
+    ]
+    return sorted(
+        role_segments,
+        key=lambda segment: (
+            -float(segment.success_rate or 0),
+            -segment.success_count,
             -segment.application_count,
             segment.value,
         ),
