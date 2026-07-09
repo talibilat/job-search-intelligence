@@ -27,6 +27,7 @@ import {
   type ApplicationRecord,
   type ApplicationSource as ApplicationSourceValue,
   type ApplicationStatus as ApplicationStatusValue,
+  type GetMetricsSummaryMetricsSummaryGetParams,
   type ListApplicationsApplicationsGetParams,
   type MetricBreakdownRow,
   type MetricFunnelStage,
@@ -36,6 +37,7 @@ import {
   type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
   type MetricsSummaryResponse,
   type TimeToFirstResponseMetric,
+  type TimeToRejectionMetric,
   type SponsorshipStatus as SponsorshipStatusValue,
   type WorkMode as WorkModeValue,
 } from "../api";
@@ -173,7 +175,7 @@ function optionalNumber(value: string) {
 
 function queryParamsFromFilters(
   filters: DashboardFilters,
-): ListApplicationsApplicationsGetParams {
+): ListApplicationsApplicationsGetParams & GetMetricsSummaryMetricsSummaryGetParams {
   return {
     first_seen_from: optionalText(filters.firstSeenFrom),
     first_seen_to: optionalText(filters.firstSeenTo),
@@ -267,6 +269,43 @@ function formatTimeToFirstResponseMeta(
   return `Averaged across ${numberFormatter.format(
     metric.application_count,
   )} ${applicationLabel} with response evidence`;
+}
+
+function formatTimeToRejectionValue(
+  isLoading: boolean,
+  metric: TimeToRejectionMetric | undefined,
+) {
+  if (isLoading) {
+    return "Loading";
+  }
+  if (metric === undefined) {
+    return "Unavailable";
+  }
+  const averageHours = metric.average_hours;
+  if (averageHours == null) {
+    return "No data";
+  }
+  if (averageHours < 24) {
+    return `${durationFormatter.format(averageHours)} hours`;
+  }
+  return `${durationFormatter.format(averageHours / 24)} days`;
+}
+
+function formatTimeToRejectionMeta(
+  isLoading: boolean,
+  metric: TimeToRejectionMetric | undefined,
+) {
+  if (isLoading || metric === undefined) {
+    return "Loading deterministic rejection timing";
+  }
+  if (metric.application_count === 0) {
+    return "No applications have rejection evidence yet";
+  }
+  const applicationLabel =
+    metric.application_count === 1 ? "rejected application" : "rejected applications";
+  return `Averaged across ${numberFormatter.format(
+    metric.application_count,
+  )} ${applicationLabel}`;
 }
 
 function liveApplicationsCountLabel(
@@ -385,30 +424,26 @@ const breakdownColumns = [
     key: "response_rate",
     header: "Response rate",
     align: "right",
-    render: (row: MetricBreakdownRow) => formatOptionalRate(row.response_rate),
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.response_rate),
   },
   { key: "interview_count", header: "Interviews", align: "right" },
   {
     key: "interview_rate",
     header: "Interview rate",
     align: "right",
-    render: (row: MetricBreakdownRow) => formatOptionalRate(row.interview_rate),
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.interview_rate),
   },
   { key: "offer_count", header: "Offers", align: "right" },
   {
     key: "offer_rate",
     header: "Offer rate",
     align: "right",
-    render: (row: MetricBreakdownRow) => formatOptionalRate(row.offer_rate),
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.offer_rate),
   },
 ] as const;
 
 function countLabel(count: number, singular: string) {
   return `${numberFormatter.format(count)} ${singular}${count === 1 ? "" : "s"}`;
-}
-
-function formatOptionalRate(rate: number | null | undefined) {
-  return rate == null ? "No data" : percentageFormatter.format(rate);
 }
 
 function sortedBreakdownRows(rows: MetricBreakdownRow[]) {
@@ -518,7 +553,9 @@ export function DashboardPage() {
     async function loadSummary() {
       setIsLoadingSummary(true);
       try {
-        const response = await getMetricsSummaryMetricsSummaryGet();
+        const response = await getMetricsSummaryMetricsSummaryGet(
+          queryParamsFromFilters(appliedFilters),
+        );
         if (response.status === 200 && !ignore) {
           setSummary(response.data);
         }
@@ -538,7 +575,7 @@ export function DashboardPage() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [appliedFilters]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -946,6 +983,14 @@ export function DashboardPage() {
     isLoadingSummary,
     summary?.average_time_to_first_response,
   );
+  const averageRejectionValue = formatTimeToRejectionValue(
+    isLoadingSummary,
+    summary?.average_time_to_rejection,
+  );
+  const averageRejectionMeta = formatTimeToRejectionMeta(
+    isLoadingSummary,
+    summary?.average_time_to_rejection,
+  );
 
   return (
     <main
@@ -960,7 +1005,7 @@ export function DashboardPage() {
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
           Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
-          Q-15, Q-16, Q-17, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
+          Q-15, Q-16, Q-17, Q-18, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
         </p>
@@ -1189,6 +1234,18 @@ export function DashboardPage() {
                 {averageFirstResponseValue}
               </p>
               <p className="dashboard-card__meta">{averageFirstResponseMeta}</p>
+            </article>
+            <article
+              aria-label="Average time to rejection metric"
+              className="metric-placeholder"
+            >
+              <h3 className="metric-placeholder__label">
+                Avg time to rejection
+              </h3>
+              <p className="metric-placeholder__value">
+                {averageRejectionValue}
+              </p>
+              <p className="dashboard-card__meta">{averageRejectionMeta}</p>
             </article>
             <article className="metric-placeholder">
               <p className="metric-placeholder__label">Applications shown</p>
@@ -1471,7 +1528,7 @@ export function DashboardPage() {
                     <span>{countLabel(row.application_count, "application")}</span>
                   </div>
                   <p>
-                    {countLabel(row.response_count, "response")} ({formatOptionalRate(row.response_rate)} response rate), {countLabel(row.interview_count, "interview")} ({formatOptionalRate(row.interview_rate)} interview rate), {countLabel(row.offer_count, "offer")} ({formatOptionalRate(row.offer_rate)} offer rate)
+                    {countLabel(row.response_count, "response")} ({formatNullableRate(row.response_rate)} response rate), {countLabel(row.interview_count, "interview")} ({formatNullableRate(row.interview_rate)} interview rate), {countLabel(row.offer_count, "offer")} ({formatNullableRate(row.offer_rate)} offer rate)
                   </p>
                 </li>
               ))

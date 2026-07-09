@@ -16,6 +16,7 @@ from app.models.metrics import (
     MetricTimeseriesPoint,
     ResponseSilenceMetric,
     TimeToFirstResponseMetric,
+    TimeToRejectionMetric,
 )
 
 _RESPONSE_LIKE_EVENT_TYPES = RESPONSE_LIKE_APPLICATION_EVENT_TYPES
@@ -24,36 +25,57 @@ _RESPONSE_LIKE_EVENT_TYPES = RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 class MetricsRepository(BaseRepository[int]):
     """Repository seam for deterministic dashboard metric reads."""
 
-    def count_applications_between(self, *, start_at: str, end_at: str) -> int:
+    def count_applications_between(
+        self,
+        *,
+        start_at: str,
+        end_at: str,
+        filters: MetricsFilter | None = None,
+    ) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
         row = self.execute(
-            """
+            f"""
             SELECT COUNT(*)
             FROM applications
             WHERE first_seen_at >= ?
               AND first_seen_at < ?
+              {filter_clause}
             """,
-            (start_at, end_at),
+            (start_at, end_at, *filter_parameters),
         ).fetchone()
         if row is None:
             return 0
         return int(row[0])
 
-    def count_distinct_companies(self) -> int:
+    def count_distinct_companies(self, filters: MetricsFilter | None = None) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
         row = self.execute(
-            """
+            f"""
             SELECT COUNT(DISTINCT LOWER(TRIM(company)))
             FROM applications
             WHERE TRIM(company) != ''
+              {filter_clause}
             """,
+            filter_parameters,
         ).fetchone()
         if row is None:
             return 0
         return int(row[0])
 
-    def count_applications_with_offer_events(self) -> int:
-        return self._count_applications_with_event("offer")
+    def count_applications_with_offer_events(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> int:
+        return self._count_applications_with_event("offer", filters=filters)
 
-    def get_time_to_first_response_metric(self) -> TimeToFirstResponseMetric:
+    def get_time_to_first_response_metric(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> TimeToFirstResponseMetric:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
         row = self.execute(
             f"""
             WITH first_response AS (
@@ -68,6 +90,7 @@ class MetricsRepository(BaseRepository[int]):
                   AND julianday(application_events.event_at) >= (
                     julianday(applications.first_seen_at)
                   )
+                  {filter_clause}
                 GROUP BY applications.id
             )
             SELECT
@@ -75,12 +98,50 @@ class MetricsRepository(BaseRepository[int]):
                 AVG((response_day - application_seen_day) * 24.0) AS average_hours
             FROM first_response
             """,
-            _RESPONSE_LIKE_EVENT_TYPES,
+            (*_RESPONSE_LIKE_EVENT_TYPES, *filter_parameters),
         ).fetchone()
         if row is None:
             return TimeToFirstResponseMetric(application_count=0, average_hours=None)
         average_hours = row["average_hours"]
         return TimeToFirstResponseMetric(
+            application_count=int(row["application_count"]),
+            average_hours=None if average_hours is None else round(float(average_hours), 6),
+        )
+
+    def get_time_to_rejection_metric(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> TimeToRejectionMetric:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
+        row = self.execute(
+            f"""
+            WITH first_rejection AS (
+                SELECT
+                    applications.id AS application_id,
+                    julianday(applications.first_seen_at) AS application_seen_day,
+                    MIN(julianday(application_events.event_at)) AS rejection_day
+                FROM applications
+                INNER JOIN application_events
+                    ON application_events.application_id = applications.id
+                WHERE application_events.event_type = 'rejection'
+                  AND julianday(application_events.event_at) >= (
+                    julianday(applications.first_seen_at)
+                  )
+                  {filter_clause}
+                GROUP BY applications.id
+            )
+            SELECT
+                COUNT(*) AS application_count,
+                AVG((rejection_day - application_seen_day) * 24.0) AS average_hours
+            FROM first_rejection
+            """,
+            filter_parameters,
+        ).fetchone()
+        if row is None:
+            return TimeToRejectionMetric(application_count=0, average_hours=None)
+        average_hours = row["average_hours"]
+        return TimeToRejectionMetric(
             application_count=int(row["application_count"]),
             average_hours=None if average_hours is None else round(float(average_hours), 6),
         )
@@ -279,13 +340,19 @@ class MetricsRepository(BaseRepository[int]):
     def count_rejected_applications(self, filters: MetricsFilter | None = None) -> int:
         return self._count_applications_with_current_status("rejected", filters=filters)
 
-    def count_interview_invitation_events(self) -> int:
+    def count_interview_invitation_events(self, filters: MetricsFilter | None = None) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
         row = self.execute(
-            """
+            f"""
             SELECT COUNT(*)
             FROM application_events
+            INNER JOIN applications
+                ON applications.id = application_events.application_id
             WHERE event_type = 'interview_scheduled'
+              {filter_clause}
             """,
+            filter_parameters,
         ).fetchone()
         if row is None:
             return 0

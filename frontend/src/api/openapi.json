@@ -2376,6 +2376,9 @@
           "average_time_to_first_response": {
             "$ref": "#/components/schemas/TimeToFirstResponseMetric"
           },
+          "average_time_to_rejection": {
+            "$ref": "#/components/schemas/TimeToRejectionMetric"
+          },
           "distinct_company_count": {
             "minimum": 0.0,
             "title": "Distinct Company Count",
@@ -2428,6 +2431,7 @@
           "evaluated_at",
           "interview_invitation_count",
           "average_time_to_first_response",
+          "average_time_to_rejection",
           "application_windows"
         ],
         "title": "MetricsSummaryResponse",
@@ -3076,6 +3080,32 @@
           "application_count"
         ],
         "title": "TimeToFirstResponseMetric",
+        "type": "object"
+      },
+      "TimeToRejectionMetric": {
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "average_hours": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Hours"
+          }
+        },
+        "required": [
+          "application_count"
+        ],
+        "title": "TimeToRejectionMetric",
         "type": "object"
       },
       "ValidationError": {
@@ -5322,6 +5352,154 @@
               ],
               "description": "Exclusive timezone-aware custom window end.",
               "title": "Custom End At"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationSource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sponsorship",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SponsorshipStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sponsorship"
+            }
+          },
+          {
+            "in": "query",
+            "name": "first_seen_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "First Seen From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "first_seen_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "First Seen To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "salary_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Salary Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "salary_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Salary Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "work_mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WorkMode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Work Mode"
             }
           }
         ],

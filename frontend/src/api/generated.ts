@@ -821,12 +821,19 @@ export interface TimeToFirstResponseMetric {
   average_hours?: number | null;
 }
 
+export interface TimeToRejectionMetric {
+  /** @minimum 0 */
+  application_count: number;
+  average_hours?: number | null;
+}
+
 /**
  * Deterministic summary metrics for the dashboard.
  */
 export interface MetricsSummaryResponse {
   application_windows: ApplicationWindowMetric[];
   average_time_to_first_response: TimeToFirstResponseMetric;
+  average_time_to_rejection: TimeToRejectionMetric;
   /** @minimum 0 */
   distinct_company_count: number;
   evaluated_at: string;
@@ -1069,6 +1076,15 @@ export type GetMetricsSummaryMetricsSummaryGetParams = {
    * Exclusive timezone-aware custom window end.
    */
   custom_end_at?: string | null;
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
 };
 
 export type GetMetricsTimeseriesMetricsTimeseriesGetParams = {

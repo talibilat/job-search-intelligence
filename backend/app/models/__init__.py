@@ -49,6 +49,7 @@ from .metrics import (
     MetricsTimeseriesResponse,
     MetricTimeseriesPoint,
     ResponseSilenceMetric,
+    TimeToRejectionMetric,
 )
 from .provider_config import (
     EmailProviderConfigResponse,
@@ -186,6 +187,7 @@ __all__ = [
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
     "ResponseSilenceMetric",
+    "TimeToRejectionMetric",
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",
