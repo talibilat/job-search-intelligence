@@ -61,4 +61,5 @@ async def regenerate_insight(
         insight=result.insight,
         cached=result.cached,
         evidence_citation_ids=[item.citation_id for item in result.input.evidence],
+        cost=result.cost,
     )

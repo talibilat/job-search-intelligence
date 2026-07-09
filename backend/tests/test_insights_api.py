@@ -21,6 +21,7 @@ from app.providers.llm import (
     LLMModelKind,
     LLMProviderHealthCheckRequest,
     LLMProviderHealthCheckResponse,
+    LLMTokenUsage,
 )
 from fastapi.testclient import TestClient
 
@@ -126,10 +127,25 @@ def test_post_insights_regenerate_forces_generation_and_persists_result(
                 content=f"Regenerated rejection theme. [{CITATION_ID}]",
                 model="llama3.1",
                 finish_reason=LLMFinishReason.STOP,
+                usage=LLMTokenUsage(
+                    prompt_tokens=80,
+                    completion_tokens=20,
+                    total_tokens=100,
+                ),
             ),
         ),
     )
-    client = create_test_client(database_path, provider=provider)
+    client = create_test_client(
+        database_path,
+        provider=provider,
+        settings_overrides={
+            "llm_provider": LLMProviderName.AZURE_OPENAI,
+            "azure_openai_chat_deployment": "gpt-4o-mini",
+            "insight_estimate_chars_per_unit": 10,
+            "insight_input_cost_per_1k_units_usd": 1.0,
+            "insight_output_cost_per_1k_units_usd": 2.0,
+        },
+    )
 
     response = client.post("/insights/regenerate", json={"type": "why_rejected"})
 
@@ -139,6 +155,21 @@ def test_post_insights_regenerate_forces_generation_and_persists_result(
     assert data["insight"]["type"] == "why_rejected"
     assert data["insight"]["content"] == f"Regenerated rejection theme. [{CITATION_ID}]"
     assert data["evidence_citation_ids"] == [CITATION_ID]
+    assert data["cost"] == {
+        "estimated_prompt_tokens": 242,
+        "estimated_completion_tokens": 1200,
+        "estimated_total_tokens": 1442,
+        "estimated_cost_usd": 2.642,
+        "actual_prompt_tokens": 80,
+        "actual_completion_tokens": 20,
+        "actual_total_tokens": 100,
+        "actual_cost_usd": 0.12,
+        "currency": "USD",
+        "cost_estimate_available": True,
+        "token_estimate_method": (
+            "ceil(insight prompt characters / 10) + configured max output tokens"
+        ),
+    }
     assert len(provider.requests) == 1
 
     with sqlite3.connect(database_path) as connection:
@@ -196,13 +227,18 @@ def create_test_client(
     database_path: Path,
     *,
     provider: FakeLLMProvider | None = None,
+    settings_overrides: dict[str, object] | None = None,
 ) -> TestClient:
+    settings_values = {
+        "database_url": f"sqlite+aiosqlite:///{database_path}",
+        "llm_provider": LLMProviderName.OLLAMA,
+        "ollama_chat_model": "llama3.1",
+        **(settings_overrides or {}),
+    }
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: AppSettings(
         _env_file=None,
-        database_url=f"sqlite+aiosqlite:///{database_path}",
-        llm_provider=LLMProviderName.OLLAMA,
-        ollama_chat_model="llama3.1",
+        **settings_values,
     )
     if provider is not None:
         app.dependency_overrides[get_llm_provider] = lambda: provider

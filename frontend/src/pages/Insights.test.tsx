@@ -79,6 +79,20 @@ function mockFetch() {
             evidence_citation_ids: [
               "application:app-5|event:event-5|email:email-5",
             ],
+            cost: {
+              estimated_prompt_tokens: 315,
+              estimated_completion_tokens: 1200,
+              estimated_total_tokens: 1515,
+              estimated_cost_usd: 2.715,
+              actual_prompt_tokens: 80,
+              actual_completion_tokens: 20,
+              actual_total_tokens: 100,
+              actual_cost_usd: 0.12,
+              currency: "USD",
+              cost_estimate_available: true,
+              token_estimate_method:
+                "ceil(insight prompt characters / 10) + configured max output tokens",
+            },
           }),
           { headers: { "Content-Type": "application/json" }, status: 200 },
         ),
@@ -136,6 +150,9 @@ describe("Insights", () => {
     expect(
       await screen.findByText("Fresh rejection themes point to platform depth."),
     ).toBeTruthy();
+    expect(screen.getByText("Estimated cost $2.715")).toBeTruthy();
+    expect(screen.getByText("Actual cost $0.12")).toBeTruthy();
+    expect(screen.getByText("100 actual tokens")).toBeTruthy();
     expect(screen.queryByText("Stale cache")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/insights/regenerate",

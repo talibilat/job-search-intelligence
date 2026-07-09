@@ -44,10 +44,25 @@ class InsightRegenerateRequest(BaseModel):
     max_evidence_items: int = Field(default=100, ge=1)
 
 
+class InsightRegenerationCost(BaseModel):
+    estimated_prompt_tokens: int = Field(ge=0)
+    estimated_completion_tokens: int = Field(ge=0)
+    estimated_total_tokens: int = Field(ge=0)
+    estimated_cost_usd: float | None = Field(default=None, ge=0)
+    actual_prompt_tokens: int | None = Field(default=None, ge=0)
+    actual_completion_tokens: int | None = Field(default=None, ge=0)
+    actual_total_tokens: int | None = Field(default=None, ge=0)
+    actual_cost_usd: float | None = Field(default=None, ge=0)
+    currency: str = "USD"
+    cost_estimate_available: bool
+    token_estimate_method: str = Field(min_length=1)
+
+
 class InsightRegenerateResponse(BaseModel):
     insight: InsightRecord
     cached: bool
     evidence_citation_ids: list[str]
+    cost: InsightRegenerationCost
 
 
 class InsightRoleOutcomeSummary(BaseModel):
