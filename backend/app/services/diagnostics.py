@@ -101,6 +101,14 @@ class DiagnosticsService:
                 segments,
                 limit=self._highlight_limit,
             ),
+            selling_skill_segments=_selling_skill_segments(
+                segments,
+                limit=self._highlight_limit,
+            ),
+            dead_weight_skill_segments=_dead_weight_skill_segments(
+                segments,
+                limit=self._highlight_limit,
+            ),
         )
 
     def _segments_for_dimensions(
@@ -332,3 +340,46 @@ def _sponsorship_response_impact(
             segment.value,
         ),
     )[0]
+
+
+def _selling_skill_segments(
+    segments: Sequence[DiagnosticSegmentComparison],
+    *,
+    limit: int,
+) -> list[DiagnosticSegmentComparison]:
+    skill_segments = [
+        segment
+        for segment in segments
+        if segment.dimension == "tech" and segment.interview_count > 0
+    ]
+    return sorted(
+        skill_segments,
+        key=lambda segment: (
+            -float(segment.interview_rate or 0),
+            -segment.interview_count,
+            -segment.application_count,
+            segment.value,
+        ),
+    )[:limit]
+
+
+def _dead_weight_skill_segments(
+    segments: Sequence[DiagnosticSegmentComparison],
+    *,
+    limit: int,
+) -> list[DiagnosticSegmentComparison]:
+    skill_segments = [
+        segment
+        for segment in segments
+        if segment.dimension == "tech"
+        and segment.response_rate_lift is not None
+        and segment.response_rate_lift < 0
+    ]
+    return sorted(
+        skill_segments,
+        key=lambda segment: (
+            float(segment.response_rate_lift or 0),
+            -segment.application_count,
+            segment.value,
+        ),
+    )[:limit]

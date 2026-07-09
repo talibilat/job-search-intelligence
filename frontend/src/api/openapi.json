@@ -2475,6 +2475,13 @@
               }
             ]
           },
+          "dead_weight_skill_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Dead Weight Skill Segments",
+            "type": "array"
+          },
           "negative_outcome_segments": {
             "items": {
               "$ref": "#/components/schemas/DiagnosticSegmentComparison"
@@ -2487,6 +2494,13 @@
               "$ref": "#/components/schemas/DiagnosticSegmentComparison"
             },
             "title": "Segments",
+            "type": "array"
+          },
+          "selling_skill_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Selling Skill Segments",
             "type": "array"
           },
           "sponsorship_response_impact": {
@@ -2553,7 +2567,9 @@
           "weakest_response_segments",
           "wasted_effort_segments",
           "successful_application_segments",
-          "negative_outcome_segments"
+          "negative_outcome_segments",
+          "selling_skill_segments",
+          "dead_weight_skill_segments"
         ],
         "title": "MetricsDiagnosticsResponse",
         "type": "object"

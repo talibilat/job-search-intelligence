@@ -834,8 +834,10 @@ export interface MetricsDiagnosticsResponse {
   baseline_success_count: number;
   baseline_success_rate?: number | null;
   best_roi_source?: DiagnosticSegmentComparison | null;
+  dead_weight_skill_segments: DiagnosticSegmentComparison[];
   negative_outcome_segments: DiagnosticSegmentComparison[];
   segments: DiagnosticSegmentComparison[];
+  selling_skill_segments: DiagnosticSegmentComparison[];
   sponsorship_response_impact?: DiagnosticSegmentComparison | null;
   strongest_response_correlate?: DiagnosticSegmentComparison | null;
   strongest_response_segments: DiagnosticSegmentComparison[];
