@@ -1199,6 +1199,7 @@ export function DashboardPage() {
   const strongestResponseCorrelate = diagnostics?.strongest_response_correlate;
   const wastedEffortSegment = diagnostics?.wasted_effort_segments[0];
   const bestRoiSource = diagnostics?.best_roi_source;
+  const sponsorshipImpact = diagnostics?.sponsorship_response_impact;
 
   return (
     <main
@@ -2417,6 +2418,32 @@ export function DashboardPage() {
                 : bestRoiSource
                 ? `${diagnosticSegmentTitle(bestRoiSource)} has the best interview ROI`
                 : "No source has interview evidence yet"}
+            </p>
+          </article>
+
+          <article className="metric-placeholder">
+            <h3 className="metric-placeholder__label">
+              Q-37 sponsorship response impact
+            </h3>
+            <p className="metric-placeholder__value">
+              {diagnosticsError
+                ? "Unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading"
+                : sponsorshipImpact
+                ? formatResponseLift(sponsorshipImpact.response_rate_lift)
+                : "No sponsorship comparison"}
+            </p>
+            <p className="dashboard-card__meta">
+              {diagnosticsError
+                ? "Sponsorship response impact is unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading sponsorship response impact"
+                : sponsorshipImpact
+                ? `${diagnosticSegmentTitle(sponsorshipImpact)} is ${formatResponseLift(
+                    sponsorshipImpact.response_rate_lift,
+                  )}`
+                : "No sponsorship segment can be compared yet"}
             </p>
           </article>
         </div>

@@ -836,6 +836,7 @@ export interface MetricsDiagnosticsResponse {
   best_roi_source?: DiagnosticSegmentComparison | null;
   negative_outcome_segments: DiagnosticSegmentComparison[];
   segments: DiagnosticSegmentComparison[];
+  sponsorship_response_impact?: DiagnosticSegmentComparison | null;
   strongest_response_correlate?: DiagnosticSegmentComparison | null;
   strongest_response_segments: DiagnosticSegmentComparison[];
   successful_application_segments: DiagnosticSegmentComparison[];

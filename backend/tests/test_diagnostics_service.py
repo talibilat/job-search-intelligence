@@ -178,6 +178,37 @@ def test_diagnostics_service_composes_metrics_filters(tmp_path: Path) -> None:
     ]
 
 
+def test_diagnostics_service_returns_sponsorship_response_impact(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        seed_diagnostic_fixture(connection)
+        service = DiagnosticsService(metrics_repository=MetricsRepository(connection))
+
+        diagnostics = service.get_diagnostics(dimensions=("sponsorship",))
+
+    assert diagnostics.sponsorship_response_impact is not None
+    assert diagnostics.sponsorship_response_impact.model_dump() == {
+        "dimension": "sponsorship",
+        "value": "not_offered",
+        "application_count": 3,
+        "response_count": 1,
+        "interview_count": 0,
+        "offer_count": 0,
+        "success_count": 0,
+        "negative_count": 2,
+        "response_rate": 1 / 3,
+        "interview_rate": 0.0,
+        "offer_rate": 0.0,
+        "success_rate": 0.0,
+        "negative_rate": 2 / 3,
+        "response_rate_lift": (1 / 3) - 0.6,
+        "success_rate_lift": -0.2,
+        "negative_rate_lift": (2 / 3) - 0.4,
+    }
+
+
 def test_diagnostics_service_handles_empty_application_set(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -211,6 +242,7 @@ def seed_diagnostic_fixture(connection: sqlite3.Connection) -> None:
         first_seen_at="2026-07-01T09:00:00+00:00",
         current_status="applied",
         event_types=("applied",),
+        sponsorship="not_offered",
     )
     insert_application(
         connection,
@@ -219,6 +251,7 @@ def seed_diagnostic_fixture(connection: sqlite3.Connection) -> None:
         first_seen_at="2026-07-01T10:00:00+00:00",
         current_status="rejected",
         event_types=("applied", "rejection"),
+        sponsorship="not_offered",
     )
     insert_application(
         connection,
@@ -227,6 +260,7 @@ def seed_diagnostic_fixture(connection: sqlite3.Connection) -> None:
         first_seen_at="2026-07-01T11:00:00+00:00",
         current_status="offer",
         event_types=("applied", "response", "interview_scheduled", "offer"),
+        sponsorship="offered",
     )
     insert_application(
         connection,
@@ -235,6 +269,7 @@ def seed_diagnostic_fixture(connection: sqlite3.Connection) -> None:
         first_seen_at="2026-07-02T09:00:00+00:00",
         current_status="assessment",
         event_types=("applied", "assessment"),
+        sponsorship="offered",
     )
     insert_application(
         connection,
@@ -243,6 +278,7 @@ def seed_diagnostic_fixture(connection: sqlite3.Connection) -> None:
         first_seen_at="2026-07-02T10:00:00+00:00",
         current_status="ghosted",
         event_types=("applied", "ghost_inferred"),
+        sponsorship="not_offered",
     )
 
 
@@ -254,6 +290,7 @@ def insert_application(
     first_seen_at: str,
     current_status: str,
     event_types: tuple[str, ...],
+    sponsorship: str = "unknown",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -271,7 +308,7 @@ def insert_application(
         location="Remote",
         work_mode="remote",
         seniority="senior",
-        sponsorship="unknown",
+        sponsorship=sponsorship,
         tech_stack=["Python"],
     )
     event_repository = EventRepository(connection)

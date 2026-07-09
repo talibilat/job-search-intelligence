@@ -453,6 +453,24 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
               negative_rate_lift: (2 / 3) - 0.4,
               value: "linkedin",
             },
+            sponsorship_response_impact: {
+              application_count: 3,
+              dimension: "sponsorship",
+              interview_count: 0,
+              interview_rate: 0,
+              offer_count: 0,
+              offer_rate: 0,
+              response_count: 1,
+              response_rate: 1 / 3,
+              response_rate_lift: (1 / 3) - 0.6,
+              success_count: 0,
+              success_rate: 0,
+              success_rate_lift: -0.4,
+              negative_count: 2,
+              negative_rate: 2 / 3,
+              negative_rate_lift: (2 / 3) - 0.4,
+              value: "not_offered",
+            },
             baseline_negative_count: 2,
             baseline_negative_rate: 0.4,
             negative_outcome_segments: [
@@ -595,6 +613,7 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             baseline_negative_count: 1,
             baseline_negative_rate: 1,
             best_roi_source: null,
+            sponsorship_response_impact: null,
             negative_outcome_segments: [],
             segments: [],
             strongest_response_correlate: null,
@@ -861,6 +880,9 @@ describe("DashboardPage", () => {
       .toBeTruthy();
     expect(within(diagnostics).getByText("Q-36 best ROI source")).toBeTruthy();
     expect(within(diagnostics).getByText("Linkedin (Source) has the best interview ROI"))
+      .toBeTruthy();
+    expect(within(diagnostics).getByText("Q-37 sponsorship response impact")).toBeTruthy();
+    expect(within(diagnostics).getByText("Not offered (Sponsorship) is -26.7 pp vs baseline"))
       .toBeTruthy();
     expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
     expect(within(diagnostics).getAllByText("Linkedin (Source)").length).toBeGreaterThan(
