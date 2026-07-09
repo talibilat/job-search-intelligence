@@ -207,6 +207,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
         );
       }
 
+      if (path === "/metrics/breakdown?dimension=company_type") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsBreakdownResponse({ dimension: "company_type" })), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
       if (path === "/metrics/timeseries") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsTimeseriesResponse()), {
@@ -1211,6 +1220,7 @@ describe("App", () => {
     expect(within(liveApplications).getByText("in review")).toBeTruthy();
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
       "/metrics/summary",
+      "/metrics/breakdown?dimension=company_type",
       "/applications?status=applied",
       "/applications?status=in_review",
       "/applications?status=assessment",

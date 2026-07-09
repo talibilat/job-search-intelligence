@@ -276,6 +276,41 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url === "/metrics/breakdown?dimension=company_type") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "company_type",
+            rows: [
+              {
+                application_count: 3,
+                dimension: "company_type",
+                interview_count: 1,
+                interview_rate: 0.3333333333333333,
+                offer_count: 0,
+                offer_rate: 0,
+                response_count: 2,
+                response_rate: 0.6666666666666666,
+                value: "startup",
+              },
+              {
+                application_count: 2,
+                dimension: "company_type",
+                interview_count: 0,
+                interview_rate: 0,
+                offer_count: 0,
+                offer_rate: 0,
+                response_count: 0,
+                response_rate: 0,
+                value: "enterprise",
+              },
+            ],
+          }),
+          { headers: { "Content-Type": "application/json" }, status: 200 },
+        ),
+      );
+    }
+
     if (url === "/metrics/timeseries") {
       return Promise.resolve(
         new Response(
@@ -829,6 +864,25 @@ describe("DashboardPage", () => {
     expect(within(leaders).getByText("2 of 4 applications reached interview")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=role",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-24 company type outcomes", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const companyTypes = await screen.findByRole("region", {
+      name: "Company type outcomes",
+    });
+
+    expect(within(companyTypes).getByText("Startup")).toBeTruthy();
+    expect(within(companyTypes).getByText("2 responses")).toBeTruthy();
+    expect(within(companyTypes).getByText("1 interview")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=company_type",
       expect.objectContaining({ method: "GET" }),
     );
   });
