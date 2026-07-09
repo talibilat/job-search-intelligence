@@ -28,6 +28,8 @@ def test_diagnostics_service_outputs_match_synthetic_fixture(tmp_path: Path) -> 
     assert diagnostics.baseline_response_rate == 0.6
     assert diagnostics.baseline_success_count == 1
     assert diagnostics.baseline_success_rate == 0.2
+    assert diagnostics.baseline_negative_count == 2
+    assert diagnostics.baseline_negative_rate == 0.4
     assert [segment.model_dump() for segment in diagnostics.segments] == [
         {
             "dimension": "source",
@@ -37,12 +39,15 @@ def test_diagnostics_service_outputs_match_synthetic_fixture(tmp_path: Path) -> 
             "interview_count": 0,
             "offer_count": 0,
             "success_count": 0,
+            "negative_count": 1,
             "response_rate": 1.0,
             "interview_rate": 0.0,
             "offer_rate": 0.0,
             "success_rate": 0.0,
+            "negative_rate": 0.5,
             "response_rate_lift": 0.4,
             "success_rate_lift": -0.2,
+            "negative_rate_lift": 0.5 - 0.4,
         },
         {
             "dimension": "source",
@@ -52,17 +57,21 @@ def test_diagnostics_service_outputs_match_synthetic_fixture(tmp_path: Path) -> 
             "interview_count": 1,
             "offer_count": 1,
             "success_count": 1,
+            "negative_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
             "success_rate": 1 / 3,
+            "negative_rate": 1 / 3,
             "response_rate_lift": (1 / 3) - 0.6,
             "success_rate_lift": (1 / 3) - 0.2,
+            "negative_rate_lift": (1 / 3) - 0.4,
         },
     ]
     assert diagnostics.strongest_response_segments == [diagnostics.segments[0]]
     assert diagnostics.weakest_response_segments == [diagnostics.segments[1]]
     assert diagnostics.successful_application_segments == [diagnostics.segments[1]]
+    assert diagnostics.negative_outcome_segments == [diagnostics.segments[0]]
 
 
 def test_diagnostics_fixture_exercises_default_diagnostic_dimensions(
@@ -94,6 +103,8 @@ def test_diagnostics_fixture_outputs_compose_with_filters(tmp_path: Path) -> Non
     assert diagnostics.total_applications == 3
     assert diagnostics.baseline_response_count == 1
     assert diagnostics.baseline_response_rate == 1 / 3
+    assert diagnostics.baseline_negative_count == 1
+    assert diagnostics.baseline_negative_rate == 1 / 3
     assert [segment.model_dump() for segment in diagnostics.segments] == [
         {
             "dimension": "source",
@@ -103,12 +114,15 @@ def test_diagnostics_fixture_outputs_compose_with_filters(tmp_path: Path) -> Non
             "interview_count": 1,
             "offer_count": 1,
             "success_count": 1,
+            "negative_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
             "success_rate": 1 / 3,
+            "negative_rate": 1 / 3,
             "response_rate_lift": 0.0,
             "success_rate_lift": 0.0,
+            "negative_rate_lift": 0.0,
         },
     ]
 
