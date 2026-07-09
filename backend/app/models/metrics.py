@@ -116,6 +116,8 @@ type MetricsBreakdownDimension = Literal[
     "role",
     "source",
     "salary",
+    "company_type",
+    "industry",
     "tech",
     "sponsorship",
     "seniority",

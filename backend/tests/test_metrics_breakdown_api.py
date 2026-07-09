@@ -357,6 +357,129 @@ def test_metrics_breakdown_endpoint_is_documented_in_openapi() -> None:
     assert validation_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
+def test_metrics_breakdown_returns_company_type_rows(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_company_profile(connection, "startup corp", "startup", "Devtools")
+        insert_company_profile(connection, "enterprise inc", "enterprise", "Cloud")
+        insert_application_with_events(
+            connection,
+            "app-startup",
+            "linkedin",
+            ("applied", "response"),
+            company="Startup Corp",
+        )
+        insert_application_with_events(
+            connection,
+            "app-enterprise",
+            "company_site",
+            ("applied",),
+            company="Enterprise Inc",
+        )
+        insert_application_with_events(
+            connection,
+            "app-unknown",
+            "referral",
+            ("applied", "interview_scheduled"),
+            company="Mystery LLC",
+        )
+
+    response = create_test_client(database_path).get(
+        "/metrics/breakdown?dimension=company_type",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "dimension": "company_type",
+        "rows": [
+            {
+                "dimension": "company_type",
+                "value": "enterprise",
+                "application_count": 1,
+                "response_count": 0,
+                "response_rate": 0.0,
+                "interview_count": 0,
+                "interview_rate": 0.0,
+                "offer_count": 0,
+                "offer_rate": 0.0,
+            },
+            {
+                "dimension": "company_type",
+                "value": "startup",
+                "application_count": 1,
+                "response_count": 1,
+                "response_rate": 1.0,
+                "interview_count": 0,
+                "interview_rate": 0.0,
+                "offer_count": 0,
+                "offer_rate": 0.0,
+            },
+            {
+                "dimension": "company_type",
+                "value": "unknown",
+                "application_count": 1,
+                "response_count": 1,
+                "response_rate": 1.0,
+                "interview_count": 1,
+                "interview_rate": 1.0,
+                "offer_count": 0,
+                "offer_rate": 0.0,
+            },
+        ],
+    }
+
+
+def test_metrics_breakdown_returns_industry_rows(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_company_profile(connection, "startup corp", "startup", "Devtools")
+        insert_application_with_events(
+            connection,
+            "app-startup",
+            "linkedin",
+            ("applied", "response"),
+            company="Startup Corp",
+        )
+        insert_application_with_events(
+            connection,
+            "app-unknown",
+            "referral",
+            ("applied",),
+            company="Mystery LLC",
+        )
+
+    response = create_test_client(database_path).get("/metrics/breakdown?dimension=industry")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "dimension": "industry",
+        "rows": [
+            {
+                "dimension": "industry",
+                "value": "devtools",
+                "application_count": 1,
+                "response_count": 1,
+                "response_rate": 1.0,
+                "interview_count": 0,
+                "interview_rate": 0.0,
+                "offer_count": 0,
+                "offer_rate": 0.0,
+            },
+            {
+                "dimension": "industry",
+                "value": "unknown",
+                "application_count": 1,
+                "response_count": 0,
+                "response_rate": 0.0,
+                "interview_count": 0,
+                "interview_rate": 0.0,
+                "offer_count": 0,
+                "offer_rate": 0.0,
+            },
+        ],
+    }
+
+
 def create_test_client(database_path: Path) -> TestClient:
     settings = AppSettings(
         _env_file=None,
@@ -387,10 +510,11 @@ def insert_application_with_events(
     seniority: str | None = None,
     salary_min: int | None = None,
     salary_max: int | None = None,
+    company: str | None = None,
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
-        company=f"{application_id} Corp",
+        company=company or f"{application_id} Corp",
         role_title=role_title,
         source=source,
         first_seen_at="2026-07-01T09:00:00+00:00",
@@ -415,6 +539,31 @@ def insert_application_with_events(
             event_at=f"2026-07-{index + 1:02d}T09:00:00+00:00",
         )
     connection.commit()
+
+
+def insert_company_profile(
+    connection: sqlite3.Connection,
+    normalized_company: str,
+    company_type: str,
+    industry: str | None,
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO company_profiles (
+            normalized_company, display_company, company_type, industry,
+            source, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            normalized_company,
+            normalized_company.title(),
+            company_type,
+            industry,
+            "manual",
+            "2026-07-09T12:00:00+00:00",
+            "2026-07-09T12:00:00+00:00",
+        ),
+    )
 
 
 def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
