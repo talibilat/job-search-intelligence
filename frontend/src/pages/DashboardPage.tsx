@@ -1198,6 +1198,7 @@ export function DashboardPage() {
   const negativeDiagnostic = diagnostics?.negative_outcome_segments[0];
   const strongestResponseCorrelate = diagnostics?.strongest_response_correlate;
   const wastedEffortSegment = diagnostics?.wasted_effort_segments[0];
+  const bestRoiSource = diagnostics?.best_roi_source;
 
   return (
     <main
@@ -2394,6 +2395,28 @@ export function DashboardPage() {
                 : diagnosticsLoadState === "loading"
                 ? "Loading wasted-effort comparison"
                 : "No segment is currently below the filtered response baseline"}
+            </p>
+          </article>
+
+          <article className="metric-placeholder">
+            <h3 className="metric-placeholder__label">Q-36 best ROI source</h3>
+            <p className="metric-placeholder__value">
+              {diagnosticsError
+                ? "Unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading"
+                : bestRoiSource
+                ? diagnosticSegmentTitle(bestRoiSource)
+                : "No source"}
+            </p>
+            <p className="dashboard-card__meta">
+              {diagnosticsError
+                ? "Best ROI source is unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading source interview ROI"
+                : bestRoiSource
+                ? `${diagnosticSegmentTitle(bestRoiSource)} has the best interview ROI`
+                : "No source has interview evidence yet"}
             </p>
           </article>
         </div>

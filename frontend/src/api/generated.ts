@@ -833,6 +833,7 @@ export interface MetricsDiagnosticsResponse {
   /** @minimum 0 */
   baseline_success_count: number;
   baseline_success_rate?: number | null;
+  best_roi_source?: DiagnosticSegmentComparison | null;
   negative_outcome_segments: DiagnosticSegmentComparison[];
   segments: DiagnosticSegmentComparison[];
   strongest_response_correlate?: DiagnosticSegmentComparison | null;

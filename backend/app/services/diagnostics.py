@@ -78,6 +78,7 @@ class DiagnosticsService:
 
         return MetricsDiagnosticsResponse(
             total_applications=response_silence.total_applications,
+            best_roi_source=_best_roi_source(segments),
             baseline_response_count=response_silence.human_response_count,
             baseline_response_rate=baseline_response_rate,
             baseline_success_count=baseline_success_count,
@@ -289,3 +290,24 @@ def _negative_outcome_segments(
             segment.value,
         ),
     )[:limit]
+
+
+def _best_roi_source(
+    segments: Sequence[DiagnosticSegmentComparison],
+) -> DiagnosticSegmentComparison | None:
+    source_segments = [
+        segment
+        for segment in segments
+        if segment.dimension == "source" and segment.interview_rate is not None
+    ]
+    if not source_segments:
+        return None
+    return sorted(
+        source_segments,
+        key=lambda segment: (
+            -float(segment.interview_rate or 0),
+            -segment.interview_count,
+            -segment.application_count,
+            segment.value,
+        ),
+    )[0]

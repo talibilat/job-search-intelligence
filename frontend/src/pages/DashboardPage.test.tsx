@@ -435,6 +435,24 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             baseline_response_rate: 0.6,
             baseline_success_count: 2,
             baseline_success_rate: 0.4,
+            best_roi_source: {
+              application_count: 3,
+              dimension: "source",
+              interview_count: 1,
+              interview_rate: 1 / 3,
+              offer_count: 0,
+              offer_rate: 0,
+              response_count: 1,
+              response_rate: 1 / 3,
+              response_rate_lift: (1 / 3) - 0.6,
+              success_count: 0,
+              success_rate: 0,
+              success_rate_lift: -0.4,
+              negative_count: 2,
+              negative_rate: 2 / 3,
+              negative_rate_lift: (2 / 3) - 0.4,
+              value: "linkedin",
+            },
             baseline_negative_count: 2,
             baseline_negative_rate: 0.4,
             negative_outcome_segments: [
@@ -576,6 +594,7 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             baseline_success_rate: 0,
             baseline_negative_count: 1,
             baseline_negative_rate: 1,
+            best_roi_source: null,
             negative_outcome_segments: [],
             segments: [],
             strongest_response_correlate: null,
@@ -839,6 +858,9 @@ describe("DashboardPage", () => {
       .toBeTruthy();
     expect(within(diagnostics).getByText("Q-35 wasted-effort segments")).toBeTruthy();
     expect(within(diagnostics).getByText("Linkedin (Source) is below baseline"))
+      .toBeTruthy();
+    expect(within(diagnostics).getByText("Q-36 best ROI source")).toBeTruthy();
+    expect(within(diagnostics).getByText("Linkedin (Source) has the best interview ROI"))
       .toBeTruthy();
     expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
     expect(within(diagnostics).getAllByText("Linkedin (Source)").length).toBeGreaterThan(

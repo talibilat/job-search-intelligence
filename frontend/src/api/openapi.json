@@ -2465,6 +2465,16 @@
             ],
             "title": "Baseline Success Rate"
           },
+          "best_roi_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "negative_outcome_segments": {
             "items": {
               "$ref": "#/components/schemas/DiagnosticSegmentComparison"
