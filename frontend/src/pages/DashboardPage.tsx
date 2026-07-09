@@ -2217,6 +2217,22 @@ export function DashboardPage() {
                   }`}
           </p>
         </article>
+
+        <article className="metric-placeholder">
+          <h3 className="metric-placeholder__label">How to read these diagnostics</h3>
+          <p className="dashboard-card__meta">
+            Response-rate lift is the segment response rate minus the filtered
+            baseline response rate.
+          </p>
+          <p className="dashboard-card__meta">
+            Strongest and weakest signals are ranked only from local applications
+            and application_events currently included by the dashboard filters.
+          </p>
+          <p className="dashboard-card__meta">
+            These are directional comparisons, not proof that a segment caused an
+            outcome.
+          </p>
+        </article>
       </section>
 
       <section

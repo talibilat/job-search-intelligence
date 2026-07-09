@@ -710,6 +710,17 @@ describe("DashboardPage", () => {
     expect(within(diagnostics).getByText("Linkedin (Source)")).toBeTruthy();
     expect(within(diagnostics).getByText("-26.7 pp vs baseline")).toBeTruthy();
     expect(within(diagnostics).getByText("Correlation summary")).toBeTruthy();
+    expect(within(diagnostics).getByText("How to read these diagnostics")).toBeTruthy();
+    expect(
+      within(diagnostics).getByText(
+        "Response-rate lift is the segment response rate minus the filtered baseline response rate.",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(diagnostics).getByText(
+        "These are directional comparisons, not proof that a segment caused an outcome.",
+      ),
+    ).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/diagnostics",
       expect.objectContaining({ method: "GET" }),
