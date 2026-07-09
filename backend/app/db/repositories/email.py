@@ -14,7 +14,12 @@ from app.models.classification import (
     EmailClassificationCandidate,
     EmailClassificationRecord,
 )
-from app.models.records import RawEmailBodyRetentionState, RawEmailPreviewRecord, RawEmailRecord
+from app.models.records import (
+    EmailChunkSource,
+    RawEmailBodyRetentionState,
+    RawEmailPreviewRecord,
+    RawEmailRecord,
+)
 from app.providers.email import EmailAddress, EmailMessageBody, EmailMessageMetadata
 
 
@@ -484,6 +489,35 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             ),
         ).fetchall()
         return [EmailClassificationCandidate.model_validate(row_to_dict(row)) for row in rows]
+
+    def list_chunkable_retained_emails(self, *, limit: int) -> list[EmailChunkSource]:
+        """Return retained job-related email bodies eligible for chunking."""
+
+        if limit < 1:
+            msg = "limit must be at least 1"
+            raise ValueError(msg)
+
+        if not self._table_exists("raw_emails") or not self._table_exists("email_classifications"):
+            return []
+
+        rows = self.execute(
+            """
+            SELECT
+                raw_emails.id AS email_id,
+                raw_emails.body_text AS body_text
+            FROM raw_emails
+            INNER JOIN email_classifications
+                ON email_classifications.email_id = raw_emails.id
+            WHERE raw_emails.body_retention_state = ?
+                AND raw_emails.body_text IS NOT NULL
+                AND LENGTH(TRIM(raw_emails.body_text)) > 0
+                AND email_classifications.is_job_related = 1
+            ORDER BY raw_emails.sent_at, raw_emails.id
+            LIMIT ?
+            """,
+            (RawEmailBodyRetentionState.RETAINED.value, limit),
+        ).fetchall()
+        return [EmailChunkSource.model_validate(row_to_dict(row)) for row in rows]
 
     def upsert_email_classifications(
         self,
