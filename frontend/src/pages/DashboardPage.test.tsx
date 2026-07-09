@@ -91,6 +91,26 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url.startsWith("/metrics/funnel")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            stages: [
+              { count: 5, stage: "applied" },
+              { count: 3, stage: "screen" },
+              { count: 1, stage: "interview" },
+              { count: 0, stage: "final" },
+              { count: 1, stage: "offer" },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
     if (url === "/metrics/breakdown?dimension=source") {
       return Promise.resolve(
         new Response(
@@ -435,6 +455,52 @@ describe("DashboardPage", () => {
     expect(
       within(metric).getByText("Averaged across 2 applications with response evidence"),
     ).toBeTruthy();
+  });
+
+  it("renders Q-16 full funnel stages from deterministic metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const funnel = await screen.findByRole("region", {
+      name: "Full funnel",
+    });
+
+    expect(within(funnel).getByText("Q-16 full funnel")).toBeTruthy();
+    expect(within(funnel).getByText("Applied")).toBeTruthy();
+    expect(within(funnel).getByText("5")).toBeTruthy();
+    expect(within(funnel).getByText("Screen")).toBeTruthy();
+    expect(within(funnel).getByText("3")).toBeTruthy();
+    expect(within(funnel).getByText("Interview")).toBeTruthy();
+    expect(within(funnel).getByText("Final")).toBeTruthy();
+    expect(within(funnel).getByText("0")).toBeTruthy();
+    expect(within(funnel).getAllByText("1").length).toBeGreaterThanOrEqual(2);
+    expect(within(funnel).getByText("Offer")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("reloads Q-16 full funnel when dashboard filters change", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Full funnel" });
+
+    fireEvent.change(screen.getByLabelText("Status"), {
+      target: { value: "rejected" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    expect(await screen.findByText("Globex")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel?status=rejected",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("renders source breakdown chart summary and table from deterministic metrics", async () => {

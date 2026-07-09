@@ -207,6 +207,157 @@ def test_metrics_summary_counts_interview_invitations_from_event_history(
     assert "evaluated_at" in body
 
 
+def test_metrics_funnel_returns_q16_deterministic_stage_counts(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="application-silent",
+            current_status="applied",
+        )
+        insert_event(
+            connection,
+            event_id="event-silent-applied",
+            application_id="application-silent",
+            email_id="email-silent-applied",
+            event_type="applied",
+        )
+        insert_application(
+            connection,
+            application_id="application-screen",
+            current_status="in_review",
+            source="company_site",
+        )
+        insert_event(
+            connection,
+            event_id="event-screen-applied",
+            application_id="application-screen",
+            email_id="email-screen-applied",
+            event_type="applied",
+        )
+        insert_event(
+            connection,
+            event_id="event-screen",
+            application_id="application-screen",
+            email_id="email-screen",
+            event_type="response",
+        )
+        insert_application(
+            connection,
+            application_id="application-final-rejection",
+            current_status="rejected",
+        )
+        insert_event(
+            connection,
+            event_id="event-final-applied",
+            application_id="application-final-rejection",
+            email_id="email-final-applied",
+            event_type="applied",
+        )
+        insert_event(
+            connection,
+            event_id="event-final-response",
+            application_id="application-final-rejection",
+            email_id="email-final-response",
+            event_type="response",
+        )
+        insert_event(
+            connection,
+            event_id="event-final-interview",
+            application_id="application-final-rejection",
+            email_id="email-final-interview",
+            event_type="interview_scheduled",
+        )
+        insert_event(
+            connection,
+            event_id="event-final-rejection",
+            application_id="application-final-rejection",
+            email_id="email-final-rejection",
+            event_type="rejection",
+        )
+        insert_application(
+            connection,
+            application_id="application-offer",
+            current_status="offer",
+        )
+        insert_event(
+            connection,
+            event_id="event-offer-applied",
+            application_id="application-offer",
+            email_id="email-offer-applied",
+            event_type="applied",
+        )
+        insert_event(
+            connection,
+            event_id="event-offer-response",
+            application_id="application-offer",
+            email_id="email-offer-response",
+            event_type="response",
+        )
+        insert_event(
+            connection,
+            event_id="event-offer-interview",
+            application_id="application-offer",
+            email_id="email-offer-interview",
+            event_type="interview_scheduled",
+        )
+        insert_event(
+            connection,
+            event_id="event-offer",
+            application_id="application-offer",
+            email_id="email-offer",
+            event_type="offer",
+        )
+        connection.execute(
+            "UPDATE application_events SET event_at = ? WHERE id = ?",
+            ("2026-07-04T10:00:00+00:00", "event-offer"),
+        )
+        connection.execute(
+            "UPDATE application_events SET event_at = ? WHERE id = ?",
+            ("2026-07-04T10:00:00+00:00", "event-final-rejection"),
+        )
+        connection.commit()
+
+    client = create_test_client(database_path)
+
+    response = client.get("/metrics/funnel")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "stages": [
+            {"stage": "applied", "count": 4},
+            {"stage": "screen", "count": 3},
+            {"stage": "interview", "count": 2},
+            {"stage": "final", "count": 0},
+            {"stage": "offer", "count": 1},
+        ]
+    }
+
+    filtered_response = client.get("/metrics/funnel?source=company_site")
+
+    assert filtered_response.status_code == 200
+    assert filtered_response.json() == {
+        "stages": [
+            {"stage": "applied", "count": 1},
+            {"stage": "screen", "count": 1},
+            {"stage": "interview", "count": 0},
+            {"stage": "final", "count": 0},
+            {"stage": "offer", "count": 0},
+        ]
+    }
+
+
+def test_metrics_funnel_endpoint_is_documented_in_openapi() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    operation = response.json()["paths"]["/metrics/funnel"]["get"]
+    success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert success_schema["$ref"] == "#/components/schemas/MetricsFunnelResponse"
+
+
 def test_metrics_summary_endpoint_is_documented_in_openapi() -> None:
     client = TestClient(create_app())
 
@@ -245,12 +396,13 @@ def insert_application(
     application_id: str,
     current_status: str = "rejected",
     first_seen_at: str = "2026-07-01T09:00:00+00:00",
+    source: str = "linkedin",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
         company="Acme Corp",
         role_title="Software Engineer",
-        source="linkedin",
+        source=source,
         first_seen_at=first_seen_at,
         current_status=current_status,
         last_activity_at=first_seen_at,
