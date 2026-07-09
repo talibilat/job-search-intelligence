@@ -89,6 +89,7 @@ function InsightCostSummary({ cost }: { cost: InsightRegenerationCost }) {
   return (
     <div className="insight-card__cost" aria-label="Regeneration cost">
       <span>Estimated cost {formatCost(cost.estimated_cost_usd, currency)}</span>
+      <span>{cost.estimated_total_tokens.toLocaleString("en-US")} estimated tokens</span>
       {hasActualDetails ? (
         <>
           <span>Actual cost {formatCost(cost.actual_cost_usd, currency)}</span>

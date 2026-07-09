@@ -179,6 +179,7 @@ describe("Insights", () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText("Estimated cost $2.715")).toBeTruthy();
+    expect(screen.getByText("1,515 estimated tokens")).toBeTruthy();
     expect(screen.getByText("Estimated cost $0.42")).toBeTruthy();
     expect(screen.queryByText("Actual cost $0.12")).toBeNull();
 
