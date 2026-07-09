@@ -1275,6 +1275,99 @@
         ],
         "type": "string"
       },
+      "DiagnosticSegmentComparison": {
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/MetricsBreakdownDimension"
+          },
+          "interview_count": {
+            "minimum": 0.0,
+            "title": "Interview Count",
+            "type": "integer"
+          },
+          "interview_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interview Rate"
+          },
+          "offer_count": {
+            "minimum": 0.0,
+            "title": "Offer Count",
+            "type": "integer"
+          },
+          "offer_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Rate"
+          },
+          "response_count": {
+            "minimum": 0.0,
+            "title": "Response Count",
+            "type": "integer"
+          },
+          "response_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Rate"
+          },
+          "response_rate_lift": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": -1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Rate Lift"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "value",
+          "application_count",
+          "response_count",
+          "interview_count",
+          "offer_count"
+        ],
+        "title": "DiagnosticSegmentComparison",
+        "type": "object"
+      },
       "EmailAccountRef": {
         "description": "Provider-neutral stable reference to a connected mailbox account.",
         "properties": {
@@ -2109,6 +2202,63 @@
           "rows"
         ],
         "title": "MetricsBreakdownResponse",
+        "type": "object"
+      },
+      "MetricsDiagnosticsResponse": {
+        "properties": {
+          "baseline_response_count": {
+            "minimum": 0.0,
+            "title": "Baseline Response Count",
+            "type": "integer"
+          },
+          "baseline_response_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Response Rate"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "strongest_response_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Strongest Response Segments",
+            "type": "array"
+          },
+          "total_applications": {
+            "minimum": 0.0,
+            "title": "Total Applications",
+            "type": "integer"
+          },
+          "weakest_response_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Weakest Response Segments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "total_applications",
+          "baseline_response_count",
+          "segments",
+          "strongest_response_segments",
+          "weakest_response_segments"
+        ],
+        "title": "MetricsDiagnosticsResponse",
         "type": "object"
       },
       "MetricsFunnelResponse": {
@@ -4315,6 +4465,188 @@
           }
         },
         "summary": "Get Metrics Breakdown",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/diagnostics": {
+      "get": {
+        "description": "Returns deterministic Phase 3.5 diagnostic segment comparisons from local applications and application_events data.",
+        "operationId": "get_metrics_diagnostics_metrics_diagnostics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationSource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sponsorship",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SponsorshipStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sponsorship"
+            }
+          },
+          {
+            "in": "query",
+            "name": "first_seen_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "First Seen From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "first_seen_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "First Seen To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "salary_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Salary Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "salary_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Salary Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "work_mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WorkMode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Work Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsDiagnosticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Metrics Diagnostics",
         "tags": [
           "metrics"
         ]

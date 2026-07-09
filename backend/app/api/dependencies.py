@@ -27,6 +27,7 @@ from app.services.applications import (
     ApplicationDetailService,
     ApplicationEventsService,
 )
+from app.services.diagnostics import DiagnosticsService
 from app.services.ghost_inference import GhostInferenceService
 from app.services.insights_service import InsightGenerationService, InsightReadService
 from app.services.manual_edit import ManualApplicationEditService
@@ -293,6 +294,18 @@ def get_metrics_breakdown_service(
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
         yield MetricsBreakdownService(metrics_repository=MetricsRepository(connection))
+    finally:
+        connection.close()
+
+
+def get_metrics_diagnostics_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[DiagnosticsService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield DiagnosticsService(metrics_repository=MetricsRepository(connection))
     finally:
         connection.close()
 

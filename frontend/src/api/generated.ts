@@ -425,6 +425,36 @@ export interface ClassificationRunResponse {
   total_tokens: number;
 }
 
+export type MetricsBreakdownDimension =
+  (typeof MetricsBreakdownDimension)[keyof typeof MetricsBreakdownDimension];
+
+export const MetricsBreakdownDimension = {
+  role: "role",
+  source: "source",
+  salary: "salary",
+  tech: "tech",
+  sponsorship: "sponsorship",
+  seniority: "seniority",
+  work_mode: "work_mode",
+} as const;
+
+export interface DiagnosticSegmentComparison {
+  /** @minimum 0 */
+  application_count: number;
+  dimension: MetricsBreakdownDimension;
+  /** @minimum 0 */
+  interview_count: number;
+  interview_rate?: number | null;
+  /** @minimum 0 */
+  offer_count: number;
+  offer_rate?: number | null;
+  /** @minimum 0 */
+  response_count: number;
+  response_rate?: number | null;
+  response_rate_lift?: number | null;
+  value: string;
+}
+
 /**
  * Provider-neutral stable reference to a connected mailbox account.
  */
@@ -697,19 +727,6 @@ export interface LLMProviderHealthCheckResponse {
   status: LLMModelHealthStatus;
 }
 
-export type MetricsBreakdownDimension =
-  (typeof MetricsBreakdownDimension)[keyof typeof MetricsBreakdownDimension];
-
-export const MetricsBreakdownDimension = {
-  role: "role",
-  source: "source",
-  salary: "salary",
-  tech: "tech",
-  sponsorship: "sponsorship",
-  seniority: "seniority",
-  work_mode: "work_mode",
-} as const;
-
 export interface MetricBreakdownRow {
   /** @minimum 0 */
   application_count: number;
@@ -766,6 +783,17 @@ export interface MetricTimeseriesPoint {
 export interface MetricsBreakdownResponse {
   dimension: MetricsBreakdownDimension;
   rows: MetricBreakdownRow[];
+}
+
+export interface MetricsDiagnosticsResponse {
+  /** @minimum 0 */
+  baseline_response_count: number;
+  baseline_response_rate?: number | null;
+  segments: DiagnosticSegmentComparison[];
+  strongest_response_segments: DiagnosticSegmentComparison[];
+  /** @minimum 0 */
+  total_applications: number;
+  weakest_response_segments: DiagnosticSegmentComparison[];
 }
 
 export interface MetricsFunnelResponse {
@@ -966,6 +994,18 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
 
 export type GetMetricsBreakdownMetricsBreakdownGetParams = {
   dimension: MetricsBreakdownDimension;
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetMetricsDiagnosticsMetricsDiagnosticsGetParams = {
   status?: ApplicationStatus | null;
   source?: ApplicationSource | null;
   sponsorship?: SponsorshipStatus | null;
@@ -2370,6 +2410,75 @@ export const getMetricsBreakdownMetricsBreakdownGet = async (
     status: res.status,
     headers: res.headers,
   } as getMetricsBreakdownMetricsBreakdownGetResponse;
+};
+
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponse200 = {
+  data: MetricsDiagnosticsResponse;
+  status: 200;
+};
+
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponseSuccess =
+  getMetricsDiagnosticsMetricsDiagnosticsGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponseError =
+  getMetricsDiagnosticsMetricsDiagnosticsGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponse =
+  | getMetricsDiagnosticsMetricsDiagnosticsGetResponseSuccess
+  | getMetricsDiagnosticsMetricsDiagnosticsGetResponseError;
+
+export const getGetMetricsDiagnosticsMetricsDiagnosticsGetUrl = (
+  params?: GetMetricsDiagnosticsMetricsDiagnosticsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/diagnostics?${stringifiedParams}`
+    : `/metrics/diagnostics`;
+};
+
+/**
+ * Returns deterministic Phase 3.5 diagnostic segment comparisons from local applications and application_events data.
+ * @summary Get Metrics Diagnostics
+ */
+export const getMetricsDiagnosticsMetricsDiagnosticsGet = async (
+  params?: GetMetricsDiagnosticsMetricsDiagnosticsGetParams,
+  options?: RequestInit,
+): Promise<getMetricsDiagnosticsMetricsDiagnosticsGetResponse> => {
+  const res = await fetch(
+    getGetMetricsDiagnosticsMetricsDiagnosticsGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsDiagnosticsMetricsDiagnosticsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsDiagnosticsMetricsDiagnosticsGetResponse;
 };
 
 export type getMetricsFunnelMetricsFunnelGetResponse200 = {

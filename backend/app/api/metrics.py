@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.api.dependencies import (
     get_metrics_breakdown_service,
+    get_metrics_diagnostics_service,
     get_metrics_funnel_service,
     get_metrics_rates_service,
     get_metrics_response_rate_trend_service,
@@ -18,6 +19,7 @@ from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorRespo
 from app.models import (
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
+    MetricsDiagnosticsResponse,
     MetricsFilter,
     MetricsFunnelResponse,
     MetricsRatesResponse,
@@ -27,6 +29,7 @@ from app.models import (
     ResponseSilenceMetric,
 )
 from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
+from app.services.diagnostics import DiagnosticsService
 from app.services.metrics import (
     MetricsBreakdownService,
     MetricsFunnelService,
@@ -251,6 +254,26 @@ def get_metrics_response_rate_trend(
     filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
 ) -> MetricsResponseRateTrendResponse:
     return service.get_response_rate_trend(filters=filters)
+
+
+@router.get(
+    "/diagnostics",
+    response_model=MetricsDiagnosticsResponse,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="Get Metrics Diagnostics",
+    description=(
+        "Returns deterministic Phase 3.5 diagnostic segment comparisons from "
+        "local applications and application_events data."
+    ),
+)
+def get_metrics_diagnostics(
+    service: Annotated[
+        DiagnosticsService,
+        Depends(get_metrics_diagnostics_service),
+    ],
+    filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
+) -> MetricsDiagnosticsResponse:
+    return service.get_diagnostics(filters=filters)
 
 
 @router.get(
