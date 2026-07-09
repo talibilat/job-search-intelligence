@@ -76,6 +76,62 @@ function metricsSummaryResponse(
   return response as unknown as MockObjectResponseBody;
 }
 
+function pipelineStatusResponse(
+  overrides: Record<string, unknown> = {},
+): MockObjectResponseBody {
+  return {
+    account_display: "me@example.com",
+    backfill_complete: false,
+    backfill_messages_processed: 13,
+    backfill_pages_processed: 3,
+    backfill_state: "running",
+    counts: {
+      application_count: 0,
+      application_event_count: 0,
+      classified_email_count: 0,
+      filter_candidate_count: 5,
+      filter_decision_count: 10,
+      filter_rejected_count: 5,
+      job_related_email_count: 0,
+      metadata_only_count: 8,
+      raw_email_count: 10,
+      retained_body_count: 2,
+    },
+    generated_at: "2026-07-07T12:00:00Z",
+    gmail_connected: true,
+    incremental_sync_ready: false,
+    last_error: null,
+    last_sync_finished_at: null,
+    last_sync_started_at: null,
+    next_action: "continue_backfill",
+    next_action_reason: "The one-time historical backfill has not finished.",
+    reauth_required: false,
+    sync_mode: null,
+    sync_running: false,
+    unclassified_retained_count: 0,
+    ...overrides,
+  };
+}
+
+function idleSyncStatusResponse(): MockObjectResponseBody {
+  return {
+    account_id: null,
+    finished_at: null,
+    last_error: null,
+    message_count: 0,
+    mode: null,
+    page_count: 0,
+    progress: 0,
+    provider: null,
+    raw_email_count: 0,
+    recovered_from_expired_cursor: false,
+    retained_body_failure_count: 0,
+    started_at: null,
+    state: "idle",
+    target_message_count: null,
+  };
+}
+
 function metricsRatesResponse(
   overrides: Partial<MetricsRatesResponse> = {},
 ): MockObjectResponseBody {
@@ -340,20 +396,45 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
-  it("shows a chart foundation empty state without implementing dashboard metrics", () => {
+  it("renders the consolidated Job Search page with pipeline activity and next action", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse({
+        next_action: "run_classification",
+        next_action_reason:
+          "2 job-search candidate emails are waiting for classification.",
+        unclassified_retained_count: 2,
+      }),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
     renderAtPath("/");
 
     expect(
-      screen.getByRole("region", { name: "Chart foundation" }),
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Your job search, from inbox to insight.",
+      }),
     ).toBeTruthy();
 
-    const emptyState = screen.getByRole("status", {
-      name: "Dashboard data pending",
-    });
-
-    expect(emptyState.textContent).toContain(
-      "Future deterministic dashboard metrics will render here after the metrics API exists.",
-    );
+    expect(
+      await screen.findByText("Candidates are waiting for classification"),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Run classification" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Raw emails")).toBeTruthy();
+    expect(screen.getByText("Filter decisions")).toBeTruthy();
+    expect(screen.getByText("Retained bodies")).toBeTruthy();
+    expect(screen.getByText("Applications")).toBeTruthy();
+    expect(
+      screen.getByText("Gmail connected:", { exact: false }),
+    ).toBeTruthy();
+    expect(
+      await screen.findByText(
+        "No synced email metadata is stored yet. Run a sync to fill this list.",
+      ),
+    ).toBeTruthy();
   });
 
   it("renders the Q-03 distinct company count on the dashboard", async () => {
@@ -429,6 +510,7 @@ describe("App", () => {
               provider: "gmail",
               raw_email_count: 1305,
               recovered_from_expired_cursor: false,
+              retained_body_failure_count: 2,
               started_at: "2026-07-05T10:00:00Z",
               state: "running",
             }
@@ -443,6 +525,7 @@ describe("App", () => {
                 provider: "gmail",
                 raw_email_count: 1240,
                 recovered_from_expired_cursor: true,
+                retained_body_failure_count: 1,
                 started_at: "2026-07-05T09:15:00Z",
                 state: "succeeded",
               }
@@ -473,6 +556,7 @@ describe("App", () => {
     expect(screen.getByText("1,240 raw emails")).toBeTruthy();
     expect(screen.getByText("2,500 messages")).toBeTruthy();
     expect(screen.getByText("12 pages")).toBeTruthy();
+    expect(screen.getByText("1 body fetch issue")).toBeTruthy();
     expect(screen.getByText("Finished Jul 5, 2026, 9:45 AM UTC")).toBeTruthy();
     expect(screen.getByText("Recovered expired cursor")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -484,6 +568,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Sync is running")).toBeTruthy();
     expect(screen.getByText("1,305 raw emails")).toBeTruthy();
+    expect(screen.getByText("2 body fetch issues")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/sync",
       expect.objectContaining({ method: "POST" }),
@@ -528,9 +613,20 @@ describe("App", () => {
         );
       }
 
+      if (pathname === "/pipeline/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(
+          new Response(JSON.stringify(pipelineStatusResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
       if (pathname === "/sync/recent-emails") {
         expect(init?.method).toBe("GET");
         expect(path).toContain("limit=50");
+        expect(path).toContain("order=sent_at");
         return Promise.resolve(
           new Response(
             JSON.stringify([
@@ -561,20 +657,31 @@ describe("App", () => {
 
     renderAtPath("/");
 
-    expect(await screen.findByText("Recently synced emails")).toBeTruthy();
     expect(
-      screen.getByRole("region", { name: "Recently synced email metadata" }),
+      await screen.findByText("Newest synced mailbox messages"),
     ).toBeTruthy();
     expect(screen.getByText("Subject captured")).toBeTruthy();
     expect(screen.getAllByText("example.com").length).toBeGreaterThan(0);
-    expect(screen.getByText("candidate")).toBeTruthy();
-    expect(screen.getByText("retained body")).toBeTruthy();
+    expect(screen.getByText("kept by filter")).toBeTruthy();
+    expect(screen.getByText("body retained")).toBeTruthy();
     expect(screen.queryByText("Private body")).toBeNull();
     expect(screen.queryByText("gmail-msg-1")).toBeNull();
     expect(screen.queryByText("thread-1")).toBeNull();
-    expect(styles).toContain(".sync-panel__recent-scroll");
-    expect(styles).toContain("max-height: min(72vh, 1120px)");
-    expect(styles).toContain("overflow-y: auto");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Subject captured/ }),
+    );
+    expect(screen.getByText("Provider")).toBeTruthy();
+    expect(screen.getByText("From domain")).toBeTruthy();
+    expect(screen.getByText("To domains")).toBeTruthy();
+    expect(
+      screen.getByText("sender_domain:example.com", { exact: false }),
+    ).toBeTruthy();
+    expect(screen.queryByText("body_text")).toBeNull();
+
+    expect(
+      screen.getByRole("button", { name: "Recently ingested" }),
+    ).toBeTruthy();
   });
 
   it("shows running progress immediately while the sync start request is pending", async () => {
@@ -1136,6 +1243,7 @@ describe("App", () => {
 
   it("shows live applications awaiting a reply on the dashboard", async () => {
     const fetchMock = mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
       "/metrics/summary": metricsSummaryResponse({
         total_applications: 12,
         distinct_company_count: 7,
@@ -1248,6 +1356,7 @@ describe("App", () => {
     expect(within(liveApplications).getByText("applied")).toBeTruthy();
     expect(within(liveApplications).getByText("in review")).toBeTruthy();
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/pipeline/status",
       "/metrics/summary",
       "/metrics/breakdown?dimension=company_type",
       "/applications?status=applied",
@@ -1263,6 +1372,68 @@ describe("App", () => {
       "/metrics/diagnostics",
       "/metrics/rates",
     ]);
+  });
+
+  it("explains zero dashboard metrics when the pipeline has not finished", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse({
+        next_action: "run_classification",
+        next_action_reason:
+          "2 job-search candidate emails are waiting for classification.",
+        unclassified_retained_count: 2,
+      }),
+      "/metrics/summary": metricsSummaryResponse({ total_applications: 0 }),
+      "/metrics/rates": metricsRatesResponse({
+        overall_response_rate: { denominator: 0, numerator: 0, rate: null },
+      }),
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
+      "/applications": { body: [], status: 200 },
+    });
+
+    renderAtPath("/dashboard");
+
+    expect(
+      await screen.findByText(
+        "These zeros mean the pipeline has not finished, not that you applied to zero jobs",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "2 job-search candidate emails are waiting for classification.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Job Search page" })).toBeTruthy();
+  });
+
+  it("marks zero applications as a real zero when the pipeline is up to date", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse({
+        backfill_complete: true,
+        backfill_state: "completed",
+        incremental_sync_ready: true,
+        next_action: "review_dashboard",
+        next_action_reason:
+          "All candidates are classified and none produced a job application.",
+      }),
+      "/metrics/summary": metricsSummaryResponse({ total_applications: 0 }),
+      "/metrics/rates": metricsRatesResponse({
+        overall_response_rate: { denominator: 0, numerator: 0, rate: null },
+      }),
+      "/applications?status=applied": { body: [], status: 200 },
+      "/applications?status=in_review": { body: [], status: 200 },
+      "/applications?status=assessment": { body: [], status: 200 },
+      "/applications?status=interview": { body: [], status: 200 },
+      "/applications": { body: [], status: 200 },
+    });
+
+    renderAtPath("/dashboard");
+
+    expect(
+      await screen.findByText("Zero applications is a real zero"),
+    ).toBeTruthy();
   });
 
   it("shows an empty live applications state on the dashboard", async () => {
@@ -1341,12 +1512,30 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "Feature Status Dashboard",
+        name: "What JobTracker can do today",
       }),
     ).toBeTruthy();
     expect(
       screen.getByRole("navigation", { name: "Primary" }).textContent,
     ).toContain("Feature Status");
+
+    expect(screen.getByText("Features and how to run them")).toBeTruthy();
+    expect(screen.getByText("Connect Gmail")).toBeTruthy();
+    expect(screen.getByText("Sync mailbox metadata")).toBeTruthy();
+    expect(
+      screen.getByText("Classify and build applications"),
+    ).toBeTruthy();
+    expect(screen.getByText("Glossary")).toBeTruthy();
+    expect(screen.getByText("Raw email")).toBeTruthy();
+    expect(screen.getByText("Retained body")).toBeTruthy();
+    expect(screen.getByText("Filter decision")).toBeTruthy();
+    expect(screen.getByText("Application")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByText(
+        "Advanced: developer inventory (files, APIs, modules, and test entry points)",
+      ),
+    );
 
     expect(screen.getAllByText("Completed features").length).toBeGreaterThan(0);
     expect(screen.getByText("First-run setup shell")).toBeTruthy();

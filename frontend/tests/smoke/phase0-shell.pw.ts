@@ -331,6 +331,7 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
         provider: "gmail",
         raw_email_count: 1240,
         recovered_from_expired_cursor: true,
+        retained_body_failure_count: 1,
         started_at: "2026-07-05T09:15:00Z",
         state: "succeeded",
       },
@@ -350,9 +351,69 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
         provider: "gmail",
         raw_email_count: 1305,
         recovered_from_expired_cursor: false,
+        retained_body_failure_count: 2,
         started_at: "2026-07-05T10:00:00Z",
         state: "running",
       },
+      status: 200,
+    });
+  });
+  await page.route("**/pipeline/status", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        account_display: "talib@example.test",
+        backfill_complete: false,
+        backfill_messages_processed: 2500,
+        backfill_pages_processed: 12,
+        backfill_state: "running",
+        counts: {
+          application_count: 0,
+          application_event_count: 0,
+          classified_email_count: 0,
+          filter_candidate_count: 24,
+          filter_decision_count: 1240,
+          filter_rejected_count: 1216,
+          job_related_email_count: 0,
+          metadata_only_count: 1216,
+          raw_email_count: 1240,
+          retained_body_count: 24,
+        },
+        generated_at: "2026-07-05T09:45:30Z",
+        gmail_connected: true,
+        incremental_sync_ready: false,
+        last_error: null,
+        last_sync_finished_at: "2026-07-05T09:45:30Z",
+        last_sync_started_at: "2026-07-05T09:15:00Z",
+        next_action: "continue_backfill",
+        next_action_reason: "The one-time historical backfill has not finished.",
+        reauth_required: false,
+        sync_mode: "full_backfill",
+        sync_running: false,
+        unclassified_retained_count: 24,
+      },
+      status: 200,
+    });
+  });
+  await page.route("**/sync/recent-emails?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: [
+        {
+          body_retention_state: "retained",
+          classification_category: null,
+          classification_is_job_related: null,
+          filter_outcome: "candidate",
+          filter_reason: "sender_domain:example.com",
+          from_domain: "example.com",
+          has_retained_body: true,
+          ingested_at: "2026-07-05T09:45:30Z",
+          provider: "gmail",
+          sent_at: "2026-07-05T08:30:00Z",
+          subject_present: true,
+          to_domains: ["example.test"],
+        },
+      ],
       status: 200,
     });
   });
@@ -464,17 +525,17 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
   await expect(page).toHaveTitle("JobTracker");
   await expect(
     page.getByRole("heading", {
-      name: "JobTracker turns your inbox into job-search intelligence.",
+      name: "Your job search, from inbox to insight.",
     }),
   ).toBeVisible();
 
   await expect(
     page.getByRole("heading", {
-      name: "Frontend foundation ready for Phase 0 pages",
+      name: "Pipeline status",
     }),
   ).toBeVisible();
   await expect(
-    page.getByText("Connect Gmail through a local-only setup flow"),
+    page.getByText("Historical backfill is still in progress"),
   ).toBeVisible();
 
   const syncPanel = page.getByRole("region", { name: "Gmail sync progress" });
@@ -484,21 +545,19 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
   await expect(syncPanel.getByText("1,240 raw emails")).toBeVisible();
   await expect(syncPanel.getByText("2,500 messages")).toBeVisible();
   await expect(syncPanel.getByText("12 pages")).toBeVisible();
+  await expect(syncPanel.getByText("1 body fetch issue")).toBeVisible();
   await expect(syncPanel.getByText("Recovered expired cursor")).toBeVisible();
   await expect(syncPanel.getByText("talib@example.test")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Newest synced mailbox messages" }),
+  ).toBeVisible();
+  await expect(page.getByText("Subject captured")).toBeVisible();
+  await expect(page.getByText("example.com")).toBeVisible();
 
   await syncPanel.getByRole("button", { name: "Sync now" }).click();
   await expect(syncPanel.getByText("Sync is running")).toBeVisible();
   await expect(syncPanel.getByText("1,305 raw emails")).toBeVisible();
-
-  await expect(
-    page.getByRole("region", { name: "Chart foundation" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("status", { name: "Dashboard data pending" }),
-  ).toContainText(
-    "Future deterministic dashboard metrics will render here after the metrics API exists.",
-  );
+  await expect(syncPanel.getByText("2 body fetch issues")).toBeVisible();
 
   await page.getByRole("link", { name: "Dashboard" }).click();
 
@@ -549,7 +608,11 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
   const breakdown = page.getByRole("region", { name: "Source breakdown" });
   await expect(breakdown.getByText("Linkedin").first()).toBeVisible();
   await expect(breakdown.getByText("2 applications")).toBeVisible();
-  await expect(breakdown.getByText("1 response, 1 interview, 1 offer")).toBeVisible();
+  await expect(
+    breakdown.getByText(
+      "1 response (No data response rate), 1 interview (No data interview rate), 1 offer (No data offer rate)",
+    ),
+  ).toBeVisible();
   await expect(
     page.getByRole("table", { name: "Source metric breakdown" }),
   ).toBeVisible();

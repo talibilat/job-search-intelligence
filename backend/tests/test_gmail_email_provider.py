@@ -716,25 +716,26 @@ def test_gmail_email_provider_sanitizes_body_dto_validation_errors() -> None:
     )
     connection = _connection()
 
-    with pytest.raises(EmailProviderError) as error_info:
-        asyncio.run(
-            provider.fetch_message_bodies(
-                connection,
-                EmailBodyFetchRequest(
-                    refs=(
-                        EmailMessageRef(
-                            account=connection.account,
-                            message_id="msg-mislabelled-html",
-                            thread_id="thread-mislabelled-html",
-                        ),
+    batch = asyncio.run(
+        provider.fetch_message_bodies(
+            connection,
+            EmailBodyFetchRequest(
+                refs=(
+                    EmailMessageRef(
+                        account=connection.account,
+                        message_id="msg-mislabelled-html",
+                        thread_id="thread-mislabelled-html",
                     ),
                 ),
-            )
+            ),
         )
+    )
 
-    assert error_info.value.public_message == "Gmail body fetching returned invalid data"
-    assert "Sensitive application update" not in str(error_info.value)
-    assert error_info.value.__cause__ is None
+    assert batch.bodies == ()
+    assert len(batch.failures) == 1
+    assert batch.failures[0].ref.message_id == "msg-mislabelled-html"
+    assert batch.failures[0].reason is EmailBodyFetchFailureReason.INVALID_DATA
+    assert "Sensitive application update" not in repr(batch)
 
 
 def test_gmail_email_provider_uses_html_when_plain_alternative_is_empty() -> None:

@@ -14,6 +14,7 @@ from app.models.classification import (
     EmailClassificationCandidate,
     EmailClassificationRecord,
 )
+from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import (
     EmailChunkSource,
     RawEmailBodyRetentionState,
@@ -192,8 +193,15 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         *,
         provider: EmailProviderName | None = None,
         limit: int = 10,
+        order_by: RawEmailPreviewOrder = RawEmailPreviewOrder.SENT_AT,
     ) -> tuple[RawEmailPreviewRecord, ...]:
-        """Return recent raw-email metadata without exposing body text."""
+        """Return recent raw-email metadata without exposing body text.
+
+        The default order is mailbox order (newest ``sent_at`` first) so a
+        resumed historical backfill does not look like an old-mail-only sync.
+        ``RawEmailPreviewOrder.INGESTED_AT`` is the diagnostic view showing
+        what the most recent sync run actually wrote.
+        """
 
         if limit < 1:
             msg = "limit must be at least 1"
@@ -206,6 +214,23 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         else:
             provider_clause = "WHERE raw_emails.provider = ?"
             parameters = (provider.value, limit)
+
+        order_clause = (
+            "raw_emails.sent_at DESC, raw_emails.ingested_at DESC, raw_emails.id DESC"
+            if order_by is RawEmailPreviewOrder.SENT_AT
+            else "raw_emails.ingested_at DESC, raw_emails.sent_at DESC, raw_emails.id DESC"
+        )
+
+        if self._table_exists("email_classifications"):
+            classification_columns = """,
+                email_classifications.category AS classification_category,
+                email_classifications.is_job_related AS classification_is_job_related"""
+            classification_join = """
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = raw_emails.id"""
+        else:
+            classification_columns = ""
+            classification_join = ""
 
         rows = self.execute(
             f"""
@@ -223,13 +248,13 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                 raw_emails.provider,
                 raw_emails.ingested_at,
                 email_filter_decisions.outcome AS filter_outcome,
-                email_filter_decisions.reason AS filter_reason
+                email_filter_decisions.reason AS filter_reason{classification_columns}
             FROM raw_emails
             LEFT JOIN email_filter_decisions
                 ON email_filter_decisions.email_id = raw_emails.id
-                AND email_filter_decisions.strategy = 'broad_job_search'
+                AND email_filter_decisions.strategy = 'broad_job_search'{classification_join}
             {provider_clause}
-            ORDER BY raw_emails.ingested_at DESC, raw_emails.sent_at DESC, raw_emails.id DESC
+            ORDER BY {order_clause}
             LIMIT ?
             """,
             parameters,

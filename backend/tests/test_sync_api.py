@@ -193,6 +193,7 @@ def test_post_sync_runs_injected_manual_sync_runtime() -> None:
         "page_count": 1,
         "message_count": 2,
         "raw_email_count": 2,
+        "retained_body_failure_count": 0,
         "target_message_count": None,
         "progress": 1.0,
         "recovered_from_expired_cursor": False,
@@ -410,12 +411,69 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
             "ingested_at": "2026-07-05T12:01:00Z",
             "filter_outcome": "candidate",
             "filter_reason": "sender_domain:example.com",
+            "classification_category": None,
+            "classification_is_job_related": None,
         }
     ]
     assert "body_text" not in response.text
     assert "Private body" not in response.text
     assert "gmail-msg-1" not in response.text
     assert "thread-1" not in response.text
+
+
+def test_get_sync_recent_emails_orders_by_sent_at_by_default(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        rows = (
+            # Old mailbox message ingested most recently (historical backfill).
+            ("gmail-old", "2026-01-01T09:00:00+00:00", "2026-07-05T12:00:00+00:00"),
+            # New mailbox message ingested earlier.
+            ("gmail-new", "2026-07-01T09:00:00+00:00", "2026-07-02T12:00:00+00:00"),
+        )
+        for email_id, sent_at, ingested_at in rows:
+            connection.execute(
+                """
+                INSERT INTO raw_emails (
+                    id, thread_id, from_addr, to_addr, subject, sent_at,
+                    body_text, body_retention_state, labels, provider, ingested_at
+                ) VALUES (?, ?, ?, ?, ?, ?, NULL, 'metadata_only', '[]', 'gmail', ?)
+                """,
+                (
+                    email_id,
+                    f"thread-{email_id}",
+                    "a@example.com",
+                    "b@example.com",
+                    "Subject",
+                    sent_at,
+                    ingested_at,
+                ),
+            )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    default_response = client.get("/sync/recent-emails")
+    assert default_response.status_code == 200
+    assert [email["sent_at"] for email in default_response.json()] == [
+        "2026-07-01T09:00:00Z",
+        "2026-01-01T09:00:00Z",
+    ]
+
+    sent_response = client.get("/sync/recent-emails?order=sent_at")
+    assert [email["sent_at"] for email in sent_response.json()] == [
+        "2026-07-01T09:00:00Z",
+        "2026-01-01T09:00:00Z",
+    ]
+
+    ingested_response = client.get("/sync/recent-emails?order=ingested_at")
+    assert [email["sent_at"] for email in ingested_response.json()] == [
+        "2026-01-01T09:00:00Z",
+        "2026-07-01T09:00:00Z",
+    ]
 
 
 def test_post_sync_passes_extraction_limits_to_provider_request(

@@ -24,8 +24,10 @@ import {
   getMetricsSummaryMetricsSummaryGet,
   getMetricsTimeseriesMetricsTimeseriesGet,
   listApplicationsApplicationsGet,
+  pipelineStatusPipelineStatusGet,
   type ApiErrorResponse,
   type ApplicationRecord,
+  type PipelineStatus,
   type ApplicationSource as ApplicationSourceValue,
   type ApplicationStatus as ApplicationStatusValue,
   type DiagnosticSegmentComparison,
@@ -650,6 +652,32 @@ export function DashboardPage() {
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadPipelineStatus() {
+      try {
+        const response = await pipelineStatusPipelineStatusGet();
+        if (response.status === 200 && !ignore) {
+          setPipelineStatus(response.data);
+        }
+      } catch {
+        if (!ignore) {
+          setPipelineStatus(null);
+        }
+      }
+    }
+
+    void loadPipelineStatus();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -1222,6 +1250,33 @@ export function DashboardPage() {
           pending.
         </p>
       </section>
+
+      {!isLoadingSummary &&
+      summary?.total_applications === 0 &&
+      pipelineStatus ? (
+        pipelineStatus.next_action === "review_dashboard" ? (
+          <Alert title="Zero applications is a real zero" tone="info">
+            <p>{pipelineStatus.next_action_reason}</p>
+          </Alert>
+        ) : (
+          <Alert
+            title="These zeros mean the pipeline has not finished, not that you applied to zero jobs"
+            tone="warning"
+          >
+            <p>{pipelineStatus.next_action_reason}</p>
+            <p>
+              {pipelineStatus.counts.raw_email_count > 0
+                ? `${new Intl.NumberFormat("en-US").format(pipelineStatus.counts.raw_email_count)} synced emails are waiting on the ${
+                    pipelineStatus.next_action === "run_classification"
+                      ? "classification"
+                      : "sync"
+                  } step. `
+                : ""}
+              Go to the <a href="/">Job Search page</a> to run the next step.
+            </p>
+          </Alert>
+        )
+      ) : null}
 
       <div className="dashboard-layout">
         <section

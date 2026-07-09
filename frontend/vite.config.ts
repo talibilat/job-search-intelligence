@@ -28,6 +28,24 @@ export default defineConfig({
       "/health": BACKEND_URL,
       "/local-data": BACKEND_URL,
       "/metrics": BACKEND_URL,
+      "/pipeline": BACKEND_URL,
+      "/classification": BACKEND_URL,
+      "/insights": BACKEND_URL,
+      // "/applications/{id}" is both a backend API path and a frontend page
+      // route. Serve SPA page navigations (browser HTML requests) from Vite
+      // and forward JSON API requests to the backend.
+      "/applications": {
+        target: BACKEND_URL,
+        changeOrigin: true,
+        bypass(req: IncomingMessage) {
+          if (
+            req.method === "GET" &&
+            (req.headers.accept ?? "").includes("text/html")
+          ) {
+            return req.url;
+          }
+        },
+      },
     },
   },
   test: {

@@ -18,6 +18,7 @@ from app.db.repositories import (
     SyncStateRepository,
 )
 from app.db.sqlite_url import sqlite_database_path
+from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import EmailBackfillStatus, RawEmailPreviewRecord
 from app.providers.email import EmailConnection, EmailProvider
 from app.providers.email.gmail import GmailEmailProvider
@@ -119,7 +120,12 @@ class ConfiguredEmailSyncRuntime:
     def current_status(self) -> EmailSyncStatus:
         return self._status_store.current_status()
 
-    def recent_email_previews(self, *, limit: int = 10) -> tuple[RawEmailPreviewRecord, ...]:
+    def recent_email_previews(
+        self,
+        *,
+        limit: int = 10,
+        order: RawEmailPreviewOrder = RawEmailPreviewOrder.SENT_AT,
+    ) -> tuple[RawEmailPreviewRecord, ...]:
         database_path = sqlite_database_path(self._settings.database_url)
         if not database_path.exists():
             return ()
@@ -130,6 +136,7 @@ class ConfiguredEmailSyncRuntime:
             ).list_recent_email_previews(
                 provider=self._settings.email_provider,
                 limit=limit,
+                order=order,
             )
 
 
@@ -227,7 +234,12 @@ def sync_status(
 def sync_recent_emails(
     sync_runtime: Annotated[EmailSyncRuntime, Depends(get_email_sync_runtime)],
     limit: int = 10,
+    order: RawEmailPreviewOrder = RawEmailPreviewOrder.SENT_AT,
 ) -> list[RawEmailPreviewRecord]:
-    """Return recently stored raw-email metadata without body text."""
+    """Return recently stored raw-email metadata without body text.
 
-    return list(sync_runtime.recent_email_previews(limit=limit))
+    ``order=sent_at`` (default) shows the newest synced mailbox messages;
+    ``order=ingested_at`` is the diagnostic view of what the latest sync wrote.
+    """
+
+    return list(sync_runtime.recent_email_previews(limit=limit, order=order))

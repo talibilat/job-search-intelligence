@@ -14,6 +14,126 @@ const areaLabels: Record<FeatureArea, string> = {
   frontend: "Frontend",
 };
 
+interface UserFacingFeature {
+  howToRun: string;
+  name: string;
+  whatItMeans: string;
+  worksToday: "yes" | "partial" | "no";
+  worksTodayNote: string;
+}
+
+const userFacingFeatures: readonly UserFacingFeature[] = [
+  {
+    howToRun:
+      "Setup page: save provider choices, then use the Gmail connect flow with your own Google OAuth client.",
+    name: "Connect Gmail",
+    whatItMeans:
+      "Authorizes read-only access to your Gmail account. Tokens are stored encrypted on this machine and never leave it.",
+    worksToday: "yes",
+    worksTodayNote: "Works today with your own Google Cloud OAuth client.",
+  },
+  {
+    howToRun:
+      'Job Search page: press "Sync now". Optional limits (email count, dates, pages) bound each run.',
+    name: "Sync mailbox metadata",
+    whatItMeans:
+      "Downloads Gmail message metadata into the local database. The first pass is a one-time historical backfill from newest to oldest mail; after it completes, each sync fetches only new mail.",
+    worksToday: "yes",
+    worksTodayNote: "Works today once Gmail is connected.",
+  },
+  {
+    howToRun:
+      "Runs automatically during every sync; outcomes appear on each email row in the Job Search page preview.",
+    name: "Job-search email filter",
+    whatItMeans:
+      "A deterministic heuristic (known recruiter domains, keywords, labels) decides which synced emails look job-related. Only those keep their body text locally for classification.",
+    worksToday: "yes",
+    worksTodayNote: "Works today; every decision is stored with a reason.",
+  },
+  {
+    howToRun:
+      'Job Search page: press "Run classification" when candidates are waiting. Requires a configured LLM provider (Ollama or Azure OpenAI).',
+    name: "Classify and build applications",
+    whatItMeans:
+      "The configured model categorizes each kept email (confirmation, rejection, interview, offer, and so on), and deterministic aggregation reconstructs one application per company and role with a timeline of events.",
+    worksToday: "partial",
+    worksTodayNote:
+      "Works today with a running LLM provider; without one the pipeline stops after the filter step.",
+  },
+  {
+    howToRun:
+      "Dashboard page: metrics fill in automatically once applications exist. Filters live in the URL.",
+    name: "Deterministic dashboard",
+    whatItMeans:
+      "Counts, statuses, and rates computed by SQL over the applications table. No model ever produces these numbers.",
+    worksToday: "yes",
+    worksTodayNote:
+      "Works today; shows guided empty states until the pipeline has produced applications.",
+  },
+  {
+    howToRun:
+      "Insights page: request narrative insights after applications exist. Requires an LLM provider.",
+    name: "Narrative insights",
+    whatItMeans:
+      "Cached model-written summaries (why rejections happen, skill gaps) grounded in cited applications and emails.",
+    worksToday: "partial",
+    worksTodayNote:
+      "API and page exist; useful output needs classified applications plus an LLM provider.",
+  },
+  {
+    howToRun: "Chat page.",
+    name: "Chat with your history",
+    whatItMeans:
+      "A hybrid question-answering agent over your job-search history, planned for a later phase.",
+    worksToday: "no",
+    worksTodayNote: "Not built yet; the page is a placeholder shell.",
+  },
+];
+
+const glossaryEntries: readonly { definition: string; term: string }[] = [
+  {
+    definition:
+      "One stored Gmail message row: sender, subject, dates, and labels. Body text is only kept when the filter marks the message as a likely job email.",
+    term: "Raw email",
+  },
+  {
+    definition:
+      "A message as returned by the Gmail API during a sync run, before it is stored locally.",
+    term: "Provider message",
+  },
+  {
+    definition:
+      "One paginated Gmail API response. A full mailbox backfill processes many pages, resumable across runs.",
+    term: "Page",
+  },
+  {
+    definition:
+      "The locally kept body text of a likely job email, stored so classification can read it. Never displayed in the UI.",
+    term: "Retained body",
+  },
+  {
+    definition:
+      "The heuristic yes/no decision on whether an email looks job-search related, stored with a public-safe reason like sender_domain:greenhouse.io.",
+    term: "Filter decision",
+  },
+  {
+    definition:
+      "The model-assigned category (confirmation, rejection, interview invite, offer, and so on) for a retained candidate email, stored with model and prompt version.",
+    term: "Classification",
+  },
+  {
+    definition:
+      "One reconstructed job application: a company and role with a timeline of events built from many emails. The single source of truth for every dashboard number.",
+    term: "Application",
+  },
+];
+
+const worksTodayLabels: Record<UserFacingFeature["worksToday"], string> = {
+  no: "Not yet",
+  partial: "Partially",
+  yes: "Works today",
+};
+
 type FeatureTab = FeatureArea;
 type FeatureStatusFilter = "all" | FeatureStatus;
 type FeatureTestableFilter = "all" | "no" | "yes";
@@ -608,14 +728,67 @@ export function FeatureStatusDashboard() {
         className="feature-status-hero"
         aria-labelledby="feature-status-title"
       >
-        <p className="eyebrow">Developer inventory</p>
-        <h1 id="feature-status-title">Feature Status Dashboard</h1>
+        <p className="eyebrow">Feature status</p>
+        <h1 id="feature-status-title">What JobTracker can do today</h1>
         <p className="hero-copy">
-          A registry-backed map of completed and in-progress frontend and
-          backend features, their test entry points, and the modules that
-          connect them.
+          Each feature below says what it means, how to run it, and whether it
+          works right now. The full developer inventory of files and APIs is
+          collapsed at the bottom.
         </p>
       </section>
+
+      <section
+        aria-labelledby="user-features-title"
+        className="status-card feature-guide"
+      >
+        <div>
+          <p className="eyebrow">Available features</p>
+          <h2 id="user-features-title">Features and how to run them</h2>
+        </div>
+        <ul className="feature-guide__list">
+          {userFacingFeatures.map((feature) => (
+            <li className="feature-guide__item" key={feature.name}>
+              <div className="feature-guide__item-header">
+                <h3>{feature.name}</h3>
+                <span
+                  className={`feature-guide__works feature-guide__works--${feature.worksToday}`}
+                >
+                  {worksTodayLabels[feature.worksToday]}
+                </span>
+              </div>
+              <p>{feature.whatItMeans}</p>
+              <p>
+                <strong>How to run it:</strong> {feature.howToRun}
+              </p>
+              <p className="feature-guide__note">{feature.worksTodayNote}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section
+        aria-labelledby="feature-glossary-title"
+        className="status-card feature-guide"
+      >
+        <div>
+          <p className="eyebrow">Plain language</p>
+          <h2 id="feature-glossary-title">Glossary</h2>
+        </div>
+        <dl className="feature-guide__glossary">
+          {glossaryEntries.map((entry) => (
+            <div key={entry.term}>
+              <dt>{entry.term}</dt>
+              <dd>{entry.definition}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <details className="feature-advanced">
+        <summary>
+          Advanced: developer inventory (files, APIs, modules, and test entry
+          points)
+        </summary>
 
       <section className="feature-filters" aria-label="Feature filters">
         <FormField htmlFor="feature-search" label="Search features">
@@ -702,6 +875,7 @@ export function FeatureStatusDashboard() {
         label="Feature status views"
         onItemChange={(itemId) => setActiveTab(itemId as FeatureTab)}
       />
+      </details>
     </main>
   );
 }

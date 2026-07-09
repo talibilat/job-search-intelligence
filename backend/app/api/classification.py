@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies import (
+    get_aggregation_service,
     get_readonly_email_repository,
     get_structured_extraction_service,
 )
@@ -15,6 +16,7 @@ from app.models import (
     ClassificationReprocessingPlan,
     ClassificationRunResponse,
 )
+from app.services.aggregation import AggregationService
 from app.services.classification_estimate import build_classification_pre_run_estimate
 from app.services.classification_reprocessing import build_classification_reprocessing_plan
 from app.services.structured_extraction import StructuredExtractionService
@@ -71,8 +73,9 @@ async def classification_reprocessing_plan(
     response_model=ClassificationRunResponse,
     summary="Run Classification Batch",
     description=(
-        "Classifies retained email candidates through the configured LLM provider "
-        "and idempotently stores classification results plus run accounting."
+        "Classifies retained email candidates through the configured LLM provider, "
+        "idempotently stores classification results plus run accounting, and then "
+        "aggregates accepted extractions into applications and timeline events."
     ),
 )
 async def classification_run(
@@ -81,8 +84,13 @@ async def classification_run(
         StructuredExtractionService,
         Depends(get_structured_extraction_service),
     ],
+    aggregation_service: Annotated[
+        AggregationService,
+        Depends(get_aggregation_service),
+    ],
 ) -> ClassificationRunResponse:
     result = await classification_service.run_batch()
+    aggregation_result = aggregation_service.run(list(result.accepted_results))
     return ClassificationRunResponse(
         run_id=result.run_record.id,
         provider=result.run_record.provider,
@@ -99,4 +107,8 @@ async def classification_run(
         estimated_cost_usd=float(result.run_record.estimated_cost_usd),
         classification_mode=settings.classification_mode,
         llm_provider=settings.llm_provider,
+        applications_upserted=aggregation_result.applications_upserted,
+        events_upserted=aggregation_result.events_upserted,
+        skipped_not_job_related=aggregation_result.skipped_not_job_related,
+        manual_conflict_count=aggregation_result.manual_conflict_count,
     )

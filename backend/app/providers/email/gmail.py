@@ -971,13 +971,38 @@ class GmailMessageLister:
                 raise EmailProviderTransientError(
                     public_message="Gmail body fetching is temporarily unavailable"
                 ) from error
+            except EmailProviderError:
+                # One malformed provider payload must not abort the whole
+                # batch, or a resumable backfill can never advance past it.
+                failures.append(
+                    EmailBodyFetchFailure(
+                        ref=ref,
+                        reason=EmailBodyFetchFailureReason.INVALID_DATA,
+                    )
+                )
+                continue
             if gmail_body.id != ref.message_id:
-                raise EmailProviderError(public_message=_INVALID_BODY_DATA_MESSAGE)
+                failures.append(
+                    EmailBodyFetchFailure(
+                        ref=ref,
+                        reason=EmailBodyFetchFailureReason.INVALID_DATA,
+                    )
+                )
+                continue
 
-            retained_body = _retained_body_from_payload(
-                gmail_body.payload,
-                max_body_bytes=request.max_body_bytes,
-            )
+            try:
+                retained_body = _retained_body_from_payload(
+                    gmail_body.payload,
+                    max_body_bytes=request.max_body_bytes,
+                )
+            except EmailProviderError:
+                failures.append(
+                    EmailBodyFetchFailure(
+                        ref=ref,
+                        reason=EmailBodyFetchFailureReason.INVALID_DATA,
+                    )
+                )
+                continue
             if isinstance(retained_body, EmailBodyFetchFailureReason):
                 failures.append(EmailBodyFetchFailure(ref=ref, reason=retained_body))
                 continue
@@ -993,7 +1018,12 @@ class GmailMessageLister:
                     )
                 )
             except ValidationError:
-                raise EmailProviderError(public_message=_INVALID_BODY_DATA_MESSAGE) from None
+                failures.append(
+                    EmailBodyFetchFailure(
+                        ref=ref,
+                        reason=EmailBodyFetchFailureReason.INVALID_DATA,
+                    )
+                )
 
         return EmailBodyBatch(bodies=tuple(bodies), failures=tuple(failures))
 

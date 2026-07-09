@@ -427,9 +427,7 @@ def _upsert_events(
             conflicts.append(
                 _CorrectionConflict(
                     application_id=application_id,
-                    conflict_key=(
-                        f"application_event:{application_id}:{email_id or event_id}"
-                    ),
+                    conflict_key=(f"application_event:{application_id}:{email_id or event_id}"),
                     conflict_type="application_event",
                     existing_json={
                         "event": _event_json(existing_event) if existing_event else None,

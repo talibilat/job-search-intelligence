@@ -4,6 +4,8 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from app.api.dependencies import get_structured_extraction_service
 from app.config import AppSettings, ClassificationMode, LLMProviderName, get_settings
 from app.db.repositories import ClassificationRunRepository, EmailRepository
@@ -22,6 +24,7 @@ from app.services.structured_extraction import StructuredExtractionService
 from fastapi.testclient import TestClient
 
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_post_classification_run_classifies_and_persists(tmp_path: Path) -> None:
@@ -64,6 +67,10 @@ def test_post_classification_run_classifies_and_persists(tmp_path: Path) -> None
     assert data["llm_provider"] == "ollama"
     assert data["started_at"] is not None
     assert data["completed_at"] is not None
+    assert data["applications_upserted"] == 1
+    assert data["events_upserted"] == 1
+    assert data["skipped_not_job_related"] == 0
+    assert data["manual_conflict_count"] == 0
 
     with sqlite3.connect(database_path) as connection:
         stored = connection.execute(
@@ -79,6 +86,16 @@ def test_post_classification_run_classifies_and_persists(tmp_path: Path) -> None
         ).fetchone()
         assert run_count is not None
         assert run_count[0] == 1
+
+        applications = connection.execute(
+            "SELECT company, role_title, current_status FROM applications",
+        ).fetchall()
+        assert applications == [("Example Systems", "Backend Engineer", "rejected")]
+
+        events = connection.execute(
+            "SELECT email_id, event_type FROM application_events",
+        ).fetchall()
+        assert events == [("email-1", "rejection")]
 
 
 def test_post_classification_run_returns_empty_run_when_no_candidates(
@@ -225,55 +242,11 @@ def _make_fake_service_with_failing_llm(database_path: Path) -> StructuredExtrac
 
 
 def create_classification_tables(database_path: Path) -> None:
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            """
-            CREATE TABLE raw_emails (
-                id TEXT PRIMARY KEY,
-                thread_id TEXT,
-                from_addr TEXT,
-                to_addr TEXT,
-                subject TEXT,
-                sent_at TEXT,
-                body_text TEXT,
-                body_retention_state TEXT NOT NULL,
-                labels TEXT NOT NULL,
-                provider TEXT NOT NULL,
-                ingested_at TEXT NOT NULL
-            )
-            """,
-        )
-        connection.execute(
-            """
-            CREATE TABLE email_classifications (
-                email_id TEXT PRIMARY KEY,
-                is_job_related INTEGER NOT NULL,
-                category TEXT NOT NULL,
-                confidence REAL NOT NULL,
-                model TEXT NOT NULL,
-                prompt_version TEXT NOT NULL,
-                classified_at TEXT NOT NULL
-            )
-            """,
-        )
-        connection.execute(
-            """
-            CREATE TABLE classification_runs (
-                id TEXT PRIMARY KEY,
-                provider TEXT NOT NULL,
-                model TEXT NOT NULL,
-                prompt_version TEXT NOT NULL,
-                started_at TEXT NOT NULL,
-                completed_at TEXT NOT NULL,
-                candidate_count INTEGER NOT NULL,
-                classified_count INTEGER NOT NULL,
-                prompt_tokens INTEGER NOT NULL,
-                completion_tokens INTEGER NOT NULL,
-                total_tokens INTEGER NOT NULL,
-                estimated_cost_usd TEXT NOT NULL
-            )
-            """,
-        )
+    """Create the full migrated schema so classification and aggregation both work."""
+
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
+    command.upgrade(config, "head")
 
 
 def insert_raw_email(

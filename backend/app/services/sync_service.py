@@ -15,6 +15,7 @@ from app.db.repositories import (
 )
 from app.db.repositories.sync_state import SyncStateRepository
 from app.models import SyncJobCounts, SyncJobPhase, SyncJobStatus
+from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import (
     EmailBackfillStateRecord,
     EmailBackfillStatus,
@@ -144,6 +145,7 @@ class EmailSyncStatus(BaseModel):
     page_count: int = Field(default=0, ge=0)
     message_count: int = Field(default=0, ge=0)
     raw_email_count: int = Field(default=0, ge=0)
+    retained_body_failure_count: int = Field(default=0, ge=0)
     target_message_count: int | None = Field(default=None, ge=1)
     progress: float = Field(default=0, ge=0, le=1)
     recovered_from_expired_cursor: bool = False
@@ -206,7 +208,12 @@ class EmailSyncRuntime(Protocol):
         """Return current or last-run status."""
         ...
 
-    def recent_email_previews(self, *, limit: int = 10) -> tuple[RawEmailPreviewRecord, ...]:
+    def recent_email_previews(
+        self,
+        *,
+        limit: int = 10,
+        order: RawEmailPreviewOrder = RawEmailPreviewOrder.SENT_AT,
+    ) -> tuple[RawEmailPreviewRecord, ...]:
         """Return sanitized recent raw-email metadata previews."""
         ...
 
@@ -299,10 +306,12 @@ class EmailSyncPreviewService:
         *,
         provider: EmailProviderName | None = None,
         limit: int = 10,
+        order: RawEmailPreviewOrder = RawEmailPreviewOrder.SENT_AT,
     ) -> tuple[RawEmailPreviewRecord, ...]:
         return self._email_repository.list_recent_email_previews(
             provider=provider,
             limit=_bounded_preview_limit(limit),
+            order_by=order,
         )
 
 
@@ -751,6 +760,7 @@ class EmailSyncService:
 
         page_count = 0
         message_count = 0
+        retained_body_failure_count = 0
         try:
             while True:
                 page_result = await self.run_backfill_page(
@@ -775,7 +785,10 @@ class EmailSyncService:
                             metadata=page.messages,
                             candidate_query=build_broad_candidate_query(),
                         )
-                        _raise_for_retained_body_failures(body_batch)
+                        # Per-message body failures are tracked, not fatal:
+                        # aborting here would pin the resumable backfill to
+                        # this page forever and block newer-mail progress.
+                        retained_body_failure_count += len(body_batch.failures)
                         if body_batch.bodies:
                             self._email_repository.upsert_retained_bodies(
                                 body_batch.bodies,
@@ -802,6 +815,7 @@ class EmailSyncService:
                         raw_email_count=self._email_repository.count_raw_emails(
                             provider=connection.account.provider,
                         ),
+                        retained_body_failure_count=retained_body_failure_count,
                         target_message_count=sync_options.target_message_count,
                         progress=_sync_progress(
                             processed_messages=message_count,
@@ -845,6 +859,7 @@ class EmailSyncService:
             raw_email_count=self._email_repository.count_raw_emails(
                 provider=connection.account.provider,
             ),
+            retained_body_failure_count=retained_body_failure_count,
             target_message_count=sync_options.target_message_count,
             progress=_sync_progress(
                 processed_messages=message_count,
@@ -947,6 +962,7 @@ class EmailSyncService:
         )
         page_count = 0
         message_count = 0
+        retained_body_failure_count = 0
         recovered_from_expired_cursor = False
         final_mode = (
             EmailSyncMode.INCREMENTAL if sync_cursor is not None else EmailSyncMode.FULL_BACKFILL
@@ -983,7 +999,7 @@ class EmailSyncService:
                         metadata=page_result.page.messages,
                         candidate_query=build_broad_candidate_query(),
                     )
-                    _raise_for_retained_body_failures(body_batch)
+                    retained_body_failure_count += len(body_batch.failures)
                     if body_batch.bodies:
                         self._email_repository.upsert_retained_bodies(
                             body_batch.bodies,
@@ -1003,6 +1019,7 @@ class EmailSyncService:
                     raw_email_count=self._email_repository.count_raw_emails(
                         provider=connection.account.provider,
                     ),
+                    retained_body_failure_count=retained_body_failure_count,
                     recovered_from_expired_cursor=recovered_from_expired_cursor,
                     target_message_count=options.target_message_count,
                     progress=_sync_progress(
@@ -1053,6 +1070,7 @@ class EmailSyncService:
             raw_email_count=self._email_repository.count_raw_emails(
                 provider=connection.account.provider,
             ),
+            retained_body_failure_count=retained_body_failure_count,
             recovered_from_expired_cursor=recovered_from_expired_cursor,
             target_message_count=options.target_message_count,
             progress=_sync_progress(
@@ -1095,13 +1113,6 @@ def _retained_body_batch_size(body_provider: RetainedBodyProvider) -> int | None
 
 def _can_fetch_retained_bodies(body_provider: object) -> bool:
     return callable(getattr(body_provider, "fetch_message_bodies", None))
-
-
-def _raise_for_retained_body_failures(body_batch: EmailBodyBatch) -> None:
-    if body_batch.failures:
-        raise EmailProviderError(
-            public_message="One or more retained email bodies could not be fetched."
-        )
 
 
 def _sync_progress(

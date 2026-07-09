@@ -22,6 +22,7 @@ from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
+from app.services.aggregation import AggregationService
 from app.services.application_corrections import ApplicationCorrectionService
 from app.services.applications import (
     ApplicationCorrectionConflictService,
@@ -164,6 +165,23 @@ def get_structured_extraction_service(
         classification_run_repository=classification_run_repository,
         llm_provider=llm_provider,
     )
+
+
+def get_aggregation_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[AggregationService]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    try:
+        yield AggregationService(
+            application_repository=ApplicationRepository(connection),
+            event_repository=EventRepository(connection),
+            email_repository=EmailRepository(connection),
+            correction_conflict_repository=CorrectionConflictRepository(connection),
+        )
+    finally:
+        connection.close()
 
 
 def get_readonly_application_repository(

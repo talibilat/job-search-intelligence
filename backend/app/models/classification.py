@@ -377,6 +377,10 @@ class ClassificationRunResponse(BaseModel):
     estimated_cost_usd: float = Field(ge=0)
     classification_mode: ClassificationMode
     llm_provider: LLMProviderName
+    applications_upserted: int = Field(default=0, ge=0)
+    events_upserted: int = Field(default=0, ge=0)
+    skipped_not_job_related: int = Field(default=0, ge=0)
+    manual_conflict_count: int = Field(default=0, ge=0)
 
 
 def _validate_timezone_aware[

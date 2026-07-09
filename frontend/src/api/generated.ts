@@ -293,6 +293,19 @@ export interface ApplicationWindowMetric {
   window: MetricsApplicationWindow;
 }
 
+/**
+ * Public lifecycle state for the durable full metadata backfill.
+ */
+export type BackfillProgressState =
+  (typeof BackfillProgressState)[keyof typeof BackfillProgressState];
+
+export const BackfillProgressState = {
+  not_started: "not_started",
+  running: "running",
+  completed: "completed",
+  failed: "failed",
+} as const;
+
 export type JsonObjectList = JsonObject[];
 
 export type ChatMessageRole =
@@ -424,6 +437,8 @@ export interface ClassificationReprocessingPlan {
  */
 export interface ClassificationRunResponse {
   /** @minimum 0 */
+  applications_upserted?: number;
+  /** @minimum 0 */
   candidate_count: number;
   classification_mode: ClassificationMode;
   /** @minimum 0 */
@@ -433,9 +448,13 @@ export interface ClassificationRunResponse {
   completion_tokens: number;
   /** @minimum 0 */
   estimated_cost_usd: number;
+  /** @minimum 0 */
+  events_upserted?: number;
   llm_provider: LLMProviderName;
   /** @minimum 0 */
   malformed_count: number;
+  /** @minimum 0 */
+  manual_conflict_count?: number;
   /** @minLength 1 */
   model: string;
   /** @minimum 0 */
@@ -446,6 +465,8 @@ export interface ClassificationRunResponse {
   provider: string;
   /** @minLength 1 */
   run_id: string;
+  /** @minimum 0 */
+  skipped_not_job_related?: number;
   started_at: string;
   /** @minimum 0 */
   total_tokens: number;
@@ -652,6 +673,8 @@ export interface EmailSyncStatus {
   /** @minimum 0 */
   raw_email_count?: number;
   recovered_from_expired_cursor?: boolean;
+  /** @minimum 0 */
+  retained_body_failure_count?: number;
   started_at?: string | null;
   state: EmailSyncRunState;
   target_message_count?: number | null;
@@ -992,6 +1015,79 @@ export interface MetricsTimeseriesResponse {
 }
 
 /**
+ * Deterministic next step a user can take to move the pipeline forward.
+ */
+export type PipelineNextAction =
+  (typeof PipelineNextAction)[keyof typeof PipelineNextAction];
+
+export const PipelineNextAction = {
+  connect_gmail: "connect_gmail",
+  run_sync: "run_sync",
+  continue_backfill: "continue_backfill",
+  wait_for_sync: "wait_for_sync",
+  run_classification: "run_classification",
+  review_dashboard: "review_dashboard",
+  inspect_error: "inspect_error",
+} as const;
+
+/**
+ * Deterministic per-stage counts computed from local SQLite only.
+ */
+export interface PipelineStageCounts {
+  /** @minimum 0 */
+  application_count: number;
+  /** @minimum 0 */
+  application_event_count: number;
+  /** @minimum 0 */
+  classified_email_count: number;
+  /** @minimum 0 */
+  filter_candidate_count: number;
+  /** @minimum 0 */
+  filter_decision_count: number;
+  /** @minimum 0 */
+  filter_rejected_count: number;
+  /** @minimum 0 */
+  job_related_email_count: number;
+  /** @minimum 0 */
+  metadata_only_count: number;
+  /** @minimum 0 */
+  raw_email_count: number;
+  /** @minimum 0 */
+  retained_body_count: number;
+}
+
+/**
+ * Public-safe deterministic pipeline overview for the workflow page.
+ *
+ * Every number comes from local SQLite counts or persisted sync state.
+ * No LLM output and no email body content is involved.
+ */
+export interface PipelineStatus {
+  account_display?: string | null;
+  backfill_complete: boolean;
+  /** @minimum 0 */
+  backfill_messages_processed: number;
+  /** @minimum 0 */
+  backfill_pages_processed: number;
+  backfill_state: BackfillProgressState;
+  counts: PipelineStageCounts;
+  generated_at: string;
+  gmail_connected: boolean;
+  incremental_sync_ready: boolean;
+  last_error?: string | null;
+  last_sync_finished_at?: string | null;
+  last_sync_started_at?: string | null;
+  next_action: PipelineNextAction;
+  /** @minLength 1 */
+  next_action_reason: string;
+  reauth_required?: boolean;
+  sync_mode?: string | null;
+  sync_running: boolean;
+  /** @minimum 0 */
+  unclassified_retained_count: number;
+}
+
+/**
  * Currently selected provider choices for the setup/config shell.
  */
 export interface ProviderSelection {
@@ -1057,10 +1153,23 @@ export const RawEmailBodyRetentionState = {
 } as const;
 
 /**
+ * Supported deterministic orderings for the raw-email preview list.
+ */
+export type RawEmailPreviewOrder =
+  (typeof RawEmailPreviewOrder)[keyof typeof RawEmailPreviewOrder];
+
+export const RawEmailPreviewOrder = {
+  sent_at: "sent_at",
+  ingested_at: "ingested_at",
+} as const;
+
+/**
  * Public-safe raw email metadata preview without body text.
  */
 export interface RawEmailPreviewRecord {
   body_retention_state: RawEmailBodyRetentionState;
+  classification_category?: string | null;
+  classification_is_job_related?: boolean | null;
   filter_outcome?: string | null;
   filter_reason?: string | null;
   from_domain: string | null;
@@ -1271,6 +1380,7 @@ export type GetMetricsTimeseriesMetricsTimeseriesGetParams = {
 
 export type SyncRecentEmailsSyncRecentEmailsGetParams = {
   limit?: number;
+  order?: RawEmailPreviewOrder;
 };
 
 export type listApplicationsApplicationsGetResponse200 = {
@@ -2240,7 +2350,7 @@ export const getClassificationRunClassificationRunPostUrl = () => {
 };
 
 /**
- * Classifies retained email candidates through the configured LLM provider and idempotently stores classification results plus run accounting.
+ * Classifies retained email candidates through the configured LLM provider, idempotently stores classification results plus run accounting, and then aggregates accepted extractions into applications and timeline events.
  * @summary Run Classification Batch
  */
 export const classificationRunClassificationRunPost = async (
@@ -3118,6 +3228,46 @@ export const getMetricsTimeseriesMetricsTimeseriesGet = async (
   } as getMetricsTimeseriesMetricsTimeseriesGetResponse;
 };
 
+export type pipelineStatusPipelineStatusGetResponse200 = {
+  data: PipelineStatus;
+  status: 200;
+};
+
+export type pipelineStatusPipelineStatusGetResponseSuccess =
+  pipelineStatusPipelineStatusGetResponse200 & {
+    headers: Headers;
+  };
+export type pipelineStatusPipelineStatusGetResponse =
+  pipelineStatusPipelineStatusGetResponseSuccess;
+
+export const getPipelineStatusPipelineStatusGetUrl = () => {
+  return `/pipeline/status`;
+};
+
+/**
+ * Returns one deterministic overview of the local ingest, filter, classify, and aggregate pipeline plus the next action, without email content or secrets.
+ * @summary Get Pipeline Status
+ */
+export const pipelineStatusPipelineStatusGet = async (
+  options?: RequestInit,
+): Promise<pipelineStatusPipelineStatusGetResponse> => {
+  const res = await fetch(getPipelineStatusPipelineStatusGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: pipelineStatusPipelineStatusGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as pipelineStatusPipelineStatusGetResponse;
+};
+
 export type setupSubmitSetupPostResponse200 = {
   data: SetupSubmitResponse;
   status: 200;
@@ -3352,6 +3502,9 @@ export const getSyncRecentEmailsSyncRecentEmailsGetUrl = (
 
 /**
  * Return recently stored raw-email metadata without body text.
+ *
+ * ``order=sent_at`` (default) shows the newest synced mailbox messages;
+ * ``order=ingested_at`` is the diagnostic view of what the latest sync wrote.
  * @summary Sync Recent Emails
  */
 export const syncRecentEmailsSyncRecentEmailsGet = async (

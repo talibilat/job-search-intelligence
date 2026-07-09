@@ -645,10 +645,7 @@ def _validate_grounding_citations(content: str, insight_input: InsightInput) -> 
         if _states_insufficient_evidence(content):
             return
         raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
-    if (
-        not cited_evidence_ids
-        or _has_ungrounded_claim(content, valid_citation_spans)
-    ):
+    if not cited_evidence_ids or _has_ungrounded_claim(content, valid_citation_spans):
         raise LLMProviderResponseError(public_message=_UNGROUNDED_INSIGHT_MESSAGE)
 
 

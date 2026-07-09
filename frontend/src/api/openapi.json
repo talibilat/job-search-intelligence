@@ -973,6 +973,17 @@
         "title": "ApplicationWindowMetric",
         "type": "object"
       },
+      "BackfillProgressState": {
+        "description": "Public lifecycle state for the durable full metadata backfill.",
+        "enum": [
+          "not_started",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "BackfillProgressState",
+        "type": "string"
+      },
       "ChatHistoryResponse": {
         "properties": {
           "messages": {
@@ -1231,6 +1242,12 @@
       "ClassificationRunResponse": {
         "description": "Public response for a completed classification batch run.",
         "properties": {
+          "applications_upserted": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Applications Upserted",
+            "type": "integer"
+          },
           "candidate_count": {
             "minimum": 0.0,
             "title": "Candidate Count",
@@ -1259,12 +1276,24 @@
             "title": "Estimated Cost Usd",
             "type": "number"
           },
+          "events_upserted": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Events Upserted",
+            "type": "integer"
+          },
           "llm_provider": {
             "$ref": "#/components/schemas/LLMProviderName"
           },
           "malformed_count": {
             "minimum": 0.0,
             "title": "Malformed Count",
+            "type": "integer"
+          },
+          "manual_conflict_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Manual Conflict Count",
             "type": "integer"
           },
           "model": {
@@ -1291,6 +1320,12 @@
             "minLength": 1,
             "title": "Run Id",
             "type": "string"
+          },
+          "skipped_not_job_related": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Skipped Not Job Related",
+            "type": "integer"
           },
           "started_at": {
             "format": "date-time",
@@ -1852,6 +1887,12 @@
             "default": false,
             "title": "Recovered From Expired Cursor",
             "type": "boolean"
+          },
+          "retained_body_failure_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Retained Body Failure Count",
+            "type": "integer"
           },
           "started_at": {
             "anyOf": [
@@ -2975,6 +3016,222 @@
         "title": "PersonalGhostThresholdMetric",
         "type": "object"
       },
+      "PipelineNextAction": {
+        "description": "Deterministic next step a user can take to move the pipeline forward.",
+        "enum": [
+          "connect_gmail",
+          "run_sync",
+          "continue_backfill",
+          "wait_for_sync",
+          "run_classification",
+          "review_dashboard",
+          "inspect_error"
+        ],
+        "title": "PipelineNextAction",
+        "type": "string"
+      },
+      "PipelineStageCounts": {
+        "description": "Deterministic per-stage counts computed from local SQLite only.",
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "application_event_count": {
+            "minimum": 0.0,
+            "title": "Application Event Count",
+            "type": "integer"
+          },
+          "classified_email_count": {
+            "minimum": 0.0,
+            "title": "Classified Email Count",
+            "type": "integer"
+          },
+          "filter_candidate_count": {
+            "minimum": 0.0,
+            "title": "Filter Candidate Count",
+            "type": "integer"
+          },
+          "filter_decision_count": {
+            "minimum": 0.0,
+            "title": "Filter Decision Count",
+            "type": "integer"
+          },
+          "filter_rejected_count": {
+            "minimum": 0.0,
+            "title": "Filter Rejected Count",
+            "type": "integer"
+          },
+          "job_related_email_count": {
+            "minimum": 0.0,
+            "title": "Job Related Email Count",
+            "type": "integer"
+          },
+          "metadata_only_count": {
+            "minimum": 0.0,
+            "title": "Metadata Only Count",
+            "type": "integer"
+          },
+          "raw_email_count": {
+            "minimum": 0.0,
+            "title": "Raw Email Count",
+            "type": "integer"
+          },
+          "retained_body_count": {
+            "minimum": 0.0,
+            "title": "Retained Body Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "raw_email_count",
+          "metadata_only_count",
+          "retained_body_count",
+          "filter_decision_count",
+          "filter_candidate_count",
+          "filter_rejected_count",
+          "classified_email_count",
+          "job_related_email_count",
+          "application_count",
+          "application_event_count"
+        ],
+        "title": "PipelineStageCounts",
+        "type": "object"
+      },
+      "PipelineStatus": {
+        "description": "Public-safe deterministic pipeline overview for the workflow page.\n\nEvery number comes from local SQLite counts or persisted sync state.\nNo LLM output and no email body content is involved.",
+        "properties": {
+          "account_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Display"
+          },
+          "backfill_complete": {
+            "title": "Backfill Complete",
+            "type": "boolean"
+          },
+          "backfill_messages_processed": {
+            "minimum": 0.0,
+            "title": "Backfill Messages Processed",
+            "type": "integer"
+          },
+          "backfill_pages_processed": {
+            "minimum": 0.0,
+            "title": "Backfill Pages Processed",
+            "type": "integer"
+          },
+          "backfill_state": {
+            "$ref": "#/components/schemas/BackfillProgressState"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/PipelineStageCounts"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "gmail_connected": {
+            "title": "Gmail Connected",
+            "type": "boolean"
+          },
+          "incremental_sync_ready": {
+            "title": "Incremental Sync Ready",
+            "type": "boolean"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_sync_finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Finished At"
+          },
+          "last_sync_started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Started At"
+          },
+          "next_action": {
+            "$ref": "#/components/schemas/PipelineNextAction"
+          },
+          "next_action_reason": {
+            "minLength": 1,
+            "title": "Next Action Reason",
+            "type": "string"
+          },
+          "reauth_required": {
+            "default": false,
+            "title": "Reauth Required",
+            "type": "boolean"
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Mode"
+          },
+          "sync_running": {
+            "title": "Sync Running",
+            "type": "boolean"
+          },
+          "unclassified_retained_count": {
+            "minimum": 0.0,
+            "title": "Unclassified Retained Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generated_at",
+          "gmail_connected",
+          "sync_running",
+          "backfill_state",
+          "backfill_pages_processed",
+          "backfill_messages_processed",
+          "backfill_complete",
+          "incremental_sync_ready",
+          "counts",
+          "unclassified_retained_count",
+          "next_action",
+          "next_action_reason"
+        ],
+        "title": "PipelineStatus",
+        "type": "object"
+      },
       "ProviderConfigRequirementResponse": {
         "description": "Non-secret provider setting required by a supported provider.",
         "properties": {
@@ -3308,11 +3565,42 @@
         "title": "RawEmailBodyRetentionState",
         "type": "string"
       },
+      "RawEmailPreviewOrder": {
+        "description": "Supported deterministic orderings for the raw-email preview list.",
+        "enum": [
+          "sent_at",
+          "ingested_at"
+        ],
+        "title": "RawEmailPreviewOrder",
+        "type": "string"
+      },
       "RawEmailPreviewRecord": {
         "description": "Public-safe raw email metadata preview without body text.",
         "properties": {
           "body_retention_state": {
             "$ref": "#/components/schemas/RawEmailBodyRetentionState"
+          },
+          "classification_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification Category"
+          },
+          "classification_is_job_related": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification Is Job Related"
           },
           "filter_outcome": {
             "anyOf": [
@@ -4820,7 +5108,7 @@
     },
     "/classification/run": {
       "post": {
-        "description": "Classifies retained email candidates through the configured LLM provider and idempotently stores classification results plus run accounting.",
+        "description": "Classifies retained email candidates through the configured LLM provider, idempotently stores classification results plus run accounting, and then aggregates accepted extractions into applications and timeline events.",
         "operationId": "classification_run_classification_run_post",
         "responses": {
           "200": {
@@ -6442,6 +6730,28 @@
         ]
       }
     },
+    "/pipeline/status": {
+      "get": {
+        "description": "Returns one deterministic overview of the local ingest, filter, classify, and aggregate pipeline plus the next action, without email content or secrets.",
+        "operationId": "pipeline_status_pipeline_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Pipeline Status",
+        "tags": [
+          "pipeline"
+        ]
+      }
+    },
     "/setup": {
       "post": {
         "description": "Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets. When classification_mode is omitted, the backend applies the selected provider recommendation before validation.",
@@ -6636,7 +6946,7 @@
     },
     "/sync/recent-emails": {
       "get": {
-        "description": "Return recently stored raw-email metadata without body text.",
+        "description": "Return recently stored raw-email metadata without body text.\n\n``order=sent_at`` (default) shows the newest synced mailbox messages;\n``order=ingested_at`` is the diagnostic view of what the latest sync wrote.",
         "operationId": "sync_recent_emails_sync_recent_emails_get",
         "parameters": [
           {
@@ -6647,6 +6957,15 @@
               "default": 10,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RawEmailPreviewOrder",
+              "default": "sent_at"
             }
           }
         ],
