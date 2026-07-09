@@ -733,10 +733,13 @@ export interface MetricBreakdownRow {
   dimension: MetricsBreakdownDimension;
   /** @minimum 0 */
   interview_count: number;
+  interview_rate: number | null;
   /** @minimum 0 */
   offer_count: number;
+  offer_rate: number | null;
   /** @minimum 0 */
   response_count: number;
+  response_rate: number | null;
   value: string;
 }
 

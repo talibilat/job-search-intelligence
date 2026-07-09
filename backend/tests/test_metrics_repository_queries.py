@@ -67,6 +67,9 @@ def test_metrics_repository_matches_basic_synthetic_fixture() -> None:
     assert [(row.value, row.application_count, row.response_count) for row in salary_rows] == [
         ("100k_149k", 1, 1),
     ]
+    assert salary_rows[0].response_rate == 1.0
+    assert salary_rows[0].interview_rate == 0.0
+    assert salary_rows[0].offer_rate == 0.0
     assert [(row.value, row.application_count, row.response_count) for row in tech_rows] == [
         ("fastapi", 1, 1),
         ("python", 1, 1),
@@ -325,6 +328,64 @@ def test_metrics_repository_returns_breakdowns(tmp_path: Path) -> None:
     assert linkedin.response_count == 1
     assert linkedin.interview_count == 1
     assert linkedin.offer_count == 1
+    assert linkedin.response_rate == 1 / 3
+    assert linkedin.interview_rate == 1 / 3
+    assert linkedin.offer_rate == 1 / 3
+
+
+def test_metrics_repository_returns_salary_band_conversion_rates(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-under-100k",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="applied",
+            salary_min=80_000,
+            salary_max=95_000,
+            tech_stack=["Python"],
+            event_types=("applied",),
+        )
+        insert_application(
+            connection,
+            application_id="app-100k-149k",
+            source="linkedin",
+            first_seen_at="2026-07-01T10:00:00+00:00",
+            current_status="rejected",
+            salary_min=120_000,
+            salary_max=140_000,
+            tech_stack=["Python"],
+            event_types=("applied", "rejection"),
+        )
+        insert_application(
+            connection,
+            application_id="app-150k-plus",
+            source="company_site",
+            first_seen_at="2026-07-01T11:00:00+00:00",
+            current_status="offer",
+            salary_min=155_000,
+            salary_max=180_000,
+            tech_stack=["Python"],
+            event_types=("applied", "interview_scheduled", "offer"),
+        )
+
+        rows = MetricsRepository(connection).get_breakdown("salary")
+
+    assert [
+        (
+            row.value,
+            row.application_count,
+            row.response_rate,
+            row.interview_rate,
+            row.offer_rate,
+        )
+        for row in rows
+    ] == [
+        ("100k_149k", 1, 1.0, 0.0, 0.0),
+        ("150k_plus", 1, 1.0, 1.0, 1.0),
+        ("under_100k", 1, 0.0, 0.0, 0.0),
+    ]
 
 
 def test_tech_breakdown_counts_event_metrics_once_per_application(
@@ -355,6 +416,9 @@ def test_tech_breakdown_counts_event_metrics_once_per_application(
     assert python.response_count == 1
     assert python.interview_count == 1
     assert python.offer_count == 1
+    assert python.response_rate == 1.0
+    assert python.interview_rate == 1.0
+    assert python.offer_rate == 1.0
 
 
 def migrated_database(tmp_path: Path) -> Path:
@@ -422,6 +486,8 @@ def insert_application(
     current_status: str,
     tech_stack: list[str],
     event_types: tuple[str, ...],
+    salary_min: int | None = 120000,
+    salary_max: int | None = 150000,
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -433,8 +499,8 @@ def insert_application(
         last_activity_at="2026-07-05T09:00:00+00:00",
         created_at=first_seen_at,
         updated_at="2026-07-05T09:00:00+00:00",
-        salary_min=120000,
-        salary_max=150000,
+        salary_min=salary_min,
+        salary_max=salary_max,
         currency="USD",
         location="Remote",
         work_mode="remote",

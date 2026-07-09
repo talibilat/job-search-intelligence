@@ -42,16 +42,22 @@ def test_metrics_breakdown_returns_source_rows(tmp_path: Path) -> None:
                 "value": "company_site",
                 "application_count": 2,
                 "response_count": 1,
+                "response_rate": 0.5,
                 "interview_count": 1,
+                "interview_rate": 0.5,
                 "offer_count": 1,
+                "offer_rate": 0.5,
             },
             {
                 "dimension": "source",
                 "value": "linkedin",
                 "application_count": 1,
                 "response_count": 1,
+                "response_rate": 1.0,
                 "interview_count": 0,
+                "interview_rate": 0.0,
                 "offer_count": 0,
+                "offer_rate": 0.0,
             },
         ],
     }
@@ -87,8 +93,82 @@ def test_metrics_breakdown_composes_status_filter(tmp_path: Path) -> None:
                 "value": "company_site",
                 "application_count": 1,
                 "response_count": 1,
+                "response_rate": 1.0,
                 "interview_count": 1,
+                "interview_rate": 1.0,
                 "offer_count": 0,
+                "offer_rate": 0.0,
+            },
+        ],
+    }
+
+
+def test_metrics_breakdown_returns_salary_band_conversion_rates(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application_with_events(
+            connection,
+            "app-under-100k",
+            "linkedin",
+            ("applied",),
+            salary_min=80_000,
+            salary_max=95_000,
+        )
+        insert_application_with_events(
+            connection,
+            "app-100k-149k",
+            "linkedin",
+            ("applied", "response"),
+            salary_min=120_000,
+            salary_max=140_000,
+        )
+        insert_application_with_events(
+            connection,
+            "app-150k-plus",
+            "company_site",
+            ("applied", "interview_scheduled", "offer"),
+            salary_min=155_000,
+            salary_max=180_000,
+        )
+
+    response = create_test_client(database_path).get("/metrics/breakdown?dimension=salary")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "dimension": "salary",
+        "rows": [
+            {
+                "dimension": "salary",
+                "value": "100k_149k",
+                "application_count": 1,
+                "response_count": 1,
+                "response_rate": 1.0,
+                "interview_count": 0,
+                "interview_rate": 0.0,
+                "offer_count": 0,
+                "offer_rate": 0.0,
+            },
+            {
+                "dimension": "salary",
+                "value": "150k_plus",
+                "application_count": 1,
+                "response_count": 1,
+                "response_rate": 1.0,
+                "interview_count": 1,
+                "interview_rate": 1.0,
+                "offer_count": 1,
+                "offer_rate": 1.0,
+            },
+            {
+                "dimension": "salary",
+                "value": "under_100k",
+                "application_count": 1,
+                "response_count": 0,
+                "response_rate": 0.0,
+                "interview_count": 0,
+                "interview_rate": 0.0,
+                "offer_count": 0,
+                "offer_rate": 0.0,
             },
         ],
     }
@@ -150,8 +230,11 @@ def test_metrics_breakdown_role_filter_treats_like_wildcards_literally(
                 "value": "linkedin",
                 "application_count": 1,
                 "response_count": 0,
+                "response_rate": 0.0,
                 "interview_count": 0,
+                "interview_rate": 0.0,
                 "offer_count": 0,
+                "offer_rate": 0.0,
             },
         ],
     }
@@ -209,40 +292,55 @@ def test_metrics_breakdown_buckets_seniority_conversion_rows(tmp_path: Path) -> 
                 "value": "junior",
                 "application_count": 1,
                 "response_count": 0,
+                "response_rate": 0.0,
                 "interview_count": 0,
+                "interview_rate": 0.0,
                 "offer_count": 0,
+                "offer_rate": 0.0,
             },
             {
                 "dimension": "seniority",
                 "value": "mid",
                 "application_count": 1,
                 "response_count": 1,
+                "response_rate": 1.0,
                 "interview_count": 0,
+                "interview_rate": 0.0,
                 "offer_count": 0,
+                "offer_rate": 0.0,
             },
             {
                 "dimension": "seniority",
                 "value": "senior",
                 "application_count": 1,
                 "response_count": 1,
+                "response_rate": 1.0,
                 "interview_count": 1,
+                "interview_rate": 1.0,
                 "offer_count": 0,
+                "offer_rate": 0.0,
             },
             {
                 "dimension": "seniority",
                 "value": "lead",
                 "application_count": 1,
                 "response_count": 1,
+                "response_rate": 1.0,
                 "interview_count": 1,
+                "interview_rate": 1.0,
                 "offer_count": 1,
+                "offer_rate": 1.0,
             },
             {
                 "dimension": "seniority",
                 "value": "unknown",
                 "application_count": 1,
                 "response_count": 0,
+                "response_rate": 0.0,
                 "interview_count": 0,
+                "interview_rate": 0.0,
                 "offer_count": 0,
+                "offer_rate": 0.0,
             },
         ],
     }
@@ -287,6 +385,8 @@ def insert_application_with_events(
     current_status: str = "applied",
     role_title: str = "Software Engineer",
     seniority: str | None = None,
+    salary_min: int | None = None,
+    salary_max: int | None = None,
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -298,6 +398,8 @@ def insert_application_with_events(
         last_activity_at="2026-07-01T09:00:00+00:00",
         created_at="2026-07-01T09:01:00+00:00",
         updated_at="2026-07-01T09:01:00+00:00",
+        salary_min=salary_min,
+        salary_max=salary_max,
         sponsorship="unknown",
         seniority=seniority,
         tech_stack=[],

@@ -420,8 +420,26 @@ const breakdownColumns = [
   },
   { key: "application_count", header: "Applications", align: "right" },
   { key: "response_count", header: "Responses", align: "right" },
+  {
+    key: "response_rate",
+    header: "Response rate",
+    align: "right",
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.response_rate),
+  },
   { key: "interview_count", header: "Interviews", align: "right" },
+  {
+    key: "interview_rate",
+    header: "Interview rate",
+    align: "right",
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.interview_rate),
+  },
   { key: "offer_count", header: "Offers", align: "right" },
+  {
+    key: "offer_rate",
+    header: "Offer rate",
+    align: "right",
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.offer_rate),
+  },
 ] as const;
 
 function countLabel(count: number, singular: string) {
@@ -1461,7 +1479,7 @@ export function DashboardPage() {
             <ChartPanel
               description={`Application counts grouped by ${titleize(
                 breakdownDimension,
-              ).toLowerCase()}. Response, interview, and offer counts are listed in the ranked summary and table.`}
+              ).toLowerCase()}. Response, interview, and offer conversion rates are listed in the ranked summary and table.`}
               emptyState={{
                 title:
                   breakdownLoadState === "loading"
@@ -1510,7 +1528,7 @@ export function DashboardPage() {
                     <span>{countLabel(row.application_count, "application")}</span>
                   </div>
                   <p>
-                    {countLabel(row.response_count, "response")}, {countLabel(row.interview_count, "interview")}, {countLabel(row.offer_count, "offer")}
+                    {countLabel(row.response_count, "response")} ({formatNullableRate(row.response_rate)} response rate), {countLabel(row.interview_count, "interview")} ({formatNullableRate(row.interview_rate)} interview rate), {countLabel(row.offer_count, "offer")} ({formatNullableRate(row.offer_rate)} offer rate)
                   </p>
                 </li>
               ))

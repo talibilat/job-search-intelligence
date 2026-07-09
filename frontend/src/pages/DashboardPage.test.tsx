@@ -183,16 +183,22 @@ function mockApplicationResponses() {
                 application_count: 3,
                 dimension: "source",
                 interview_count: 2,
+                interview_rate: 2 / 3,
                 offer_count: 1,
+                offer_rate: 1 / 3,
                 response_count: 2,
+                response_rate: 2 / 3,
                 value: "linkedin",
               },
               {
                 application_count: 2,
                 dimension: "source",
                 interview_count: 0,
+                interview_rate: 0,
                 offer_count: 0,
+                offer_rate: 0,
                 response_count: 1,
+                response_rate: 0.5,
                 value: "company_site",
               },
             ],
@@ -215,8 +221,11 @@ function mockApplicationResponses() {
                 application_count: 4,
                 dimension: "tech",
                 interview_count: 2,
+                interview_rate: 0.5,
                 offer_count: 1,
+                offer_rate: 0.25,
                 response_count: 3,
+                response_rate: 0.75,
                 value: "python",
               },
             ],
@@ -239,16 +248,22 @@ function mockApplicationResponses() {
                 application_count: 4,
                 dimension: "role",
                 interview_count: 2,
+                interview_rate: 0.5,
                 offer_count: 1,
+                offer_rate: 0.25,
                 response_count: 3,
+                response_rate: 0.75,
                 value: "backend engineer",
               },
               {
                 application_count: 3,
                 dimension: "role",
                 interview_count: 0,
+                interview_rate: 0,
                 offer_count: 0,
+                offer_rate: 0,
                 response_count: 1,
+                response_rate: 1 / 3,
                 value: "frontend engineer",
               },
             ],
@@ -308,6 +323,33 @@ function mockApplicationResponses() {
                 period_start: "2026-07-08",
                 response_count: 4,
                 response_rate: 0.8,
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/breakdown?dimension=salary") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "salary",
+            rows: [
+              {
+                application_count: 2,
+                dimension: "salary",
+                interview_count: 1,
+                interview_rate: 0.5,
+                offer_count: 0,
+                offer_rate: 0,
+                response_count: 2,
+                response_rate: 1,
+                value: "100k_149k",
               },
             ],
           }),
@@ -580,6 +622,7 @@ describe("DashboardPage", () => {
     expect(within(breakdown).getAllByText("Company site").length).toBeGreaterThan(0);
     expect(within(breakdown).getByText("3 applications")).toBeTruthy();
     expect(within(breakdown).getByText(/2 responses/)).toBeTruthy();
+    expect(within(breakdown).getByText(/66.7% response rate/)).toBeTruthy();
     expect(within(breakdown).getByText(/1 offer/)).toBeTruthy();
     expect(
       within(breakdown).getByRole("table", {
@@ -600,6 +643,7 @@ describe("DashboardPage", () => {
     });
 
     expect(within(techBreakdown).getAllByText("Python").length).toBeGreaterThan(0);
+    expect(within(techBreakdown).getByText(/75% response rate/)).toBeTruthy();
     expect(
       within(techBreakdown).getByRole("table", {
         name: "Tech metric breakdown",
@@ -607,6 +651,21 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=tech",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Dimension"), {
+      target: { value: "salary" },
+    });
+
+    const salaryBreakdown = await screen.findByRole("region", {
+      name: "Salary breakdown",
+    });
+
+    expect(within(salaryBreakdown).getAllByText("100k 149k").length).toBeGreaterThan(0);
+    expect(within(salaryBreakdown).getByText(/100% response rate/)).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=salary",
       expect.objectContaining({ method: "GET" }),
     );
   });
