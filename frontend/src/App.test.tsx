@@ -167,6 +167,7 @@ function metricsDiagnosticsResponse(
     strongest_response_segments: [],
     successful_application_segments: [],
     total_applications: 0,
+    wasted_effort_segments: [],
     weakest_response_segments: [],
     ...overrides,
   };
