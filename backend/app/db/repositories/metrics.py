@@ -85,17 +85,27 @@ class MetricsRepository(BaseRepository[int]):
             average_hours=None if average_hours is None else round(float(average_hours), 6),
         )
 
-    def get_rate_metrics(self, *, ghost_cutoff_at: str) -> tuple[MetricRateRow, ...]:
-        total_applications = self.count_total_applications()
-        response_metric = self.get_response_silence_metric()
-        rejected_applications = self.count_rejected_applications()
+    def get_rate_metrics(
+        self,
+        *,
+        ghost_cutoff_at: str,
+        filters: MetricsFilter | None = None,
+    ) -> tuple[MetricRateRow, ...]:
+        total_applications = self.count_total_applications(filters=filters)
+        response_metric = self.get_response_silence_metric(filters=filters)
+        rejected_applications = self.count_rejected_applications(filters=filters)
         ghosted_applications = self.count_threshold_ghosted_applications(
             cutoff_at=ghost_cutoff_at,
+            filters=filters,
         )
-        interviewed_applications = self._count_applications_with_event("interview_scheduled")
+        interviewed_applications = self._count_applications_with_event(
+            "interview_scheduled",
+            filters=filters,
+        )
         offered_after_interview_applications = self._count_applications_with_later_event(
             first_event_type="interview_scheduled",
             later_event_type="offer",
+            filters=filters,
         )
 
         return (
@@ -266,8 +276,8 @@ class MetricsRepository(BaseRepository[int]):
             return 0
         return int(row[0])
 
-    def count_rejected_applications(self) -> int:
-        return self._count_applications_with_current_status("rejected")
+    def count_rejected_applications(self, filters: MetricsFilter | None = None) -> int:
+        return self._count_applications_with_current_status("rejected", filters=filters)
 
     def count_interview_invitation_events(self) -> int:
         row = self.execute(
@@ -281,19 +291,37 @@ class MetricsRepository(BaseRepository[int]):
             return 0
         return int(row[0])
 
-    def count_applications_with_interview_events(self) -> int:
-        return self._count_applications_with_event("interview_scheduled")
+    def count_applications_with_interview_events(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> int:
+        return self._count_applications_with_event("interview_scheduled", filters=filters)
 
-    def count_applications_with_offer_after_interview_events(self) -> int:
+    def count_applications_with_offer_after_interview_events(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> int:
         return self._count_applications_with_later_event(
             first_event_type="interview_scheduled",
             later_event_type="offer",
+            filters=filters,
         )
 
-    def _count_applications_with_current_status(self, status: str) -> int:
+    def _count_applications_with_current_status(
+        self,
+        status: str,
+        filters: MetricsFilter | None = None,
+    ) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
         return self._fetch_count(
-            "SELECT COUNT(*) FROM applications WHERE current_status = ?",
-            (status,),
+            f"""
+            SELECT COUNT(*)
+            FROM applications
+            WHERE current_status = ?
+              {filter_clause}
+            """,
+            (status, *filter_parameters),
         )
 
     def _count_applications_with_event(
@@ -471,7 +499,14 @@ class MetricsRepository(BaseRepository[int]):
             return 0
         return int(row[0])
 
-    def count_threshold_ghosted_applications(self, *, cutoff_at: str) -> int:
+    def count_threshold_ghosted_applications(
+        self,
+        *,
+        cutoff_at: str,
+        filters: MetricsFilter | None = None,
+    ) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
         row = self.execute(
             f"""
             WITH event_order AS (
@@ -555,6 +590,7 @@ class MetricsRepository(BaseRepository[int]):
             INNER JOIN latest_non_ghost
                 ON latest_non_ghost.application_id = applications.id
             WHERE latest_non_ghost.event_at <= ?
+              {filter_clause}
               AND NOT EXISTS (
                 SELECT 1
                 FROM event_order AS response_event
@@ -580,7 +616,7 @@ class MetricsRepository(BaseRepository[int]):
                   )
               )
             """,
-            (cutoff_at, *_RESPONSE_LIKE_EVENT_TYPES),
+            (cutoff_at, *filter_parameters, *_RESPONSE_LIKE_EVENT_TYPES),
         ).fetchone()
         if row is None:
             return 0

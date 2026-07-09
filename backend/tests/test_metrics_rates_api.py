@@ -110,6 +110,55 @@ def test_metrics_rates_returns_null_rate_when_no_applications(tmp_path: Path) ->
     }
 
 
+def test_metrics_rates_composes_dashboard_filters(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application_with_events(
+            connection,
+            "app-linkedin-offer",
+            ("applied", "response", "interview_scheduled", "offer"),
+            source="linkedin",
+        )
+        insert_application_with_events(
+            connection,
+            "app-company-rejected",
+            ("applied", "rejection"),
+            current_status="rejected",
+            source="company_site",
+        )
+
+    response = create_test_client(database_path).get("/metrics/rates?source=linkedin")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "overall_response_rate": {
+            "numerator": 1,
+            "denominator": 1,
+            "rate": 1.0,
+        },
+        "rejection_rate": {
+            "numerator": 0,
+            "denominator": 1,
+            "rate": 0.0,
+        },
+        "ghost_rate": {
+            "numerator": 0,
+            "denominator": 1,
+            "rate": 0.0,
+        },
+        "application_to_interview_rate": {
+            "numerator": 1,
+            "denominator": 1,
+            "rate": 1.0,
+        },
+        "interview_to_offer_rate": {
+            "numerator": 1,
+            "denominator": 1,
+            "rate": 1.0,
+        },
+    }
+
+
 def test_metrics_rates_endpoint_is_documented_in_openapi() -> None:
     response = TestClient(create_app()).get("/openapi.json")
 
@@ -146,13 +195,14 @@ def insert_application_with_events(
     *,
     current_status: str = "applied",
     event_date_prefix: str = "2026-07",
+    source: str = "linkedin",
 ) -> None:
     repository = ApplicationRepository(connection)
     repository.upsert_application(
         id=application_id,
         company=f"{application_id} Corp",
         role_title="Software Engineer",
-        source="linkedin",
+        source=source,
         first_seen_at="2026-07-01T09:00:00+00:00",
         current_status=current_status,
         last_activity_at="2026-07-01T09:00:00+00:00",

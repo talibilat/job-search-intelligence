@@ -108,24 +108,6 @@ def get_metrics_summary(
         ) from error
 
 
-@router.get(
-    "/rates",
-    response_model=MetricsRatesResponse,
-    summary="Get Metrics Rates",
-    description=(
-        "Returns deterministic dashboard rates with explicit numerator and "
-        "denominator counts from the local applications source of truth."
-    ),
-)
-def get_metrics_rates(
-    service: Annotated[
-        MetricsRatesService,
-        Depends(get_metrics_rates_service),
-    ],
-) -> MetricsRatesResponse:
-    return service.get_rates()
-
-
 def get_metrics_filter(
     status: Annotated[ApplicationStatus | None, Query()] = None,
     source: Annotated[ApplicationSource | None, Query()] = None,
@@ -188,6 +170,26 @@ def _metrics_filter_error_field(message: str) -> str | None:
     if message.startswith("first_seen_from"):
         return "query.first_seen_from"
     return None
+
+
+@router.get(
+    "/rates",
+    response_model=MetricsRatesResponse,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="Get Metrics Rates",
+    description=(
+        "Returns deterministic dashboard rates with explicit numerator and "
+        "denominator counts from the local applications source of truth."
+    ),
+)
+def get_metrics_rates(
+    service: Annotated[
+        MetricsRatesService,
+        Depends(get_metrics_rates_service),
+    ],
+    filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
+) -> MetricsRatesResponse:
+    return service.get_rates(filters=filters)
 
 
 @router.get(

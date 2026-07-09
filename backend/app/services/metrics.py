@@ -216,21 +216,24 @@ class MetricsRatesService:
         self._ghost_threshold_days = ghost_threshold_days
         self._clock = clock or _utcnow
 
-    def get_rates(self) -> MetricsRatesResponse:
+    def get_rates(self, filters: MetricsFilter | None = None) -> MetricsRatesResponse:
         evaluated_at = self._clock()
         cutoff_at = evaluated_at - timedelta(days=self._ghost_threshold_days)
-        response_silence = self._metrics_repository.get_response_silence_metric()
+        response_silence = self._metrics_repository.get_response_silence_metric(filters=filters)
         denominator = response_silence.total_applications
         response_numerator = response_silence.human_response_count
-        rejection_numerator = self._metrics_repository.count_rejected_applications()
+        rejection_numerator = self._metrics_repository.count_rejected_applications(filters=filters)
         ghost_numerator = self._metrics_repository.count_threshold_ghosted_applications(
             cutoff_at=cutoff_at.isoformat(),
+            filters=filters,
         )
         application_to_interview_numerator = (
-            self._metrics_repository.count_applications_with_interview_events()
+            self._metrics_repository.count_applications_with_interview_events(filters=filters)
         )
         interview_to_offer_numerator = (
-            self._metrics_repository.count_applications_with_offer_after_interview_events()
+            self._metrics_repository.count_applications_with_offer_after_interview_events(
+                filters=filters,
+            )
         )
         return MetricsRatesResponse(
             overall_response_rate=MetricRate(
