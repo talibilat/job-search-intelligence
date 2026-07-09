@@ -178,6 +178,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
         );
       }
 
+      if (path === "/metrics/breakdown?dimension=role") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsBreakdownResponse({ dimension: "role" })), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
       if (path === "/metrics/timeseries") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsTimeseriesResponse()), {
@@ -898,6 +907,7 @@ describe("App", () => {
       "/metrics/response-rate-trend",
       "/metrics/funnel",
       "/metrics/breakdown?dimension=source",
+      "/metrics/breakdown?dimension=role",
       "/metrics/timeseries",
       "/metrics/rates",
     ]);
