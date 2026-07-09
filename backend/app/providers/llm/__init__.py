@@ -8,8 +8,11 @@ from .errors import (
     LLMProviderUnavailableError,
 )
 from .ollama import OllamaLLMProvider
-from .provider import LLMProvider
+from .provider import LLMEmbeddingProvider, LLMProvider
 from .types import (
+    LLMEmbedding,
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMFinishReason,
     LLMGenerationOptions,
     LLMGenerationRequest,
@@ -27,6 +30,9 @@ from .types import (
 
 __all__ = [
     "LLMFinishReason",
+    "LLMEmbedding",
+    "LLMEmbeddingRequest",
+    "LLMEmbeddingResponse",
     "LLMGenerationOptions",
     "LLMGenerationRequest",
     "LLMGenerationResponse",
@@ -35,6 +41,7 @@ __all__ = [
     "LLMModelKind",
     "LLMMessage",
     "LLMMessageRole",
+    "LLMEmbeddingProvider",
     "LLMProvider",
     "LLMProviderError",
     "LLMProviderRequestError",

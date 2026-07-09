@@ -64,6 +64,34 @@ class LLMGenerationRequest(BaseModel):
     options: LLMGenerationOptions = Field(default_factory=LLMGenerationOptions)
 
 
+class LLMEmbeddingRequest(BaseModel):
+    """Provider-neutral request for embedding retained local text chunks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    inputs: tuple[str, ...] = Field(min_length=1, repr=False)
+    model: str | None = Field(default=None, min_length=1)
+
+
+class LLMEmbedding(BaseModel):
+    """One provider-neutral embedding vector."""
+
+    model_config = ConfigDict(frozen=True)
+
+    index: int = Field(ge=0)
+    embedding: tuple[float, ...] = Field(min_length=1, repr=False)
+
+
+class LLMEmbeddingResponse(BaseModel):
+    """Provider-neutral embedding response and token accounting."""
+
+    model_config = ConfigDict(frozen=True)
+
+    model: str = Field(min_length=1)
+    embeddings: tuple[LLMEmbedding, ...] = Field(min_length=1)
+    usage: LLMTokenUsage | None = None
+
+
 class LLMProviderHealthCheckRequest(BaseModel):
     """Provider-neutral request to verify configured model availability."""
 

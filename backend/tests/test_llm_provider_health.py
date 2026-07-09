@@ -7,6 +7,8 @@ from app.api.provider_config import get_configured_llm_provider
 from app.config import AppSettings, ClassificationMode, LLMProviderName, get_settings
 from app.main import create_app
 from app.providers.llm import (
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMFinishReason,
     LLMGenerationRequest,
     LLMGenerationResponse,
@@ -39,6 +41,9 @@ class FakeLLMHealthProvider:
             finish_reason=LLMFinishReason.STOP,
         )
 
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        raise NotImplementedError
+
     async def health_check(
         self,
         request: LLMProviderHealthCheckRequest,
@@ -58,6 +63,9 @@ class TimeoutLLMHealthProvider:
             model=request.model or "fake-model",
             finish_reason=LLMFinishReason.STOP,
         )
+
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        raise NotImplementedError
 
     async def health_check(
         self,
