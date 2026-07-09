@@ -34,10 +34,13 @@ def test_diagnostics_service_outputs_match_synthetic_fixture(tmp_path: Path) -> 
             "response_count": 2,
             "interview_count": 0,
             "offer_count": 0,
+            "success_count": 0,
             "response_rate": 1.0,
             "interview_rate": 0.0,
             "offer_rate": 0.0,
+            "success_rate": 0.0,
             "response_rate_lift": 0.4,
+            "success_rate_lift": -0.2,
         },
         {
             "dimension": "source",
@@ -46,10 +49,13 @@ def test_diagnostics_service_outputs_match_synthetic_fixture(tmp_path: Path) -> 
             "response_count": 1,
             "interview_count": 1,
             "offer_count": 1,
+            "success_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
+            "success_rate": 1 / 3,
             "response_rate_lift": (1 / 3) - 0.6,
+            "success_rate_lift": (1 / 3) - 0.2,
         },
     ]
     assert diagnostics.strongest_response_segments == [diagnostics.segments[0]]
@@ -78,10 +84,13 @@ def test_diagnostics_fixture_outputs_compose_with_filters(tmp_path: Path) -> Non
             "response_count": 1,
             "interview_count": 1,
             "offer_count": 1,
+            "success_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
+            "success_rate": 1 / 3,
             "response_rate_lift": 0.0,
+            "success_rate_lift": 0.0,
         },
     ]
 
