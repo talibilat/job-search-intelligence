@@ -87,6 +87,12 @@ class FakeAzureTransport:
             raise self.error
         if self.response is not None:
             return self.response
+        if "/embeddings?" in url:
+            return {
+                "model": "jobtracker-embedding",
+                "data": [{"index": 0, "embedding": list(EMBEDDING_1536)}],
+                "usage": {"prompt_tokens": 2, "total_tokens": 2},
+            }
         return {
             "model": "gpt-4o-mini",
             "choices": [
@@ -164,13 +170,17 @@ def test_azure_openai_health_check_verifies_chat_deployment() -> None:
         )
     )
 
-    assert len(transport.calls) == 1
+    assert len(transport.calls) == 2
     assert transport.calls[0].url == (
         "https://example.openai.azure.com/openai/deployments/"
         "jobtracker-chat/chat/completions?api-version=2024-06-01"
     )
+    assert transport.calls[1].url == (
+        "https://example.openai.azure.com/openai/deployments/"
+        "jobtracker-embedding/embeddings?api-version=2024-06-01"
+    )
     assert response.provider_name == "azure_openai"
-    assert response.status is LLMModelHealthStatus.UNAVAILABLE
+    assert response.status is LLMModelHealthStatus.AVAILABLE
     assert response.checks == (
         LLMModelHealthCheck(
             kind=LLMModelKind.CHAT,
@@ -180,8 +190,7 @@ def test_azure_openai_health_check_verifies_chat_deployment() -> None:
         LLMModelHealthCheck(
             kind=LLMModelKind.EMBEDDING,
             model="jobtracker-embedding",
-            status=LLMModelHealthStatus.UNAVAILABLE,
-            detail="Azure OpenAI embedding health checks are not implemented yet.",
+            status=LLMModelHealthStatus.AVAILABLE,
         ),
     )
 

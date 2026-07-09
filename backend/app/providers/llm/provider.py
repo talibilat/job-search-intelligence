@@ -22,6 +22,10 @@ class LLMProvider(Protocol):
         """Generate provider-neutral content for a typed request."""
         ...
 
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        """Generate provider-neutral embeddings for retained local text chunks."""
+        ...
+
     async def health_check(
         self,
         request: LLMProviderHealthCheckRequest,

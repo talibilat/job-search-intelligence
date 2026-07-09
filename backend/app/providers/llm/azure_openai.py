@@ -46,7 +46,7 @@ _AZURE_OPENAI_API_KEY_REF = SecretRef(
 _TRANSIENT_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
 _INVALID_RESPONSE_MESSAGE = "Azure OpenAI returned an invalid response."
 _HEALTH_CHECK_PROMPT = "Health check. Reply OK."
-_EMBEDDING_HEALTH_DETAIL = "Azure OpenAI embedding health checks are not implemented yet."
+_EMBEDDING_HEALTH_INPUT = "Health check."
 
 
 class AzureOpenAIChatMessageResponse(BaseModel):
@@ -279,12 +279,7 @@ class AzureOpenAIProvider:
         request: LLMProviderHealthCheckRequest,
     ) -> LLMProviderHealthCheckResponse:
         chat_check = await self._chat_health_check(request.chat_model)
-        embedding_check = LLMModelHealthCheck(
-            kind=LLMModelKind.EMBEDDING,
-            model=request.embedding_model,
-            status=LLMModelHealthStatus.UNAVAILABLE,
-            detail=_EMBEDDING_HEALTH_DETAIL,
-        )
+        embedding_check = await self._embedding_health_check(request.embedding_model)
         return LLMProviderHealthCheckResponse(
             provider_name=self.provider_name,
             status=_health_status((chat_check, embedding_check)),
@@ -309,6 +304,27 @@ class AzureOpenAIProvider:
             )
         return LLMModelHealthCheck(
             kind=LLMModelKind.CHAT,
+            model=model,
+            status=LLMModelHealthStatus.AVAILABLE,
+        )
+
+    async def _embedding_health_check(self, model: str) -> LLMModelHealthCheck:
+        try:
+            await self.embed(
+                LLMEmbeddingRequest(
+                    inputs=(_EMBEDDING_HEALTH_INPUT,),
+                    model=model,
+                )
+            )
+        except LLMProviderError as error:
+            return LLMModelHealthCheck(
+                kind=LLMModelKind.EMBEDDING,
+                model=model,
+                status=LLMModelHealthStatus.UNAVAILABLE,
+                detail=error.public_message,
+            )
+        return LLMModelHealthCheck(
+            kind=LLMModelKind.EMBEDDING,
             model=model,
             status=LLMModelHealthStatus.AVAILABLE,
         )

@@ -11,6 +11,8 @@ from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.repositories import ApplicationRepository, EventRepository, InsightRepository
 from app.main import create_app
 from app.providers.llm import (
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMFinishReason,
     LLMGenerationRequest,
     LLMGenerationResponse,
@@ -361,6 +363,9 @@ class FakeLLMProvider:
         if not self._responses:
             raise AssertionError("FakeLLMProvider received an unexpected generation request")
         return self._responses.pop(0)
+
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        raise NotImplementedError
 
     async def health_check(
         self,
