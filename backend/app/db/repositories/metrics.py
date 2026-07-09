@@ -125,26 +125,36 @@ class MetricsRepository(BaseRepository[int]):
             ),
         )
 
-    def get_funnel_metrics(self) -> tuple[MetricFunnelStage, ...]:
+    def get_funnel_metrics(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> tuple[MetricFunnelStage, ...]:
         return (
-            MetricFunnelStage(stage="applied", count=self.count_total_applications()),
             MetricFunnelStage(
-                stage="response",
-                count=self.get_response_silence_metric().human_response_count,
+                stage="applied",
+                count=self.count_total_applications(filters=filters),
             ),
             MetricFunnelStage(
-                stage="assessment",
-                count=self._count_applications_with_event("assessment"),
+                stage="screen",
+                count=self.get_response_silence_metric(filters=filters).human_response_count,
             ),
             MetricFunnelStage(
                 stage="interview",
-                count=self._count_applications_with_event("interview_scheduled"),
+                count=self._count_applications_with_event(
+                    "interview_scheduled",
+                    filters=filters,
+                ),
+            ),
+            MetricFunnelStage(
+                stage="final",
+                count=0,
             ),
             MetricFunnelStage(
                 stage="offer",
                 count=self._count_applications_with_later_event(
                     first_event_type="interview_scheduled",
                     later_event_type="offer",
+                    filters=filters,
                 ),
             ),
         )
@@ -176,7 +186,11 @@ class MetricsRepository(BaseRepository[int]):
             return self._get_tech_breakdown(filters=filters)
         return self._get_application_breakdown(dimension, filters=filters)
 
-    def get_response_silence_metric(self) -> ResponseSilenceMetric:
+    def get_response_silence_metric(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> ResponseSilenceMetric:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
         row = self.execute(
             f"""
             SELECT
@@ -193,8 +207,9 @@ class MetricsRepository(BaseRepository[int]):
                     0
                 ) AS human_response_count
             FROM applications
+            {where_clause}
             """,
-            _RESPONSE_LIKE_EVENT_TYPES,
+            (*_RESPONSE_LIKE_EVENT_TYPES, *filter_parameters),
         ).fetchone()
         total_applications = int(row["total_applications"] if row is not None else 0)
         human_response_count = int(row["human_response_count"] if row is not None else 0)
@@ -204,8 +219,12 @@ class MetricsRepository(BaseRepository[int]):
             silent_count=total_applications - human_response_count,
         )
 
-    def count_total_applications(self) -> int:
-        row = self.execute("SELECT COUNT(*) FROM applications").fetchone()
+    def count_total_applications(self, filters: MetricsFilter | None = None) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        row = self.execute(
+            f"SELECT COUNT(*) FROM applications {where_clause}",
+            filter_parameters,
+        ).fetchone()
         if row is None:
             return 0
         return int(row[0])
@@ -240,16 +259,22 @@ class MetricsRepository(BaseRepository[int]):
             (status,),
         )
 
-    def _count_applications_with_event(self, event_type: str) -> int:
+    def _count_applications_with_event(
+        self,
+        event_type: str,
+        filters: MetricsFilter | None = None,
+    ) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
         return self._fetch_count(
-            """
+            f"""
             SELECT COUNT(DISTINCT application_events.application_id)
             FROM application_events
             INNER JOIN applications
                 ON applications.id = application_events.application_id
             WHERE application_events.event_type = ?
+              {where_clause.replace('WHERE', 'AND', 1)}
             """,
-            (event_type,),
+            (event_type, *filter_parameters),
         )
 
     def _count_applications_with_later_event(
@@ -257,9 +282,12 @@ class MetricsRepository(BaseRepository[int]):
         *,
         first_event_type: str,
         later_event_type: str,
+        filters: MetricsFilter | None = None,
     ) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
         return self._fetch_count(
-            """
+            f"""
             WITH event_order AS (
                 SELECT
                     application_events.application_id,
@@ -286,6 +314,7 @@ class MetricsRepository(BaseRepository[int]):
                 ON applications.id = first_event.application_id
             WHERE first_event.event_type = ?
               AND later_event.event_type = ?
+              {filter_clause}
               AND (
                 later_event.event_at > first_event.event_at
                 OR (
@@ -305,7 +334,13 @@ class MetricsRepository(BaseRepository[int]):
                 )
               )
             """,
-            (first_event_type, later_event_type, first_event_type, later_event_type),
+            (
+                first_event_type,
+                later_event_type,
+                first_event_type,
+                later_event_type,
+                *filter_parameters,
+            ),
         )
 
     def _get_application_breakdown(

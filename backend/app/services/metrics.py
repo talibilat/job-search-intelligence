@@ -9,6 +9,7 @@ from app.models import (
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
     MetricsFilter,
+    MetricsFunnelResponse,
     MetricsRatesResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
@@ -274,6 +275,18 @@ class MetricsTimeseriesService:
     def get_timeseries(self) -> MetricsTimeseriesResponse:
         return MetricsTimeseriesResponse(
             points=list(self._metrics_repository.get_application_timeseries()),
+        )
+
+
+class MetricsFunnelService:
+    """Build deterministic dashboard funnel metrics from local SQLite."""
+
+    def __init__(self, *, metrics_repository: MetricsRepository) -> None:
+        self._metrics_repository = metrics_repository
+
+    def get_funnel(self, filters: MetricsFilter | None = None) -> MetricsFunnelResponse:
+        return MetricsFunnelResponse(
+            stages=list(self._metrics_repository.get_funnel_metrics(filters=filters)),
         )
 
 

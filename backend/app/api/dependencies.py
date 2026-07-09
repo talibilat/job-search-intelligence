@@ -33,6 +33,7 @@ from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.metrics import (
     MetricsBreakdownService,
+    MetricsFunnelService,
     MetricsRatesService,
     MetricsSummaryService,
     MetricsTimeseriesService,
@@ -255,6 +256,18 @@ def get_metrics_timeseries_service(
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
         yield MetricsTimeseriesService(metrics_repository=MetricsRepository(connection))
+    finally:
+        connection.close()
+
+
+def get_metrics_funnel_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[MetricsFunnelService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield MetricsFunnelService(metrics_repository=MetricsRepository(connection))
     finally:
         connection.close()
 

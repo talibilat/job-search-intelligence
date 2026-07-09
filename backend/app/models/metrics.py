@@ -111,7 +111,7 @@ type MetricRateName = Literal[
     "application_to_interview",
     "interview_to_offer",
 ]
-type MetricFunnelStageName = Literal["applied", "response", "assessment", "interview", "offer"]
+type MetricFunnelStageName = Literal["applied", "screen", "interview", "final", "offer"]
 type MetricsBreakdownDimension = Literal[
     "role",
     "source",
@@ -133,6 +133,10 @@ class MetricRateRow(BaseModel):
 class MetricFunnelStage(BaseModel):
     stage: MetricFunnelStageName
     count: int = Field(ge=0)
+
+
+class MetricsFunnelResponse(BaseModel):
+    stages: list[MetricFunnelStage]
 
 
 class MetricTimeseriesPoint(BaseModel):

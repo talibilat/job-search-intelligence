@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.api.dependencies import (
     get_metrics_breakdown_service,
+    get_metrics_funnel_service,
     get_metrics_rates_service,
     get_metrics_summary_service,
     get_metrics_timeseries_service,
@@ -17,6 +18,7 @@ from app.models import (
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
     MetricsFilter,
+    MetricsFunnelResponse,
     MetricsRatesResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
@@ -25,6 +27,7 @@ from app.models import (
 from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.services.metrics import (
     MetricsBreakdownService,
+    MetricsFunnelService,
     MetricsRatesService,
     MetricsSummaryService,
     MetricsTimeseriesService,
@@ -199,6 +202,28 @@ def _metrics_filter_error_field(message: str) -> str | None:
     if message.startswith("first_seen_from"):
         return "query.first_seen_from"
     return None
+
+
+@router.get(
+    "/funnel",
+    response_model=MetricsFunnelResponse,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="Get Metrics Funnel",
+    description=(
+        "Returns deterministic Q-16 funnel counts for applied, screen, "
+        "interview, final, and offer stages from local applications and "
+        "application_events data. The final stage is explicitly zero until "
+        "final-round evidence is represented in the data model."
+    ),
+)
+def get_metrics_funnel(
+    service: Annotated[
+        MetricsFunnelService,
+        Depends(get_metrics_funnel_service),
+    ],
+    filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
+) -> MetricsFunnelResponse:
+    return service.get_funnel(filters=filters)
 
 
 @router.get(

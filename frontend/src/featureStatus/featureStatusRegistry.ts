@@ -151,16 +151,21 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     ],
     blockers: [],
     components: ["DashboardPage", "ChartPanel"],
-    connectedModules: ["Metrics summary API", "GET /metrics/rates", "Future metrics APIs"],
+    connectedModules: [
+      "Metrics summary API",
+      "GET /metrics/rates",
+      "GET /metrics/funnel",
+      "Future metric widgets",
+    ],
     completedDate: "2026-07-05",
     dependencies: [
       "GET /metrics/summary",
       "GET /metrics/rates",
-      "Future GET /metrics/funnel",
+      "GET /metrics/funnel",
     ],
     description:
       "Deterministic dashboard route with summary metric cards, a Q-11 response-rate card, and placeholders for remaining dashboard metrics.",
-    endpoints: ["GET /metrics/summary", "GET /metrics/rates"],
+    endpoints: ["GET /metrics/summary", "GET /metrics/rates", "GET /metrics/funnel"],
     files: [
       "frontend/src/pages/DashboardPage.tsx",
       "frontend/src/components/charts/ChartPanel.tsx",
