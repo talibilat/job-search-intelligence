@@ -178,6 +178,33 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url === "/metrics/response-rate-trend") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            points: [
+              {
+                application_count: 2,
+                period_start: "2026-07-01",
+                response_count: 1,
+                response_rate: 0.5,
+              },
+              {
+                application_count: 5,
+                period_start: "2026-07-08",
+                response_count: 4,
+                response_rate: 0.8,
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
     if (url === "/applications") {
       return Promise.resolve(
         new Response(JSON.stringify([baseApplication]), {
@@ -488,6 +515,25 @@ describe("DashboardPage", () => {
     expect(within(trend).getByText("1 application on Jul 8, 2026")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/timeseries?status=rejected",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-21 response rate trend from deterministic metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const trend = await screen.findByRole("region", {
+      name: "Response rate trend",
+    });
+
+    expect(within(trend).getByText("Response rate trend")).toBeTruthy();
+    expect(within(trend).getByText("50% on Jul 1, 2026"));
+    expect(within(trend).getByText("80% on Jul 8, 2026"));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/response-rate-trend",
       expect.objectContaining({ method: "GET" }),
     );
   });

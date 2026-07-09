@@ -11,6 +11,7 @@ from app.models import (
     MetricsFilter,
     MetricsFunnelResponse,
     MetricsRatesResponse,
+    MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
@@ -290,6 +291,21 @@ class MetricsFunnelService:
     def get_funnel(self, filters: MetricsFilter | None = None) -> MetricsFunnelResponse:
         return MetricsFunnelResponse(
             stages=list(self._metrics_repository.get_funnel_metrics(filters=filters)),
+        )
+
+
+class MetricsResponseRateTrendService:
+    """Build deterministic response-rate trend metrics from local SQLite."""
+
+    def __init__(self, *, metrics_repository: MetricsRepository) -> None:
+        self._metrics_repository = metrics_repository
+
+    def get_response_rate_trend(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> MetricsResponseRateTrendResponse:
+        return MetricsResponseRateTrendResponse(
+            points=list(self._metrics_repository.get_response_rate_timeseries(filters=filters)),
         )
 
 

@@ -148,6 +148,17 @@ class MetricsTimeseriesResponse(BaseModel):
     points: list[MetricTimeseriesPoint]
 
 
+class MetricResponseRateTrendPoint(BaseModel):
+    period_start: str
+    response_count: int = Field(ge=0)
+    application_count: int = Field(ge=0)
+    response_rate: float | None = Field(ge=0, le=1)
+
+
+class MetricsResponseRateTrendResponse(BaseModel):
+    points: list[MetricResponseRateTrendPoint]
+
+
 class MetricBreakdownRow(BaseModel):
     dimension: MetricsBreakdownDimension
     value: str

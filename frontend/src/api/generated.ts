@@ -748,6 +748,15 @@ export interface MetricRate {
   rate: number | null;
 }
 
+export interface MetricResponseRateTrendPoint {
+  /** @minimum 0 */
+  application_count: number;
+  period_start: string;
+  /** @minimum 0 */
+  response_count: number;
+  response_rate: number | null;
+}
+
 export interface MetricTimeseriesPoint {
   /** @minimum 0 */
   application_count: number;
@@ -769,6 +778,10 @@ export interface MetricsRatesResponse {
   interview_to_offer_rate: MetricRate;
   overall_response_rate: MetricRate;
   rejection_rate: MetricRate;
+}
+
+export interface MetricsResponseRateTrendResponse {
+  points: MetricResponseRateTrendPoint[];
 }
 
 export interface TimeToFirstResponseMetric {
@@ -965,6 +978,18 @@ export type GetMetricsBreakdownMetricsBreakdownGetParams = {
 };
 
 export type GetMetricsFunnelMetricsFunnelGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetMetricsResponseRateTrendMetricsResponseRateTrendGetParams = {
   status?: ApplicationStatus | null;
   source?: ApplicationSource | null;
   sponsorship?: SponsorshipStatus | null;
@@ -2439,6 +2464,76 @@ export const getMetricsRatesMetricsRatesGet = async (
     status: res.status,
     headers: res.headers,
   } as getMetricsRatesMetricsRatesGetResponse;
+};
+
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse200 =
+  {
+    data: MetricsResponseRateTrendResponse;
+    status: 200;
+  };
+
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse422 =
+  {
+    data: ApiErrorResponse;
+    status: 422;
+  };
+
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponseSuccess =
+  getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponseError =
+  getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse =
+  | getMetricsResponseRateTrendMetricsResponseRateTrendGetResponseSuccess
+  | getMetricsResponseRateTrendMetricsResponseRateTrendGetResponseError;
+
+export const getGetMetricsResponseRateTrendMetricsResponseRateTrendGetUrl = (
+  params?: GetMetricsResponseRateTrendMetricsResponseRateTrendGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/response-rate-trend?${stringifiedParams}`
+    : `/metrics/response-rate-trend`;
+};
+
+/**
+ * Returns deterministic response-rate trend points from local applications and application_events data.
+ * @summary Get Metrics Response Rate Trend
+ */
+export const getMetricsResponseRateTrendMetricsResponseRateTrendGet = async (
+  params?: GetMetricsResponseRateTrendMetricsResponseRateTrendGetParams,
+  options?: RequestInit,
+): Promise<getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse> => {
+  const res = await fetch(
+    getGetMetricsResponseRateTrendMetricsResponseRateTrendGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse;
 };
 
 export type getResponseSilenceMetricMetricsResponseSilenceGetResponse200 = {
