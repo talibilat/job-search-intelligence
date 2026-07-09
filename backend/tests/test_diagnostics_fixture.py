@@ -7,7 +7,7 @@ from alembic import command
 from alembic.config import Config
 from app.db.repositories import MetricsRepository, SyntheticFixtureRepository
 from app.models.metrics import MetricsFilter
-from app.services.diagnostics import DiagnosticsService
+from app.services.diagnostics import DEFAULT_DIAGNOSTIC_DIMENSIONS, DiagnosticsService
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,6 +26,8 @@ def test_diagnostics_service_outputs_match_synthetic_fixture(tmp_path: Path) -> 
     assert diagnostics.total_applications == 5
     assert diagnostics.baseline_response_count == 3
     assert diagnostics.baseline_response_rate == 0.6
+    assert diagnostics.baseline_success_count == 1
+    assert diagnostics.baseline_success_rate == 0.2
     assert [segment.model_dump() for segment in diagnostics.segments] == [
         {
             "dimension": "source",
@@ -60,6 +62,22 @@ def test_diagnostics_service_outputs_match_synthetic_fixture(tmp_path: Path) -> 
     ]
     assert diagnostics.strongest_response_segments == [diagnostics.segments[0]]
     assert diagnostics.weakest_response_segments == [diagnostics.segments[1]]
+    assert diagnostics.successful_application_segments == [diagnostics.segments[1]]
+
+
+def test_diagnostics_fixture_exercises_default_diagnostic_dimensions(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        SyntheticFixtureRepository(connection).load_file(diagnostic_fixture_path())
+        service = DiagnosticsService(metrics_repository=MetricsRepository(connection))
+
+        diagnostics = service.get_diagnostics()
+
+    assert {segment.dimension for segment in diagnostics.segments} == set(
+        DEFAULT_DIAGNOSTIC_DIMENSIONS
+    )
 
 
 def test_diagnostics_fixture_outputs_compose_with_filters(tmp_path: Path) -> None:
