@@ -835,6 +835,7 @@ export interface MetricsDiagnosticsResponse {
   baseline_success_rate?: number | null;
   negative_outcome_segments: DiagnosticSegmentComparison[];
   segments: DiagnosticSegmentComparison[];
+  strongest_response_correlate?: DiagnosticSegmentComparison | null;
   strongest_response_segments: DiagnosticSegmentComparison[];
   successful_application_segments: DiagnosticSegmentComparison[];
   /** @minimum 0 */

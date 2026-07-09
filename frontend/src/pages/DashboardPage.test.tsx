@@ -478,6 +478,24 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
                 value: "referral",
               },
             ],
+            strongest_response_correlate: {
+              application_count: 2,
+              dimension: "source",
+              interview_count: 1,
+              interview_rate: 0.5,
+              offer_count: 1,
+              offer_rate: 0.5,
+              response_count: 2,
+              response_rate: 1,
+              response_rate_lift: 0.4,
+              success_count: 2,
+              success_rate: 1,
+              success_rate_lift: 0.6,
+              negative_count: 0,
+              negative_rate: 0,
+              negative_rate_lift: -0.4,
+              value: "referral",
+            },
             successful_application_segments: [
               {
                 application_count: 2,
@@ -540,6 +558,7 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             baseline_negative_rate: 1,
             negative_outcome_segments: [],
             segments: [],
+            strongest_response_correlate: null,
             strongest_response_segments: [],
             successful_application_segments: [],
             total_applications: 1,
@@ -794,6 +813,9 @@ describe("DashboardPage", () => {
     expect(within(diagnostics).getByText("Q-33 rejected or ghosted traits")).toBeTruthy();
     expect(within(diagnostics).getByText("40% baseline negative rate")).toBeTruthy();
     expect(within(diagnostics).getByText("+26.7 pp negative lift")).toBeTruthy();
+    expect(within(diagnostics).getByText("Q-34 strongest response correlate")).toBeTruthy();
+    expect(within(diagnostics).getByText("Referral (Source) is the strongest positive correlate"))
+      .toBeTruthy();
     expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
     expect(within(diagnostics).getAllByText("Linkedin (Source)").length).toBeGreaterThan(
       0,

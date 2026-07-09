@@ -67,6 +67,11 @@ class DiagnosticsService:
             filters=filters,
         )
 
+        strongest_response_segments = _strongest_segments(
+            segments,
+            limit=self._highlight_limit,
+        )
+
         return MetricsDiagnosticsResponse(
             total_applications=response_silence.total_applications,
             baseline_response_count=response_silence.human_response_count,
@@ -76,10 +81,10 @@ class DiagnosticsService:
             baseline_negative_count=baseline_negative_count,
             baseline_negative_rate=baseline_negative_rate,
             segments=segments,
-            strongest_response_segments=_strongest_segments(
-                segments,
-                limit=self._highlight_limit,
-            ),
+            strongest_response_correlate=strongest_response_segments[0]
+            if strongest_response_segments
+            else None,
+            strongest_response_segments=strongest_response_segments,
             weakest_response_segments=_weakest_segments(
                 segments,
                 limit=self._highlight_limit,

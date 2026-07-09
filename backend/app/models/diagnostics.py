@@ -33,6 +33,7 @@ class MetricsDiagnosticsResponse(BaseModel):
     baseline_negative_count: int = Field(ge=0)
     baseline_negative_rate: float | None = Field(default=None, ge=0, le=1)
     segments: list[DiagnosticSegmentComparison]
+    strongest_response_correlate: DiagnosticSegmentComparison | None = None
     strongest_response_segments: list[DiagnosticSegmentComparison]
     weakest_response_segments: list[DiagnosticSegmentComparison]
     successful_application_segments: list[DiagnosticSegmentComparison]
