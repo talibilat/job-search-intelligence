@@ -163,6 +163,7 @@ function metricsDiagnosticsResponse(
     baseline_negative_rate: null,
     negative_outcome_segments: [],
     segments: [],
+    strongest_response_correlate: null,
     strongest_response_segments: [],
     successful_application_segments: [],
     total_applications: 0,

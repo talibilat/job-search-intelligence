@@ -65,6 +65,7 @@ def test_diagnostics_service_compares_segments_against_baseline(
     assert [segment.model_dump() for segment in diagnostics.strongest_response_segments] == [
         diagnostics.segments[0].model_dump(),
     ]
+    assert diagnostics.strongest_response_correlate == diagnostics.segments[0]
     assert [segment.model_dump() for segment in diagnostics.weakest_response_segments] == [
         diagnostics.segments[1].model_dump(),
     ]
@@ -184,6 +185,7 @@ def test_diagnostics_service_handles_empty_application_set(tmp_path: Path) -> No
     assert diagnostics.baseline_response_rate is None
     assert diagnostics.segments == []
     assert diagnostics.strongest_response_segments == []
+    assert diagnostics.strongest_response_correlate is None
     assert diagnostics.weakest_response_segments == []
 
 

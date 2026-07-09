@@ -48,6 +48,7 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
         "success_rate_lift": -0.2,
         "negative_rate_lift": 0.5 - 0.4,
     }
+    assert payload["strongest_response_correlate"] == payload["strongest_response_segments"][0]
     assert payload["successful_application_segments"] == [
         {
             "dimension": "source",

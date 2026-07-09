@@ -2479,6 +2479,16 @@
             "title": "Segments",
             "type": "array"
           },
+          "strongest_response_correlate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "strongest_response_segments": {
             "items": {
               "$ref": "#/components/schemas/DiagnosticSegmentComparison"

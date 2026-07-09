@@ -1196,6 +1196,7 @@ export function DashboardPage() {
   const weakestDiagnostic = diagnostics?.weakest_response_segments[0];
   const successfulDiagnostic = diagnostics?.successful_application_segments[0];
   const negativeDiagnostic = diagnostics?.negative_outcome_segments[0];
+  const strongestResponseCorrelate = diagnostics?.strongest_response_correlate;
 
   return (
     <main
@@ -2322,6 +2323,32 @@ export function DashboardPage() {
                 </li>
               )}
             </ol>
+          </article>
+
+          <article className="metric-placeholder">
+            <h3 className="metric-placeholder__label">
+              Q-34 strongest response correlate
+            </h3>
+            <p className="metric-placeholder__value">
+              {diagnosticsError
+                ? "Unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading"
+                : strongestResponseCorrelate
+                ? diagnosticSegmentTitle(strongestResponseCorrelate)
+                : "No correlate"}
+            </p>
+            <p className="dashboard-card__meta">
+              {diagnosticsError
+                ? "Strongest response correlate is unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading deterministic response correlate"
+                : strongestResponseCorrelate
+                ? `${diagnosticSegmentTitle(
+                    strongestResponseCorrelate,
+                  )} is the strongest positive correlate`
+                : "No segment is above the filtered response baseline"}
+            </p>
           </article>
         </div>
 
