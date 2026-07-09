@@ -12,6 +12,7 @@ from app.db.repositories import (
     MetricsRepository,
     SyntheticFixtureRepository,
 )
+from app.models.metrics import MetricsFilter
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SYNTHETIC_FIXTURE_PATH = BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "basic_job_search.json"
@@ -285,6 +286,20 @@ def test_metrics_repository_returns_application_timeseries(tmp_path: Path) -> No
     assert [(point.period_start, point.application_count) for point in points] == [
         ("2026-07-01", 3),
         ("2026-07-02", 2),
+    ]
+
+
+def test_metrics_repository_filters_application_timeseries(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        seed_metric_fixture(connection)
+        points = MetricsRepository(connection).get_application_timeseries(
+            filters=MetricsFilter(source="company_site"),
+        )
+
+    assert [(point.period_start, point.application_count) for point in points] == [
+        ("2026-07-01", 1),
+        ("2026-07-02", 1),
     ]
 
 

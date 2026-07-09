@@ -159,15 +159,21 @@ class MetricsRepository(BaseRepository[int]):
             ),
         )
 
-    def get_application_timeseries(self) -> tuple[MetricTimeseriesPoint, ...]:
+    def get_application_timeseries(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> tuple[MetricTimeseriesPoint, ...]:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
         rows = self.execute(
-            """
+            f"""
             SELECT substr(first_seen_at, 1, 10) AS period_start,
                 COUNT(*) AS application_count
             FROM applications
+            {where_clause}
             GROUP BY period_start
             ORDER BY period_start ASC
             """,
+            filter_parameters,
         ).fetchall()
         return tuple(
             MetricTimeseriesPoint(

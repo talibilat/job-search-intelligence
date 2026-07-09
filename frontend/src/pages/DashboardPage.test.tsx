@@ -147,6 +147,37 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url === "/metrics/timeseries") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            points: [
+              { application_count: 2, period_start: "2026-07-01" },
+              { application_count: 5, period_start: "2026-07-08" },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/timeseries?status=rejected") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            points: [{ application_count: 1, period_start: "2026-07-08" }],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
     if (url === "/applications") {
       return Promise.resolve(
         new Response(JSON.stringify([baseApplication]), {
@@ -421,6 +452,42 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=tech",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-20 application volume trend from deterministic timeseries metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const trend = await screen.findByRole("region", {
+      name: "Application volume trend",
+    });
+
+    expect(within(trend).getByText("Application volume trend")).toBeTruthy();
+    expect(within(trend).getByText("2 applications on Jul 1, 2026")).toBeTruthy();
+    expect(within(trend).getByText("5 applications on Jul 8, 2026")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/timeseries",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("passes route-backed filters to the Q-20 application volume trend", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard?status=rejected");
+
+    render(<DashboardPage />);
+
+    const trend = await screen.findByRole("region", {
+      name: "Application volume trend",
+    });
+
+    expect(within(trend).getByText("1 application on Jul 8, 2026")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/timeseries?status=rejected",
       expect.objectContaining({ method: "GET" }),
     );
   });

@@ -991,6 +991,18 @@ export type GetMetricsSummaryMetricsSummaryGetParams = {
   custom_end_at?: string | null;
 };
 
+export type GetMetricsTimeseriesMetricsTimeseriesGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
 export type listApplicationsApplicationsGetResponse200 = {
   data: ApplicationRecord[];
   status: 200;
@@ -2542,15 +2554,40 @@ export type getMetricsTimeseriesMetricsTimeseriesGetResponse200 = {
   status: 200;
 };
 
+export type getMetricsTimeseriesMetricsTimeseriesGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type getMetricsTimeseriesMetricsTimeseriesGetResponseSuccess =
   getMetricsTimeseriesMetricsTimeseriesGetResponse200 & {
     headers: Headers;
   };
-export type getMetricsTimeseriesMetricsTimeseriesGetResponse =
-  getMetricsTimeseriesMetricsTimeseriesGetResponseSuccess;
+export type getMetricsTimeseriesMetricsTimeseriesGetResponseError =
+  getMetricsTimeseriesMetricsTimeseriesGetResponse422 & {
+    headers: Headers;
+  };
 
-export const getGetMetricsTimeseriesMetricsTimeseriesGetUrl = () => {
-  return `/metrics/timeseries`;
+export type getMetricsTimeseriesMetricsTimeseriesGetResponse =
+  | getMetricsTimeseriesMetricsTimeseriesGetResponseSuccess
+  | getMetricsTimeseriesMetricsTimeseriesGetResponseError;
+
+export const getGetMetricsTimeseriesMetricsTimeseriesGetUrl = (
+  params?: GetMetricsTimeseriesMetricsTimeseriesGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/timeseries?${stringifiedParams}`
+    : `/metrics/timeseries`;
 };
 
 /**
@@ -2558,12 +2595,16 @@ export const getGetMetricsTimeseriesMetricsTimeseriesGetUrl = () => {
  * @summary Get Metrics Timeseries
  */
 export const getMetricsTimeseriesMetricsTimeseriesGet = async (
+  params?: GetMetricsTimeseriesMetricsTimeseriesGetParams,
   options?: RequestInit,
 ): Promise<getMetricsTimeseriesMetricsTimeseriesGetResponse> => {
-  const res = await fetch(getGetMetricsTimeseriesMetricsTimeseriesGetUrl(), {
-    ...options,
-    method: "GET",
-  });
+  const res = await fetch(
+    getGetMetricsTimeseriesMetricsTimeseriesGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
