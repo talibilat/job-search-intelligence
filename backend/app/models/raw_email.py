@@ -60,3 +60,18 @@ class RawEmailRecord(BaseModel):
             RawEmailBodyRetentionState.RETAINED,
             RawEmailBodyRetentionState.DEBUGGING,
         }
+
+
+class RawEmailPreviewRecord(BaseModel):
+    """Public-safe raw email metadata preview without body text."""
+
+    from_domain: str | None
+    to_domains: list[str]
+    subject_present: bool
+    sent_at: datetime | None
+    body_retention_state: RawEmailBodyRetentionState
+    has_retained_body: bool
+    provider: str
+    ingested_at: datetime
+    filter_outcome: str | None = None
+    filter_reason: str | None = None

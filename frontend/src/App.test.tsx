@@ -350,7 +350,10 @@ describe("App", () => {
           : input instanceof URL
             ? input.href
             : input.url;
-      const path = url.startsWith("http") ? new URL(url).pathname : url;
+      const pathWithSearch = url.startsWith("http")
+        ? new URL(url).pathname + new URL(url).search
+        : url;
+      const path = pathWithSearch.split("?")[0];
       const body =
         path === "/sync"
           ? {
@@ -380,6 +383,8 @@ describe("App", () => {
                 started_at: "2026-07-05T09:15:00Z",
                 state: "succeeded",
               }
+            : path === "/sync/recent-emails"
+              ? []
             : null;
 
       if (!body) {
@@ -422,6 +427,248 @@ describe("App", () => {
     );
   });
 
+  it("shows recent synced email metadata so the user can inspect what was retrieved", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const path = url.startsWith("http")
+        ? new URL(url).pathname + new URL(url).search
+        : url;
+      const pathname = path.split("?")[0];
+
+      if (pathname === "/sync/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              account_id: "talib@example.test",
+              finished_at: "2026-07-05T09:45:30Z",
+              last_error: null,
+              message_count: 2,
+              mode: "full_backfill",
+              page_count: 1,
+              provider: "gmail",
+              raw_email_count: 2,
+              recovered_from_expired_cursor: false,
+              started_at: "2026-07-05T09:15:00Z",
+              state: "succeeded",
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
+        );
+      }
+
+      if (pathname === "/sync/recent-emails") {
+        expect(init?.method).toBe("GET");
+        expect(path).toContain("limit=50");
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                from_domain: "example.com",
+                to_domains: ["example.com"],
+                subject_present: true,
+                sent_at: "2026-07-05T12:00:00Z",
+                body_retention_state: "retained",
+                has_retained_body: true,
+                provider: "gmail",
+                ingested_at: "2026-07-05T12:01:00Z",
+                filter_outcome: "candidate",
+                filter_reason: "sender_domain:example.com",
+              },
+            ]),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
+        );
+      }
+
+      throw new Error(`Unhandled fetch request: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/");
+
+    expect(await screen.findByText("Recently synced emails")).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Recently synced email metadata" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Subject captured")).toBeTruthy();
+    expect(screen.getAllByText("example.com").length).toBeGreaterThan(0);
+    expect(screen.getByText("candidate")).toBeTruthy();
+    expect(screen.getByText("retained body")).toBeTruthy();
+    expect(screen.queryByText("Private body")).toBeNull();
+    expect(screen.queryByText("gmail-msg-1")).toBeNull();
+    expect(screen.queryByText("thread-1")).toBeNull();
+    expect(styles).toContain(".sync-panel__recent-scroll");
+    expect(styles).toContain("max-height: min(72vh, 1120px)");
+    expect(styles).toContain("overflow-y: auto");
+  });
+
+  it("shows running progress immediately while the sync start request is pending", async () => {
+    let syncRequestStarted = false;
+    let resolveSyncRequest: (response: Response) => void = () => {
+      throw new Error("Sync request was not started.");
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const pathWithSearch = url.startsWith("http")
+        ? new URL(url).pathname + new URL(url).search
+        : url;
+      const path = pathWithSearch.split("?")[0];
+
+      if (path === "/sync") {
+        syncRequestStarted = true;
+        expect(init?.method).toBe("POST");
+        return new Promise<Response>((resolve) => {
+          resolveSyncRequest = resolve;
+        });
+      }
+
+      if (path === "/sync/recent-emails") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path !== "/sync/status") {
+        throw new Error(`Unhandled fetch request: ${path}`);
+      }
+
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            account_id: "talib@example.test",
+            finished_at: "2026-07-05T09:45:30Z",
+            last_error: "Previous sync failed.",
+            message_count: 0,
+            mode: "full_backfill",
+            page_count: 0,
+            provider: "gmail",
+            raw_email_count: 0,
+            recovered_from_expired_cursor: false,
+            started_at: "2026-07-05T09:15:00Z",
+            state: "failed",
+            target_message_count: 500,
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/");
+
+    expect(await screen.findByText("Last sync failed")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+
+    expect(syncRequestStarted).toBe(true);
+    expect(await screen.findByText("Sync is running")).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Sync running" }).disabled).toBe(
+      true,
+    );
+    expect(
+      screen
+        .getByRole("progressbar", { name: "Sync progress" })
+        .className.includes("sync-panel__progress--indeterminate"),
+    ).toBe(true);
+    resolveSyncRequest(
+      new Response(JSON.stringify({ state: "running" }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+  });
+
+  it("blocks invalid sync extraction counts before posting to the API", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const pathWithSearch = url.startsWith("http")
+        ? new URL(url).pathname + new URL(url).search
+        : url;
+      const path = pathWithSearch.split("?")[0];
+
+      if (path === "/sync/recent-emails") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path !== "/sync/status") {
+        throw new Error(`Unexpected fetch request: ${path}`);
+      }
+
+      expect(init?.method).toBe("GET");
+
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            account_id: null,
+            finished_at: null,
+            last_error: null,
+            message_count: 0,
+            mode: null,
+            page_count: 0,
+            provider: null,
+            raw_email_count: 0,
+            recovered_from_expired_cursor: false,
+            started_at: null,
+            state: "idle",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/");
+
+    const emailCountInput = await screen.findByLabelText("Email count");
+    fireEvent.change(emailCountInput, { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+
+    expect(
+      await screen.findByText("Email count must be at least 1."),
+    ).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/sync",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("shows public sync status API errors instead of idle progress", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url =
@@ -430,7 +677,20 @@ describe("App", () => {
           : input instanceof URL
             ? input.href
             : input.url;
-      const path = url.startsWith("http") ? new URL(url).pathname : url;
+      const pathWithSearch = url.startsWith("http")
+        ? new URL(url).pathname + new URL(url).search
+        : url;
+      const path = pathWithSearch.split("?")[0];
+
+      if (path === "/sync/recent-emails") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
 
       expect(path).toBe("/sync/status");
       expect(init?.method).toBe("GET");
@@ -492,7 +752,20 @@ describe("App", () => {
           : input instanceof URL
             ? input.href
             : input.url;
-      const path = url.startsWith("http") ? new URL(url).pathname : url;
+      const pathWithSearch = url.startsWith("http")
+        ? new URL(url).pathname + new URL(url).search
+        : url;
+      const path = pathWithSearch.split("?")[0];
+
+      if (path === "/sync/recent-emails") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
 
       expect(path).toBe("/sync/status");
       expect(init?.method).toBe("GET");
@@ -529,7 +802,17 @@ describe("App", () => {
       "disabled",
       false,
     );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const statusCallCount = fetchMock.mock.calls.filter(([input]) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const path = url.startsWith("http") ? new URL(url).pathname : url;
+      return path === "/sync/status";
+    }).length;
+    expect(statusCallCount).toBe(2);
   });
 
   it("renders the first-run setup shell at /setup", () => {

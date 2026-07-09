@@ -574,6 +574,17 @@ export const EmailSyncMode = {
   incremental: "incremental",
 } as const;
 
+/**
+ * User-selected bounds for a manual extraction run.
+ */
+export interface EmailSyncOptions {
+  before_date?: string | null;
+  max_age_days?: number | null;
+  max_messages?: number | null;
+  max_pages?: number | null;
+  since_date?: string | null;
+}
+
 export type EmailSyncRunState =
   (typeof EmailSyncRunState)[keyof typeof EmailSyncRunState];
 
@@ -596,12 +607,18 @@ export interface EmailSyncStatus {
   mode?: EmailSyncMode | null;
   /** @minimum 0 */
   page_count?: number;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  progress?: number;
   provider?: EmailProviderName | null;
   /** @minimum 0 */
   raw_email_count?: number;
   recovered_from_expired_cursor?: boolean;
   started_at?: string | null;
   state: EmailSyncRunState;
+  target_message_count?: number | null;
 }
 
 /**
@@ -911,6 +928,34 @@ export interface ProviderConfigUpdateRequest {
   ollama_embedding_model?: string | null;
 }
 
+/**
+ * Explicit body retention state for raw email DTO boundaries.
+ */
+export type RawEmailBodyRetentionState =
+  (typeof RawEmailBodyRetentionState)[keyof typeof RawEmailBodyRetentionState];
+
+export const RawEmailBodyRetentionState = {
+  metadata_only: "metadata_only",
+  retained: "retained",
+  debugging: "debugging",
+} as const;
+
+/**
+ * Public-safe raw email metadata preview without body text.
+ */
+export interface RawEmailPreviewRecord {
+  body_retention_state: RawEmailBodyRetentionState;
+  filter_outcome?: string | null;
+  filter_reason?: string | null;
+  from_domain: string | null;
+  has_retained_body: boolean;
+  ingested_at: string;
+  provider: string;
+  sent_at: string | null;
+  subject_present: boolean;
+  to_domains: string[];
+}
+
 export interface ResponseSilenceMetric {
   /** @minimum 0 */
   human_response_count: number;
@@ -1097,6 +1142,10 @@ export type GetMetricsTimeseriesMetricsTimeseriesGetParams = {
   salary_min?: number | null;
   salary_max?: number | null;
   work_mode?: WorkMode | null;
+};
+
+export type SyncRecentEmailsSyncRecentEmailsGetParams = {
+  limit?: number;
 };
 
 export type listApplicationsApplicationsGetResponse200 = {
@@ -3003,6 +3052,11 @@ export type syncNowSyncPostResponse409 = {
   status: 409;
 };
 
+export type syncNowSyncPostResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
 export type syncNowSyncPostResponse429 = {
   data: ApiErrorResponse;
   status: 429;
@@ -3026,6 +3080,7 @@ export type syncNowSyncPostResponseError = (
   | syncNowSyncPostResponse401
   | syncNowSyncPostResponse403
   | syncNowSyncPostResponse409
+  | syncNowSyncPostResponse422
   | syncNowSyncPostResponse429
   | syncNowSyncPostResponse502
   | syncNowSyncPostResponse503
@@ -3044,11 +3099,14 @@ export const getSyncNowSyncPostUrl = () => {
  * @summary Sync Now
  */
 export const syncNowSyncPost = async (
+  emailSyncOptionsNull?: EmailSyncOptions | null,
   options?: RequestInit,
 ): Promise<syncNowSyncPostResponse> => {
   const res = await fetch(getSyncNowSyncPostUrl(), {
     ...options,
     method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(emailSyncOptionsNull),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -3059,6 +3117,72 @@ export const syncNowSyncPost = async (
     status: res.status,
     headers: res.headers,
   } as syncNowSyncPostResponse;
+};
+
+export type syncRecentEmailsSyncRecentEmailsGetResponse200 = {
+  data: RawEmailPreviewRecord[];
+  status: 200;
+};
+
+export type syncRecentEmailsSyncRecentEmailsGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type syncRecentEmailsSyncRecentEmailsGetResponseSuccess =
+  syncRecentEmailsSyncRecentEmailsGetResponse200 & {
+    headers: Headers;
+  };
+export type syncRecentEmailsSyncRecentEmailsGetResponseError =
+  syncRecentEmailsSyncRecentEmailsGetResponse422 & {
+    headers: Headers;
+  };
+
+export type syncRecentEmailsSyncRecentEmailsGetResponse =
+  | syncRecentEmailsSyncRecentEmailsGetResponseSuccess
+  | syncRecentEmailsSyncRecentEmailsGetResponseError;
+
+export const getSyncRecentEmailsSyncRecentEmailsGetUrl = (
+  params?: SyncRecentEmailsSyncRecentEmailsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/sync/recent-emails?${stringifiedParams}`
+    : `/sync/recent-emails`;
+};
+
+/**
+ * Return recently stored raw-email metadata without body text.
+ * @summary Sync Recent Emails
+ */
+export const syncRecentEmailsSyncRecentEmailsGet = async (
+  params?: SyncRecentEmailsSyncRecentEmailsGetParams,
+  options?: RequestInit,
+): Promise<syncRecentEmailsSyncRecentEmailsGetResponse> => {
+  const res = await fetch(getSyncRecentEmailsSyncRecentEmailsGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: syncRecentEmailsSyncRecentEmailsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as syncRecentEmailsSyncRecentEmailsGetResponse;
 };
 
 export type syncStatusSyncStatusGetResponse200 = {

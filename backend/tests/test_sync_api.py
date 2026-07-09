@@ -41,6 +41,7 @@ from app.providers.email import (
 )
 from app.security import SecretKind, SecretRef, create_secret_store
 from app.services.sync_service import (
+    EmailSyncOptions,
     EmailSyncRunState,
     EmailSyncStatus,
     SyncAlreadyRunningError,
@@ -53,10 +54,12 @@ NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 class FakeSyncRuntime:
     def __init__(self) -> None:
         self.run_count = 0
+        self.last_options: EmailSyncOptions | None = None
         self.status = EmailSyncStatus(state=EmailSyncRunState.IDLE)
 
-    async def run_manual_sync(self) -> EmailSyncStatus:
+    async def run_manual_sync(self, options: EmailSyncOptions | None = None) -> EmailSyncStatus:
         self.run_count += 1
+        self.last_options = options
         self.status = EmailSyncStatus(
             state=EmailSyncRunState.SUCCEEDED,
             provider=EmailProviderName.GMAIL,
@@ -67,6 +70,8 @@ class FakeSyncRuntime:
             page_count=1,
             message_count=2,
             raw_email_count=2,
+            target_message_count=options.max_messages if options is not None else None,
+            progress=1,
             recovered_from_expired_cursor=False,
         )
         return self.status
@@ -74,9 +79,14 @@ class FakeSyncRuntime:
     def current_status(self) -> EmailSyncStatus:
         return self.status
 
+    def recent_email_previews(self, *, limit: int = 10) -> tuple[object, ...]:
+        del limit
+        return ()
+
 
 class ProviderErrorSyncRuntime:
-    async def run_manual_sync(self) -> EmailSyncStatus:
+    async def run_manual_sync(self, options: EmailSyncOptions | None = None) -> EmailSyncStatus:
+        del options
         raise EmailProviderAuthError(
             public_message="Reconnect Gmail to continue syncing.",
             error_code=EmailProviderErrorCode.AUTHORIZATION_REQUIRED,
@@ -183,9 +193,42 @@ def test_post_sync_runs_injected_manual_sync_runtime() -> None:
         "page_count": 1,
         "message_count": 2,
         "raw_email_count": 2,
+        "target_message_count": None,
+        "progress": 1.0,
         "recovered_from_expired_cursor": False,
         "last_error": None,
     }
+
+
+def test_post_sync_accepts_extraction_limits_for_manual_run() -> None:
+    runtime = FakeSyncRuntime()
+    app = create_app()
+    app.dependency_overrides[get_email_sync_runtime] = lambda: runtime
+    client = TestClient(app)
+
+    response = client.post(
+        "/sync",
+        json={
+            "max_messages": 25,
+            "since_date": "2026-01-01",
+            "before_date": "2026-07-01",
+            "max_age_days": 90,
+            "max_pages": 3,
+        },
+    )
+
+    assert response.status_code == 200
+    last_options = runtime.last_options
+    assert last_options is not None
+    assert last_options.max_messages == 25
+    assert last_options.max_pages == 3
+    assert last_options.since_date is not None
+    assert last_options.since_date.isoformat() == "2026-01-01"
+    assert last_options.before_date is not None
+    assert last_options.before_date.isoformat() == "2026-07-01"
+    assert last_options.max_age_days == 90
+    assert response.json()["target_message_count"] == 25
+    assert response.json()["progress"] == 1.0
 
 
 def test_get_sync_status_returns_current_runtime_status() -> None:
@@ -291,6 +334,127 @@ def test_post_sync_uses_persisted_gmail_connection_metadata(
         ).fetchone()
     assert row == (1,)
     assert tuple(backfill_state) == ("completed", 1, 1, "history-next")
+
+
+def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO raw_emails (
+                id,
+                thread_id,
+                from_addr,
+                to_addr,
+                subject,
+                sent_at,
+                body_text,
+                body_retention_state,
+                labels,
+                provider,
+                ingested_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail-msg-1",
+                "thread-1",
+                "jobs@example.com",
+                "me@example.com",
+                "Application received",
+                "2026-07-05T12:00:00+00:00",
+                "Private body must not leave this endpoint",
+                "retained",
+                '["INBOX"]',
+                "gmail",
+                "2026-07-05T12:01:00+00:00",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO email_filter_decisions (
+                email_id,
+                strategy,
+                outcome,
+                reason,
+                decided_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail-msg-1",
+                "broad_job_search",
+                "candidate",
+                "sender_domain:example.com",
+                "2026-07-05T12:01:30+00:00",
+            ),
+        )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get("/sync/recent-emails")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "from_domain": "example.com",
+            "to_domains": ["example.com"],
+            "subject_present": True,
+            "sent_at": "2026-07-05T12:00:00Z",
+            "body_retention_state": "retained",
+            "has_retained_body": True,
+            "provider": "gmail",
+            "ingested_at": "2026-07-05T12:01:00Z",
+            "filter_outcome": "candidate",
+            "filter_reason": "sender_domain:example.com",
+        }
+    ]
+    assert "body_text" not in response.text
+    assert "Private body" not in response.text
+    assert "gmail-msg-1" not in response.text
+    assert "thread-1" not in response.text
+
+
+def test_post_sync_passes_extraction_limits_to_provider_request(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        EmailConnectionRepository(connection).save_connection(email_connection())
+    provider = FakeMetadataProvider()
+    status_store = EmailSyncStatusStore()
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        gmail_page_size=77,
+    )
+    app.dependency_overrides[get_sync_email_provider] = lambda: provider
+    app.dependency_overrides[get_sync_status_store] = lambda: status_store
+    client = TestClient(app)
+
+    response = client.post(
+        "/sync",
+        json={
+            "max_messages": 12,
+            "since_date": "2026-01-01",
+            "before_date": "2026-07-01",
+            "max_pages": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["target_message_count"] == 12
+    assert len(provider.requests) == 1
+    assert provider.requests[0].page_size == 12
+    assert provider.requests[0].since_date is not None
+    assert provider.requests[0].before_date is not None
+    assert provider.requests[0].since_date.isoformat() == "2026-01-01"
+    assert provider.requests[0].before_date.isoformat() == "2026-07-01"
 
 
 def test_default_sync_email_provider_uses_configured_secret_store(tmp_path: Path) -> None:

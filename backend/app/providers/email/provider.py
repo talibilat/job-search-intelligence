@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import ClassVar, Protocol, cast, runtime_checkable
 
@@ -357,6 +357,8 @@ class EmailMetadataListRequest(BaseModel):
     page_size: int = Field(ge=1)
     page_token: str | None = Field(default=None, min_length=1)
     sync_cursor: EmailProviderCursor | None = None
+    since_date: date | None = None
+    before_date: date | None = None
 
     @model_validator(mode="after")
     def validate_cursor_for_mode(self) -> EmailMetadataListRequest:
@@ -365,6 +367,13 @@ class EmailMetadataListRequest(BaseModel):
             raise ValueError(msg)
         if self.mode is EmailSyncMode.FULL_BACKFILL and self.sync_cursor is not None:
             msg = "sync_cursor is not allowed for full metadata backfill"
+            raise ValueError(msg)
+        if (
+            self.since_date is not None
+            and self.before_date is not None
+            and self.since_date >= self.before_date
+        ):
+            msg = "since_date must be before before_date"
             raise ValueError(msg)
         return self
 

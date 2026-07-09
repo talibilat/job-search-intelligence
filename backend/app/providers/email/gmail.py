@@ -1075,9 +1075,23 @@ def _list_query(request: EmailMetadataListRequest) -> tuple[tuple[str, str], ...
         )
 
     query = [("fields", _MESSAGE_LIST_FIELDS), ("maxResults", str(request.page_size))]
+    date_query = _gmail_date_query(request)
+    if date_query is not None:
+        query.append(("q", date_query))
     if request.page_token is not None:
         query.append(("pageToken", request.page_token))
     return tuple(query)
+
+
+def _gmail_date_query(request: EmailMetadataListRequest) -> str | None:
+    terms: list[str] = []
+    if request.since_date is not None:
+        terms.append(f"after:{request.since_date:%Y/%m/%d}")
+    if request.before_date is not None:
+        terms.append(f"before:{request.before_date:%Y/%m/%d}")
+    if not terms:
+        return None
+    return " ".join(terms)
 
 
 def _query_value(query: tuple[tuple[str, str], ...], name: str) -> str | None:
