@@ -83,13 +83,16 @@ function formatTokenCount(value: number | null | undefined) {
 function InsightCostSummary({ cost }: { cost: InsightRegenerationCost }) {
   const currency = cost.currency ?? "USD";
   const hasActualCost = cost.actual_cost_usd !== null && cost.actual_cost_usd !== undefined;
+  const hasActualTokens =
+    cost.actual_total_tokens !== null && cost.actual_total_tokens !== undefined;
+  const hasActualDetails = hasActualCost || hasActualTokens;
   return (
     <div className="insight-card__cost" aria-label="Regeneration cost">
       <span>Estimated cost {formatCost(cost.estimated_cost_usd, currency)}</span>
-      {hasActualCost ? (
+      {hasActualDetails ? (
         <>
           <span>Actual cost {formatCost(cost.actual_cost_usd, currency)}</span>
-          <span>{formatTokenCount(cost.actual_total_tokens)}</span>
+          {hasActualTokens ? <span>{formatTokenCount(cost.actual_total_tokens)}</span> : null}
         </>
       ) : null}
     </div>
@@ -242,13 +245,13 @@ export function Insights() {
                         Model {insight.model} · Generated {" "}
                         {formatUtcDate(insight.generated_at)}
                       </p>
-                      {cost ? <InsightCostSummary cost={cost} /> : null}
                     </div>
                   ) : (
                     <p className="insights-panel__empty">
                       {config.emptyMessage}
                     </p>
                   )}
+                  {cost ? <InsightCostSummary cost={cost} /> : null}
 
                   <div className="insight-card__actions">
                     <Button
