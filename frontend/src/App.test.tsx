@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type {
   MetricsBreakdownResponse,
+  MetricsDiagnosticsResponse,
   MetricsFunnelResponse,
   MetricsRatesResponse,
   MetricsResponseRateTrendResponse,
@@ -137,6 +138,21 @@ function metricsFunnelResponse(
   return response as unknown as MockObjectResponseBody;
 }
 
+function metricsDiagnosticsResponse(
+  overrides: Partial<MetricsDiagnosticsResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsDiagnosticsResponse = {
+    baseline_response_count: 0,
+    baseline_response_rate: null,
+    segments: [],
+    strongest_response_segments: [],
+    total_applications: 0,
+    weakest_response_segments: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
 function isMockResponseConfig(
   value: MockResponse,
 ): value is { body: MockResponseBody; status: number } {
@@ -203,6 +219,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
       if (path === "/metrics/response-rate-trend") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsResponseRateTrendResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/diagnostics") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsDiagnosticsResponse()), {
             headers: { "Content-Type": "application/json" },
             status: 200,
           }),
@@ -1196,6 +1221,7 @@ describe("App", () => {
       "/metrics/breakdown?dimension=source",
       "/metrics/breakdown?dimension=role",
       "/metrics/timeseries",
+      "/metrics/diagnostics",
       "/metrics/rates",
     ]);
   });

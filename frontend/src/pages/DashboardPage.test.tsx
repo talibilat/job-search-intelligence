@@ -361,6 +361,70 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url === "/metrics/diagnostics") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            baseline_response_count: 3,
+            baseline_response_rate: 0.6,
+            segments: [],
+            strongest_response_segments: [
+              {
+                application_count: 2,
+                dimension: "source",
+                interview_count: 1,
+                interview_rate: 0.5,
+                offer_count: 1,
+                offer_rate: 0.5,
+                response_count: 2,
+                response_rate: 1,
+                response_rate_lift: 0.4,
+                value: "referral",
+              },
+            ],
+            total_applications: 5,
+            weakest_response_segments: [
+              {
+                application_count: 3,
+                dimension: "source",
+                interview_count: 1,
+                interview_rate: 1 / 3,
+                offer_count: 0,
+                offer_rate: 0,
+                response_count: 1,
+                response_rate: 1 / 3,
+                response_rate_lift: (1 / 3) - 0.6,
+                value: "linkedin",
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/diagnostics?role=platform&status=rejected") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            baseline_response_count: 1,
+            baseline_response_rate: 1,
+            segments: [],
+            strongest_response_segments: [],
+            total_applications: 1,
+            weakest_response_segments: [],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
     if (url === "/applications") {
       return Promise.resolve(
         new Response(JSON.stringify([baseApplication]), {
@@ -579,6 +643,31 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("renders diagnostic comparison widgets from deterministic diagnostics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+
+    expect(within(diagnostics).getByText("Baseline response rate")).toBeTruthy();
+    expect(within(diagnostics).getByText("60%")).toBeTruthy();
+    expect(within(diagnostics).getByText("Strongest response signals")).toBeTruthy();
+    expect(within(diagnostics).getByText("Referral (Source)")).toBeTruthy();
+    expect(within(diagnostics).getByText("+40 pp vs baseline")).toBeTruthy();
+    expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
+    expect(within(diagnostics).getByText("Linkedin (Source)")).toBeTruthy();
+    expect(within(diagnostics).getByText("-26.7 pp vs baseline")).toBeTruthy();
+    expect(within(diagnostics).getByText("Correlation summary")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/diagnostics",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("renders Q-17 average time to first response from deterministic metrics", async () => {
     mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
@@ -764,6 +853,10 @@ describe("DashboardPage", () => {
     expect(within(funnel).getAllByText("0 applications").length).toBeGreaterThan(0);
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/funnel?role=platform&status=rejected",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/diagnostics?role=platform&status=rejected",
       expect.objectContaining({ method: "GET" }),
     );
   });
