@@ -1,5 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import {
   ApplicationSource,
@@ -10,6 +19,7 @@ import {
   getMetricsBreakdownMetricsBreakdownGet,
   getMetricsRatesMetricsRatesGet,
   getMetricsSummaryMetricsSummaryGet,
+  getMetricsTimeseriesMetricsTimeseriesGet,
   listApplicationsApplicationsGet,
   type ApiErrorResponse,
   type ApplicationRecord,
@@ -18,6 +28,7 @@ import {
   type ListApplicationsApplicationsGetParams,
   type MetricBreakdownRow,
   type MetricRate,
+  type MetricTimeseriesPoint,
   type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
   type MetricsSummaryResponse,
   type TimeToFirstResponseMetric,
@@ -37,6 +48,7 @@ type LoadState = "loading" | "loaded" | "error";
 type BreakdownLoadState = "loading" | "loaded" | "error";
 type LiveApplicationsState = "loading" | "ready" | "error";
 type ResponseRateLoadState = "loading" | "loaded" | "error";
+type TimeseriesLoadState = "loading" | "loaded" | "error";
 
 interface DashboardFilters {
   firstSeenFrom: string;
@@ -278,6 +290,15 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatTrendDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 function statusLabel(status: ApplicationRecord["current_status"]) {
   return status.replaceAll("_", " ");
 }
@@ -373,6 +394,12 @@ function sortedBreakdownRows(rows: MetricBreakdownRow[]) {
   });
 }
 
+function sortedTimeseriesPoints(points: MetricTimeseriesPoint[]) {
+  return [...points].sort((left, right) =>
+    left.period_start.localeCompare(right.period_start),
+  );
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -396,6 +423,12 @@ export function DashboardPage() {
   const [breakdownLoadState, setBreakdownLoadState] =
     useState<BreakdownLoadState>("loading");
   const [breakdownError, setBreakdownError] = useState<string | null>(null);
+  const [timeseriesPoints, setTimeseriesPoints] = useState<
+    MetricTimeseriesPoint[]
+  >([]);
+  const [timeseriesLoadState, setTimeseriesLoadState] =
+    useState<TimeseriesLoadState>("loading");
+  const [timeseriesError, setTimeseriesError] = useState<string | null>(null);
   const [filters, setFilters] = useState<DashboardFilters>(() =>
     filtersFromSearch(window.location.search),
   );
@@ -586,6 +619,50 @@ export function DashboardPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    async function loadTimeseries() {
+      setTimeseriesLoadState("loading");
+      setTimeseriesError(null);
+      setTimeseriesPoints([]);
+
+      const response = await getMetricsTimeseriesMetricsTimeseriesGet(
+        queryParamsFromFilters(appliedFilters),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setTimeseriesPoints([]);
+        setTimeseriesError(
+          publicError(response.data, "Application volume trend is unavailable."),
+        );
+        setTimeseriesLoadState("error");
+        return;
+      }
+
+      setTimeseriesPoints(sortedTimeseriesPoints(response.data.points));
+      setTimeseriesLoadState("loaded");
+    }
+
+    void loadTimeseries().catch(() => {
+      if (!isCancelled) {
+        setTimeseriesPoints([]);
+        setTimeseriesError(
+          "Application volume trend is unavailable. Start the local backend to load Q-20.",
+        );
+        setTimeseriesLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
     async function loadResponseRate() {
       try {
         const response = await getMetricsRatesMetricsRatesGet();
@@ -667,7 +744,7 @@ export function DashboardPage() {
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
           Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
-          Q-15, Q-17, and Tier 3 breakdowns now render from deterministic application and metrics
+          Q-15, Q-17, Q-20, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
         </p>
@@ -1156,6 +1233,103 @@ export function DashboardPage() {
       </section>
 
       <section
+        aria-labelledby="application-volume-trend-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div>
+          <p className="eyebrow">Q-20</p>
+          <h2 id="application-volume-trend-title">
+            Application volume trend
+          </h2>
+          <p className="dashboard-card__meta">
+            Daily application counts come from deterministic /metrics/timeseries
+            points over canonical applications.first_seen_at values.
+          </p>
+        </div>
+
+        {timeseriesError ? (
+          <Alert title="Application volume trend unavailable" tone="danger">
+            <p>{timeseriesError}</p>
+          </Alert>
+        ) : null}
+
+        <div className="dashboard-breakdown-layout">
+          <div className="dashboard-breakdown-chart-card">
+            <ChartPanel
+              description="Application counts grouped over time from the local SQLite applications table."
+              emptyState={{
+                title:
+                  timeseriesLoadState === "loading"
+                    ? "Loading application volume"
+                    : "No application volume yet",
+                description:
+                  timeseriesLoadState === "loading"
+                    ? "Loading deterministic application-volume points from the local backend."
+                    : "No applications exist for the volume trend yet.",
+              }}
+              height={260}
+              title="Daily application count"
+            >
+              {timeseriesPoints.length > 0 ? (
+                <LineChart
+                  data={timeseriesPoints.map((point) => ({
+                    applications: point.application_count,
+                    period: formatTrendDate(point.period_start),
+                  }))}
+                  margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+                >
+                  <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                  <XAxis dataKey="period" stroke="#c9d8ce" />
+                  <YAxis allowDecimals={false} stroke="#c9d8ce" />
+                  <Tooltip />
+                  <Line
+                    dataKey="applications"
+                    dot={{ fill: "#b8e2af", r: 4 }}
+                    name="Applications"
+                    stroke="#b8e2af"
+                    strokeWidth={3}
+                    type="monotone"
+                  />
+                </LineChart>
+              ) : undefined}
+            </ChartPanel>
+          </div>
+          <ol className="dashboard-breakdown-ranks">
+            {timeseriesPoints.length > 0 ? (
+              timeseriesPoints.map((point) => (
+                <li key={point.period_start}>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {formatTrendDate(point.period_start)}
+                    </span>
+                    <span>
+                      {countLabel(point.application_count, "application")}
+                    </span>
+                  </div>
+                  <p>
+                    {`${countLabel(point.application_count, "application")} on ${formatTrendDate(point.period_start)}`}
+                  </p>
+                </li>
+              ))
+            ) : (
+              <li>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {timeseriesLoadState === "loading" ? "Loading" : "No rows"}
+                  </span>
+                  <span>
+                    {timeseriesLoadState === "loading"
+                      ? "Fetching trend"
+                      : "No application volume"}
+                  </span>
+                </div>
+              </li>
+            )}
+          </ol>
+        </div>
+      </section>
+
+      <section
         aria-labelledby="live-applications-title"
         className="dashboard-card dashboard-live-applications"
       >
@@ -1223,15 +1397,6 @@ export function DashboardPage() {
         )}
       </section>
 
-      <ChartPanel
-        description="Dashboard charts stay empty until broader deterministic metrics endpoints can supply reconciled series from the local SQLite database."
-        emptyState={{
-          title: "Dashboard metrics pending",
-          description:
-            "Broader deterministic metrics will appear here as additional metrics APIs are available.",
-        }}
-        title="Dashboard metrics shell"
-      />
     </main>
   );
 }

@@ -13,6 +13,7 @@ import type {
   MetricsBreakdownResponse,
   MetricsRatesResponse,
   MetricsSummaryResponse,
+  MetricsTimeseriesResponse,
 } from "./api";
 import styles from "./index.css?raw";
 
@@ -100,6 +101,16 @@ function metricsBreakdownResponse(
   return response as unknown as MockObjectResponseBody;
 }
 
+function metricsTimeseriesResponse(
+  overrides: Partial<MetricsTimeseriesResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsTimeseriesResponse = {
+    points: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
 function isMockResponseConfig(
   value: MockResponse,
 ): value is { body: MockResponseBody; status: number } {
@@ -130,6 +141,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
       if (path === "/metrics/breakdown?dimension=source") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsBreakdownResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/timeseries") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsTimeseriesResponse()), {
             headers: { "Content-Type": "application/json" },
             status: 200,
           }),
@@ -643,12 +663,15 @@ describe("App", () => {
       await screen.findByText("No applications match these filters."),
     ).toBeTruthy();
 
-    const emptyState = screen.getByRole("status", {
-      name: "Dashboard metrics pending",
+    const volumeTrend = screen.getByRole("region", {
+      name: "Application volume trend",
+    });
+    const emptyState = within(volumeTrend).getByRole("status", {
+      name: "No application volume yet",
     });
 
     expect(emptyState.textContent).toContain(
-      "Broader deterministic metrics will appear here as additional metrics APIs are available.",
+      "No applications exist for the volume trend yet.",
     );
   });
 
@@ -833,6 +856,7 @@ describe("App", () => {
       "/applications?status=interview",
       "/applications",
       "/metrics/breakdown?dimension=source",
+      "/metrics/timeseries",
       "/metrics/rates",
     ]);
   });

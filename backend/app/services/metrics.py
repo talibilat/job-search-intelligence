@@ -272,9 +272,12 @@ class MetricsTimeseriesService:
     def __init__(self, *, metrics_repository: MetricsRepository) -> None:
         self._metrics_repository = metrics_repository
 
-    def get_timeseries(self) -> MetricsTimeseriesResponse:
+    def get_timeseries(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> MetricsTimeseriesResponse:
         return MetricsTimeseriesResponse(
-            points=list(self._metrics_repository.get_application_timeseries()),
+            points=list(self._metrics_repository.get_application_timeseries(filters=filters)),
         )
 
 

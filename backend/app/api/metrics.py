@@ -123,23 +123,6 @@ def get_metrics_rates(
     return service.get_rates()
 
 
-@router.get(
-    "/timeseries",
-    response_model=MetricsTimeseriesResponse,
-    summary="Get Metrics Timeseries",
-    description=(
-        "Returns deterministic application-volume timeseries points from local applications data."
-    ),
-)
-def get_metrics_timeseries(
-    service: Annotated[
-        MetricsTimeseriesService,
-        Depends(get_metrics_timeseries_service),
-    ],
-) -> MetricsTimeseriesResponse:
-    return service.get_timeseries()
-
-
 def get_metrics_filter(
     status: Annotated[ApplicationStatus | None, Query()] = None,
     source: Annotated[ApplicationSource | None, Query()] = None,
@@ -224,6 +207,25 @@ def get_metrics_funnel(
     filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
 ) -> MetricsFunnelResponse:
     return service.get_funnel(filters=filters)
+
+
+@router.get(
+    "/timeseries",
+    response_model=MetricsTimeseriesResponse,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="Get Metrics Timeseries",
+    description=(
+        "Returns deterministic application-volume timeseries points from local applications data."
+    ),
+)
+def get_metrics_timeseries(
+    service: Annotated[
+        MetricsTimeseriesService,
+        Depends(get_metrics_timeseries_service),
+    ],
+    filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
+) -> MetricsTimeseriesResponse:
+    return service.get_timeseries(filters=filters)
 
 
 @router.get(
