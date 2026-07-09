@@ -7,6 +7,7 @@ from .application_edit import (
     ApplicationStatusEditResponse,
 )
 from .application_merge import ApplicationMergeRequest, ApplicationMergeResponse
+from .chat_history import ChatHistoryResponse
 from .classification import (
     ClassificationCandidateStats,
     ClassificationPreRunEstimate,
@@ -163,6 +164,7 @@ __all__ = [
     "ApplicationSplitSourceApplication",
     "ChatMessageRecord",
     "ChatMessageRole",
+    "ChatHistoryResponse",
     "ClassificationRunRecord",
     "CorrectionConflictType",
     "ClassificationCandidateStats",
