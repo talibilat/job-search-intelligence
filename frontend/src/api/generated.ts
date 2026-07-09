@@ -723,6 +723,23 @@ export interface MetricBreakdownRow {
   value: string;
 }
 
+export type MetricFunnelStageName =
+  (typeof MetricFunnelStageName)[keyof typeof MetricFunnelStageName];
+
+export const MetricFunnelStageName = {
+  applied: "applied",
+  screen: "screen",
+  interview: "interview",
+  final: "final",
+  offer: "offer",
+} as const;
+
+export interface MetricFunnelStage {
+  /** @minimum 0 */
+  count: number;
+  stage: MetricFunnelStageName;
+}
+
 export interface MetricRate {
   /** @minimum 0 */
   denominator: number;
@@ -740,6 +757,10 @@ export interface MetricTimeseriesPoint {
 export interface MetricsBreakdownResponse {
   dimension: MetricsBreakdownDimension;
   rows: MetricBreakdownRow[];
+}
+
+export interface MetricsFunnelResponse {
+  stages: MetricFunnelStage[];
 }
 
 export interface MetricsRatesResponse {
@@ -932,6 +953,18 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
 
 export type GetMetricsBreakdownMetricsBreakdownGetParams = {
   dimension: MetricsBreakdownDimension;
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetMetricsFunnelMetricsFunnelGetParams = {
   status?: ApplicationStatus | null;
   source?: ApplicationSource | null;
   sponsorship?: SponsorshipStatus | null;
@@ -2288,6 +2321,72 @@ export const getMetricsBreakdownMetricsBreakdownGet = async (
     status: res.status,
     headers: res.headers,
   } as getMetricsBreakdownMetricsBreakdownGetResponse;
+};
+
+export type getMetricsFunnelMetricsFunnelGetResponse200 = {
+  data: MetricsFunnelResponse;
+  status: 200;
+};
+
+export type getMetricsFunnelMetricsFunnelGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type getMetricsFunnelMetricsFunnelGetResponseSuccess =
+  getMetricsFunnelMetricsFunnelGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsFunnelMetricsFunnelGetResponseError =
+  getMetricsFunnelMetricsFunnelGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getMetricsFunnelMetricsFunnelGetResponse =
+  | getMetricsFunnelMetricsFunnelGetResponseSuccess
+  | getMetricsFunnelMetricsFunnelGetResponseError;
+
+export const getGetMetricsFunnelMetricsFunnelGetUrl = (
+  params?: GetMetricsFunnelMetricsFunnelGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/funnel?${stringifiedParams}`
+    : `/metrics/funnel`;
+};
+
+/**
+ * Returns deterministic Q-16 funnel counts for applied, screen, interview, final, and offer stages from local applications and application_events data. The final stage is explicitly zero until final-round evidence is represented in the data model.
+ * @summary Get Metrics Funnel
+ */
+export const getMetricsFunnelMetricsFunnelGet = async (
+  params?: GetMetricsFunnelMetricsFunnelGetParams,
+  options?: RequestInit,
+): Promise<getMetricsFunnelMetricsFunnelGetResponse> => {
+  const res = await fetch(getGetMetricsFunnelMetricsFunnelGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsFunnelMetricsFunnelGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsFunnelMetricsFunnelGetResponse;
 };
 
 export type getMetricsRatesMetricsRatesGetResponse200 = {

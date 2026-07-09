@@ -49,9 +49,9 @@ def test_metrics_repository_matches_basic_synthetic_fixture() -> None:
     assert rates["interview_to_offer"].rate is None
     assert funnel == {
         "applied": 1,
-        "response": 1,
-        "assessment": 0,
+        "screen": 1,
         "interview": 0,
+        "final": 0,
         "offer": 0,
     }
     assert [(point.period_start, point.application_count) for point in timeseries] == [
@@ -104,9 +104,9 @@ def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> N
     assert rates["interview_to_offer"].rate == 1.0
     assert funnel == {
         "applied": 5,
-        "response": 3,
-        "assessment": 1,
+        "screen": 3,
         "interview": 1,
+        "final": 0,
         "offer": 1,
     }
 
@@ -138,8 +138,9 @@ def test_funnel_metrics_count_offers_only_after_interviews(tmp_path: Path) -> No
         }
 
     assert funnel["applied"] == 2
-    assert funnel["response"] == 2
+    assert funnel["screen"] == 2
     assert funnel["interview"] == 1
+    assert funnel["final"] == 0
     assert funnel["offer"] == 0
 
 
