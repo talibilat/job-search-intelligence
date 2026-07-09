@@ -50,6 +50,11 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
     }
     assert payload["strongest_response_correlate"] == payload["strongest_response_segments"][0]
     assert payload["wasted_effort_segments"] == payload["weakest_response_segments"]
+    assert payload["best_roi_source"] == next(
+        segment
+        for segment in payload["segments"]
+        if segment["dimension"] == "source" and segment["value"] == "linkedin"
+    )
     assert payload["successful_application_segments"] == [
         {
             "dimension": "source",

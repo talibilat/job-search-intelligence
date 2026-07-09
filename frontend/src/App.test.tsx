@@ -155,6 +155,7 @@ function metricsDiagnosticsResponse(
   overrides: Partial<MetricsDiagnosticsResponse> = {},
 ): MockObjectResponseBody {
   const response: MetricsDiagnosticsResponse = {
+    best_roi_source: null,
     baseline_response_count: 0,
     baseline_response_rate: null,
     baseline_success_count: 0,
