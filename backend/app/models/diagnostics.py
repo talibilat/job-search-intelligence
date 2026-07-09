@@ -36,5 +36,6 @@ class MetricsDiagnosticsResponse(BaseModel):
     strongest_response_correlate: DiagnosticSegmentComparison | None = None
     strongest_response_segments: list[DiagnosticSegmentComparison]
     weakest_response_segments: list[DiagnosticSegmentComparison]
+    wasted_effort_segments: list[DiagnosticSegmentComparison]
     successful_application_segments: list[DiagnosticSegmentComparison]
     negative_outcome_segments: list[DiagnosticSegmentComparison]

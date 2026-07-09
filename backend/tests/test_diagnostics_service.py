@@ -69,6 +69,9 @@ def test_diagnostics_service_compares_segments_against_baseline(
     assert [segment.model_dump() for segment in diagnostics.weakest_response_segments] == [
         diagnostics.segments[1].model_dump(),
     ]
+    assert [segment.model_dump() for segment in diagnostics.wasted_effort_segments] == [
+        diagnostics.segments[1].model_dump(),
+    ]
 
 
 def test_diagnostics_service_returns_successful_application_traits(
@@ -187,6 +190,7 @@ def test_diagnostics_service_handles_empty_application_set(tmp_path: Path) -> No
     assert diagnostics.strongest_response_segments == []
     assert diagnostics.strongest_response_correlate is None
     assert diagnostics.weakest_response_segments == []
+    assert diagnostics.wasted_effort_segments == []
 
 
 def migrated_database(tmp_path: Path) -> Path:

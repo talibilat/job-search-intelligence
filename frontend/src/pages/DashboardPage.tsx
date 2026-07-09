@@ -1197,6 +1197,7 @@ export function DashboardPage() {
   const successfulDiagnostic = diagnostics?.successful_application_segments[0];
   const negativeDiagnostic = diagnostics?.negative_outcome_segments[0];
   const strongestResponseCorrelate = diagnostics?.strongest_response_correlate;
+  const wastedEffortSegment = diagnostics?.wasted_effort_segments[0];
 
   return (
     <main
@@ -2348,6 +2349,51 @@ export function DashboardPage() {
                     strongestResponseCorrelate,
                   )} is the strongest positive correlate`
                 : "No segment is above the filtered response baseline"}
+            </p>
+          </article>
+
+          <article>
+            <h3>Q-35 wasted-effort segments</h3>
+            <ol className="dashboard-breakdown-ranks">
+              {diagnostics?.wasted_effort_segments.length ? (
+                diagnostics.wasted_effort_segments.map((segment) => (
+                  <li key={`wasted-${segment.dimension}-${segment.value}`}>
+                    <div>
+                      <span className="dashboard-breakdown-rank__label">
+                        {diagnosticSegmentTitle(segment)}
+                      </span>
+                      <span>{formatResponseLift(segment.response_rate_lift)}</span>
+                    </div>
+                    <p>{diagnosticSegmentEvidence(segment)}</p>
+                  </li>
+                ))
+              ) : (
+                <li>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {diagnosticsError
+                        ? "Unavailable"
+                        : diagnosticsLoadState === "loading"
+                          ? "Loading"
+                          : "No wasted effort"}
+                    </span>
+                    <span>
+                      {diagnosticsError
+                        ? "Diagnostic request failed"
+                        : diagnosticsLoadState === "loading"
+                        ? "Fetching diagnostics"
+                        : "No below-baseline segments"}
+                    </span>
+                  </div>
+                </li>
+              )}
+            </ol>
+            <p className="dashboard-card__meta">
+              {wastedEffortSegment
+                ? `${diagnosticSegmentTitle(wastedEffortSegment)} is below baseline`
+                : diagnosticsLoadState === "loading"
+                ? "Loading wasted-effort comparison"
+                : "No segment is currently below the filtered response baseline"}
             </p>
           </article>
         </div>

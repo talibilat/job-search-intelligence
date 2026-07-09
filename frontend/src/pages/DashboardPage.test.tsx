@@ -517,6 +517,26 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
               },
             ],
             total_applications: 5,
+            wasted_effort_segments: [
+              {
+                application_count: 3,
+                dimension: "source",
+                interview_count: 1,
+                interview_rate: 1 / 3,
+                offer_count: 0,
+                offer_rate: 0,
+                response_count: 1,
+                response_rate: 1 / 3,
+                response_rate_lift: (1 / 3) - 0.6,
+                success_count: 0,
+                success_rate: 0,
+                success_rate_lift: -0.4,
+                negative_count: 2,
+                negative_rate: 2 / 3,
+                negative_rate_lift: (2 / 3) - 0.4,
+                value: "linkedin",
+              },
+            ],
             weakest_response_segments: [
               {
                 application_count: 3,
@@ -562,6 +582,7 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             strongest_response_segments: [],
             successful_application_segments: [],
             total_applications: 1,
+            wasted_effort_segments: [],
             weakest_response_segments: [],
           }),
           {
@@ -816,11 +837,16 @@ describe("DashboardPage", () => {
     expect(within(diagnostics).getByText("Q-34 strongest response correlate")).toBeTruthy();
     expect(within(diagnostics).getByText("Referral (Source) is the strongest positive correlate"))
       .toBeTruthy();
+    expect(within(diagnostics).getByText("Q-35 wasted-effort segments")).toBeTruthy();
+    expect(within(diagnostics).getByText("Linkedin (Source) is below baseline"))
+      .toBeTruthy();
     expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
     expect(within(diagnostics).getAllByText("Linkedin (Source)").length).toBeGreaterThan(
       0,
     );
-    expect(within(diagnostics).getByText("-26.7 pp vs baseline")).toBeTruthy();
+    expect(
+      within(diagnostics).getAllByText("-26.7 pp vs baseline").length,
+    ).toBeGreaterThan(0);
     expect(within(diagnostics).getByText("Correlation summary")).toBeTruthy();
     expect(within(diagnostics).getByText("How to read these diagnostics")).toBeTruthy();
     expect(

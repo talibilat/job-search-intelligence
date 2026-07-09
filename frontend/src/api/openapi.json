@@ -2508,6 +2508,13 @@
             "title": "Total Applications",
             "type": "integer"
           },
+          "wasted_effort_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Wasted Effort Segments",
+            "type": "array"
+          },
           "weakest_response_segments": {
             "items": {
               "$ref": "#/components/schemas/DiagnosticSegmentComparison"
@@ -2524,6 +2531,7 @@
           "segments",
           "strongest_response_segments",
           "weakest_response_segments",
+          "wasted_effort_segments",
           "successful_application_segments",
           "negative_outcome_segments"
         ],

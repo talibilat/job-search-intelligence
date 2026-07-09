@@ -840,6 +840,7 @@ export interface MetricsDiagnosticsResponse {
   successful_application_segments: DiagnosticSegmentComparison[];
   /** @minimum 0 */
   total_applications: number;
+  wasted_effort_segments: DiagnosticSegmentComparison[];
   weakest_response_segments: DiagnosticSegmentComparison[];
 }
 

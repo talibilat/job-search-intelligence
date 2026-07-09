@@ -71,6 +71,10 @@ class DiagnosticsService:
             segments,
             limit=self._highlight_limit,
         )
+        weakest_response_segments = _weakest_segments(
+            segments,
+            limit=self._highlight_limit,
+        )
 
         return MetricsDiagnosticsResponse(
             total_applications=response_silence.total_applications,
@@ -85,10 +89,8 @@ class DiagnosticsService:
             if strongest_response_segments
             else None,
             strongest_response_segments=strongest_response_segments,
-            weakest_response_segments=_weakest_segments(
-                segments,
-                limit=self._highlight_limit,
-            ),
+            weakest_response_segments=weakest_response_segments,
+            wasted_effort_segments=weakest_response_segments,
             successful_application_segments=_successful_application_segments(
                 segments,
                 limit=self._highlight_limit,
