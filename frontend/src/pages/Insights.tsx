@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
 
 import {
-  InsightType,
   listInsightsInsightsGet,
   regenerateInsightInsightsRegeneratePost,
   type InsightRecord,
 } from "../api";
 import { Alert, Button } from "../components/ui";
+import {
+  INSIGHT_CARDS,
+  renderTextWithCitationLinks,
+  type InsightDisplayConfig,
+} from "./insightDisplay";
 
 type LoadState = "loading" | "ready" | "error";
+type RegeneratingType = InsightRecord["type"] | null;
 
 function apiErrorMessage(data: unknown, fallback: string) {
   if (
@@ -26,19 +31,29 @@ function apiErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
-function insightTitle(type: InsightRecord["type"]) {
-  if (type === "recurring_feedback") {
-    return "Recurring recruiter feedback";
-  }
+function formatUtcDate(value: string) {
+  return new Date(value).toLocaleString("en-US", {
+    timeZone: "UTC",
+    timeZoneName: "short",
+  });
+}
 
-  return type.replaceAll("_", " ");
+function replaceInsight(
+  currentInsights: InsightRecord[],
+  nextInsight: InsightRecord,
+) {
+  return [
+    nextInsight,
+    ...currentInsights.filter((insight) => insight.type !== nextInsight.type),
+  ];
 }
 
 export function Insights() {
   const [insights, setInsights] = useState<InsightRecord[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regeneratingType, setRegeneratingType] =
+    useState<RegeneratingType>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -82,47 +97,43 @@ export function Insights() {
     };
   }, []);
 
-  async function handleRegenerateRecurringFeedback() {
-    setIsRegenerating(true);
+  async function handleRegenerate(config: InsightDisplayConfig) {
+    setRegeneratingType(config.type);
     setErrorMessage(null);
 
     try {
       const response = await regenerateInsightInsightsRegeneratePost({
-        type: InsightType.recurring_feedback,
+        type: config.type,
       });
       if (response.status !== 200) {
         setErrorMessage(
           apiErrorMessage(
             response.data,
-            "Recurring feedback could not be regenerated.",
+            `${config.title} could not be regenerated.`,
           ),
         );
         return;
       }
 
-      setInsights((currentInsights) => [
-        response.data.insight,
-        ...currentInsights.filter(
-          (insight) => insight.type !== response.data.insight.type,
-        ),
-      ]);
+      setInsights((currentInsights) =>
+        replaceInsight(currentInsights, response.data.insight),
+      );
       setLoadState("ready");
     } catch {
       setErrorMessage(
-        "Recurring feedback could not be regenerated. Check that the local backend is running.",
+        `${config.title} could not be regenerated. Check that the local backend is running.`,
       );
     } finally {
-      setIsRegenerating(false);
+      setRegeneratingType(null);
     }
   }
 
-  const recurringFeedback = insights.find(
-    (insight) => insight.type === "recurring_feedback",
-  );
+  const cachedCount = insights.length;
+  const staleCount = insights.filter((insight) => insight.is_stale).length;
 
   return (
-    <main className="app-shell">
-      <section className="hero" aria-labelledby="page-title">
+    <main className="app-shell insights-page">
+      <section className="hero insights-hero" aria-labelledby="page-title">
         <p className="eyebrow">Phase 4 insights</p>
         <h1 id="page-title">Insights</h1>
         <p className="hero-copy">
@@ -130,49 +141,71 @@ export function Insights() {
           grounded recommendations without making the LLM authoritative for
           counts.
         </p>
+        <div className="insights-summary" aria-label="Insights cache summary">
+          <span>{INSIGHT_CARDS.length} Tier 5 insights</span>
+          <span>{cachedCount} cached</span>
+          <span>{staleCount} stale</span>
+        </div>
       </section>
 
-      <section className="status-card insights-panel" aria-labelledby="insights-status-title">
-        <div>
-          <p className="eyebrow">Q-41</p>
-          <h2 id="insights-status-title">Recurring recruiter feedback</h2>
-          <p>
-            Answers what recruiter or interviewer feedback consistently says to
-            improve, using cited feedback events from the application timeline.
-          </p>
-          <div className="sync-panel__actions">
-            <Button
-              disabled={isRegenerating}
-              onClick={() => void handleRegenerateRecurringFeedback()}
-              type="button"
-            >
-              {isRegenerating ? "Regenerating" : "Regenerate Q-41"}
-            </Button>
-          </div>
-        </div>
-        <div className="insights-panel__body">
-          {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
-          {loadState === "loading" ? (
-            <p className="insights-panel__empty">Loading cached insights.</p>
-          ) : recurringFeedback ? (
-            <article className="insights-panel__insight">
-              <p className="eyebrow">{insightTitle(recurringFeedback.type)}</p>
-              <p>{recurringFeedback.content}</p>
-              <p className="insights-panel__meta">
-                Model {recurringFeedback.model} · Generated {" "}
-                {new Date(recurringFeedback.generated_at).toLocaleString("en-US", {
-                  timeZone: "UTC",
-                  timeZoneName: "short",
-                })}
-              </p>
-            </article>
-          ) : (
-            <p className="insights-panel__empty">
-              No cached recurring feedback insight exists yet. Regenerate Q-41
-              after feedback events are available.
-            </p>
-          )}
-        </div>
+      <section className="insights-board" aria-label="Cached narrative insights">
+        {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
+        {loadState === "loading" ? (
+          <p className="insights-panel__empty">Loading cached insights.</p>
+        ) : null}
+        {loadState !== "loading"
+          ? INSIGHT_CARDS.map((config) => {
+              const insight = insights.find(
+                (item) => item.type === config.type,
+              );
+              const isRegenerating = regeneratingType === config.type;
+
+              return (
+                <article className="insight-card" key={config.type}>
+                  <div className="insight-card__header">
+                    <div>
+                      <p className="eyebrow">{config.question}</p>
+                      <h2>{config.title}</h2>
+                    </div>
+                    {insight?.is_stale ? (
+                      <span className="insight-card__badge">Stale cache</span>
+                    ) : null}
+                  </div>
+                  <p className="insight-card__description">
+                    {config.description}
+                  </p>
+
+                  {insight ? (
+                    <div className="insight-card__content">
+                      {insight.content.split("\n").map((line) => (
+                        <p key={line}>{renderTextWithCitationLinks(line)}</p>
+                      ))}
+                      <p className="insights-panel__meta">
+                        Model {insight.model} · Generated {" "}
+                        {formatUtcDate(insight.generated_at)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="insights-panel__empty">
+                      {config.emptyMessage}
+                    </p>
+                  )}
+
+                  <div className="insight-card__actions">
+                    <Button
+                      disabled={regeneratingType !== null}
+                      onClick={() => void handleRegenerate(config)}
+                      type="button"
+                    >
+                      {isRegenerating
+                        ? `Regenerating ${config.title}`
+                        : `Regenerate ${config.title}`}
+                    </Button>
+                  </div>
+                </article>
+              );
+            })
+          : null}
       </section>
     </main>
   );

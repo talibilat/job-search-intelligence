@@ -322,8 +322,11 @@ describe("App", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Feedback consistently says to improve system design examples. [application:app-1|event:event-1|email:email-1]",
+        "Feedback consistently says to improve system design examples.",
       ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("application:app-1|event:event-1|email:email-1"),
     ).toBeTruthy();
   });
 
@@ -1338,7 +1341,7 @@ describe("App", () => {
     expect(screen.getAllByText("Completed features").length).toBeGreaterThan(0);
     expect(screen.getByText("First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Dashboard route shell")).toBeTruthy();
-    expect(screen.getByText("Insights recurring-feedback view")).toBeTruthy();
+    expect(screen.getByText("Insights cached narrative view")).toBeTruthy();
     expect(screen.getByText("Chat route shell")).toBeTruthy();
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();
