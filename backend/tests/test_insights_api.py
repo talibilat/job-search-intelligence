@@ -77,6 +77,18 @@ def test_get_insights_returns_latest_cached_records_in_wrapper(tmp_path: Path) -
     assert records[1]["content"] == (
         f"Feedback repeats system design examples. [{FEEDBACK_CITATION_ID}]"
     )
+    estimates = response.json()["regeneration_cost_estimates"]
+    assert [estimate["type"] for estimate in estimates] == [
+        "why_rejected",
+        "recurring_feedback",
+        "skill_gaps",
+        "strongest_weakest_signals",
+        "role_fit",
+        "weekly_actions",
+        "story",
+    ]
+    assert estimates[0]["cost"]["estimated_cost_usd"] == 0.0
+    assert estimates[0]["cost"]["actual_cost_usd"] is None
 
 
 def test_post_insights_regenerate_answers_q41(tmp_path: Path) -> None:
@@ -111,6 +123,8 @@ def test_post_insights_regenerate_answers_q41(tmp_path: Path) -> None:
         FEEDBACK_CITATION_ID,
         SECOND_FEEDBACK_CITATION_ID,
     ]
+    assert body["cost"]["estimated_cost_usd"] == 0.0
+    assert body["cost"]["actual_cost_usd"] == 0.0
     assert len(provider.requests) == 1
 
 

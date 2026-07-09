@@ -1926,6 +1926,13 @@
             },
             "title": "Insights",
             "type": "array"
+          },
+          "regeneration_cost_estimates": {
+            "items": {
+              "$ref": "#/components/schemas/InsightRegenerationEstimate"
+            },
+            "title": "Regeneration Cost Estimates",
+            "type": "array"
           }
         },
         "required": [
@@ -2124,6 +2131,22 @@
           "token_estimate_method"
         ],
         "title": "InsightRegenerationCost",
+        "type": "object"
+      },
+      "InsightRegenerationEstimate": {
+        "properties": {
+          "cost": {
+            "$ref": "#/components/schemas/InsightRegenerationCost"
+          },
+          "type": {
+            "$ref": "#/components/schemas/InsightType"
+          }
+        },
+        "required": [
+          "type",
+          "cost"
+        ],
+        "title": "InsightRegenerationEstimate",
         "type": "object"
       },
       "InsightType": {

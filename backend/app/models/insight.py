@@ -35,10 +35,6 @@ class InsightRecord(BaseModel):
     generated_at: datetime
 
 
-class InsightListResponse(BaseModel):
-    insights: list[InsightRecord]
-
-
 class InsightRegenerateRequest(BaseModel):
     type: InsightType
     max_evidence_items: int = Field(default=100, ge=1)
@@ -56,6 +52,18 @@ class InsightRegenerationCost(BaseModel):
     currency: str = "USD"
     cost_estimate_available: bool
     token_estimate_method: str = Field(min_length=1)
+
+
+class InsightRegenerationEstimate(BaseModel):
+    type: InsightType
+    cost: InsightRegenerationCost
+
+
+class InsightListResponse(BaseModel):
+    insights: list[InsightRecord]
+    regeneration_cost_estimates: list[InsightRegenerationEstimate] = Field(
+        default_factory=list,
+    )
 
 
 class InsightRegenerateResponse(BaseModel):

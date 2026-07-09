@@ -18,6 +18,7 @@ from app.models import (
     InsightInputFact,
     InsightRecord,
     InsightRegenerationCost,
+    InsightRegenerationEstimate,
     InsightRoleOutcomeSummary,
 )
 from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
@@ -33,6 +34,7 @@ from app.providers.llm import (
     LLMProviderUnavailableError,
     LLMResponseFormat,
 )
+from app.services.llm_costs import calculate_llm_cost_usd
 
 type Clock = Callable[[], datetime]
 
@@ -70,8 +72,16 @@ SUPPORTED_INSIGHT_TYPES: tuple[InsightType, ...] = (
 class InsightReadService:
     """Read cached narrative insights for the API boundary."""
 
-    def __init__(self, insight_repository: InsightRepository) -> None:
+    def __init__(
+        self,
+        *,
+        settings: AppSettings,
+        insight_repository: InsightRepository,
+        input_builder: InsightInputBuilder | None = None,
+    ) -> None:
+        self._settings = settings
         self._insight_repository = insight_repository
+        self._input_builder = input_builder or InsightInputBuilder(insight_repository)
 
     def list_latest_insights(self) -> list[InsightRecord]:
         insights: list[InsightRecord] = []
@@ -83,6 +93,21 @@ class InsightReadService:
             if insight is not None:
                 insights.append(insight)
         return insights
+
+    def list_regeneration_cost_estimates(self) -> list[InsightRegenerationEstimate]:
+        estimates: list[InsightRegenerationEstimate] = []
+        for insight_type in SUPPORTED_INSIGHT_TYPES:
+            insight_input = self._input_builder.build(insight_type)
+            estimates.append(
+                InsightRegenerationEstimate(
+                    type=insight_type,
+                    cost=_estimate_regeneration_cost_for_input(
+                        settings=self._settings,
+                        insight_input=insight_input,
+                    ),
+                ),
+            )
+        return estimates
 
 
 class InsightGenerationResult(BaseModel):
@@ -246,6 +271,23 @@ def _estimate_regeneration_cost(
     )
 
 
+def _estimate_regeneration_cost_for_input(
+    *,
+    settings: AppSettings,
+    insight_input: InsightInput,
+) -> InsightRegenerationCost:
+    if _insufficient_recurring_feedback_content(insight_input) is not None:
+        return _no_llm_cost("insufficient evidence response does not call an LLM")
+
+    return _estimate_regeneration_cost(
+        settings=settings,
+        request=build_insight_generation_request(
+            insight_input,
+            model=_configured_chat_model(settings),
+        ),
+    )
+
+
 def _with_actual_regeneration_cost(
     *,
     settings: AppSettings,
@@ -253,6 +295,8 @@ def _with_actual_regeneration_cost(
     response: LLMGenerationResponse,
 ) -> InsightRegenerationCost:
     if response.usage is None:
+        if settings.llm_provider is LLMProviderName.OLLAMA:
+            return estimated_cost.model_copy(update={"actual_cost_usd": 0.0})
         return estimated_cost
 
     prompt_tokens = response.usage.prompt_tokens
@@ -296,16 +340,13 @@ def _insight_cost_usd(
     prompt_tokens: int,
     completion_tokens: int,
 ) -> tuple[float | None, bool]:
-    if settings.llm_provider is LLMProviderName.OLLAMA:
-        return 0.0, True
-
-    input_rate = settings.insight_input_cost_per_1k_units_usd
-    output_rate = settings.insight_output_cost_per_1k_units_usd
-    if input_rate == 0 or output_rate == 0:
-        return None, False
-
-    cost = (prompt_tokens / 1000 * input_rate) + (completion_tokens / 1000 * output_rate)
-    return round(cost, 6), True
+    return calculate_llm_cost_usd(
+        is_local_provider=settings.llm_provider is LLMProviderName.OLLAMA,
+        input_rate_per_1k_units_usd=settings.insight_input_cost_per_1k_units_usd,
+        output_rate_per_1k_units_usd=settings.insight_output_cost_per_1k_units_usd,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
 
 
 class InsightInputBuilder:

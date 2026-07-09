@@ -50,6 +50,16 @@ function replaceInsight(
   ];
 }
 
+function costEstimatesByType(
+  estimates: { cost: InsightRegenerationCost; type: InsightRecord["type"] }[],
+) {
+  const costs: CostByInsightType = {};
+  for (const estimate of estimates) {
+    costs[estimate.type] = estimate.cost;
+  }
+  return costs;
+}
+
 function formatCost(value: number | null | undefined, currency: string) {
   if (value === null || value === undefined) {
     return "unavailable";
@@ -72,11 +82,16 @@ function formatTokenCount(value: number | null | undefined) {
 
 function InsightCostSummary({ cost }: { cost: InsightRegenerationCost }) {
   const currency = cost.currency ?? "USD";
+  const hasActualCost = cost.actual_cost_usd !== null && cost.actual_cost_usd !== undefined;
   return (
     <div className="insight-card__cost" aria-label="Regeneration cost">
       <span>Estimated cost {formatCost(cost.estimated_cost_usd, currency)}</span>
-      <span>Actual cost {formatCost(cost.actual_cost_usd, currency)}</span>
-      <span>{formatTokenCount(cost.actual_total_tokens)}</span>
+      {hasActualCost ? (
+        <>
+          <span>Actual cost {formatCost(cost.actual_cost_usd, currency)}</span>
+          <span>{formatTokenCount(cost.actual_total_tokens)}</span>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -112,6 +127,9 @@ export function Insights() {
 
         if (!ignore) {
           setInsights(response.data.insights);
+          setCostByInsightType(
+            costEstimatesByType(response.data.regeneration_cost_estimates ?? []),
+          );
           setErrorMessage(null);
           setLoadState("ready");
         }

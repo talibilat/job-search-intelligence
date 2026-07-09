@@ -49,6 +49,25 @@ function mockFetch() {
                 generated_at: "2026-07-07T13:00:00+00:00",
               },
             ],
+            regeneration_cost_estimates: [
+              {
+                type: "why_rejected",
+                cost: {
+                  estimated_prompt_tokens: 315,
+                  estimated_completion_tokens: 1200,
+                  estimated_total_tokens: 1515,
+                  estimated_cost_usd: 2.715,
+                  actual_prompt_tokens: null,
+                  actual_completion_tokens: null,
+                  actual_total_tokens: null,
+                  actual_cost_usd: null,
+                  currency: "USD",
+                  cost_estimate_available: true,
+                  token_estimate_method:
+                    "ceil(insight prompt characters / 10) + configured max output tokens",
+                },
+              },
+            ],
           }),
           { headers: { "Content-Type": "application/json" }, status: 200 },
         ),
@@ -142,6 +161,8 @@ describe("Insights", () => {
         "No cached recurring recruiter feedback insight yet. Regenerate it after the source timeline has enough evidence.",
       ),
     ).toBeTruthy();
+    expect(screen.getByText("Estimated cost $2.715")).toBeTruthy();
+    expect(screen.queryByText("Actual cost $0.12")).toBeNull();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Regenerate Rejection themes" }),
