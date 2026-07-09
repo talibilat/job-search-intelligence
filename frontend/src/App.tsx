@@ -1,4 +1,4 @@
-import { ChartPanel } from "./components/charts";
+import { PipelineActivityPanel } from "./components/PipelineActivityPanel";
 import { SyncStatusPanel } from "./components/SyncStatusPanel";
 import { ApplicationDetailPage } from "./pages/ApplicationDetailPage";
 import Chat from "./pages/Chat";
@@ -7,14 +7,8 @@ import { FeatureStatusDashboard } from "./pages/FeatureStatusDashboard";
 import { Insights } from "./pages/Insights";
 import { SetupPage } from "./pages/SetupPage";
 
-const phaseItems = [
-  "Connect Gmail through a local-only setup flow",
-  "Reconstruct applications from job-search email history",
-  "Answer factual dashboard questions from deterministic data",
-] as const;
-
 const navigationItems = [
-  { href: "/", label: "Overview" },
+  { href: "/", label: "Job Search" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },
   { href: "/features", label: "Feature Status" },
@@ -22,43 +16,22 @@ const navigationItems = [
   { href: "/chat", label: "Chat" },
 ] as const;
 
-function OverviewPage() {
+function JobSearchPage() {
   return (
     <main className="app-shell">
       <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Phase 0 frontend shell</p>
-        <h1 id="page-title">
-          JobTracker turns your inbox into job-search intelligence.
-        </h1>
+        <p className="eyebrow">Local-first job-search intelligence</p>
+        <h1 id="page-title">Your job search, from inbox to insight.</h1>
         <p className="hero-copy">
-          This local-first app will connect to Gmail, reconstruct applications,
-          and keep every factual answer grounded in the application timeline.
+          Connect Gmail, sync your mail history, classify job-search email, and
+          watch the deterministic dashboard fill in. Everything on this page
+          runs locally.
         </p>
       </section>
 
-      <section className="status-card" aria-labelledby="status-title">
-        <div>
-          <p className="eyebrow">Current milestone</p>
-          <h2 id="status-title">Frontend foundation ready for Phase 0 pages</h2>
-        </div>
-        <ul>
-          {phaseItems.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </section>
+      <PipelineActivityPanel />
 
       <SyncStatusPanel />
-
-      <ChartPanel
-        description="A small accessible wrapper layer is ready for future deterministic dashboard charts, while Phase 0 avoids real dashboard metrics."
-        emptyState={{
-          title: "Dashboard data pending",
-          description:
-            "Future deterministic dashboard metrics will render here after the metrics API exists.",
-        }}
-        title="Chart foundation"
-      />
     </main>
   );
 }
@@ -102,7 +75,7 @@ function App() {
       ) : currentPath === "/chat" ? (
         <Chat />
       ) : (
-        <OverviewPage />
+        <JobSearchPage />
       )}
     </>
   );

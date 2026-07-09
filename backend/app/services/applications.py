@@ -59,6 +59,7 @@ class ApplicationDetailService:
             raise ApplicationNotFoundError(application_id)
         return application
 
+
 class ApplicationEventsService:
     def __init__(
         self,

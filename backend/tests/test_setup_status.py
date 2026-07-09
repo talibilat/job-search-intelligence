@@ -80,9 +80,16 @@ def test_connection_repository_reports_no_default_connection_before_migrations(
 
 def test_setup_status_endpoint_returns_phase_zero_shell_status(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     clear_jobtracker_env(monkeypatch)
-    client = TestClient(create_test_app(AppSettings(_env_file=None)))
+    # Point at an empty temp database so a developer's real local
+    # .jobtracker data cannot leak a Gmail connection into this assertion.
+    settings = AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'jobtracker.sqlite3'}",
+    )
+    client = TestClient(create_test_app(settings))
 
     response = client.get("/setup/status")
 

@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 
 import {
-  syncRecentEmailsSyncRecentEmailsGet,
   syncNowSyncPost,
   syncStatusSyncStatusGet,
   type EmailSyncOptions,
   type EmailSyncStatus,
-  type RawEmailPreviewRecord,
 } from "../api";
+import { EmailPreviewList } from "./EmailPreviewList";
 import { Alert, Button, FormField, TextInput } from "./ui";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const syncStatusPollIntervalMs = 5000;
-const recentEmailPreviewLimit = 50;
 type SyncLimitField =
   | "beforeDate"
   | "maxAgeDays"
@@ -85,6 +83,17 @@ function formatCount(value: number | undefined, label: string) {
   return `${numberFormatter.format(value ?? 0)} ${label}`;
 }
 
+function formatBodyFetchIssueCount(value: number | undefined) {
+  if (value == null) {
+    return "Pending body fetch issues";
+  }
+
+  const formattedValue = numberFormatter.format(value);
+  return value === 1
+    ? `${formattedValue} body fetch issue`
+    : `${formattedValue} body fetch issues`;
+}
+
 function formatSyncMode(status: EmailSyncStatus) {
   if (status.mode === "full_backfill") {
     return "Full backfill";
@@ -115,23 +124,6 @@ function providerLabel(status: EmailSyncStatus) {
   }
 
   return "Provider pending";
-}
-
-function formatEmailTimestamp(value: string | null, label: string) {
-  if (!value) {
-    return `${label} pending`;
-  }
-
-  return `${label} ${dateFormatter.format(new Date(value))}`;
-}
-
-function formatEmailSubject(email: RawEmailPreviewRecord) {
-  const subject = email.subject?.trim();
-  return subject && subject.length > 0 ? subject : "(No subject)";
-}
-
-function emailRetentionLabel(email: RawEmailPreviewRecord) {
-  return email.has_retained_body ? "retained body" : "metadata only";
 }
 
 function SyncMetric({ label, value }: { label: string; value: string }) {
@@ -249,6 +241,7 @@ function optimisticRunningStatus(
     provider: previousStatus?.provider ?? null,
     raw_email_count: previousStatus?.raw_email_count ?? 0,
     recovered_from_expired_cursor: false,
+    retained_body_failure_count: 0,
     started_at: new Date().toISOString(),
     state: "running",
     target_message_count: options.max_messages ?? null,
@@ -266,43 +259,10 @@ export function SyncStatusPanel() {
   const [maxAgeDays, setMaxAgeDays] = useState("");
   const [maxPages, setMaxPages] = useState("");
   const [syncLimitErrors, setSyncLimitErrors] = useState<SyncLimitErrors>({});
-  const [recentEmails, setRecentEmails] = useState<RawEmailPreviewRecord[]>([]);
-  const [recentEmailsError, setRecentEmailsError] = useState<string | null>(
-    null,
-  );
+  const [emailRefreshToken, setEmailRefreshToken] = useState(0);
 
   useEffect(() => {
     let ignore = false;
-
-    async function loadRecentEmails() {
-      try {
-        const response = await syncRecentEmailsSyncRecentEmailsGet({
-          limit: recentEmailPreviewLimit,
-        });
-        if (response.status !== 200) {
-          if (!ignore) {
-            setRecentEmailsError(
-              apiErrorMessage(
-                response.data,
-                "Recent synced email metadata is unavailable.",
-              ),
-            );
-          }
-          return;
-        }
-
-        if (!ignore) {
-          setRecentEmails(response.data);
-          setRecentEmailsError(null);
-        }
-      } catch {
-        if (!ignore) {
-          setRecentEmailsError(
-            "Recent synced email metadata is unavailable.",
-          );
-        }
-      }
-    }
 
     async function loadStatus() {
       setIsLoadingStatus(true);
@@ -323,8 +283,8 @@ export function SyncStatusPanel() {
         if (!ignore) {
           setStatus(response.data);
           setErrorMessage(null);
+          setEmailRefreshToken((token) => token + 1);
         }
-        void loadRecentEmails();
       } catch {
         if (!ignore) {
           setErrorMessage(
@@ -352,24 +312,6 @@ export function SyncStatusPanel() {
 
     let ignore = false;
 
-    async function loadRecentEmails() {
-      try {
-        const response = await syncRecentEmailsSyncRecentEmailsGet({
-          limit: recentEmailPreviewLimit,
-        });
-        if (response.status === 200 && !ignore) {
-          setRecentEmails(response.data);
-          setRecentEmailsError(null);
-        }
-      } catch {
-        if (!ignore) {
-          setRecentEmailsError(
-            "Recent synced email metadata is unavailable.",
-          );
-        }
-      }
-    }
-
     async function refreshStatus() {
       try {
         const response = await syncStatusSyncStatusGet();
@@ -388,8 +330,8 @@ export function SyncStatusPanel() {
         if (!ignore) {
           setStatus(response.data);
           setErrorMessage(null);
+          setEmailRefreshToken((token) => token + 1);
         }
-        void loadRecentEmails();
       } catch {
         if (!ignore) {
           setErrorMessage(
@@ -439,17 +381,7 @@ export function SyncStatusPanel() {
       }
 
       setStatus(response.data);
-      try {
-        const recentResponse = await syncRecentEmailsSyncRecentEmailsGet({
-          limit: recentEmailPreviewLimit,
-        });
-        if (recentResponse.status === 200) {
-          setRecentEmails(recentResponse.data);
-          setRecentEmailsError(null);
-        }
-      } catch {
-        setRecentEmailsError("Recent synced email metadata is unavailable.");
-      }
+      setEmailRefreshToken((token) => token + 1);
     } catch {
       setErrorMessage(
         "Sync could not start. Check that the local backend is running.",
@@ -644,6 +576,12 @@ export function SyncStatusPanel() {
                 label="Pages processed"
                 value={formatCount(status?.page_count, "pages")}
               />
+              <SyncMetric
+                label="Retained body fetch issues"
+                value={formatBodyFetchIssueCount(
+                  status?.retained_body_failure_count,
+                )}
+              />
             </div>
 
             <div className="sync-panel__meta-grid">
@@ -663,94 +601,7 @@ export function SyncStatusPanel() {
               </Alert>
             ) : null}
 
-            <section
-              aria-labelledby="sync-recent-emails-title"
-              className="sync-panel__recent"
-            >
-              <div className="sync-panel__recent-header">
-                <div>
-                  <p className="eyebrow">Stored email metadata</p>
-                  <h3 id="sync-recent-emails-title">Recently synced emails</h3>
-                </div>
-                <p>
-                  Public-safe metadata from raw_emails. Body text and snippets
-                  stay hidden.
-                </p>
-              </div>
-
-              {recentEmails.length > 0 ? (
-                <div
-                  aria-label="Recently synced email metadata"
-                  className="sync-panel__recent-scroll"
-                  role="region"
-                >
-                  <ul className="sync-panel__recent-list">
-                    {recentEmails.map((email) => (
-                      <li className="sync-panel__recent-email" key={email.id}>
-                        <div className="sync-panel__recent-email-header">
-                          <h4>{formatEmailSubject(email)}</h4>
-                          <div
-                            aria-label="Email processing labels"
-                            className="sync-panel__recent-badges"
-                          >
-                            {email.filter_outcome ? (
-                              <span>{email.filter_outcome}</span>
-                            ) : null}
-                            <span>{emailRetentionLabel(email)}</span>
-                          </div>
-                        </div>
-                        <dl className="sync-panel__recent-meta">
-                          <div>
-                            <dt>From</dt>
-                            <dd>{email.from_addr ?? "Unknown sender"}</dd>
-                          </div>
-                          <div>
-                            <dt>To</dt>
-                            <dd>{email.to_addr ?? "Unknown recipient"}</dd>
-                          </div>
-                          <div>
-                            <dt>Sent</dt>
-                            <dd>
-                              {formatEmailTimestamp(email.sent_at, "Sent")}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>Ingested</dt>
-                            <dd>
-                              {formatEmailTimestamp(
-                                email.ingested_at,
-                                "Ingested",
-                              )}
-                            </dd>
-                          </div>
-                        </dl>
-                        <p className="sync-panel__recent-context">
-                          {email.provider} - {email.id}
-                          {email.thread_id
-                            ? ` - thread ${email.thread_id}`
-                            : ""}
-                        </p>
-                        {email.filter_reason ? (
-                          <p className="sync-panel__recent-context">
-                            Filter reason: {email.filter_reason}
-                          </p>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <p className="sync-panel__recent-empty">
-                  No synced email metadata is stored yet.
-                </p>
-              )}
-
-              {recentEmailsError ? (
-                <Alert title="Recent email metadata unavailable" tone="warning">
-                  <p>{recentEmailsError}</p>
-                </Alert>
-              ) : null}
-            </section>
+            <EmailPreviewList refreshToken={emailRefreshToken} />
           </>
         ) : null}
 

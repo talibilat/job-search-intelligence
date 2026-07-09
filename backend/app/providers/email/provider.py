@@ -58,6 +58,7 @@ class EmailBodyFetchFailureReason(StrEnum):
     TOO_LARGE = "too_large"
     UNSUPPORTED_CONTENT = "unsupported_content"
     PERMISSION_DENIED = "permission_denied"
+    INVALID_DATA = "invalid_data"
 
 
 class EmailProviderErrorCode(StrEnum):

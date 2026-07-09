@@ -78,8 +78,7 @@ class GhostInferenceService:
                     event_type="ghost_inferred",
                     event_at=ghosted_at_str,
                     extract_note=(
-                        "No response after configured "
-                        f"{self._threshold_days}-day ghost threshold."
+                        f"No response after configured {self._threshold_days}-day ghost threshold."
                     ),
                 )
                 if outcome != "upserted":

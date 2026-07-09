@@ -62,6 +62,13 @@ class RawEmailRecord(BaseModel):
         }
 
 
+class RawEmailPreviewOrder(StrEnum):
+    """Supported deterministic orderings for the raw-email preview list."""
+
+    SENT_AT = "sent_at"
+    INGESTED_AT = "ingested_at"
+
+
 class RawEmailPreviewRecord(BaseModel):
     """Public-safe raw email metadata preview without body text."""
 
@@ -78,6 +85,8 @@ class RawEmailPreviewRecord(BaseModel):
     ingested_at: datetime
     filter_outcome: str | None = None
     filter_reason: str | None = None
+    classification_category: str | None = None
+    classification_is_job_related: bool | None = None
 
     @field_validator("labels", mode="before")
     @classmethod

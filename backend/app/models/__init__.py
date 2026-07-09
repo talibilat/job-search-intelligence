@@ -46,6 +46,12 @@ from .metrics import (
     MetricTimeseriesPoint,
     ResponseSilenceMetric,
 )
+from .pipeline import (
+    BackfillProgressState,
+    PipelineNextAction,
+    PipelineStageCounts,
+    PipelineStatus,
+)
 from .provider_config import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
@@ -56,6 +62,7 @@ from .provider_config import (
     ProviderSecretRequirementResponse,
     ProviderSelection,
 )
+from .raw_email import RawEmailPreviewOrder, RawEmailPreviewRecord
 from .records import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
@@ -173,8 +180,14 @@ __all__ = [
     "InsightRegenerateRequest",
     "InsightRegenerateResponse",
     "InsightRoleOutcomeSummary",
+    "BackfillProgressState",
     "JobEmailCategory",
+    "PipelineNextAction",
+    "PipelineStageCounts",
+    "PipelineStatus",
     "RawEmailBodyRetentionState",
+    "RawEmailPreviewOrder",
+    "RawEmailPreviewRecord",
     "RawEmailRecord",
     "ResponseSilenceMetric",
     "SetupStatusResponse",

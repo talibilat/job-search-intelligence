@@ -560,9 +560,11 @@ def test_full_backfill_marks_failure_without_advancing_page_progress(
     assert sync_service.current_status().last_error == "Gmail body fetching failed"
 
 
-def test_full_backfill_marks_body_batch_failures_without_advancing_page_progress(
+def test_full_backfill_records_body_batch_failures_and_still_completes(
     tmp_path: Path,
 ) -> None:
+    """Per-message body failures must not pin the backfill to one page forever."""
+
     database_connection = migrated_connection(tmp_path)
     backfill_state_service = BackfillStateService(
         backfill_state_repository=BackfillStateRepository(database_connection),
@@ -595,21 +597,23 @@ def test_full_backfill_marks_body_batch_failures_without_advancing_page_progress
     )
     email_provider_connection = email_connection()
 
-    with pytest.raises(EmailProviderError, match="retained email bodies could not be fetched"):
-        asyncio.run(
-            sync_service.run_full_backfill(
-                connection=email_provider_connection,
-                backfill_state_service=backfill_state_service,
-            )
+    status = asyncio.run(
+        sync_service.run_full_backfill(
+            connection=email_provider_connection,
+            backfill_state_service=backfill_state_service,
         )
+    )
+
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert status.retained_body_failure_count == 1
 
     state = backfill_state_service.get_backfill_state(email_provider_connection.account)
     assert state is not None
-    assert state.status is EmailBackfillStatus.FAILED
+    assert state.status is EmailBackfillStatus.COMPLETED
     assert state.next_page_token is None
-    assert state.processed_page_count == 0
-    assert state.processed_message_count == 0
-    assert state.last_error == "One or more retained email bodies could not be fetched."
+    assert state.processed_page_count == 1
+    assert state.processed_message_count == 1
+    assert state.last_error is None
 
 
 class PaginatedBackfillProvider:

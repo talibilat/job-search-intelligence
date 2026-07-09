@@ -12,6 +12,7 @@ from .event import EventRepository
 from .filter_decision import EmailFilterDecisionRepository
 from .insight import InsightRepository
 from .metrics import MetricsRepository
+from .pipeline_status import PipelineStatusRepository
 from .sync_state import SyncStateRepository
 from .synthetic_fixture import SyntheticFixtureRepository
 
@@ -29,6 +30,7 @@ __all__ = [
     "EventRepository",
     "InsightRepository",
     "MetricsRepository",
+    "PipelineStatusRepository",
     "SqlParameters",
     "SyncStateRepository",
     "SyntheticFixtureRepository",
