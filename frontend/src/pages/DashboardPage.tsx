@@ -17,6 +17,7 @@ import {
   SponsorshipStatus,
   WorkMode,
   getMetricsBreakdownMetricsBreakdownGet,
+  getMetricsDiagnosticsMetricsDiagnosticsGet,
   getMetricsFunnelMetricsFunnelGet,
   getMetricsRatesMetricsRatesGet,
   getMetricsResponseRateTrendMetricsResponseRateTrendGet,
@@ -27,6 +28,7 @@ import {
   type ApplicationRecord,
   type ApplicationSource as ApplicationSourceValue,
   type ApplicationStatus as ApplicationStatusValue,
+  type DiagnosticSegmentComparison,
   type GetMetricsSummaryMetricsSummaryGetParams,
   type ListApplicationsApplicationsGetParams,
   type MetricBreakdownRow,
@@ -35,6 +37,7 @@ import {
   type MetricResponseRateTrendPoint,
   type MetricTimeseriesPoint,
   type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
+  type MetricsDiagnosticsResponse,
   type MetricsSummaryResponse,
   type TimeToFirstResponseMetric,
   type TimeToRejectionMetric,
@@ -52,6 +55,7 @@ import {
 
 type LoadState = "loading" | "loaded" | "error";
 type BreakdownLoadState = "loading" | "loaded" | "error";
+type DiagnosticsLoadState = "loading" | "loaded" | "error";
 type FunnelLoadState = "loading" | "loaded" | "error";
 type LiveApplicationsState = "loading" | "ready" | "error";
 type ResponseRateLoadState = "loading" | "loaded" | "error";
@@ -99,6 +103,9 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 const percentageFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
   style: "percent",
+});
+const percentagePointFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
 });
 const durationFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
@@ -493,6 +500,25 @@ function sortedFunnelStages(stages: MetricFunnelStage[]) {
   );
 }
 
+function formatResponseLift(lift: number | null | undefined) {
+  if (lift == null) {
+    return "No baseline";
+  }
+  const sign = lift > 0 ? "+" : "";
+  return `${sign}${percentagePointFormatter.format(lift * 100)} pp vs baseline`;
+}
+
+function diagnosticSegmentTitle(segment: DiagnosticSegmentComparison) {
+  return `${titleize(segment.value)} (${titleize(segment.dimension)})`;
+}
+
+function diagnosticSegmentEvidence(segment: DiagnosticSegmentComparison) {
+  return `${countLabel(segment.response_count, "response")} from ${countLabel(
+    segment.application_count,
+    "application",
+  )}`;
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -538,6 +564,12 @@ export function DashboardPage() {
   const [responseRateTrendError, setResponseRateTrendError] = useState<
     string | null
   >(null);
+  const [diagnostics, setDiagnostics] = useState<MetricsDiagnosticsResponse | null>(
+    null,
+  );
+  const [diagnosticsLoadState, setDiagnosticsLoadState] =
+    useState<DiagnosticsLoadState>("loading");
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
   const [filters, setFilters] = useState<DashboardFilters>(() =>
     filtersFromSearch(window.location.search),
   );
@@ -909,6 +941,50 @@ export function DashboardPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    async function loadDiagnostics() {
+      setDiagnosticsLoadState("loading");
+      setDiagnosticsError(null);
+      setDiagnostics(null);
+
+      const response = await getMetricsDiagnosticsMetricsDiagnosticsGet(
+        queryParamsFromFilters(appliedFilters),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setDiagnostics(null);
+        setDiagnosticsError(
+          publicError(response.data, "Diagnostic comparisons are unavailable."),
+        );
+        setDiagnosticsLoadState("error");
+        return;
+      }
+
+      setDiagnostics(response.data);
+      setDiagnosticsLoadState("loaded");
+    }
+
+    void loadDiagnostics().catch(() => {
+      if (!isCancelled) {
+        setDiagnostics(null);
+        setDiagnosticsError(
+          "Diagnostic comparisons are unavailable. Start the local backend to load Tier 4 diagnostics.",
+        );
+        setDiagnosticsLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
     async function loadResponseRate() {
       try {
         const response = await getMetricsRatesMetricsRatesGet(
@@ -991,6 +1067,8 @@ export function DashboardPage() {
     isLoadingSummary,
     summary?.average_time_to_rejection,
   );
+  const strongestDiagnostic = diagnostics?.strongest_response_segments[0];
+  const weakestDiagnostic = diagnostics?.weakest_response_segments[0];
 
   return (
     <main
@@ -1801,6 +1879,148 @@ export function DashboardPage() {
             )}
           </ol>
         </div>
+      </section>
+
+      <section
+        aria-labelledby="diagnostic-comparisons-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div>
+          <p className="eyebrow">Phase 3.5 diagnostics</p>
+          <h2 id="diagnostic-comparisons-title">Diagnostic comparisons</h2>
+          <p className="dashboard-card__meta">
+            Winners, losers, and response-rate lift come from deterministic
+            diagnostics over local applications and application_events.
+          </p>
+        </div>
+
+        {diagnosticsError ? (
+          <Alert title="Diagnostic comparisons unavailable" tone="danger">
+            <p>{diagnosticsError}</p>
+          </Alert>
+        ) : null}
+
+        <div className="dashboard-breakdown-layout">
+          <article className="metric-placeholder">
+            <p className="metric-placeholder__label">Baseline response rate</p>
+            <p className="metric-placeholder__value">
+              {diagnosticsError
+                ? "Unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading"
+                : formatNullableRate(diagnostics?.baseline_response_rate ?? null)}
+            </p>
+            <p className="dashboard-card__meta">
+              {diagnosticsError
+                ? "Diagnostic baseline is unavailable"
+                : diagnostics
+                ? `${countLabel(
+                    diagnostics.baseline_response_count,
+                    "response",
+                  )} from ${countLabel(diagnostics.total_applications, "application")}`
+                : "Loading deterministic baseline"}
+            </p>
+          </article>
+
+          <article>
+            <h3>Strongest response signals</h3>
+            <ol className="dashboard-breakdown-ranks">
+              {diagnostics?.strongest_response_segments.length ? (
+                diagnostics.strongest_response_segments.map((segment) => (
+                  <li key={`strong-${segment.dimension}-${segment.value}`}>
+                    <div>
+                      <span className="dashboard-breakdown-rank__label">
+                        {diagnosticSegmentTitle(segment)}
+                      </span>
+                      <span>{formatResponseLift(segment.response_rate_lift)}</span>
+                    </div>
+                    <p>{diagnosticSegmentEvidence(segment)}</p>
+                  </li>
+                ))
+              ) : (
+                <li>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {diagnosticsError
+                        ? "Unavailable"
+                        : diagnosticsLoadState === "loading"
+                          ? "Loading"
+                          : "No winners"}
+                    </span>
+                    <span>
+                      {diagnosticsError
+                        ? "Diagnostic request failed"
+                        : diagnosticsLoadState === "loading"
+                        ? "Fetching diagnostics"
+                        : "No positive lift"}
+                    </span>
+                  </div>
+                </li>
+              )}
+            </ol>
+          </article>
+
+          <article>
+            <h3>Weakest response signals</h3>
+            <ol className="dashboard-breakdown-ranks">
+              {diagnostics?.weakest_response_segments.length ? (
+                diagnostics.weakest_response_segments.map((segment) => (
+                  <li key={`weak-${segment.dimension}-${segment.value}`}>
+                    <div>
+                      <span className="dashboard-breakdown-rank__label">
+                        {diagnosticSegmentTitle(segment)}
+                      </span>
+                      <span>{formatResponseLift(segment.response_rate_lift)}</span>
+                    </div>
+                    <p>{diagnosticSegmentEvidence(segment)}</p>
+                  </li>
+                ))
+              ) : (
+                <li>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {diagnosticsError
+                        ? "Unavailable"
+                        : diagnosticsLoadState === "loading"
+                          ? "Loading"
+                          : "No losers"}
+                    </span>
+                    <span>
+                      {diagnosticsError
+                        ? "Diagnostic request failed"
+                        : diagnosticsLoadState === "loading"
+                        ? "Fetching diagnostics"
+                        : "No negative lift"}
+                    </span>
+                  </div>
+                </li>
+              )}
+            </ol>
+          </article>
+        </div>
+
+        <article className="metric-placeholder">
+          <h3 className="metric-placeholder__label">Correlation summary</h3>
+          <p className="dashboard-card__meta">
+            {diagnosticsLoadState === "loading"
+              ? "Loading deterministic diagnostic comparisons."
+              : diagnosticsError
+                ? "Diagnostic comparison summary is unavailable."
+                : `${
+                    strongestDiagnostic
+                      ? `${diagnosticSegmentTitle(strongestDiagnostic)} is ${formatResponseLift(
+                          strongestDiagnostic.response_rate_lift,
+                        )}.`
+                      : "No positive response-rate lift is available yet."
+                  } ${
+                    weakestDiagnostic
+                      ? `${diagnosticSegmentTitle(weakestDiagnostic)} is ${formatResponseLift(
+                          weakestDiagnostic.response_rate_lift,
+                        )}.`
+                      : "No negative response-rate lift is available yet."
+                  }`}
+          </p>
+        </article>
       </section>
 
       <section
