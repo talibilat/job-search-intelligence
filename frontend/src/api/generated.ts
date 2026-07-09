@@ -448,6 +448,10 @@ export interface DiagnosticSegmentComparison {
   interview_count: number;
   interview_rate?: number | null;
   /** @minimum 0 */
+  negative_count: number;
+  negative_rate?: number | null;
+  negative_rate_lift?: number | null;
+  /** @minimum 0 */
   offer_count: number;
   offer_rate?: number | null;
   /** @minimum 0 */
@@ -821,11 +825,15 @@ export interface MetricsBreakdownResponse {
 
 export interface MetricsDiagnosticsResponse {
   /** @minimum 0 */
+  baseline_negative_count: number;
+  baseline_negative_rate?: number | null;
+  /** @minimum 0 */
   baseline_response_count: number;
   baseline_response_rate?: number | null;
   /** @minimum 0 */
   baseline_success_count: number;
   baseline_success_rate?: number | null;
+  negative_outcome_segments: DiagnosticSegmentComparison[];
   segments: DiagnosticSegmentComparison[];
   strongest_response_segments: DiagnosticSegmentComparison[];
   successful_application_segments: DiagnosticSegmentComparison[];

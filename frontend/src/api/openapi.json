@@ -1303,6 +1303,37 @@
             ],
             "title": "Interview Rate"
           },
+          "negative_count": {
+            "minimum": 0.0,
+            "title": "Negative Count",
+            "type": "integer"
+          },
+          "negative_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Rate"
+          },
+          "negative_rate_lift": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": -1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Rate Lift"
+          },
           "offer_count": {
             "minimum": 0.0,
             "title": "Offer Count",
@@ -1395,7 +1426,8 @@
           "response_count",
           "interview_count",
           "offer_count",
-          "success_count"
+          "success_count",
+          "negative_count"
         ],
         "title": "DiagnosticSegmentComparison",
         "type": "object"
@@ -2379,6 +2411,24 @@
       },
       "MetricsDiagnosticsResponse": {
         "properties": {
+          "baseline_negative_count": {
+            "minimum": 0.0,
+            "title": "Baseline Negative Count",
+            "type": "integer"
+          },
+          "baseline_negative_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Negative Rate"
+          },
           "baseline_response_count": {
             "minimum": 0.0,
             "title": "Baseline Response Count",
@@ -2414,6 +2464,13 @@
               }
             ],
             "title": "Baseline Success Rate"
+          },
+          "negative_outcome_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Negative Outcome Segments",
+            "type": "array"
           },
           "segments": {
             "items": {
@@ -2453,10 +2510,12 @@
           "total_applications",
           "baseline_response_count",
           "baseline_success_count",
+          "baseline_negative_count",
           "segments",
           "strongest_response_segments",
           "weakest_response_segments",
-          "successful_application_segments"
+          "successful_application_segments",
+          "negative_outcome_segments"
         ],
         "title": "MetricsDiagnosticsResponse",
         "type": "object"

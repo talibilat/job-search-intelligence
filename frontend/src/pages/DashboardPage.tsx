@@ -554,6 +554,14 @@ function formatSuccessLift(lift: number | null | undefined) {
   return `${sign}${percentagePointFormatter.format(lift * 100)} pp success lift`;
 }
 
+function formatNegativeLift(lift: number | null | undefined) {
+  if (lift == null) {
+    return "No negative baseline";
+  }
+  const sign = lift > 0 ? "+" : "";
+  return `${sign}${percentagePointFormatter.format(lift * 100)} pp negative lift`;
+}
+
 function diagnosticSegmentTitle(segment: DiagnosticSegmentComparison) {
   return `${titleize(segment.value)} (${titleize(segment.dimension)})`;
 }
@@ -567,6 +575,13 @@ function diagnosticSegmentEvidence(segment: DiagnosticSegmentComparison) {
 
 function diagnosticSuccessEvidence(segment: DiagnosticSegmentComparison) {
   return `${countLabel(segment.success_count, "successful application")} from ${countLabel(
+    segment.application_count,
+    "application",
+  )}`;
+}
+
+function diagnosticNegativeEvidence(segment: DiagnosticSegmentComparison) {
+  return `${countLabel(segment.negative_count, "negative outcome")} from ${countLabel(
     segment.application_count,
     "application",
   )}`;
@@ -1180,6 +1195,7 @@ export function DashboardPage() {
   const strongestDiagnostic = diagnostics?.strongest_response_segments[0];
   const weakestDiagnostic = diagnostics?.weakest_response_segments[0];
   const successfulDiagnostic = diagnostics?.successful_application_segments[0];
+  const negativeDiagnostic = diagnostics?.negative_outcome_segments[0];
 
   return (
     <main
@@ -2258,6 +2274,55 @@ export function DashboardPage() {
               )}
             </ol>
           </article>
+
+          <article>
+            <h3>Q-33 rejected or ghosted traits</h3>
+            <p className="dashboard-card__meta">
+              {diagnosticsError
+                ? "Negative-outcome diagnostics are unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading negative outcome baseline"
+                : diagnostics
+                ? `${formatNullableRate(
+                    diagnostics.baseline_negative_rate,
+                  )} baseline negative rate`
+                : "Loading deterministic negative baseline"}
+            </p>
+            <ol className="dashboard-breakdown-ranks">
+              {diagnostics?.negative_outcome_segments.length ? (
+                diagnostics.negative_outcome_segments.map((segment) => (
+                  <li key={`negative-${segment.dimension}-${segment.value}`}>
+                    <div>
+                      <span className="dashboard-breakdown-rank__label">
+                        {diagnosticSegmentTitle(segment)}
+                      </span>
+                      <span>{formatNegativeLift(segment.negative_rate_lift)}</span>
+                    </div>
+                    <p>{diagnosticNegativeEvidence(segment)}</p>
+                  </li>
+                ))
+              ) : (
+                <li>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {diagnosticsError
+                        ? "Unavailable"
+                        : diagnosticsLoadState === "loading"
+                          ? "Loading"
+                          : "No negative traits"}
+                    </span>
+                    <span>
+                      {diagnosticsError
+                        ? "Diagnostic request failed"
+                        : diagnosticsLoadState === "loading"
+                        ? "Fetching diagnostics"
+                        : "No positive negative-outcome lift"}
+                    </span>
+                  </div>
+                </li>
+              )}
+            </ol>
+          </article>
         </div>
 
         <article className="metric-placeholder">
@@ -2285,6 +2350,12 @@ export function DashboardPage() {
                           successfulDiagnostic.success_rate_lift,
                         )}.`
                       : "No successful application trait lift is available yet."
+                  } ${
+                    negativeDiagnostic
+                      ? `${diagnosticSegmentTitle(negativeDiagnostic)} is ${formatNegativeLift(
+                          negativeDiagnostic.negative_rate_lift,
+                        )}.`
+                      : "No rejected or ghosted trait lift is available yet."
                   }`}
           </p>
         </article>

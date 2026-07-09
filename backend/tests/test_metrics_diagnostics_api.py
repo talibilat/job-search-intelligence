@@ -28,6 +28,8 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
     assert payload["baseline_response_rate"] == 0.6
     assert payload["baseline_success_count"] == 1
     assert payload["baseline_success_rate"] == 0.2
+    assert payload["baseline_negative_count"] == 2
+    assert payload["baseline_negative_rate"] == 0.4
     assert payload["strongest_response_segments"][0] == {
         "dimension": "source",
         "value": "company_site",
@@ -36,12 +38,15 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
         "interview_count": 0,
         "offer_count": 0,
         "success_count": 0,
+        "negative_count": 1,
         "response_rate": 1.0,
         "interview_rate": 0.0,
         "offer_rate": 0.0,
         "success_rate": 0.0,
+        "negative_rate": 0.5,
         "response_rate_lift": 0.4,
         "success_rate_lift": -0.2,
+        "negative_rate_lift": 0.5 - 0.4,
     }
     assert payload["successful_application_segments"] == [
         {
@@ -52,12 +57,35 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
             "interview_count": 1,
             "offer_count": 1,
             "success_count": 1,
+            "negative_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
             "success_rate": 1 / 3,
+            "negative_rate": 1 / 3,
             "response_rate_lift": (1 / 3) - 0.6,
             "success_rate_lift": (1 / 3) - 0.2,
+            "negative_rate_lift": (1 / 3) - 0.4,
+        },
+    ]
+    assert payload["negative_outcome_segments"] == [
+        {
+            "dimension": "source",
+            "value": "company_site",
+            "application_count": 2,
+            "response_count": 2,
+            "interview_count": 0,
+            "offer_count": 0,
+            "success_count": 0,
+            "negative_count": 1,
+            "response_rate": 1.0,
+            "interview_rate": 0.0,
+            "offer_rate": 0.0,
+            "success_rate": 0.0,
+            "negative_rate": 0.5,
+            "response_rate_lift": 0.4,
+            "success_rate_lift": -0.2,
+            "negative_rate_lift": 0.5 - 0.4,
         },
     ]
     assert any(
@@ -83,6 +111,8 @@ def test_metrics_diagnostics_composes_filters(tmp_path: Path) -> None:
     assert payload["baseline_response_rate"] == 1 / 3
     assert payload["baseline_success_count"] == 1
     assert payload["baseline_success_rate"] == 1 / 3
+    assert payload["baseline_negative_count"] == 1
+    assert payload["baseline_negative_rate"] == 1 / 3
     source_segments = [
         segment for segment in payload["segments"] if segment["dimension"] == "source"
     ]
@@ -95,12 +125,15 @@ def test_metrics_diagnostics_composes_filters(tmp_path: Path) -> None:
             "interview_count": 1,
             "offer_count": 1,
             "success_count": 1,
+            "negative_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
             "success_rate": 1 / 3,
+            "negative_rate": 1 / 3,
             "response_rate_lift": 0.0,
             "success_rate_lift": 0.0,
+            "negative_rate_lift": 0.0,
         },
     ]
 

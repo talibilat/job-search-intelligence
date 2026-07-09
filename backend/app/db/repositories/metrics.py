@@ -87,6 +87,18 @@ class MetricsRepository(BaseRepository[int]):
             filter_parameters,
         )
 
+    def count_negative_applications(self, filters: MetricsFilter | None = None) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        return self._fetch_count(
+            f"""
+            SELECT COUNT(*)
+            FROM applications
+            {where_clause}
+            {"WHERE" if not where_clause else "AND"} current_status IN ('rejected', 'ghosted')
+            """,
+            filter_parameters,
+        )
+
     def get_successful_application_breakdown(
         self,
         dimension: MetricsBreakdownDimension,
@@ -95,6 +107,15 @@ class MetricsRepository(BaseRepository[int]):
         if dimension == "tech":
             return self._get_successful_tech_breakdown(filters=filters)
         return self._get_successful_application_breakdown(dimension, filters=filters)
+
+    def get_negative_application_breakdown(
+        self,
+        dimension: MetricsBreakdownDimension,
+        filters: MetricsFilter | None = None,
+    ) -> dict[str, int]:
+        if dimension == "tech":
+            return self._get_negative_tech_breakdown(filters=filters)
+        return self._get_negative_application_breakdown(dimension, filters=filters)
 
     def get_time_to_first_response_metric(
         self,
@@ -766,6 +787,58 @@ class MetricsRepository(BaseRepository[int]):
             filter_parameters,
         ).fetchall()
         return {str(row["value"]): int(row["success_count"]) for row in rows}
+
+    def _get_negative_application_breakdown(
+        self,
+        dimension: MetricsBreakdownDimension,
+        *,
+        filters: MetricsFilter | None,
+    ) -> dict[str, int]:
+        expression = _dimension_expression(dimension)
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        rows = self.execute(
+            f"""
+            SELECT {expression} AS value,
+                COUNT(*) AS negative_count
+            FROM applications
+            LEFT JOIN company_profiles
+                ON company_profiles.normalized_company = LOWER(TRIM(applications.company))
+            {where_clause}
+            {"WHERE" if not where_clause else "AND"}
+                applications.current_status IN ('rejected', 'ghosted')
+            GROUP BY value
+            """,
+            filter_parameters,
+        ).fetchall()
+        return {str(row["value"]): int(row["negative_count"]) for row in rows}
+
+    def _get_negative_tech_breakdown(
+        self,
+        *,
+        filters: MetricsFilter | None,
+    ) -> dict[str, int]:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        rows = self.execute(
+            f"""
+            WITH tech_applications AS (
+                SELECT DISTINCT
+                    applications.id AS application_id,
+                    applications.current_status AS current_status,
+                    LOWER(TRIM(json_each.value)) AS value
+                FROM applications
+                INNER JOIN json_each(applications.tech_stack)
+                WHERE TRIM(json_each.value) != ''
+                  {where_clause.replace("WHERE", "AND", 1)}
+            )
+            SELECT tech_applications.value AS value,
+                COUNT(*) AS negative_count
+            FROM tech_applications
+            WHERE tech_applications.current_status IN ('rejected', 'ghosted')
+            GROUP BY tech_applications.value
+            """,
+            filter_parameters,
+        ).fetchall()
+        return {str(row["value"]): int(row["negative_count"]) for row in rows}
 
     def _fetch_count(self, sql: str, parameters: Sequence[object] = ()) -> int:
         row = self.execute(sql, parameters).fetchone()
