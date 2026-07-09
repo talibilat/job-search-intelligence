@@ -774,6 +774,142 @@ h3 {
   gap: 24px;
 }
 
+.dashboard-funnel-card {
+  overflow: hidden;
+}
+
+.dashboard-funnel-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-funnel-stage {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #edf6eb;
+  color: #203f2c;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-funnel-stage__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-funnel-stage__header span {
+  color: #102417;
+  font-size: 1.08rem;
+  font-weight: 900;
+}
+
+.dashboard-funnel-stage__header strong {
+  color: #3f6b52;
+  font-size: 0.92rem;
+}
+
+.dashboard-funnel-stage__bar {
+  min-width: 0;
+  height: 12px;
+  border-radius: 999px;
+  background: #d8d0bf;
+  overflow: hidden;
+}
+
+.dashboard-funnel-stage__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #203f2c;
+}
+
+.dashboard-breakdown-card {
+  overflow: hidden;
+}
+
+.dashboard-breakdown-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 18px;
+  align-items: end;
+  min-width: 0;
+}
+
+.dashboard-breakdown-header > div {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-breakdown-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
+  gap: 18px;
+  min-width: 0;
+}
+
+.dashboard-breakdown-chart-card,
+.dashboard-breakdown-ranks {
+  min-width: 0;
+}
+
+.dashboard-breakdown-chart-card .chart-panel {
+  height: 100%;
+  margin-top: 0;
+}
+
+.dashboard-breakdown-ranks {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-breakdown-ranks li {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #edf6eb;
+  color: #203f2c;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-breakdown-ranks div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 900;
+}
+
+.dashboard-breakdown-ranks p {
+  margin-bottom: 0;
+  color: #4e5e53;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.dashboard-breakdown-rank__label {
+  color: #102417;
+  font-size: 1.05rem;
+}
+
 .dashboard-live-applications__header {
   display: flex;
   flex-wrap: wrap;
@@ -1367,6 +1503,8 @@ h3 {
   }
 
   .dashboard-layout,
+  .dashboard-breakdown-header,
+  .dashboard-breakdown-layout,
   .dashboard-live-card,
   .application-detail-grid,
   .filter-placeholder-list,

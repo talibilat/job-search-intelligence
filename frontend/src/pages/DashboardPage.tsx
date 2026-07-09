@@ -1,20 +1,43 @@
 import { useEffect, useState, type FormEvent } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import {
   ApplicationSource,
   ApplicationStatus,
+  MetricsBreakdownDimension,
   SponsorshipStatus,
   WorkMode,
+  getMetricsBreakdownMetricsBreakdownGet,
+  getMetricsFunnelMetricsFunnelGet,
   getMetricsRatesMetricsRatesGet,
+  getMetricsResponseRateTrendMetricsResponseRateTrendGet,
   getMetricsSummaryMetricsSummaryGet,
+  getMetricsTimeseriesMetricsTimeseriesGet,
   listApplicationsApplicationsGet,
   type ApiErrorResponse,
   type ApplicationRecord,
   type ApplicationSource as ApplicationSourceValue,
   type ApplicationStatus as ApplicationStatusValue,
+  type GetMetricsSummaryMetricsSummaryGetParams,
   type ListApplicationsApplicationsGetParams,
+  type MetricBreakdownRow,
+  type MetricFunnelStage,
   type MetricRate,
+  type MetricResponseRateTrendPoint,
+  type MetricTimeseriesPoint,
+  type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
   type MetricsSummaryResponse,
+  type TimeToFirstResponseMetric,
+  type TimeToRejectionMetric,
   type SponsorshipStatus as SponsorshipStatusValue,
   type WorkMode as WorkModeValue,
 } from "../api";
@@ -28,8 +51,11 @@ import {
 } from "../components/ui";
 
 type LoadState = "loading" | "loaded" | "error";
+type BreakdownLoadState = "loading" | "loaded" | "error";
+type FunnelLoadState = "loading" | "loaded" | "error";
 type LiveApplicationsState = "loading" | "ready" | "error";
 type ResponseRateLoadState = "loading" | "loaded" | "error";
+type TimeseriesLoadState = "loading" | "loaded" | "error";
 
 interface DashboardFilters {
   firstSeenFrom: string;
@@ -68,10 +94,14 @@ const statusOptions = Object.values(ApplicationStatus);
 const sourceOptions = Object.values(ApplicationSource);
 const sponsorshipOptions = Object.values(SponsorshipStatus);
 const workModeOptions = Object.values(WorkMode);
+const breakdownDimensionOptions = Object.values(MetricsBreakdownDimension);
 const numberFormatter = new Intl.NumberFormat("en-US");
 const percentageFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
   style: "percent",
+});
+const durationFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
 });
 
 function titleize(value: string) {
@@ -145,7 +175,7 @@ function optionalNumber(value: string) {
 
 function queryParamsFromFilters(
   filters: DashboardFilters,
-): ListApplicationsApplicationsGetParams {
+): ListApplicationsApplicationsGetParams & GetMetricsSummaryMetricsSummaryGetParams {
   return {
     first_seen_from: optionalText(filters.firstSeenFrom),
     first_seen_to: optionalText(filters.firstSeenTo),
@@ -203,6 +233,81 @@ function summaryMetricValue(isLoading: boolean, value: number | undefined) {
   }
   return numberFormatter.format(value);
 }
+
+function formatTimeToFirstResponseValue(
+  isLoading: boolean,
+  metric: TimeToFirstResponseMetric | undefined,
+) {
+  if (isLoading) {
+    return "Loading";
+  }
+  if (metric === undefined) {
+    return "Unavailable";
+  }
+  const averageHours = metric.average_hours;
+  if (averageHours == null) {
+    return "No data";
+  }
+  if (averageHours < 24) {
+    return `${durationFormatter.format(averageHours)} hours`;
+  }
+  return `${durationFormatter.format(averageHours / 24)} days`;
+}
+
+function formatTimeToFirstResponseMeta(
+  isLoading: boolean,
+  metric: TimeToFirstResponseMetric | undefined,
+) {
+  if (isLoading || metric === undefined) {
+    return "Loading deterministic response timing";
+  }
+  if (metric.application_count === 0) {
+    return "No applications have response evidence yet";
+  }
+  const applicationLabel =
+    metric.application_count === 1 ? "application" : "applications";
+  return `Averaged across ${numberFormatter.format(
+    metric.application_count,
+  )} ${applicationLabel} with response evidence`;
+}
+
+function formatTimeToRejectionValue(
+  isLoading: boolean,
+  metric: TimeToRejectionMetric | undefined,
+) {
+  if (isLoading) {
+    return "Loading";
+  }
+  if (metric === undefined) {
+    return "Unavailable";
+  }
+  const averageHours = metric.average_hours;
+  if (averageHours == null) {
+    return "No data";
+  }
+  if (averageHours < 24) {
+    return `${durationFormatter.format(averageHours)} hours`;
+  }
+  return `${durationFormatter.format(averageHours / 24)} days`;
+}
+
+function formatTimeToRejectionMeta(
+  isLoading: boolean,
+  metric: TimeToRejectionMetric | undefined,
+) {
+  if (isLoading || metric === undefined) {
+    return "Loading deterministic rejection timing";
+  }
+  if (metric.application_count === 0) {
+    return "No applications have rejection evidence yet";
+  }
+  const applicationLabel =
+    metric.application_count === 1 ? "rejected application" : "rejected applications";
+  return `Averaged across ${numberFormatter.format(
+    metric.application_count,
+  )} ${applicationLabel}`;
+}
+
 function liveApplicationsCountLabel(
   state: LiveApplicationsState,
   count: number,
@@ -225,6 +330,15 @@ function formatDateTime(value: string) {
     month: "short",
     timeZone: "UTC",
     timeZoneName: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatTrendDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
     year: "numeric",
   }).format(new Date(value));
 }
@@ -298,6 +412,87 @@ const applicationStatusColumns = [
   },
 ] as const;
 
+const breakdownColumns = [
+  {
+    key: "value",
+    header: "Group",
+    render: (row: MetricBreakdownRow) => titleize(row.value),
+  },
+  { key: "application_count", header: "Applications", align: "right" },
+  { key: "response_count", header: "Responses", align: "right" },
+  {
+    key: "response_rate",
+    header: "Response rate",
+    align: "right",
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.response_rate),
+  },
+  { key: "interview_count", header: "Interviews", align: "right" },
+  {
+    key: "interview_rate",
+    header: "Interview rate",
+    align: "right",
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.interview_rate),
+  },
+  { key: "offer_count", header: "Offers", align: "right" },
+  {
+    key: "offer_rate",
+    header: "Offer rate",
+    align: "right",
+    render: (row: MetricBreakdownRow) => formatNullableRate(row.offer_rate),
+  },
+] as const;
+
+function countLabel(count: number, singular: string) {
+  return `${numberFormatter.format(count)} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function sortedBreakdownRows(rows: MetricBreakdownRow[]) {
+  return [...rows].sort((left, right) => {
+    const applicationOrder = right.application_count - left.application_count;
+    if (applicationOrder !== 0) {
+      return applicationOrder;
+    }
+    return left.value.localeCompare(right.value);
+  });
+}
+
+function interviewConversionRate(row: MetricBreakdownRow) {
+  if (row.application_count === 0) {
+    return null;
+  }
+  return row.interview_count / row.application_count;
+}
+
+function sortedRoleConversionRows(rows: MetricBreakdownRow[]) {
+  return [...rows].sort((left, right) => {
+    const rateOrder =
+      (interviewConversionRate(right) ?? -1) - (interviewConversionRate(left) ?? -1);
+    if (rateOrder !== 0) {
+      return rateOrder;
+    }
+    const interviewOrder = right.interview_count - left.interview_count;
+    if (interviewOrder !== 0) {
+      return interviewOrder;
+    }
+    return right.application_count - left.application_count;
+  });
+}
+
+function sortedTimeseriesPoints(points: MetricTimeseriesPoint[]) {
+  return [...points].sort((left, right) =>
+    left.period_start.localeCompare(right.period_start),
+  );
+}
+
+const funnelStageOrder = ["applied", "screen", "interview", "final", "offer"] as const;
+
+function sortedFunnelStages(stages: MetricFunnelStage[]) {
+  return [...stages].sort(
+    (left, right) =>
+      funnelStageOrder.indexOf(left.stage) - funnelStageOrder.indexOf(right.stage),
+  );
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -307,8 +502,42 @@ export function DashboardPage() {
   const [liveApplicationsState, setLiveApplicationsState] =
     useState<LiveApplicationsState>("loading");
   const [responseRate, setResponseRate] = useState<MetricRate | null>(null);
+  const [rejectionRate, setRejectionRate] = useState<MetricRate | null>(null);
+  const [ghostRate, setGhostRate] = useState<MetricRate | null>(null);
+  const [applicationToInterviewRate, setApplicationToInterviewRate] =
+    useState<MetricRate | null>(null);
+  const [interviewToOfferRate, setInterviewToOfferRate] =
+    useState<MetricRate | null>(null);
   const [responseRateLoadState, setResponseRateLoadState] =
     useState<ResponseRateLoadState>("loading");
+  const [funnelStages, setFunnelStages] = useState<MetricFunnelStage[]>([]);
+  const [funnelLoadState, setFunnelLoadState] =
+    useState<FunnelLoadState>("loading");
+  const [funnelError, setFunnelError] = useState<string | null>(null);
+  const [breakdownDimension, setBreakdownDimension] =
+    useState<MetricsBreakdownDimensionValue>(MetricsBreakdownDimension.source);
+  const [breakdownRows, setBreakdownRows] = useState<MetricBreakdownRow[]>([]);
+  const [breakdownLoadState, setBreakdownLoadState] =
+    useState<BreakdownLoadState>("loading");
+  const [breakdownError, setBreakdownError] = useState<string | null>(null);
+  const [roleConversionRows, setRoleConversionRows] = useState<MetricBreakdownRow[]>([]);
+  const [roleConversionLoadState, setRoleConversionLoadState] =
+    useState<BreakdownLoadState>("loading");
+  const [roleConversionError, setRoleConversionError] = useState<string | null>(null);
+  const [timeseriesPoints, setTimeseriesPoints] = useState<
+    MetricTimeseriesPoint[]
+  >([]);
+  const [timeseriesLoadState, setTimeseriesLoadState] =
+    useState<TimeseriesLoadState>("loading");
+  const [timeseriesError, setTimeseriesError] = useState<string | null>(null);
+  const [responseRateTrendPoints, setResponseRateTrendPoints] = useState<
+    MetricResponseRateTrendPoint[]
+  >([]);
+  const [responseRateTrendLoadState, setResponseRateTrendLoadState] =
+    useState<TimeseriesLoadState>("loading");
+  const [responseRateTrendError, setResponseRateTrendError] = useState<
+    string | null
+  >(null);
   const [filters, setFilters] = useState<DashboardFilters>(() =>
     filtersFromSearch(window.location.search),
   );
@@ -324,7 +553,9 @@ export function DashboardPage() {
     async function loadSummary() {
       setIsLoadingSummary(true);
       try {
-        const response = await getMetricsSummaryMetricsSummaryGet();
+        const response = await getMetricsSummaryMetricsSummaryGet(
+          queryParamsFromFilters(appliedFilters),
+        );
         if (response.status === 200 && !ignore) {
           setSummary(response.data);
         }
@@ -344,7 +575,7 @@ export function DashboardPage() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [appliedFilters]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -436,6 +667,54 @@ export function DashboardPage() {
   }, [appliedFilters]);
 
   useEffect(() => {
+    let isCancelled = false;
+
+    async function loadResponseRateTrend() {
+      setResponseRateTrendLoadState("loading");
+      setResponseRateTrendError(null);
+      setResponseRateTrendPoints([]);
+
+      const response = await getMetricsResponseRateTrendMetricsResponseRateTrendGet(
+        queryParamsFromFilters(appliedFilters),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setResponseRateTrendPoints([]);
+        setResponseRateTrendError(
+          publicError(response.data, "Response rate trend is unavailable."),
+        );
+        setResponseRateTrendLoadState("error");
+        return;
+      }
+
+      setResponseRateTrendPoints(
+        [...response.data.points].sort((left, right) =>
+          left.period_start.localeCompare(right.period_start),
+        ),
+      );
+      setResponseRateTrendLoadState("loaded");
+    }
+
+    void loadResponseRateTrend().catch(() => {
+      if (!isCancelled) {
+        setResponseRateTrendPoints([]);
+        setResponseRateTrendError(
+          "Response rate trend is unavailable. Start the local backend to load Q-21.",
+        );
+        setResponseRateTrendLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
     replaceUrlWithFilters(appliedFilters);
 
     function handlePopState() {
@@ -454,11 +733,198 @@ export function DashboardPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    async function loadFunnel() {
+      setFunnelLoadState("loading");
+      setFunnelError(null);
+      setFunnelStages([]);
+
+      const response = await getMetricsFunnelMetricsFunnelGet(
+        queryParamsFromFilters(appliedFilters),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setFunnelStages([]);
+        setFunnelError(publicError(response.data, "Application funnel is unavailable."));
+        setFunnelLoadState("error");
+        return;
+      }
+
+      setFunnelStages(sortedFunnelStages(response.data.stages));
+      setFunnelLoadState("loaded");
+    }
+
+    void loadFunnel().catch(() => {
+      if (!isCancelled) {
+        setFunnelStages([]);
+        setFunnelError(
+          "Application funnel is unavailable. Start the local backend to load Q-16.",
+        );
+        setFunnelLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadBreakdown() {
+      setBreakdownLoadState("loading");
+      setBreakdownError(null);
+      setBreakdownRows([]);
+
+      const response = await getMetricsBreakdownMetricsBreakdownGet({
+        dimension: breakdownDimension,
+        ...queryParamsFromFilters(appliedFilters),
+      });
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setBreakdownRows([]);
+        setBreakdownError(
+          publicError(response.data, "Metric breakdowns are unavailable."),
+        );
+        setBreakdownLoadState("error");
+        return;
+      }
+
+      setBreakdownRows(sortedBreakdownRows(response.data.rows));
+      setBreakdownLoadState("loaded");
+    }
+
+    void loadBreakdown().catch(() => {
+      if (!isCancelled) {
+        setBreakdownRows([]);
+        setBreakdownError(
+          "Metric breakdowns are unavailable. Start the local backend to load segmentation metrics.",
+        );
+        setBreakdownLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters, breakdownDimension]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadRoleConversion() {
+      setRoleConversionLoadState("loading");
+      setRoleConversionError(null);
+      setRoleConversionRows([]);
+
+      const response = await getMetricsBreakdownMetricsBreakdownGet({
+        dimension: MetricsBreakdownDimension.role,
+        ...queryParamsFromFilters(appliedFilters),
+      });
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setRoleConversionRows([]);
+        setRoleConversionError(
+          publicError(response.data, "Role conversion metrics are unavailable."),
+        );
+        setRoleConversionLoadState("error");
+        return;
+      }
+
+      setRoleConversionRows(sortedRoleConversionRows(response.data.rows));
+      setRoleConversionLoadState("loaded");
+    }
+
+    void loadRoleConversion().catch(() => {
+      if (!isCancelled) {
+        setRoleConversionRows([]);
+        setRoleConversionError(
+          "Role conversion metrics are unavailable. Start the local backend to load Q-23.",
+        );
+        setRoleConversionLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadTimeseries() {
+      setTimeseriesLoadState("loading");
+      setTimeseriesError(null);
+      setTimeseriesPoints([]);
+
+      const response = await getMetricsTimeseriesMetricsTimeseriesGet(
+        queryParamsFromFilters(appliedFilters),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setTimeseriesPoints([]);
+        setTimeseriesError(
+          publicError(response.data, "Application volume trend is unavailable."),
+        );
+        setTimeseriesLoadState("error");
+        return;
+      }
+
+      setTimeseriesPoints(sortedTimeseriesPoints(response.data.points));
+      setTimeseriesLoadState("loaded");
+    }
+
+    void loadTimeseries().catch(() => {
+      if (!isCancelled) {
+        setTimeseriesPoints([]);
+        setTimeseriesError(
+          "Application volume trend is unavailable. Start the local backend to load Q-20.",
+        );
+        setTimeseriesLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
     async function loadResponseRate() {
       try {
-        const response = await getMetricsRatesMetricsRatesGet();
+        const response = await getMetricsRatesMetricsRatesGet(
+          queryParamsFromFilters(appliedFilters),
+        );
         if (!isCancelled) {
+          if (response.status !== 200) {
+            setResponseRateLoadState("error");
+            return;
+          }
+
           setResponseRate(response.data.overall_response_rate);
+          setRejectionRate(response.data.rejection_rate);
+          setGhostRate(response.data.ghost_rate);
+          setApplicationToInterviewRate(response.data.application_to_interview_rate);
+          setInterviewToOfferRate(response.data.interview_to_offer_rate);
           setResponseRateLoadState("loaded");
         }
       } catch {
@@ -473,7 +939,7 @@ export function DashboardPage() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [appliedFilters]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -509,6 +975,22 @@ export function DashboardPage() {
     isLoadingSummary,
     summary?.offers_received,
   );
+  const averageFirstResponseValue = formatTimeToFirstResponseValue(
+    isLoadingSummary,
+    summary?.average_time_to_first_response,
+  );
+  const averageFirstResponseMeta = formatTimeToFirstResponseMeta(
+    isLoadingSummary,
+    summary?.average_time_to_first_response,
+  );
+  const averageRejectionValue = formatTimeToRejectionValue(
+    isLoadingSummary,
+    summary?.average_time_to_rejection,
+  );
+  const averageRejectionMeta = formatTimeToRejectionMeta(
+    isLoadingSummary,
+    summary?.average_time_to_rejection,
+  );
 
   return (
     <main
@@ -522,9 +1004,10 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, and Q-11 now render from
-          deterministic application and metrics endpoints, while remaining
-          dashboard questions stay clearly marked as pending.
+          Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
+          Q-15, Q-16, Q-17, Q-18, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
+          endpoints, while remaining dashboard questions stay clearly marked as
+          pending.
         </p>
       </section>
 
@@ -740,6 +1223,30 @@ export function DashboardPage() {
                 Q-08 counted from offer events
               </p>
             </article>
+            <article
+              aria-label="Average time to first response metric"
+              className="metric-placeholder"
+            >
+              <h3 className="metric-placeholder__label">
+                Avg time to first response
+              </h3>
+              <p className="metric-placeholder__value">
+                {averageFirstResponseValue}
+              </p>
+              <p className="dashboard-card__meta">{averageFirstResponseMeta}</p>
+            </article>
+            <article
+              aria-label="Average time to rejection metric"
+              className="metric-placeholder"
+            >
+              <h3 className="metric-placeholder__label">
+                Avg time to rejection
+              </h3>
+              <p className="metric-placeholder__value">
+                {averageRejectionValue}
+              </p>
+              <p className="dashboard-card__meta">{averageRejectionMeta}</p>
+            </article>
             <article className="metric-placeholder">
               <p className="metric-placeholder__label">Applications shown</p>
               <p className="metric-placeholder__value">{applications.length}</p>
@@ -765,10 +1272,68 @@ export function DashboardPage() {
             >
               <p className="metric-placeholder__label">Response rate</p>
               <p className="metric-placeholder__value">
-                {formatResponseRateValue(responseRate, responseRateLoadState)}
+                {formatRateValue(responseRate, responseRateLoadState)}
               </p>
               <p className="dashboard-card__meta">
                 {formatResponseRateMeta(responseRate, responseRateLoadState)}
+              </p>
+            </article>
+            <article
+              aria-label="Rejection rate metric"
+              className="metric-placeholder"
+            >
+              <p className="metric-placeholder__label">Rejection rate</p>
+              <p className="metric-placeholder__value">
+                {formatRateValue(rejectionRate, responseRateLoadState)}
+              </p>
+              <p className="dashboard-card__meta">
+                {formatRejectionRateMeta(rejectionRate, responseRateLoadState)}
+              </p>
+            </article>
+            <article aria-label="Ghost rate metric" className="metric-placeholder">
+              <p className="metric-placeholder__label">Ghost rate</p>
+              <p className="metric-placeholder__value">
+                {formatRateValue(ghostRate, responseRateLoadState)}
+              </p>
+              <p className="dashboard-card__meta">
+                {formatGhostRateMeta(ghostRate, responseRateLoadState)}
+              </p>
+            </article>
+            <article
+              aria-label="Application to interview rate metric"
+              className="metric-placeholder"
+            >
+              <p className="metric-placeholder__label">
+                Application to interview rate
+              </p>
+              <p className="metric-placeholder__value">
+                {formatRateValue(
+                  applicationToInterviewRate,
+                  responseRateLoadState,
+                )}
+              </p>
+              <p className="dashboard-card__meta">
+                {formatApplicationToInterviewRateMeta(
+                  applicationToInterviewRate,
+                  responseRateLoadState,
+                )}
+              </p>
+            </article>
+            <article
+              aria-label="Interview to offer rate metric"
+              className="metric-placeholder"
+            >
+              <p className="metric-placeholder__label">
+                Interview to offer rate
+              </p>
+              <p className="metric-placeholder__value">
+                {formatRateValue(interviewToOfferRate, responseRateLoadState)}
+              </p>
+              <p className="dashboard-card__meta">
+                {formatInterviewToOfferRateMeta(
+                  interviewToOfferRate,
+                  responseRateLoadState,
+                )}
               </p>
             </article>
             {metricPlaceholders.map((metric) => (
@@ -809,6 +1374,433 @@ export function DashboardPage() {
           rowKey={(row) => row.id}
           rows={applications}
         />
+      </section>
+
+      <section
+        aria-labelledby="dashboard-funnel-title"
+        className="dashboard-card dashboard-funnel-card"
+      >
+        <div>
+          <p className="eyebrow">Q-16</p>
+          <h2 id="dashboard-funnel-title">Application funnel</h2>
+          <p className="dashboard-card__meta">
+            Funnel stages come from deterministic application and event evidence
+            and reload with the active dashboard filters.
+          </p>
+        </div>
+        {funnelError ? (
+          <Alert title="Application funnel unavailable" tone="danger">
+            <p>{funnelError}</p>
+          </Alert>
+        ) : null}
+        <ol className="dashboard-funnel-list">
+          {funnelStages.length > 0 ? (
+            funnelStages.map((stage) => {
+              const appliedCount = funnelStages[0]?.count ?? 0;
+              const width = appliedCount > 0 ? Math.max((stage.count / appliedCount) * 100, 4) : 0;
+
+              return (
+                <li className="dashboard-funnel-stage" key={stage.stage}>
+                  <div className="dashboard-funnel-stage__header">
+                    <span>{titleize(stage.stage)}</span>
+                    <strong>{countLabel(stage.count, "application")}</strong>
+                  </div>
+                  <div
+                    aria-hidden="true"
+                    className="dashboard-funnel-stage__bar"
+                  >
+                    <span style={{ width: `${width}%` }} />
+                  </div>
+                  {stage.stage === "final" ? (
+                    <p className="dashboard-card__meta">
+                      Final-round evidence is not represented yet, so this stage is
+                      intentionally zero.
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })
+          ) : (
+            <li className="dashboard-funnel-stage">
+              <div className="dashboard-funnel-stage__header">
+                <span>{funnelLoadState === "loading" ? "Loading" : "No funnel rows"}</span>
+                <strong>
+                  {funnelLoadState === "loading" ? "Fetching funnel" : "No data"}
+                </strong>
+              </div>
+            </li>
+          )}
+        </ol>
+      </section>
+
+      <section
+        aria-labelledby="dashboard-breakdown-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div className="dashboard-breakdown-header">
+          <div>
+            <p className="eyebrow">Tier 3 segmentation</p>
+            <h2 id="dashboard-breakdown-title">
+              {titleize(breakdownDimension)} breakdown
+            </h2>
+            <p className="dashboard-card__meta">
+              Grouped metrics come from deterministic SQLite breakdown rows over
+              applications and application_events.
+            </p>
+          </div>
+          <FormField htmlFor="dashboard-breakdown-dimension" label="Dimension">
+            <select
+              className="ui-input"
+              id="dashboard-breakdown-dimension"
+              onChange={(event) =>
+                setBreakdownDimension(
+                  event.target.value as MetricsBreakdownDimensionValue,
+                )
+              }
+              value={breakdownDimension}
+            >
+              {breakdownDimensionOptions.map((dimension) => (
+                <option key={dimension} value={dimension}>
+                  {titleize(dimension)}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+
+        {breakdownError ? (
+          <Alert title="Metric breakdowns unavailable" tone="danger">
+            <p>{breakdownError}</p>
+          </Alert>
+        ) : null}
+
+        <div className="dashboard-breakdown-layout">
+          <div className="dashboard-breakdown-chart-card">
+            <ChartPanel
+              description={`Application counts grouped by ${titleize(
+                breakdownDimension,
+              ).toLowerCase()}. Response, interview, and offer conversion rates are listed in the ranked summary and table.`}
+              emptyState={{
+                title:
+                  breakdownLoadState === "loading"
+                    ? "Loading breakdown"
+                    : "No breakdown rows yet",
+                description:
+                  breakdownLoadState === "loading"
+                    ? "Loading deterministic grouped metrics from the local backend."
+                    : "No applications exist for this breakdown dimension yet.",
+              }}
+              height={260}
+              title={`${titleize(breakdownDimension)} applications`}
+            >
+              {breakdownRows.length > 0 ? (
+                <BarChart
+                  data={breakdownRows.map((row) => ({
+                    applications: row.application_count,
+                    group: titleize(row.value),
+                  }))}
+                  layout="vertical"
+                  margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+                >
+                  <CartesianGrid horizontal={false} stroke="rgba(255, 250, 240, 0.16)" />
+                  <XAxis allowDecimals={false} stroke="#c9d8ce" type="number" />
+                  <YAxis
+                    dataKey="group"
+                    stroke="#c9d8ce"
+                    tick={{ fontSize: 12 }}
+                    type="category"
+                    width={96}
+                  />
+                  <Tooltip />
+                  <Bar dataKey="applications" fill="#b8e2af" radius={[0, 8, 8, 0]} />
+                </BarChart>
+              ) : undefined}
+            </ChartPanel>
+          </div>
+          <ol className="dashboard-breakdown-ranks">
+            {breakdownRows.length > 0 ? (
+              breakdownRows.slice(0, 4).map((row) => (
+                <li key={`${row.dimension}-${row.value}`}>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {titleize(row.value)}
+                    </span>
+                    <span>{countLabel(row.application_count, "application")}</span>
+                  </div>
+                  <p>
+                    {countLabel(row.response_count, "response")} ({formatNullableRate(row.response_rate)} response rate), {countLabel(row.interview_count, "interview")} ({formatNullableRate(row.interview_rate)} interview rate), {countLabel(row.offer_count, "offer")} ({formatNullableRate(row.offer_rate)} offer rate)
+                  </p>
+                </li>
+              ))
+            ) : (
+              <li>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {breakdownLoadState === "loading" ? "Loading" : "No rows"}
+                  </span>
+                  <span>
+                    {breakdownLoadState === "loading"
+                      ? "Fetching breakdowns"
+                      : "No grouped metrics"}
+                  </span>
+                </div>
+              </li>
+            )}
+          </ol>
+        </div>
+
+        <DataTable
+          caption={`${titleize(breakdownDimension)} metric breakdown`}
+          columns={breakdownColumns}
+          emptyMessage={
+            breakdownLoadState === "loaded"
+              ? "No breakdown rows to show."
+              : "No breakdown rows loaded yet."
+          }
+          rowKey={(row) => `${row.dimension}-${row.value}`}
+          rows={breakdownRows}
+        />
+      </section>
+
+      <section
+        aria-labelledby="best-converting-titles-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div>
+          <p className="eyebrow">Q-23</p>
+          <h2 id="best-converting-titles-title">Best-converting titles</h2>
+          <p className="dashboard-card__meta">
+            Roles are ranked by deterministic interview conversion from role breakdown rows.
+          </p>
+        </div>
+
+        {roleConversionError ? (
+          <Alert title="Best-converting titles unavailable" tone="danger">
+            <p>{roleConversionError}</p>
+          </Alert>
+        ) : null}
+
+        <ol className="dashboard-breakdown-ranks">
+          {roleConversionRows.length > 0 ? (
+            roleConversionRows.slice(0, 5).map((row) => (
+              <li key={`${row.dimension}-${row.value}`}>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {titleize(row.value)}
+                  </span>
+                  <span>{formatNullableRate(interviewConversionRate(row))} interview rate</span>
+                </div>
+                <p>
+                  {`${row.interview_count} of ${row.application_count} applications reached interview`}
+                </p>
+              </li>
+            ))
+          ) : (
+            <li>
+              <div>
+                <span className="dashboard-breakdown-rank__label">
+                  {roleConversionLoadState === "loading" ? "Loading" : "No rows"}
+                </span>
+                <span>
+                  {roleConversionLoadState === "loading"
+                    ? "Fetching role conversions"
+                    : "No title conversion data"}
+                </span>
+              </div>
+            </li>
+          )}
+        </ol>
+      </section>
+
+      <section
+        aria-labelledby="application-volume-trend-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div>
+          <p className="eyebrow">Q-20</p>
+          <h2 id="application-volume-trend-title">
+            Application volume trend
+          </h2>
+          <p className="dashboard-card__meta">
+            Daily application counts come from deterministic /metrics/timeseries
+            points over canonical applications.first_seen_at values.
+          </p>
+        </div>
+
+        {timeseriesError ? (
+          <Alert title="Application volume trend unavailable" tone="danger">
+            <p>{timeseriesError}</p>
+          </Alert>
+        ) : null}
+
+        <div className="dashboard-breakdown-layout">
+          <div className="dashboard-breakdown-chart-card">
+            <ChartPanel
+              description="Application counts grouped over time from the local SQLite applications table."
+              emptyState={{
+                title:
+                  timeseriesLoadState === "loading"
+                    ? "Loading application volume"
+                    : "No application volume yet",
+                description:
+                  timeseriesLoadState === "loading"
+                    ? "Loading deterministic application-volume points from the local backend."
+                    : "No applications exist for the volume trend yet.",
+              }}
+              height={260}
+              title="Daily application count"
+            >
+              {timeseriesPoints.length > 0 ? (
+                <LineChart
+                  data={timeseriesPoints.map((point) => ({
+                    applications: point.application_count,
+                    period: formatTrendDate(point.period_start),
+                  }))}
+                  margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+                >
+                  <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                  <XAxis dataKey="period" stroke="#c9d8ce" />
+                  <YAxis allowDecimals={false} stroke="#c9d8ce" />
+                  <Tooltip />
+                  <Line
+                    dataKey="applications"
+                    dot={{ fill: "#b8e2af", r: 4 }}
+                    name="Applications"
+                    stroke="#b8e2af"
+                    strokeWidth={3}
+                    type="monotone"
+                  />
+                </LineChart>
+              ) : undefined}
+            </ChartPanel>
+          </div>
+          <ol className="dashboard-breakdown-ranks">
+            {timeseriesPoints.length > 0 ? (
+              timeseriesPoints.map((point) => (
+                <li key={point.period_start}>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {formatTrendDate(point.period_start)}
+                    </span>
+                    <span>
+                      {countLabel(point.application_count, "application")}
+                    </span>
+                  </div>
+                  <p>
+                    {`${countLabel(point.application_count, "application")} on ${formatTrendDate(point.period_start)}`}
+                  </p>
+                </li>
+              ))
+            ) : (
+              <li>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {timeseriesLoadState === "loading" ? "Loading" : "No rows"}
+                  </span>
+                  <span>
+                    {timeseriesLoadState === "loading"
+                      ? "Fetching trend"
+                      : "No application volume"}
+                  </span>
+                </div>
+              </li>
+            )}
+          </ol>
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="response-rate-trend-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div>
+          <p className="eyebrow">Q-21</p>
+          <h2 id="response-rate-trend-title">Response rate trend</h2>
+          <p className="dashboard-card__meta">
+            Response-rate trend points come from deterministic response evidence
+            over canonical applications grouped by first_seen_at date.
+          </p>
+        </div>
+
+        {responseRateTrendError ? (
+          <Alert title="Response rate trend unavailable" tone="danger">
+            <p>{responseRateTrendError}</p>
+          </Alert>
+        ) : null}
+
+        <div className="dashboard-breakdown-layout">
+          <div className="dashboard-breakdown-chart-card">
+            <ChartPanel
+              description="Response rates grouped over time from local application and response-event evidence."
+              emptyState={{
+                title:
+                  responseRateTrendLoadState === "loading"
+                    ? "Loading response rate trend"
+                    : "No response rate trend yet",
+                description:
+                  responseRateTrendLoadState === "loading"
+                    ? "Loading deterministic response-rate trend points from the local backend."
+                    : "No applications exist for the response-rate trend yet.",
+              }}
+              height={260}
+              title="Daily response rate"
+            >
+              {responseRateTrendPoints.length > 0 ? (
+                <LineChart
+                  data={responseRateTrendPoints.map((point) => ({
+                    period: formatTrendDate(point.period_start),
+                    responseRate:
+                      point.response_rate === null ? null : point.response_rate * 100,
+                  }))}
+                  margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+                >
+                  <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                  <XAxis dataKey="period" stroke="#c9d8ce" />
+                  <YAxis allowDecimals={false} stroke="#c9d8ce" unit="%" />
+                  <Tooltip />
+                  <Line
+                    dataKey="responseRate"
+                    dot={{ fill: "#b8e2af", r: 4 }}
+                    name="Response rate"
+                    stroke="#b8e2af"
+                    strokeWidth={3}
+                    type="monotone"
+                  />
+                </LineChart>
+              ) : undefined}
+            </ChartPanel>
+          </div>
+          <ol className="dashboard-breakdown-ranks">
+            {responseRateTrendPoints.length > 0 ? (
+              responseRateTrendPoints.map((point) => (
+                <li key={point.period_start}>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {formatTrendDate(point.period_start)}
+                    </span>
+                    <span>{formatNullableRate(point.response_rate)}</span>
+                  </div>
+                  <p>
+                    {`${formatNullableRate(point.response_rate)} on ${formatTrendDate(point.period_start)}`}
+                  </p>
+                </li>
+              ))
+            ) : (
+              <li>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {responseRateTrendLoadState === "loading" ? "Loading" : "No rows"}
+                  </span>
+                  <span>
+                    {responseRateTrendLoadState === "loading"
+                      ? "Fetching trend"
+                      : "No response-rate trend"}
+                  </span>
+                </div>
+              </li>
+            )}
+          </ol>
+        </div>
       </section>
 
       <section
@@ -879,20 +1871,11 @@ export function DashboardPage() {
         )}
       </section>
 
-      <ChartPanel
-        description="Dashboard charts stay empty until broader deterministic metrics endpoints can supply reconciled series from the local SQLite database."
-        emptyState={{
-          title: "Dashboard metrics pending",
-          description:
-            "Broader deterministic metrics will appear here as additional metrics APIs are available.",
-        }}
-        title="Dashboard metrics shell"
-      />
     </main>
   );
 }
 
-function formatResponseRateValue(
+function formatRateValue(
   metric: MetricRate | null,
   loadState: ResponseRateLoadState,
 ) {
@@ -906,6 +1889,10 @@ function formatResponseRateValue(
     return "No data";
   }
   return percentageFormatter.format(metric.rate);
+}
+
+function formatNullableRate(rate: number | null) {
+  return rate === null ? "No data" : percentageFormatter.format(rate);
 }
 
 function formatResponseRateMeta(
@@ -924,4 +1911,78 @@ function formatResponseRateMeta(
   return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
     metric.denominator,
   )} applications have response evidence`;
+}
+
+function formatRejectionRateMeta(
+  metric: MetricRate | null,
+  loadState: ResponseRateLoadState,
+) {
+  if (loadState === "error") {
+    return "Rejection rate is unavailable from the local backend";
+  }
+  if (loadState === "loading" || metric === null) {
+    return "Loading deterministic numerator and denominator";
+  }
+  if (metric.denominator === 0) {
+    return "0 applications in the denominator";
+  }
+  const applicationLabel =
+    metric.denominator === 1 ? "application is" : "applications are";
+  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
+    metric.denominator,
+  )} ${applicationLabel} rejected`;
+}
+
+function formatGhostRateMeta(
+  metric: MetricRate | null,
+  loadState: ResponseRateLoadState,
+) {
+  if (loadState === "error") {
+    return "Ghost rate is unavailable from the local backend";
+  }
+  if (loadState === "loading" || metric === null) {
+    return "Loading deterministic numerator and denominator";
+  }
+  if (metric.denominator === 0) {
+    return "0 applications in the denominator";
+  }
+  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
+    metric.denominator,
+  )} applications are ghosted or silent past threshold`;
+}
+
+function formatApplicationToInterviewRateMeta(
+  metric: MetricRate | null,
+  loadState: ResponseRateLoadState,
+) {
+  if (loadState === "error") {
+    return "Application to interview rate is unavailable from the local backend";
+  }
+  if (loadState === "loading" || metric === null) {
+    return "Loading deterministic numerator and denominator";
+  }
+  if (metric.denominator === 0) {
+    return "0 applications in the denominator";
+  }
+  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
+    metric.denominator,
+  )} applications reached interview`;
+}
+
+function formatInterviewToOfferRateMeta(
+  metric: MetricRate | null,
+  loadState: ResponseRateLoadState,
+) {
+  if (loadState === "error") {
+    return "Interview to offer rate is unavailable from the local backend";
+  }
+  if (loadState === "loading" || metric === null) {
+    return "Loading deterministic numerator and denominator";
+  }
+  if (metric.denominator === 0) {
+    return "0 interviewed applications in the denominator";
+  }
+  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
+    metric.denominator,
+  )} interviewed applications reached offer`;
 }

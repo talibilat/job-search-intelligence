@@ -23,6 +23,7 @@ from .correction import (
     ApplicationSplitResponse,
     ApplicationSplitSourceApplication,
 )
+from .diagnostics import DiagnosticSegmentComparison, MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunResponse
 from .health import HealthResponse
 from .insight import (
@@ -36,15 +37,19 @@ from .metrics import (
     MetricFunnelStage,
     MetricRate,
     MetricRateRow,
+    MetricResponseRateTrendPoint,
     MetricsApplicationWindow,
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
     MetricsFilter,
+    MetricsFunnelResponse,
     MetricsRatesResponse,
+    MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     MetricTimeseriesPoint,
     ResponseSilenceMetric,
+    TimeToRejectionMetric,
 )
 from .provider_config import (
     EmailProviderConfigResponse,
@@ -106,19 +111,24 @@ from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
     "ClassificationPromptOutput",
+    "DiagnosticSegmentComparison",
     "EmailProviderConfigResponse",
     "GhostInferenceRunResponse",
     "HealthResponse",
     "LLMProviderConfigResponse",
     "MetricBreakdownRow",
     "MetricsBreakdownResponse",
+    "MetricsDiagnosticsResponse",
     "MetricFunnelStage",
     "MetricRate",
     "MetricRateRow",
+    "MetricResponseRateTrendPoint",
     "MetricsApplicationWindow",
     "MetricsBreakdownDimension",
     "MetricsFilter",
+    "MetricsFunnelResponse",
     "MetricsRatesResponse",
+    "MetricsResponseRateTrendResponse",
     "MetricsSummaryResponse",
     "MetricsTimeseriesResponse",
     "MetricTimeseriesPoint",
@@ -177,6 +187,7 @@ __all__ = [
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
     "ResponseSilenceMetric",
+    "TimeToRejectionMetric",
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",

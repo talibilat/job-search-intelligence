@@ -18,17 +18,29 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
         insert_application_with_events(connection, "app-response", ("applied", "response"))
-        insert_application_with_events(connection, "app-rejection", ("applied", "rejection"))
+        insert_application_with_events(
+            connection,
+            "app-rejection",
+            ("applied", "rejection"),
+            current_status="rejected",
+        )
         insert_application_with_events(
             connection,
             "app-multiple-responses",
-            ("applied", "response", "interview_scheduled"),
+            ("applied", "response", "interview_scheduled", "offer"),
         )
-        insert_application_with_events(connection, "app-silent", ("applied",))
+        insert_application_with_events(
+            connection,
+            "app-silent",
+            ("applied",),
+            event_date_prefix="2020-01",
+        )
         insert_application_with_events(
             connection,
             "app-ghosted",
             ("applied", "ghost_inferred"),
+            current_status="ghosted",
+            event_date_prefix="2020-02",
         )
 
     response = create_test_client(database_path).get("/metrics/rates")
@@ -39,7 +51,27 @@ def test_metrics_rates_returns_overall_response_rate_with_counts(tmp_path: Path)
             "numerator": 3,
             "denominator": 5,
             "rate": 0.6,
-        }
+        },
+        "rejection_rate": {
+            "numerator": 1,
+            "denominator": 5,
+            "rate": 0.2,
+        },
+        "ghost_rate": {
+            "numerator": 2,
+            "denominator": 5,
+            "rate": 0.4,
+        },
+        "application_to_interview_rate": {
+            "numerator": 1,
+            "denominator": 5,
+            "rate": 0.2,
+        },
+        "interview_to_offer_rate": {
+            "numerator": 1,
+            "denominator": 1,
+            "rate": 1.0,
+        },
     }
 
 
@@ -54,7 +86,76 @@ def test_metrics_rates_returns_null_rate_when_no_applications(tmp_path: Path) ->
             "numerator": 0,
             "denominator": 0,
             "rate": None,
-        }
+        },
+        "rejection_rate": {
+            "numerator": 0,
+            "denominator": 0,
+            "rate": None,
+        },
+        "ghost_rate": {
+            "numerator": 0,
+            "denominator": 0,
+            "rate": None,
+        },
+        "application_to_interview_rate": {
+            "numerator": 0,
+            "denominator": 0,
+            "rate": None,
+        },
+        "interview_to_offer_rate": {
+            "numerator": 0,
+            "denominator": 0,
+            "rate": None,
+        },
+    }
+
+
+def test_metrics_rates_composes_dashboard_filters(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application_with_events(
+            connection,
+            "app-linkedin-offer",
+            ("applied", "response", "interview_scheduled", "offer"),
+            source="linkedin",
+        )
+        insert_application_with_events(
+            connection,
+            "app-company-rejected",
+            ("applied", "rejection"),
+            current_status="rejected",
+            source="company_site",
+        )
+
+    response = create_test_client(database_path).get("/metrics/rates?source=linkedin")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "overall_response_rate": {
+            "numerator": 1,
+            "denominator": 1,
+            "rate": 1.0,
+        },
+        "rejection_rate": {
+            "numerator": 0,
+            "denominator": 1,
+            "rate": 0.0,
+        },
+        "ghost_rate": {
+            "numerator": 0,
+            "denominator": 1,
+            "rate": 0.0,
+        },
+        "application_to_interview_rate": {
+            "numerator": 1,
+            "denominator": 1,
+            "rate": 1.0,
+        },
+        "interview_to_offer_rate": {
+            "numerator": 1,
+            "denominator": 1,
+            "rate": 1.0,
+        },
     }
 
 
@@ -71,6 +172,7 @@ def create_test_client(database_path: Path) -> TestClient:
     settings = AppSettings(
         _env_file=None,
         database_url=f"sqlite+aiosqlite:///{database_path}",
+        ghost_threshold_days=30,
         sync_on_open=False,
     )
     app = create_app(settings=settings)
@@ -90,15 +192,19 @@ def insert_application_with_events(
     connection: sqlite3.Connection,
     application_id: str,
     event_types: tuple[str, ...],
+    *,
+    current_status: str = "applied",
+    event_date_prefix: str = "2026-07",
+    source: str = "linkedin",
 ) -> None:
     repository = ApplicationRepository(connection)
     repository.upsert_application(
         id=application_id,
         company=f"{application_id} Corp",
         role_title="Software Engineer",
-        source="linkedin",
+        source=source,
         first_seen_at="2026-07-01T09:00:00+00:00",
-        current_status="applied",
+        current_status=current_status,
         last_activity_at="2026-07-01T09:00:00+00:00",
         created_at="2026-07-01T09:01:00+00:00",
         updated_at="2026-07-01T09:01:00+00:00",
@@ -114,7 +220,7 @@ def insert_application_with_events(
             application_id=application_id,
             email_id=email_id,
             event_type=event_type,
-            event_at=f"2026-07-{index + 1:02d}T09:00:00+00:00",
+            event_at=f"{event_date_prefix}-{index + 1:02d}T09:00:00+00:00",
         )
     connection.commit()
 

@@ -38,9 +38,19 @@ function mockApplicationResponses() {
           ? `${input.pathname}${input.search}`
           : input.url;
 
-    if (url === "/metrics/summary") {
+    if (url.startsWith("/metrics/summary")) {
       return Promise.resolve(
-        new Response(JSON.stringify({ distinct_company_count: 1 }), {
+        new Response(JSON.stringify({
+          average_time_to_first_response: {
+            application_count: 2,
+            average_hours: 36,
+          },
+          average_time_to_rejection: {
+            application_count: 2,
+            average_hours: 48,
+          },
+          distinct_company_count: 1,
+        }), {
           headers: { "Content-Type": "application/json" },
           status: 200,
         }),
@@ -52,10 +62,296 @@ function mockApplicationResponses() {
         new Response(
           JSON.stringify({
             overall_response_rate: {
+              denominator: 5,
+              numerator: 3,
+              rate: 0.6,
+            },
+            rejection_rate: {
+              denominator: 5,
+              numerator: 1,
+              rate: 0.2,
+            },
+            ghost_rate: {
+              denominator: 5,
+              numerator: 2,
+              rate: 0.4,
+            },
+            application_to_interview_rate: {
+              denominator: 5,
+              numerator: 1,
+              rate: 0.2,
+            },
+            interview_to_offer_rate: {
+              denominator: 1,
+              numerator: 1,
+              rate: 1,
+            },
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/rates?role=platform&status=rejected") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            overall_response_rate: {
+              denominator: 1,
+              numerator: 1,
+              rate: 1,
+            },
+            rejection_rate: {
+              denominator: 1,
+              numerator: 1,
+              rate: 1,
+            },
+            ghost_rate: {
+              denominator: 1,
+              numerator: 0,
+              rate: 0,
+            },
+            application_to_interview_rate: {
+              denominator: 1,
+              numerator: 0,
+              rate: 0,
+            },
+            interview_to_offer_rate: {
               denominator: 0,
               numerator: 0,
               rate: null,
             },
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/funnel") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            stages: [
+              { count: 5, stage: "applied" },
+              { count: 3, stage: "screen" },
+              { count: 2, stage: "interview" },
+              { count: 0, stage: "final" },
+              { count: 1, stage: "offer" },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/funnel?role=platform&status=rejected") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            stages: [
+              { count: 1, stage: "applied" },
+              { count: 1, stage: "screen" },
+              { count: 0, stage: "interview" },
+              { count: 0, stage: "final" },
+              { count: 0, stage: "offer" },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/breakdown?dimension=source") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "source",
+            rows: [
+              {
+                application_count: 3,
+                dimension: "source",
+                interview_count: 2,
+                interview_rate: 2 / 3,
+                offer_count: 1,
+                offer_rate: 1 / 3,
+                response_count: 2,
+                response_rate: 2 / 3,
+                value: "linkedin",
+              },
+              {
+                application_count: 2,
+                dimension: "source",
+                interview_count: 0,
+                interview_rate: 0,
+                offer_count: 0,
+                offer_rate: 0,
+                response_count: 1,
+                response_rate: 0.5,
+                value: "company_site",
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/breakdown?dimension=tech") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "tech",
+            rows: [
+              {
+                application_count: 4,
+                dimension: "tech",
+                interview_count: 2,
+                interview_rate: 0.5,
+                offer_count: 1,
+                offer_rate: 0.25,
+                response_count: 3,
+                response_rate: 0.75,
+                value: "python",
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/breakdown?dimension=role") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "role",
+            rows: [
+              {
+                application_count: 4,
+                dimension: "role",
+                interview_count: 2,
+                interview_rate: 0.5,
+                offer_count: 1,
+                offer_rate: 0.25,
+                response_count: 3,
+                response_rate: 0.75,
+                value: "backend engineer",
+              },
+              {
+                application_count: 3,
+                dimension: "role",
+                interview_count: 0,
+                interview_rate: 0,
+                offer_count: 0,
+                offer_rate: 0,
+                response_count: 1,
+                response_rate: 1 / 3,
+                value: "frontend engineer",
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/timeseries") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            points: [
+              { application_count: 2, period_start: "2026-07-01" },
+              { application_count: 5, period_start: "2026-07-08" },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/timeseries?status=rejected") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            points: [{ application_count: 1, period_start: "2026-07-08" }],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/response-rate-trend") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            points: [
+              {
+                application_count: 2,
+                period_start: "2026-07-01",
+                response_count: 1,
+                response_rate: 0.5,
+              },
+              {
+                application_count: 5,
+                period_start: "2026-07-08",
+                response_count: 4,
+                response_rate: 0.8,
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/breakdown?dimension=salary") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "salary",
+            rows: [
+              {
+                application_count: 2,
+                dimension: "salary",
+                interview_count: 1,
+                interview_rate: 0.5,
+                offer_count: 0,
+                offer_rate: 0,
+                response_count: 2,
+                response_rate: 1,
+                value: "100k_149k",
+              },
+            ],
           }),
           {
             headers: { "Content-Type": "application/json" },
@@ -223,6 +519,251 @@ describe("DashboardPage", () => {
     expect(screen.getByLabelText("Salary min")).toHaveProperty("value", "");
     expect(fetchMock).toHaveBeenCalledWith(
       "/applications",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-12 rejection rate from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Rejection rate metric");
+
+    expect(await within(metric).findByText("20%")).toBeTruthy();
+    expect(
+      within(metric).getByText("1 of 5 applications are rejected"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-13 ghost rate from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Ghost rate metric");
+
+    expect(await within(metric).findByText("40%")).toBeTruthy();
+    expect(
+      within(metric).getByText("2 of 5 applications are ghosted or silent past threshold"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-14 application to interview rate from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Application to interview rate metric");
+
+    expect(await within(metric).findByText("20%")).toBeTruthy();
+    expect(
+      within(metric).getByText("1 of 5 applications reached interview"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-15 interview to offer rate from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Interview to offer rate metric");
+
+    expect(await within(metric).findByText("100%")).toBeTruthy();
+    expect(
+      within(metric).getByText("1 of 1 interviewed applications reached offer"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-17 average time to first response from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Average time to first response metric");
+
+    expect(await within(metric).findByText("1.5 days")).toBeTruthy();
+    expect(
+      within(metric).getByText("Averaged across 2 applications with response evidence"),
+    ).toBeTruthy();
+  });
+
+  it("renders Q-18 average time to rejection from deterministic metrics", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByLabelText("Average time to rejection metric");
+
+    expect(await within(metric).findByText("2 days")).toBeTruthy();
+    expect(
+      within(metric).getByText("Averaged across 2 rejected applications"),
+    ).toBeTruthy();
+  });
+
+  it("renders source breakdown chart summary and table from deterministic metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const breakdown = await screen.findByRole("region", {
+      name: "Source breakdown",
+    });
+
+    expect(within(breakdown).getByText("Source breakdown")).toBeTruthy();
+    expect(within(breakdown).getAllByText("Linkedin").length).toBeGreaterThan(0);
+    expect(within(breakdown).getAllByText("Company site").length).toBeGreaterThan(0);
+    expect(within(breakdown).getByText("3 applications")).toBeTruthy();
+    expect(within(breakdown).getByText(/2 responses/)).toBeTruthy();
+    expect(within(breakdown).getByText(/66.7% response rate/)).toBeTruthy();
+    expect(within(breakdown).getByText(/1 offer/)).toBeTruthy();
+    expect(
+      within(breakdown).getByRole("table", {
+        name: "Source metric breakdown",
+      }),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=source",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Dimension"), {
+      target: { value: "tech" },
+    });
+
+    const techBreakdown = await screen.findByRole("region", {
+      name: "Tech breakdown",
+    });
+
+    expect(within(techBreakdown).getAllByText("Python").length).toBeGreaterThan(0);
+    expect(within(techBreakdown).getByText(/75% response rate/)).toBeTruthy();
+    expect(
+      within(techBreakdown).getByRole("table", {
+        name: "Tech metric breakdown",
+      }),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=tech",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Dimension"), {
+      target: { value: "salary" },
+    });
+
+    const salaryBreakdown = await screen.findByRole("region", {
+      name: "Salary breakdown",
+    });
+
+    expect(within(salaryBreakdown).getAllByText("100k 149k").length).toBeGreaterThan(0);
+    expect(within(salaryBreakdown).getByText(/100% response rate/)).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=salary",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-20 application volume trend from deterministic timeseries metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const trend = await screen.findByRole("region", {
+      name: "Application volume trend",
+    });
+
+    expect(within(trend).getByText("Application volume trend")).toBeTruthy();
+    expect(within(trend).getByText("2 applications on Jul 1, 2026")).toBeTruthy();
+    expect(within(trend).getByText("5 applications on Jul 8, 2026")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/timeseries",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("passes route-backed filters to the Q-20 application volume trend", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard?status=rejected");
+
+    render(<DashboardPage />);
+
+    const trend = await screen.findByRole("region", {
+      name: "Application volume trend",
+    });
+
+    expect(within(trend).getByText("1 application on Jul 8, 2026")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/timeseries?status=rejected",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-21 response rate trend from deterministic metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const trend = await screen.findByRole("region", {
+      name: "Response rate trend",
+    });
+
+    expect(within(trend).getByText("Response rate trend")).toBeTruthy();
+    expect(within(trend).getByText("50% on Jul 1, 2026"));
+    expect(within(trend).getByText("80% on Jul 8, 2026"));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/response-rate-trend",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-23 best-converting titles by interview conversion", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const leaders = await screen.findByRole("region", {
+      name: "Best-converting titles",
+    });
+
+    expect(within(leaders).getByText("Backend engineer")).toBeTruthy();
+    expect(within(leaders).getByText("50% interview rate")).toBeTruthy();
+    expect(within(leaders).getByText("2 of 4 applications reached interview")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=role",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-16 funnel stages and reloads them with dashboard filters", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard?status=rejected&role=platform");
+
+    render(<DashboardPage />);
+
+    const funnel = await screen.findByRole("region", {
+      name: "Application funnel",
+    });
+
+    expect(within(funnel).getByText("Application funnel")).toBeTruthy();
+    expect(within(funnel).getByText("Applied")).toBeTruthy();
+    expect(within(funnel).getByText("Screen")).toBeTruthy();
+    expect(within(funnel).getByText("Interview")).toBeTruthy();
+    expect(within(funnel).getByText("Final")).toBeTruthy();
+    expect(within(funnel).getByText("Offer")).toBeTruthy();
+    expect(within(funnel).getAllByText("1 application").length).toBeGreaterThan(0);
+    expect(within(funnel).getAllByText("0 applications").length).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel?role=platform&status=rejected",
       expect.objectContaining({ method: "GET" }),
     );
   });

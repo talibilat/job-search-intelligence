@@ -43,6 +43,41 @@ def test_metrics_timeseries_returns_application_counts_by_day(tmp_path: Path) ->
     }
 
 
+def test_metrics_timeseries_applies_application_filters(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-linkedin-1",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            source="linkedin",
+        )
+        insert_application(
+            connection,
+            application_id="app-linkedin-2",
+            first_seen_at="2026-07-08T09:00:00+00:00",
+            source="linkedin",
+        )
+        insert_application(
+            connection,
+            application_id="app-company-site",
+            first_seen_at="2026-07-08T10:00:00+00:00",
+            source="company_site",
+        )
+
+    response = create_test_client(database_path).get(
+        "/metrics/timeseries?source=linkedin",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "points": [
+            {"period_start": "2026-07-01", "application_count": 1},
+            {"period_start": "2026-07-08", "application_count": 1},
+        ]
+    }
+
+
 def test_metrics_timeseries_endpoint_is_documented_in_openapi() -> None:
     response = TestClient(create_app()).get("/openapi.json")
 
@@ -76,12 +111,13 @@ def insert_application(
     *,
     application_id: str,
     first_seen_at: str,
+    source: str = "linkedin",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
         company=f"{application_id} Corp",
         role_title="Software Engineer",
-        source="linkedin",
+        source=source,
         first_seen_at=first_seen_at,
         current_status="applied",
         last_activity_at=first_seen_at,
