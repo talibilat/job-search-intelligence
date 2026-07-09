@@ -721,8 +721,14 @@ def _dimension_expression(dimension: MetricsBreakdownDimension) -> str:
         return """
         CASE
             WHEN applications.salary_min IS NULL AND applications.salary_max IS NULL THEN 'unknown'
-            WHEN COALESCE(applications.salary_max, applications.salary_min) < 100000 THEN 'under_100k'
-            WHEN COALESCE(applications.salary_min, applications.salary_max) >= 150000 THEN '150k_plus'
+            WHEN COALESCE(
+                applications.salary_max,
+                applications.salary_min
+            ) < 100000 THEN 'under_100k'
+            WHEN COALESCE(
+                applications.salary_min,
+                applications.salary_max
+            ) >= 150000 THEN '150k_plus'
             ELSE '100k_149k'
         END
         """
