@@ -91,6 +91,84 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url === "/metrics/rates?role=platform&status=rejected") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            overall_response_rate: {
+              denominator: 1,
+              numerator: 1,
+              rate: 1,
+            },
+            rejection_rate: {
+              denominator: 1,
+              numerator: 1,
+              rate: 1,
+            },
+            ghost_rate: {
+              denominator: 1,
+              numerator: 0,
+              rate: 0,
+            },
+            application_to_interview_rate: {
+              denominator: 1,
+              numerator: 0,
+              rate: 0,
+            },
+            interview_to_offer_rate: {
+              denominator: 0,
+              numerator: 0,
+              rate: null,
+            },
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/funnel") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            stages: [
+              { count: 5, stage: "applied" },
+              { count: 3, stage: "screen" },
+              { count: 2, stage: "interview" },
+              { count: 0, stage: "final" },
+              { count: 1, stage: "offer" },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/funnel?role=platform&status=rejected") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            stages: [
+              { count: 1, stage: "applied" },
+              { count: 1, stage: "screen" },
+              { count: 0, stage: "interview" },
+              { count: 0, stage: "final" },
+              { count: 0, stage: "offer" },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
     if (url === "/metrics/breakdown?dimension=source") {
       return Promise.resolve(
         new Response(
@@ -585,6 +663,30 @@ describe("DashboardPage", () => {
     expect(within(leaders).getByText("2 of 4 applications reached interview")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=role",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-16 funnel stages and reloads them with dashboard filters", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard?status=rejected&role=platform");
+
+    render(<DashboardPage />);
+
+    const funnel = await screen.findByRole("region", {
+      name: "Application funnel",
+    });
+
+    expect(within(funnel).getByText("Application funnel")).toBeTruthy();
+    expect(within(funnel).getByText("Applied")).toBeTruthy();
+    expect(within(funnel).getByText("Screen")).toBeTruthy();
+    expect(within(funnel).getByText("Interview")).toBeTruthy();
+    expect(within(funnel).getByText("Final")).toBeTruthy();
+    expect(within(funnel).getByText("Offer")).toBeTruthy();
+    expect(within(funnel).getAllByText("1 application").length).toBeGreaterThan(0);
+    expect(within(funnel).getAllByText("0 applications").length).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel?role=platform&status=rejected",
       expect.objectContaining({ method: "GET" }),
     );
   });

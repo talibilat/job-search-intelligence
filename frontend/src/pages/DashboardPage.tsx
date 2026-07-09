@@ -17,6 +17,7 @@ import {
   SponsorshipStatus,
   WorkMode,
   getMetricsBreakdownMetricsBreakdownGet,
+  getMetricsFunnelMetricsFunnelGet,
   getMetricsRatesMetricsRatesGet,
   getMetricsResponseRateTrendMetricsResponseRateTrendGet,
   getMetricsSummaryMetricsSummaryGet,
@@ -28,6 +29,7 @@ import {
   type ApplicationStatus as ApplicationStatusValue,
   type ListApplicationsApplicationsGetParams,
   type MetricBreakdownRow,
+  type MetricFunnelStage,
   type MetricRate,
   type MetricResponseRateTrendPoint,
   type MetricTimeseriesPoint,
@@ -48,6 +50,7 @@ import {
 
 type LoadState = "loading" | "loaded" | "error";
 type BreakdownLoadState = "loading" | "loaded" | "error";
+type FunnelLoadState = "loading" | "loaded" | "error";
 type LiveApplicationsState = "loading" | "ready" | "error";
 type ResponseRateLoadState = "loading" | "loaded" | "error";
 type TimeseriesLoadState = "loading" | "loaded" | "error";
@@ -424,6 +427,15 @@ function sortedTimeseriesPoints(points: MetricTimeseriesPoint[]) {
   );
 }
 
+const funnelStageOrder = ["applied", "screen", "interview", "final", "offer"] as const;
+
+function sortedFunnelStages(stages: MetricFunnelStage[]) {
+  return [...stages].sort(
+    (left, right) =>
+      funnelStageOrder.indexOf(left.stage) - funnelStageOrder.indexOf(right.stage),
+  );
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -441,6 +453,10 @@ export function DashboardPage() {
     useState<MetricRate | null>(null);
   const [responseRateLoadState, setResponseRateLoadState] =
     useState<ResponseRateLoadState>("loading");
+  const [funnelStages, setFunnelStages] = useState<MetricFunnelStage[]>([]);
+  const [funnelLoadState, setFunnelLoadState] =
+    useState<FunnelLoadState>("loading");
+  const [funnelError, setFunnelError] = useState<string | null>(null);
   const [breakdownDimension, setBreakdownDimension] =
     useState<MetricsBreakdownDimensionValue>(MetricsBreakdownDimension.source);
   const [breakdownRows, setBreakdownRows] = useState<MetricBreakdownRow[]>([]);
@@ -658,6 +674,48 @@ export function DashboardPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    async function loadFunnel() {
+      setFunnelLoadState("loading");
+      setFunnelError(null);
+      setFunnelStages([]);
+
+      const response = await getMetricsFunnelMetricsFunnelGet(
+        queryParamsFromFilters(appliedFilters),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setFunnelStages([]);
+        setFunnelError(publicError(response.data, "Application funnel is unavailable."));
+        setFunnelLoadState("error");
+        return;
+      }
+
+      setFunnelStages(sortedFunnelStages(response.data.stages));
+      setFunnelLoadState("loaded");
+    }
+
+    void loadFunnel().catch(() => {
+      if (!isCancelled) {
+        setFunnelStages([]);
+        setFunnelError(
+          "Application funnel is unavailable. Start the local backend to load Q-16.",
+        );
+        setFunnelLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
     async function loadBreakdown() {
       setBreakdownLoadState("loading");
       setBreakdownError(null);
@@ -794,8 +852,15 @@ export function DashboardPage() {
 
     async function loadResponseRate() {
       try {
-        const response = await getMetricsRatesMetricsRatesGet();
+        const response = await getMetricsRatesMetricsRatesGet(
+          queryParamsFromFilters(appliedFilters),
+        );
         if (!isCancelled) {
+          if (response.status !== 200) {
+            setResponseRateLoadState("error");
+            return;
+          }
+
           setResponseRate(response.data.overall_response_rate);
           setRejectionRate(response.data.rejection_rate);
           setGhostRate(response.data.ghost_rate);
@@ -815,7 +880,7 @@ export function DashboardPage() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [appliedFilters]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -873,7 +938,7 @@ export function DashboardPage() {
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
           Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
-          Q-15, Q-17, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
+          Q-15, Q-16, Q-17, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
         </p>
@@ -1230,6 +1295,63 @@ export function DashboardPage() {
           rowKey={(row) => row.id}
           rows={applications}
         />
+      </section>
+
+      <section
+        aria-labelledby="dashboard-funnel-title"
+        className="dashboard-card dashboard-funnel-card"
+      >
+        <div>
+          <p className="eyebrow">Q-16</p>
+          <h2 id="dashboard-funnel-title">Application funnel</h2>
+          <p className="dashboard-card__meta">
+            Funnel stages come from deterministic application and event evidence
+            and reload with the active dashboard filters.
+          </p>
+        </div>
+        {funnelError ? (
+          <Alert title="Application funnel unavailable" tone="danger">
+            <p>{funnelError}</p>
+          </Alert>
+        ) : null}
+        <ol className="dashboard-funnel-list">
+          {funnelStages.length > 0 ? (
+            funnelStages.map((stage) => {
+              const appliedCount = funnelStages[0]?.count ?? 0;
+              const width = appliedCount > 0 ? Math.max((stage.count / appliedCount) * 100, 4) : 0;
+
+              return (
+                <li className="dashboard-funnel-stage" key={stage.stage}>
+                  <div className="dashboard-funnel-stage__header">
+                    <span>{titleize(stage.stage)}</span>
+                    <strong>{countLabel(stage.count, "application")}</strong>
+                  </div>
+                  <div
+                    aria-hidden="true"
+                    className="dashboard-funnel-stage__bar"
+                  >
+                    <span style={{ width: `${width}%` }} />
+                  </div>
+                  {stage.stage === "final" ? (
+                    <p className="dashboard-card__meta">
+                      Final-round evidence is not represented yet, so this stage is
+                      intentionally zero.
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })
+          ) : (
+            <li className="dashboard-funnel-stage">
+              <div className="dashboard-funnel-stage__header">
+                <span>{funnelLoadState === "loading" ? "Loading" : "No funnel rows"}</span>
+                <strong>
+                  {funnelLoadState === "loading" ? "Fetching funnel" : "No data"}
+                </strong>
+              </div>
+            </li>
+          )}
+        </ol>
       </section>
 
       <section

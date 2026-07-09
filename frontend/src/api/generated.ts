@@ -989,6 +989,18 @@ export type GetMetricsFunnelMetricsFunnelGetParams = {
   work_mode?: WorkMode | null;
 };
 
+export type GetMetricsRatesMetricsRatesGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
 export type GetMetricsResponseRateTrendMetricsResponseRateTrendGetParams = {
   status?: ApplicationStatus | null;
   source?: ApplicationSource | null;
@@ -2431,15 +2443,40 @@ export type getMetricsRatesMetricsRatesGetResponse200 = {
   status: 200;
 };
 
+export type getMetricsRatesMetricsRatesGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type getMetricsRatesMetricsRatesGetResponseSuccess =
   getMetricsRatesMetricsRatesGetResponse200 & {
     headers: Headers;
   };
-export type getMetricsRatesMetricsRatesGetResponse =
-  getMetricsRatesMetricsRatesGetResponseSuccess;
+export type getMetricsRatesMetricsRatesGetResponseError =
+  getMetricsRatesMetricsRatesGetResponse422 & {
+    headers: Headers;
+  };
 
-export const getGetMetricsRatesMetricsRatesGetUrl = () => {
-  return `/metrics/rates`;
+export type getMetricsRatesMetricsRatesGetResponse =
+  | getMetricsRatesMetricsRatesGetResponseSuccess
+  | getMetricsRatesMetricsRatesGetResponseError;
+
+export const getGetMetricsRatesMetricsRatesGetUrl = (
+  params?: GetMetricsRatesMetricsRatesGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/rates?${stringifiedParams}`
+    : `/metrics/rates`;
 };
 
 /**
@@ -2447,9 +2484,10 @@ export const getGetMetricsRatesMetricsRatesGetUrl = () => {
  * @summary Get Metrics Rates
  */
 export const getMetricsRatesMetricsRatesGet = async (
+  params?: GetMetricsRatesMetricsRatesGetParams,
   options?: RequestInit,
 ): Promise<getMetricsRatesMetricsRatesGetResponse> => {
-  const res = await fetch(getGetMetricsRatesMetricsRatesGetUrl(), {
+  const res = await fetch(getGetMetricsRatesMetricsRatesGetUrl(params), {
     ...options,
     method: "GET",
   });
