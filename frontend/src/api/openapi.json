@@ -2589,7 +2589,7 @@
             ],
             "title": "Filter Reason"
           },
-          "from_addr": {
+          "from_domain": {
             "anyOf": [
               {
                 "type": "string"
@@ -2598,27 +2598,16 @@
                 "type": "null"
               }
             ],
-            "title": "From Addr"
+            "title": "From Domain"
           },
           "has_retained_body": {
             "title": "Has Retained Body",
             "type": "boolean"
           },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
           "ingested_at": {
             "format": "date-time",
             "title": "Ingested At",
             "type": "string"
-          },
-          "labels": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Labels",
-            "type": "array"
           },
           "provider": {
             "title": "Provider",
@@ -2636,50 +2625,25 @@
             ],
             "title": "Sent At"
           },
-          "subject": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subject"
+          "subject_present": {
+            "title": "Subject Present",
+            "type": "boolean"
           },
-          "thread_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thread Id"
-          },
-          "to_addr": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "To Addr"
+          "to_domains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "To Domains",
+            "type": "array"
           }
         },
         "required": [
-          "id",
-          "thread_id",
-          "from_addr",
-          "to_addr",
-          "subject",
+          "from_domain",
+          "to_domains",
+          "subject_present",
           "sent_at",
           "body_retention_state",
           "has_retained_body",
-          "labels",
           "provider",
           "ingested_at"
         ],

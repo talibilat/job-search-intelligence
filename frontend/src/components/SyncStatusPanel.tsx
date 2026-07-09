@@ -8,7 +8,8 @@ import {
   type EmailSyncStatus,
   type RawEmailPreviewRecord,
 } from "../api";
-import { Alert, Button, FormField, TextInput } from "./ui";
+import { Alert, Button, DataTable, FormField, TextInput } from "./ui";
+import type { DataTableColumn } from "./ui";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const syncStatusPollIntervalMs = 5000;
@@ -125,14 +126,64 @@ function formatEmailTimestamp(value: string | null, label: string) {
   return `${label} ${dateFormatter.format(new Date(value))}`;
 }
 
-function formatEmailSubject(email: RawEmailPreviewRecord) {
-  const subject = email.subject?.trim();
-  return subject && subject.length > 0 ? subject : "(No subject)";
-}
-
 function emailRetentionLabel(email: RawEmailPreviewRecord) {
   return email.has_retained_body ? "retained body" : "metadata only";
 }
+
+function formatSubjectPresence(email: RawEmailPreviewRecord) {
+  return email.subject_present ? "Subject captured" : "No subject";
+}
+
+function formatEmailDomains(domains: string[]) {
+  return domains.length > 0 ? domains.join(", ") : "Unknown recipient";
+}
+
+function recentEmailRowKey(email: RawEmailPreviewRecord) {
+  return [
+    email.provider,
+    email.ingested_at,
+    email.sent_at,
+    email.from_domain,
+    email.subject_present ? "subject" : "no-subject",
+    email.filter_outcome,
+    email.filter_reason,
+  ]
+    .filter(Boolean)
+    .join(":");
+}
+
+const recentEmailColumns: readonly DataTableColumn<RawEmailPreviewRecord>[] = [
+  {
+    header: "Subject",
+    key: "subject_present",
+    render: formatSubjectPresence,
+  },
+  {
+    header: "From domain",
+    key: "from_domain",
+    render: (email) => email.from_domain ?? "Unknown sender",
+  },
+  {
+    header: "To domains",
+    key: "to_domains",
+    render: (email) => formatEmailDomains(email.to_domains),
+  },
+  {
+    header: "Sent",
+    key: "sent_at",
+    render: (email) => formatEmailTimestamp(email.sent_at, "Sent"),
+  },
+  {
+    header: "Retention",
+    key: "body_retention_state",
+    render: emailRetentionLabel,
+  },
+  {
+    header: "Filter",
+    key: "filter_outcome",
+    render: (email) => email.filter_outcome ?? "not evaluated",
+  },
+];
 
 function SyncMetric({ label, value }: { label: string; value: string }) {
   return (
@@ -260,7 +311,7 @@ export function SyncStatusPanel() {
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isStartingSync, setIsStartingSync] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [maxMessages, setMaxMessages] = useState("500");
+  const [maxMessages, setMaxMessages] = useState("");
   const [sinceDate, setSinceDate] = useState("");
   const [beforeDate, setBeforeDate] = useState("");
   const [maxAgeDays, setMaxAgeDays] = useState("");
@@ -503,6 +554,7 @@ export function SyncStatusPanel() {
                   maxMessages: undefined,
                 }));
               }}
+              placeholder="500"
               type="number"
               value={maxMessages}
             />
@@ -673,8 +725,8 @@ export function SyncStatusPanel() {
                   <h3 id="sync-recent-emails-title">Recently synced emails</h3>
                 </div>
                 <p>
-                  Public-safe metadata from raw_emails. Body text and snippets
-                  stay hidden.
+                  Sanitized metadata from raw_emails. Body text, snippets, and
+                  provider message identifiers stay hidden.
                 </p>
               </div>
 
@@ -684,60 +736,12 @@ export function SyncStatusPanel() {
                   className="sync-panel__recent-scroll"
                   role="region"
                 >
-                  <ul className="sync-panel__recent-list">
-                    {recentEmails.map((email) => (
-                      <li className="sync-panel__recent-email" key={email.id}>
-                        <div className="sync-panel__recent-email-header">
-                          <h4>{formatEmailSubject(email)}</h4>
-                          <div
-                            aria-label="Email processing labels"
-                            className="sync-panel__recent-badges"
-                          >
-                            {email.filter_outcome ? (
-                              <span>{email.filter_outcome}</span>
-                            ) : null}
-                            <span>{emailRetentionLabel(email)}</span>
-                          </div>
-                        </div>
-                        <dl className="sync-panel__recent-meta">
-                          <div>
-                            <dt>From</dt>
-                            <dd>{email.from_addr ?? "Unknown sender"}</dd>
-                          </div>
-                          <div>
-                            <dt>To</dt>
-                            <dd>{email.to_addr ?? "Unknown recipient"}</dd>
-                          </div>
-                          <div>
-                            <dt>Sent</dt>
-                            <dd>
-                              {formatEmailTimestamp(email.sent_at, "Sent")}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>Ingested</dt>
-                            <dd>
-                              {formatEmailTimestamp(
-                                email.ingested_at,
-                                "Ingested",
-                              )}
-                            </dd>
-                          </div>
-                        </dl>
-                        <p className="sync-panel__recent-context">
-                          {email.provider} - {email.id}
-                          {email.thread_id
-                            ? ` - thread ${email.thread_id}`
-                            : ""}
-                        </p>
-                        {email.filter_reason ? (
-                          <p className="sync-panel__recent-context">
-                            Filter reason: {email.filter_reason}
-                          </p>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
+                  <DataTable
+                    caption="Recently synced email metadata"
+                    columns={recentEmailColumns}
+                    rowKey={recentEmailRowKey}
+                    rows={recentEmails}
+                  />
                 </div>
               ) : (
                 <p className="sync-panel__recent-empty">

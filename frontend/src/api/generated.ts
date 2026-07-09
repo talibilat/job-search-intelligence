@@ -864,16 +864,13 @@ export interface RawEmailPreviewRecord {
   body_retention_state: RawEmailBodyRetentionState;
   filter_outcome?: string | null;
   filter_reason?: string | null;
-  from_addr: string | null;
+  from_domain: string | null;
   has_retained_body: boolean;
-  id: string;
   ingested_at: string;
-  labels: string[];
   provider: string;
   sent_at: string | null;
-  subject: string | null;
-  thread_id: string | null;
-  to_addr: string | null;
+  subject_present: boolean;
+  to_domains: string[];
 }
 
 export interface ResponseSilenceMetric {

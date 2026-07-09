@@ -343,15 +343,12 @@ describe("App", () => {
           new Response(
             JSON.stringify([
               {
-                id: "gmail-msg-1",
-                thread_id: "thread-1",
-                from_addr: "jobs@example.com",
-                to_addr: "me@example.com",
-                subject: "Application received",
+                from_domain: "example.com",
+                to_domains: ["example.com"],
+                subject_present: true,
                 sent_at: "2026-07-05T12:00:00Z",
                 body_retention_state: "retained",
                 has_retained_body: true,
-                labels: ["INBOX"],
                 provider: "gmail",
                 ingested_at: "2026-07-05T12:01:00Z",
                 filter_outcome: "candidate",
@@ -376,11 +373,13 @@ describe("App", () => {
     expect(
       screen.getByRole("region", { name: "Recently synced email metadata" }),
     ).toBeTruthy();
-    expect(screen.getByText("Application received")).toBeTruthy();
-    expect(screen.getByText("jobs@example.com")).toBeTruthy();
+    expect(screen.getByText("Subject captured")).toBeTruthy();
+    expect(screen.getAllByText("example.com").length).toBeGreaterThan(0);
     expect(screen.getByText("candidate")).toBeTruthy();
     expect(screen.getByText("retained body")).toBeTruthy();
     expect(screen.queryByText("Private body")).toBeNull();
+    expect(screen.queryByText("gmail-msg-1")).toBeNull();
+    expect(screen.queryByText("thread-1")).toBeNull();
     expect(styles).toContain(".sync-panel__recent-scroll");
     expect(styles).toContain("max-height: min(72vh, 1120px)");
     expect(styles).toContain("overflow-y: auto");

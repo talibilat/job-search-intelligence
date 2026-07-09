@@ -79,6 +79,10 @@ class FakeSyncRuntime:
     def current_status(self) -> EmailSyncStatus:
         return self.status
 
+    def recent_email_previews(self, *, limit: int = 10) -> tuple[object, ...]:
+        del limit
+        return ()
+
 
 class ProviderErrorSyncRuntime:
     async def run_manual_sync(self, options: EmailSyncOptions | None = None) -> EmailSyncStatus:
@@ -396,15 +400,12 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
     assert response.status_code == 200
     assert response.json() == [
         {
-            "id": "gmail-msg-1",
-            "thread_id": "thread-1",
-            "from_addr": "jobs@example.com",
-            "to_addr": "me@example.com",
-            "subject": "Application received",
+            "from_domain": "example.com",
+            "to_domains": ["example.com"],
+            "subject_present": True,
             "sent_at": "2026-07-05T12:00:00Z",
             "body_retention_state": "retained",
             "has_retained_body": True,
-            "labels": ["INBOX"],
             "provider": "gmail",
             "ingested_at": "2026-07-05T12:01:00Z",
             "filter_outcome": "candidate",
@@ -413,6 +414,8 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
     ]
     assert "body_text" not in response.text
     assert "Private body" not in response.text
+    assert "gmail-msg-1" not in response.text
+    assert "thread-1" not in response.text
 
 
 def test_post_sync_passes_extraction_limits_to_provider_request(

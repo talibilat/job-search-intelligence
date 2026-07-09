@@ -205,8 +205,6 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         rows = self.execute(
             f"""
             SELECT
-                raw_emails.id,
-                raw_emails.thread_id,
                 raw_emails.from_addr,
                 raw_emails.to_addr,
                 raw_emails.subject,
@@ -217,7 +215,6 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                         AND raw_emails.body_text IS NOT NULL
                     THEN 1 ELSE 0
                 END AS has_retained_body,
-                raw_emails.labels,
                 raw_emails.provider,
                 raw_emails.ingested_at,
                 email_filter_decisions.outcome AS filter_outcome,
@@ -233,7 +230,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             parameters,
         ).fetchall()
 
-        return tuple(RawEmailPreviewRecord.model_validate(row_to_dict(row)) for row in rows)
+        return tuple(_raw_email_preview_from_row(row) for row in rows)
 
     def get_classification_candidate_stats(
         self,
@@ -594,6 +591,39 @@ def _format_email_addresses(addresses: tuple[EmailAddress, ...]) -> str | None:
     return ", ".join(
         address for address in (_format_email_address(item) for item in addresses) if address
     )
+
+
+def _raw_email_preview_from_row(row: sqlite3.Row) -> RawEmailPreviewRecord:
+    row_data = row_to_dict(row)
+    from_addr = row_data.pop("from_addr")
+    to_addr = row_data.pop("to_addr")
+    subject = row_data.pop("subject")
+    row_data["from_domain"] = _email_address_domain(from_addr)
+    row_data["to_domains"] = _email_address_domains(to_addr)
+    row_data["subject_present"] = bool(str(subject or "").strip())
+    return RawEmailPreviewRecord.model_validate(row_data)
+
+
+def _email_address_domains(value: object) -> list[str]:
+    if value is None:
+        return []
+    domains = {
+        domain
+        for domain in (_email_address_domain(part) for part in str(value).split(","))
+        if domain is not None
+    }
+    return sorted(domains)
+
+
+def _email_address_domain(value: object) -> str | None:
+    if value is None:
+        return None
+    address = str(value).strip().rstrip(">")
+    _local_part, separator, domain = address.rpartition("@")
+    if not separator:
+        return None
+    normalized_domain = domain.strip().lower()
+    return normalized_domain or None
 
 
 def _format_datetime(value: datetime | None) -> str | None:

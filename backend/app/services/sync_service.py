@@ -21,6 +21,7 @@ from app.models.records import (
     EmailFilterDecisionRecord,
     EmailSyncStateRecord,
     RawEmailBodyRetentionState,
+    RawEmailPreviewRecord,
 )
 from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import (
@@ -205,6 +206,10 @@ class EmailSyncRuntime(Protocol):
         """Return current or last-run status."""
         ...
 
+    def recent_email_previews(self, *, limit: int = 10) -> tuple[RawEmailPreviewRecord, ...]:
+        """Return sanitized recent raw-email metadata previews."""
+        ...
+
 
 class SyncService:
     """Business seam for email sync state used by full and incremental runs."""
@@ -280,6 +285,24 @@ class SyncService:
         return self._sync_state_repository.clear_page_progress(
             account,
             updated_at=updated_at or datetime.now(UTC),
+        )
+
+
+class EmailSyncPreviewService:
+    """Read sanitized sync preview records from raw-email storage."""
+
+    def __init__(self, *, email_repository: EmailRepository) -> None:
+        self._email_repository = email_repository
+
+    def list_recent_email_previews(
+        self,
+        *,
+        provider: EmailProviderName | None = None,
+        limit: int = 10,
+    ) -> tuple[RawEmailPreviewRecord, ...]:
+        return self._email_repository.list_recent_email_previews(
+            provider=provider,
+            limit=_bounded_preview_limit(limit),
         )
 
 
@@ -635,8 +658,6 @@ class EmailSyncService:
                     page_size=page_size,
                     page_token=page_token,
                     sync_cursor=sync_cursor,
-                    since_date=since_date,
-                    before_date=sync_options.before_date,
                 ),
             )
         except EmailSyncCursorExpiredError:
@@ -653,7 +674,14 @@ class EmailSyncService:
                 recovered_from_expired_cursor=True,
             )
 
-        return EmailSyncPageResult(mode=EmailSyncMode.INCREMENTAL, page=page)
+        return EmailSyncPageResult(
+            mode=EmailSyncMode.INCREMENTAL,
+            page=_filter_metadata_page(
+                page,
+                since_date=since_date,
+                before_date=sync_options.before_date,
+            ),
+        )
 
     async def run_backfill_page(
         self,
@@ -1117,6 +1145,49 @@ def _chunk_refs(
     return tuple(
         tuple(refs[index : index + chunk_size]) for index in range(0, len(refs), chunk_size)
     )
+
+
+def _bounded_preview_limit(limit: int) -> int:
+    return min(max(limit, 1), 50)
+
+
+def _filter_metadata_page(
+    page: EmailMetadataPage,
+    *,
+    since_date: date | None,
+    before_date: date | None,
+) -> EmailMetadataPage:
+    if since_date is None and before_date is None:
+        return page
+
+    return page.model_copy(
+        update={
+            "messages": tuple(
+                message
+                for message in page.messages
+                if _metadata_matches_date_bounds(
+                    message,
+                    since_date=since_date,
+                    before_date=before_date,
+                )
+            )
+        }
+    )
+
+
+def _metadata_matches_date_bounds(
+    message: EmailMessageMetadata,
+    *,
+    since_date: date | None,
+    before_date: date | None,
+) -> bool:
+    timestamp = message.sent_at or message.received_at
+    if timestamp is None:
+        return False
+    message_date = timestamp.date()
+    if since_date is not None and message_date < since_date:
+        return False
+    return before_date is None or message_date < before_date
 
 
 def build_idle_sync_status(*, now: datetime | None = None) -> SyncJobStatus:
