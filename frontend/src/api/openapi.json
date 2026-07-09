@@ -1820,6 +1820,13 @@
         "title": "GhostInferenceRunResponse",
         "type": "object"
       },
+      "GhostThresholdSource": {
+        "enum": [
+          "response_percentile",
+          "configured_fallback"
+        ],
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2501,6 +2508,9 @@
             "title": "Offers Received",
             "type": "integer"
           },
+          "personal_ghost_threshold": {
+            "$ref": "#/components/schemas/PersonalGhostThresholdMetric"
+          },
           "rejected_applications": {
             "description": "Total applications whose canonical current status is rejected.",
             "minimum": 0.0,
@@ -2524,6 +2534,7 @@
           "interview_invitation_count",
           "average_time_to_first_response",
           "average_time_to_rejection",
+          "personal_ghost_threshold",
           "application_windows"
         ],
         "title": "MetricsSummaryResponse",
@@ -2543,6 +2554,44 @@
           "points"
         ],
         "title": "MetricsTimeseriesResponse",
+        "type": "object"
+      },
+      "PersonalGhostThresholdMetric": {
+        "properties": {
+          "response_sample_size": {
+            "minimum": 0.0,
+            "title": "Response Sample Size",
+            "type": "integer"
+          },
+          "silence_age_distribution": {
+            "items": {
+              "$ref": "#/components/schemas/SilenceAgeBucketMetric"
+            },
+            "title": "Silence Age Distribution",
+            "type": "array"
+          },
+          "silent_application_count": {
+            "minimum": 0.0,
+            "title": "Silent Application Count",
+            "type": "integer"
+          },
+          "threshold_days": {
+            "minimum": 1.0,
+            "title": "Threshold Days",
+            "type": "integer"
+          },
+          "threshold_source": {
+            "$ref": "#/components/schemas/GhostThresholdSource"
+          }
+        },
+        "required": [
+          "threshold_days",
+          "threshold_source",
+          "response_sample_size",
+          "silent_application_count",
+          "silence_age_distribution"
+        ],
+        "title": "PersonalGhostThresholdMetric",
         "type": "object"
       },
       "ProviderConfigRequirementResponse": {
@@ -3238,6 +3287,52 @@
         ],
         "title": "SetupSubmitResponse",
         "type": "object"
+      },
+      "SilenceAgeBucketMetric": {
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "bucket": {
+            "$ref": "#/components/schemas/SilenceAgeBucketName"
+          },
+          "max_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Days"
+          },
+          "min_days": {
+            "minimum": 0.0,
+            "title": "Min Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket",
+          "min_days",
+          "application_count"
+        ],
+        "title": "SilenceAgeBucketMetric",
+        "type": "object"
+      },
+      "SilenceAgeBucketName": {
+        "enum": [
+          "0_7",
+          "8_14",
+          "15_30",
+          "31_60",
+          "61_plus"
+        ],
+        "type": "string"
       },
       "SponsorshipStatus": {
         "enum": [

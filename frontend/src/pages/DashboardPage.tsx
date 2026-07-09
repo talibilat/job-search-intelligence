@@ -39,6 +39,8 @@ import {
   type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
   type MetricsDiagnosticsResponse,
   type MetricsSummaryResponse,
+  type PersonalGhostThresholdMetric,
+  type SilenceAgeBucketMetric,
   type TimeToFirstResponseMetric,
   type TimeToRejectionMetric,
   type SponsorshipStatus as SponsorshipStatusValue,
@@ -313,6 +315,42 @@ function formatTimeToRejectionMeta(
   return `Averaged across ${numberFormatter.format(
     metric.application_count,
   )} ${applicationLabel}`;
+}
+
+function formatGhostThresholdValue(
+  isLoading: boolean,
+  metric: PersonalGhostThresholdMetric | undefined,
+) {
+  if (isLoading) {
+    return "Loading";
+  }
+  if (metric === undefined) {
+    return "Unavailable";
+  }
+  return `${numberFormatter.format(metric.threshold_days)} days`;
+}
+
+function formatGhostThresholdMeta(
+  isLoading: boolean,
+  metric: PersonalGhostThresholdMetric | undefined,
+) {
+  if (isLoading || metric === undefined) {
+    return "Loading deterministic silence threshold";
+  }
+  if (metric.threshold_source === "configured_fallback") {
+    return "Using configured fallback threshold";
+  }
+  const sampleLabel = metric.response_sample_size === 1 ? "timing" : "timings";
+  return `Inferred from ${numberFormatter.format(metric.response_sample_size)} response ${sampleLabel}`;
+}
+
+function silenceBucketLabel(bucket: SilenceAgeBucketMetric) {
+  if (bucket.max_days === null || bucket.max_days === undefined) {
+    return `${numberFormatter.format(bucket.min_days)}+ days`;
+  }
+  return `${numberFormatter.format(bucket.min_days)} to ${numberFormatter.format(
+    bucket.max_days,
+  )} days`;
 }
 
 function liveApplicationsCountLabel(
@@ -1116,6 +1154,14 @@ export function DashboardPage() {
     isLoadingSummary,
     summary?.average_time_to_rejection,
   );
+  const ghostThresholdValue = formatGhostThresholdValue(
+    isLoadingSummary,
+    summary?.personal_ghost_threshold,
+  );
+  const ghostThresholdMeta = formatGhostThresholdMeta(
+    isLoadingSummary,
+    summary?.personal_ghost_threshold,
+  );
   const strongestDiagnostic = diagnostics?.strongest_response_segments[0];
   const weakestDiagnostic = diagnostics?.weakest_response_segments[0];
 
@@ -1132,7 +1178,7 @@ export function DashboardPage() {
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
           Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
-          Q-15, Q-16, Q-17, Q-18, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
+          Q-15, Q-16, Q-17, Q-18, Q-19, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
         </p>
@@ -1473,6 +1519,57 @@ export function DashboardPage() {
           </div>
         </section>
       </div>
+
+      <section aria-label="Personal ghost threshold" className="dashboard-card">
+        <div>
+          <p className="eyebrow">Q-19</p>
+          <h2>Personal ghost threshold</h2>
+          <p className="dashboard-card__meta">
+            The threshold and silence-age distribution come from deterministic
+            application timelines and update with the active dashboard filters.
+          </p>
+        </div>
+        <div className="dashboard-metric-grid">
+          <article className="metric-placeholder">
+            <p className="metric-placeholder__label">Effective dead after</p>
+            <p className="metric-placeholder__value">{ghostThresholdValue}</p>
+            <p className="dashboard-card__meta">{ghostThresholdMeta}</p>
+          </article>
+          <article className="metric-placeholder">
+            <p className="metric-placeholder__label">Silent applications</p>
+            <p className="metric-placeholder__value">
+              {isLoadingSummary
+                ? "Loading"
+                : summary?.personal_ghost_threshold === undefined
+                  ? "Unavailable"
+                  : numberFormatter.format(
+                      summary.personal_ghost_threshold.silent_application_count,
+                    )}
+            </p>
+            <p className="dashboard-card__meta">
+              {isLoadingSummary || summary?.personal_ghost_threshold === undefined
+                ? "Silence-age distribution unavailable"
+                : `${numberFormatter.format(
+                    summary.personal_ghost_threshold.silent_application_count,
+                  )} silent applications in distribution`}
+            </p>
+          </article>
+        </div>
+        <ol className="dashboard-breakdown-ranks">
+          {(summary?.personal_ghost_threshold?.silence_age_distribution ?? []).map(
+            (bucket) => (
+              <li key={bucket.bucket}>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {silenceBucketLabel(bucket)}
+                  </span>
+                  <span>{numberFormatter.format(bucket.application_count)}</span>
+                </div>
+              </li>
+            ),
+          )}
+        </ol>
+      </section>
 
       <section
         className="dashboard-card status-table-card"

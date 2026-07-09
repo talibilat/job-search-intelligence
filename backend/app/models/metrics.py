@@ -112,6 +112,8 @@ type MetricRateName = Literal[
     "interview_to_offer",
 ]
 type MetricFunnelStageName = Literal["applied", "screen", "interview", "final", "offer"]
+type SilenceAgeBucketName = Literal["0_7", "8_14", "15_30", "31_60", "61_plus"]
+type GhostThresholdSource = Literal["response_percentile", "configured_fallback"]
 type MetricsBreakdownDimension = Literal[
     "role",
     "source",
@@ -188,6 +190,21 @@ class TimeToRejectionMetric(BaseModel):
     average_hours: float | None = Field(default=None, ge=0)
 
 
+class SilenceAgeBucketMetric(BaseModel):
+    bucket: SilenceAgeBucketName
+    min_days: int = Field(ge=0)
+    max_days: int | None = Field(default=None, ge=0)
+    application_count: int = Field(ge=0)
+
+
+class PersonalGhostThresholdMetric(BaseModel):
+    threshold_days: int = Field(ge=1)
+    threshold_source: GhostThresholdSource
+    response_sample_size: int = Field(ge=0)
+    silent_application_count: int = Field(ge=0)
+    silence_age_distribution: list[SilenceAgeBucketMetric]
+
+
 class MetricsSummaryResponse(BaseModel):
     """Deterministic summary metrics for the dashboard."""
 
@@ -204,4 +221,5 @@ class MetricsSummaryResponse(BaseModel):
     interview_invitation_count: int = Field(ge=0)
     average_time_to_first_response: TimeToFirstResponseMetric
     average_time_to_rejection: TimeToRejectionMetric
+    personal_ghost_threshold: PersonalGhostThresholdMetric
     application_windows: list[ApplicationWindowMetric]

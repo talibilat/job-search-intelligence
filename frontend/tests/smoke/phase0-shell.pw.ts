@@ -168,6 +168,86 @@ function averageTimeToRejectionHours() {
   return rejectionHours.reduce((total, hours) => total + hours, 0) / rejectionHours.length;
 }
 
+function firstResponseDays() {
+  return applications
+    .flatMap((application) => {
+      const responses = applicationEvents
+        .filter(
+          (event) =>
+            event.application_id === application.id &&
+            responseEventTypes.has(event.event_type) &&
+            Date.parse(event.event_at) >= Date.parse(application.first_seen_at),
+        )
+        .sort((left, right) => left.event_at.localeCompare(right.event_at));
+      const firstResponse = responses[0];
+      if (!firstResponse) {
+        return [];
+      }
+      return [
+        (Date.parse(firstResponse.event_at) - Date.parse(application.first_seen_at)) /
+          86_400_000,
+      ];
+    })
+    .sort((left, right) => left - right);
+}
+
+function inferredGhostThresholdDays() {
+  const responseDays = firstResponseDays();
+  if (responseDays.length === 0) {
+    return 30;
+  }
+  const percentileIndex = Math.max(0, Math.ceil(responseDays.length * 0.95) - 1);
+  return Math.max(1, Math.ceil(responseDays[percentileIndex]));
+}
+
+function latestAppliedEvent(applicationId: string) {
+  return applicationEvents
+    .filter((event) => event.application_id === applicationId && event.event_type === "applied")
+    .sort((left, right) => right.event_at.localeCompare(left.event_at))[0];
+}
+
+function silenceAgeDistribution() {
+  const buckets = [
+    { application_count: 0, bucket: "0_7", max_days: 7, min_days: 0 },
+    { application_count: 0, bucket: "8_14", max_days: 14, min_days: 8 },
+    { application_count: 0, bucket: "15_30", max_days: 30, min_days: 15 },
+    { application_count: 0, bucket: "31_60", max_days: 60, min_days: 31 },
+    { application_count: 0, bucket: "61_plus", max_days: null, min_days: 61 },
+  ];
+
+  for (const application of applications) {
+    const latestApplied = latestAppliedEvent(application.id);
+    if (!latestApplied || application.current_status === "withdrawn") {
+      continue;
+    }
+    const hasResponseAfterLatestApply = applicationEvents.some(
+      (event) =>
+        event.application_id === application.id &&
+        responseEventTypes.has(event.event_type) &&
+        Date.parse(event.event_at) > Date.parse(latestApplied.event_at),
+    );
+    if (hasResponseAfterLatestApply) {
+      continue;
+    }
+    const silenceDays = Math.max(
+      0,
+      Math.floor(
+        (Date.parse("2026-07-05T12:00:00Z") - Date.parse(latestApplied.event_at)) /
+          86_400_000,
+      ),
+    );
+    const bucket =
+      buckets.find(
+        (candidate) =>
+          silenceDays >= candidate.min_days &&
+          (candidate.max_days === null || silenceDays <= candidate.max_days),
+      ) ?? buckets[buckets.length - 1];
+    bucket.application_count += 1;
+  }
+
+  return buckets;
+}
+
 function sourceBreakdownRows() {
   const responseIds = responseApplicationIds();
   const interviewIds = applicationsWithEvent("interview_scheduled");
@@ -293,6 +373,7 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
     const responseIds = responseApplicationIds();
     const averageHours = averageFirstResponseHours();
     const averageRejectionHours = averageTimeToRejectionHours();
+    const silenceBuckets = silenceAgeDistribution();
     await route.fulfill({
       contentType: "application/json",
       json: {
@@ -315,6 +396,16 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
         ).length,
         interview_invitation_count: applicationsWithEvent("interview_scheduled").size,
         offers_received: applicationsWithEvent("offer").size,
+        personal_ghost_threshold: {
+          threshold_days: inferredGhostThresholdDays(),
+          threshold_source: responseIds.size > 0 ? "response_percentile" : "configured_fallback",
+          response_sample_size: responseIds.size,
+          silent_application_count: silenceBuckets.reduce(
+            (total, bucket) => total + bucket.application_count,
+            0,
+          ),
+          silence_age_distribution: silenceBuckets,
+        },
         rejected_applications: applications.filter(
           (application) => application.current_status === "rejected",
         ).length,

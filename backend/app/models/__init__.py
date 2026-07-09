@@ -49,7 +49,9 @@ from .metrics import (
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     MetricTimeseriesPoint,
+    PersonalGhostThresholdMetric,
     ResponseSilenceMetric,
+    SilenceAgeBucketMetric,
     TimeToRejectionMetric,
 )
 from .provider_config import (
@@ -190,7 +192,9 @@ __all__ = [
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
+    "PersonalGhostThresholdMetric",
     "ResponseSilenceMetric",
+    "SilenceAgeBucketMetric",
     "TimeToRejectionMetric",
     "SetupStatusResponse",
     "SetupSubmitRequest",

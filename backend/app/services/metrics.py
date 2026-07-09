@@ -55,6 +55,7 @@ class MetricsSummaryService:
         cutoff_at = evaluated_at - timedelta(days=self._ghost_threshold_days)
         ghosted_applications = self._metrics_repository.count_threshold_ghosted_applications(
             cutoff_at=cutoff_at.isoformat(),
+            filters=filters,
         )
         anchor = (
             _datetime_filter_value(anchor_at, "anchor_at")
@@ -83,6 +84,13 @@ class MetricsSummaryService:
             ),
             average_time_to_rejection=(
                 self._metrics_repository.get_time_to_rejection_metric(filters=filters)
+            ),
+            personal_ghost_threshold=(
+                self._metrics_repository.get_personal_ghost_threshold_metric(
+                    evaluated_at=evaluated_at.isoformat(),
+                    fallback_threshold_days=self._ghost_threshold_days,
+                    filters=filters,
+                )
             ),
             application_windows=self._application_windows(
                 anchor_at=anchor,
