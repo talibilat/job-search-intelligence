@@ -2016,15 +2016,54 @@
             "title": "Interview Count",
             "type": "integer"
           },
+          "interview_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interview Rate"
+          },
           "offer_count": {
             "minimum": 0.0,
             "title": "Offer Count",
             "type": "integer"
           },
+          "offer_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Rate"
+          },
           "response_count": {
             "minimum": 0.0,
             "title": "Response Count",
             "type": "integer"
+          },
+          "response_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Rate"
           },
           "value": {
             "title": "Value",
@@ -2036,8 +2075,11 @@
           "value",
           "application_count",
           "response_count",
+          "response_rate",
           "interview_count",
-          "offer_count"
+          "interview_rate",
+          "offer_count",
+          "offer_rate"
         ],
         "title": "MetricBreakdownRow",
         "type": "object"

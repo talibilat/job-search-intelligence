@@ -789,11 +789,33 @@ def _breakdown_row(
     dimension: MetricsBreakdownDimension,
     row: sqlite3.Row,
 ) -> MetricBreakdownRow:
+    application_count = int(row["application_count"])
+    response_count = int(row["response_count"])
+    interview_count = int(row["interview_count"])
+    offer_count = int(row["offer_count"])
     return MetricBreakdownRow(
         dimension=dimension,
         value=str(row["value"]),
-        application_count=int(row["application_count"]),
-        response_count=int(row["response_count"]),
-        interview_count=int(row["interview_count"]),
-        offer_count=int(row["offer_count"]),
+        application_count=application_count,
+        response_count=response_count,
+        response_rate=_breakdown_rate(
+            numerator=response_count,
+            denominator=application_count,
+        ),
+        interview_count=interview_count,
+        interview_rate=_breakdown_rate(
+            numerator=interview_count,
+            denominator=application_count,
+        ),
+        offer_count=offer_count,
+        offer_rate=_breakdown_rate(
+            numerator=offer_count,
+            denominator=application_count,
+        ),
     )
+
+
+def _breakdown_rate(*, numerator: int, denominator: int) -> float | None:
+    if denominator == 0:
+        return None
+    return numerator / denominator

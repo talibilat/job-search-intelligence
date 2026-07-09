@@ -164,8 +164,11 @@ class MetricBreakdownRow(BaseModel):
     value: str
     application_count: int = Field(ge=0)
     response_count: int = Field(ge=0)
+    response_rate: float | None = Field(ge=0, le=1)
     interview_count: int = Field(ge=0)
+    interview_rate: float | None = Field(ge=0, le=1)
     offer_count: int = Field(ge=0)
+    offer_rate: float | None = Field(ge=0, le=1)
 
 
 class MetricsBreakdownResponse(BaseModel):
