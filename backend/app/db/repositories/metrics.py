@@ -326,7 +326,7 @@ class MetricsRepository(BaseRepository[int]):
             FROM applications
             {where_clause}
             GROUP BY value
-            ORDER BY value ASC
+            ORDER BY {_breakdown_order_expression(dimension)}
             """,
             (
                 *_RESPONSE_LIKE_EVENT_TYPES,
@@ -352,7 +352,7 @@ class MetricsRepository(BaseRepository[int]):
                 FROM applications
                 INNER JOIN json_each(applications.tech_stack)
                 WHERE TRIM(json_each.value) != ''
-                  {where_clause.replace('WHERE', 'AND', 1)}
+                  {where_clause.replace("WHERE", "AND", 1)}
             )
             SELECT tech_applications.value AS value,
                 COUNT(*) AS application_count,
@@ -549,11 +549,63 @@ def _dimension_expression(dimension: MetricsBreakdownDimension) -> str:
     if dimension == "sponsorship":
         return "COALESCE(NULLIF(sponsorship, ''), 'unknown')"
     if dimension == "seniority":
-        return "COALESCE(NULLIF(LOWER(TRIM(seniority)), ''), 'unknown')"
+        normalized_seniority = _normalized_seniority_expression()
+        return f"""
+        CASE
+            WHEN TRIM(COALESCE(seniority, '')) = '' THEN 'unknown'
+            WHEN {normalized_seniority} LIKE '% lead %'
+              OR {normalized_seniority} LIKE '% staff %'
+              OR {normalized_seniority} LIKE '% principal %' THEN 'lead'
+            WHEN {normalized_seniority} LIKE '% senior %'
+              OR {normalized_seniority} LIKE '% sr %' THEN 'senior'
+            WHEN {normalized_seniority} LIKE '% junior %'
+              OR {normalized_seniority} LIKE '% jr %'
+              OR {normalized_seniority} LIKE '% entry %'
+              OR {normalized_seniority} LIKE '% intern %'
+              OR {normalized_seniority} LIKE '% graduate %' THEN 'junior'
+            WHEN {normalized_seniority} LIKE '% mid %'
+              OR {normalized_seniority} LIKE '% intermediate %' THEN 'mid'
+            ELSE 'unknown'
+        END
+        """
     if dimension == "work_mode":
         return "COALESCE(NULLIF(work_mode, ''), 'unknown')"
     msg = f"Unsupported breakdown dimension: {dimension}"
     raise ValueError(msg)
+
+
+def _normalized_seniority_expression() -> str:
+    return """
+    (' ' || REPLACE(
+        REPLACE(
+            REPLACE(
+                REPLACE(LOWER(TRIM(COALESCE(seniority, ''))), '.', ' '),
+                '-',
+                ' '
+            ),
+            '/',
+            ' '
+        ),
+        '_',
+        ' '
+    ) || ' ')
+    """
+
+
+def _breakdown_order_expression(dimension: MetricsBreakdownDimension) -> str:
+    if dimension == "seniority":
+        return """
+        CASE value
+            WHEN 'junior' THEN 1
+            WHEN 'mid' THEN 2
+            WHEN 'senior' THEN 3
+            WHEN 'lead' THEN 4
+            WHEN 'unknown' THEN 5
+            ELSE 6
+        END,
+        value ASC
+        """
+    return "value ASC"
 
 
 def _metrics_filter_where_clause(filters: MetricsFilter | None) -> tuple[str, tuple[object, ...]]:

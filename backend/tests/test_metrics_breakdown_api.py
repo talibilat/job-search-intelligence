@@ -157,6 +157,97 @@ def test_metrics_breakdown_role_filter_treats_like_wildcards_literally(
     }
 
 
+def test_metrics_breakdown_buckets_seniority_conversion_rows(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application_with_events(
+            connection,
+            "app-junior",
+            "linkedin",
+            ("applied",),
+            seniority="Junior Engineer",
+        )
+        insert_application_with_events(
+            connection,
+            "app-mid",
+            "linkedin",
+            ("applied", "response"),
+            seniority="Mid-level",
+        )
+        insert_application_with_events(
+            connection,
+            "app-senior",
+            "company_site",
+            ("applied", "interview_scheduled"),
+            seniority="Sr. Software Engineer",
+        )
+        insert_application_with_events(
+            connection,
+            "app-lead",
+            "referral",
+            ("applied", "interview_scheduled", "offer"),
+            seniority="Principal / Staff Lead",
+        )
+        insert_application_with_events(
+            connection,
+            "app-unknown",
+            "other",
+            ("applied",),
+            seniority="",
+        )
+
+    response = create_test_client(database_path).get(
+        "/metrics/breakdown?dimension=seniority",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "dimension": "seniority",
+        "rows": [
+            {
+                "dimension": "seniority",
+                "value": "junior",
+                "application_count": 1,
+                "response_count": 0,
+                "interview_count": 0,
+                "offer_count": 0,
+            },
+            {
+                "dimension": "seniority",
+                "value": "mid",
+                "application_count": 1,
+                "response_count": 1,
+                "interview_count": 0,
+                "offer_count": 0,
+            },
+            {
+                "dimension": "seniority",
+                "value": "senior",
+                "application_count": 1,
+                "response_count": 1,
+                "interview_count": 1,
+                "offer_count": 0,
+            },
+            {
+                "dimension": "seniority",
+                "value": "lead",
+                "application_count": 1,
+                "response_count": 1,
+                "interview_count": 1,
+                "offer_count": 1,
+            },
+            {
+                "dimension": "seniority",
+                "value": "unknown",
+                "application_count": 1,
+                "response_count": 0,
+                "interview_count": 0,
+                "offer_count": 0,
+            },
+        ],
+    }
+
+
 def test_metrics_breakdown_endpoint_is_documented_in_openapi() -> None:
     response = TestClient(create_app()).get("/openapi.json")
 
@@ -195,6 +286,7 @@ def insert_application_with_events(
     *,
     current_status: str = "applied",
     role_title: str = "Software Engineer",
+    seniority: str | None = None,
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -207,6 +299,7 @@ def insert_application_with_events(
         created_at="2026-07-01T09:01:00+00:00",
         updated_at="2026-07-01T09:01:00+00:00",
         sponsorship="unknown",
+        seniority=seniority,
         tech_stack=[],
     )
     for index, event_type in enumerate(event_types):
