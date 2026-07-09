@@ -9,7 +9,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import type { MetricsRatesResponse, MetricsSummaryResponse } from "./api";
+import type {
+  MetricsBreakdownResponse,
+  MetricsRatesResponse,
+  MetricsSummaryResponse,
+} from "./api";
 import styles from "./index.css?raw";
 
 function renderAtPath(pathname: string) {
@@ -85,6 +89,17 @@ function metricsRatesResponse(
   return response as unknown as MockObjectResponseBody;
 }
 
+function metricsBreakdownResponse(
+  overrides: Partial<MetricsBreakdownResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsBreakdownResponse = {
+    dimension: "source",
+    rows: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
 function isMockResponseConfig(
   value: MockResponse,
 ): value is { body: MockResponseBody; status: number } {
@@ -112,6 +127,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
     const config = responseQueues.get(path);
 
     if (!config) {
+      if (path === "/metrics/breakdown?dimension=source") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsBreakdownResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
       throw new Error(`Unhandled fetch request: ${path}`);
     }
 
@@ -808,6 +832,7 @@ describe("App", () => {
       "/applications?status=assessment",
       "/applications?status=interview",
       "/applications",
+      "/metrics/breakdown?dimension=source",
       "/metrics/rates",
     ]);
   });

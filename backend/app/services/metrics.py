@@ -8,6 +8,7 @@ from app.models import (
     MetricRate,
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
+    MetricsFilter,
     MetricsRatesResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
@@ -282,10 +283,14 @@ class MetricsBreakdownService:
     def __init__(self, *, metrics_repository: MetricsRepository) -> None:
         self._metrics_repository = metrics_repository
 
-    def get_breakdown(self, dimension: MetricsBreakdownDimension) -> MetricsBreakdownResponse:
+    def get_breakdown(
+        self,
+        dimension: MetricsBreakdownDimension,
+        filters: MetricsFilter | None = None,
+    ) -> MetricsBreakdownResponse:
         return MetricsBreakdownResponse(
             dimension=dimension,
-            rows=list(self._metrics_repository.get_breakdown(dimension)),
+            rows=list(self._metrics_repository.get_breakdown(dimension, filters=filters)),
         )
 
 

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import ValidationError
 
 from app.api.dependencies import (
     get_metrics_breakdown_service,
@@ -15,11 +16,13 @@ from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorRespo
 from app.models import (
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
+    MetricsFilter,
     MetricsRatesResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )
+from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.services.metrics import (
     MetricsBreakdownService,
     MetricsRatesService,
@@ -134,6 +137,70 @@ def get_metrics_timeseries(
     return service.get_timeseries()
 
 
+def get_metrics_filter(
+    status: Annotated[ApplicationStatus | None, Query()] = None,
+    source: Annotated[ApplicationSource | None, Query()] = None,
+    sponsorship: Annotated[SponsorshipStatus | None, Query()] = None,
+    first_seen_from: Annotated[datetime | None, Query()] = None,
+    first_seen_to: Annotated[datetime | None, Query()] = None,
+    role: Annotated[str | None, Query()] = None,
+    salary_min: Annotated[int | None, Query(ge=0)] = None,
+    salary_max: Annotated[int | None, Query(ge=0)] = None,
+    work_mode: Annotated[WorkMode | None, Query()] = None,
+) -> MetricsFilter:
+    try:
+        return MetricsFilter(
+            status=status,
+            source=source,
+            sponsorship=sponsorship,
+            first_seen_from=first_seen_from,
+            first_seen_to=first_seen_to,
+            role=role,
+            salary_min=salary_min,
+            salary_max=salary_max,
+            work_mode=work_mode,
+        )
+    except ValidationError as error:
+        raise ApiError(
+            status_code=422,
+            code=ApiErrorCode.VALIDATION_ERROR,
+            message="Request validation failed.",
+            details=tuple(_metrics_filter_validation_details(error)),
+        ) from error
+
+
+def _metrics_filter_validation_details(error: ValidationError) -> list[ApiErrorDetail]:
+    details: list[ApiErrorDetail] = []
+    for validation_error in error.errors():
+        message = _metrics_filter_error_message(str(validation_error.get("msg", "")))
+        field = _metrics_filter_error_field(message)
+        loc = validation_error.get("loc", ())
+        if field is None and loc:
+            field = f"query.{'.'.join(str(part) for part in loc)}"
+        details.append(
+            ApiErrorDetail(
+                field=field or "query",
+                message=message or "Invalid metric filter.",
+                type=str(validation_error.get("type", "value_error")),
+            ),
+        )
+    return details
+
+
+def _metrics_filter_error_message(message: str) -> str:
+    if message.startswith("Value error, "):
+        return message.removeprefix("Value error, ")
+    return message
+
+
+def _metrics_filter_error_field(message: str) -> str | None:
+    if message.startswith("salary_min"):
+        return "query.salary_min"
+    if message.startswith("first_seen_from"):
+        return "query.first_seen_from"
+    return None
+
+
 @router.get(
     "/breakdown",
     response_model=MetricsBreakdownResponse,
@@ -150,5 +217,6 @@ def get_metrics_breakdown(
         Depends(get_metrics_breakdown_service),
     ],
     dimension: Annotated[MetricsBreakdownDimension, Query()],
+    filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
 ) -> MetricsBreakdownResponse:
-    return service.get_breakdown(dimension)
+    return service.get_breakdown(dimension, filters=filters)
