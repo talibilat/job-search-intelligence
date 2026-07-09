@@ -973,6 +973,72 @@
         "title": "ApplicationWindowMetric",
         "type": "object"
       },
+      "ChatHistoryResponse": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageRecord"
+            },
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "ChatHistoryResponse",
+        "type": "object"
+      },
+      "ChatMessageRecord": {
+        "properties": {
+          "citations_json": {
+            "$ref": "#/components/schemas/JsonObjectList"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ChatMessageRole"
+          },
+          "tool_outputs_json": {
+            "$ref": "#/components/schemas/JsonObjectList"
+          }
+        },
+        "required": [
+          "id",
+          "conversation_id",
+          "role",
+          "content",
+          "citations_json",
+          "tool_outputs_json",
+          "created_at"
+        ],
+        "title": "ChatMessageRecord",
+        "type": "object"
+      },
+      "ChatMessageRole": {
+        "enum": [
+          "user",
+          "assistant",
+          "tool",
+          "system"
+        ],
+        "type": "string"
+      },
       "ClassificationMode": {
         "enum": [
           "hybrid",
@@ -2035,6 +2101,12 @@
       "JsonObject": {
         "additionalProperties": true,
         "type": "object"
+      },
+      "JsonObjectList": {
+        "items": {
+          "$ref": "#/components/schemas/JsonObject"
+        },
+        "type": "array"
       },
       "LLMModelHealthCheck": {
         "description": "Availability result for one configured provider model.",
@@ -4500,6 +4572,68 @@
         "summary": "Gmail Auth Callback",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/chat/history": {
+      "get": {
+        "operationId": "get_chat_history_chat_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversation_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Chat History",
+        "tags": [
+          "chat"
         ]
       }
     },

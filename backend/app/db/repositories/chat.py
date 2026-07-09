@@ -10,5 +10,40 @@ from app.models.records import ChatMessageRecord
 class ChatRepository(BaseRepository[ChatMessageRecord]):
     """Repository seam for persisted chat messages."""
 
+    def list_messages(
+        self,
+        *,
+        conversation_id: str | None = None,
+        limit: int = 100,
+    ) -> tuple[ChatMessageRecord, ...]:
+        if limit < 1:
+            msg = "limit must be at least 1"
+            raise ValueError(msg)
+
+        where_clause = ""
+        parameters: tuple[object, ...] = (limit,)
+        if conversation_id is not None:
+            where_clause = "WHERE conversation_id = ?"
+            parameters = (conversation_id, limit)
+
+        rows = self.execute(
+            f"""
+            SELECT
+                id,
+                conversation_id,
+                role,
+                content,
+                citations_json,
+                tool_outputs_json,
+                created_at
+            FROM chat_messages
+            {where_clause}
+            ORDER BY conversation_id ASC, created_at ASC, id ASC
+            LIMIT ?
+            """,
+            parameters,
+        ).fetchall()
+        return tuple(self.map_row(row) for row in rows)
+
     def map_row(self, row: sqlite3.Row) -> ChatMessageRecord:
         return ChatMessageRecord.model_validate(row_to_dict(row))
