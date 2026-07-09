@@ -164,7 +164,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       "GET /metrics/funnel",
     ],
     description:
-      "Deterministic dashboard route with summary metric cards, Q-11 response rate, Q-18 rejection timing, and placeholders for remaining dashboard metrics.",
+      "Deterministic dashboard route with summary metric cards, Q-11 response rate, Q-18 rejection timing, Q-19 ghost threshold, and placeholders for remaining dashboard metrics.",
     endpoints: ["GET /metrics/summary", "GET /metrics/rates", "GET /metrics/funnel"],
     files: [
       "frontend/src/pages/DashboardPage.tsx",
@@ -183,6 +183,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "The Interview invitations card shows a loaded count or an unavailable state.",
         "Response rate card shows deterministic numerator, denominator, and percentage.",
         "Average time to rejection card shows deterministic duration math.",
+        "Personal ghost threshold shows deterministic threshold and silence-age distribution.",
         "Unimplemented metric cards still say Pending.",
         "Chart empty state explains metrics are not available yet.",
         "No LLM-generated dashboard counts appear.",
@@ -194,6 +195,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "Review the Q-07 interview invitations card.",
         "Confirm the response-rate card loads from GET /metrics/rates.",
         "Confirm the average time-to-rejection card loads from GET /metrics/summary.",
+        "Confirm the personal ghost-threshold section loads from GET /metrics/summary.",
         "Confirm the chart foundation empty state is visible.",
       ],
     },
@@ -233,6 +235,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "Interview invitations card renders a deterministic count or unavailable state",
         "Response-rate metric renders",
         "Average time-to-rejection metric renders",
+        "Personal ghost-threshold metric renders",
         "Unimplemented metric values remain Pending",
       ],
       requiredSetup: ["Frontend dev server"],

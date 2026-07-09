@@ -231,6 +231,19 @@ def test_metrics_summary_returns_zero_without_applications(tmp_path: Path) -> No
         "application_count": 0,
         "average_hours": None,
     }
+    assert body["personal_ghost_threshold"] == {
+        "threshold_days": 30,
+        "threshold_source": "configured_fallback",
+        "response_sample_size": 0,
+        "silent_application_count": 0,
+        "silence_age_distribution": [
+            {"bucket": "0_7", "min_days": 0, "max_days": 7, "application_count": 0},
+            {"bucket": "8_14", "min_days": 8, "max_days": 14, "application_count": 0},
+            {"bucket": "15_30", "min_days": 15, "max_days": 30, "application_count": 0},
+            {"bucket": "31_60", "min_days": 31, "max_days": 60, "application_count": 0},
+            {"bucket": "61_plus", "min_days": 61, "max_days": None, "application_count": 0},
+        ],
+    }
     assert body["ghost_threshold_days"] == 30
     assert "evaluated_at" in body
 
@@ -334,6 +347,105 @@ def test_metrics_summary_returns_average_time_to_rejection(
     assert filtered_response.json()["average_time_to_rejection"] == {
         "application_count": 1,
         "average_hours": 24.0,
+    }
+
+
+def test_metrics_summary_returns_personal_ghost_threshold_distribution(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="quick-response",
+            first_seen_at="2020-01-01T09:00:00+00:00",
+            last_activity_at="2020-01-04T09:00:00+00:00",
+            source="company_site",
+        )
+        insert_event(
+            connection,
+            event_id="quick-response-event",
+            application_id="quick-response",
+            event_type="response",
+            event_at="2020-01-06T09:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="slow-response",
+            first_seen_at="2020-02-01T09:00:00+00:00",
+            last_activity_at="2020-02-10T09:00:00+00:00",
+            source="linkedin",
+        )
+        insert_event(
+            connection,
+            event_id="slow-response-event",
+            application_id="slow-response",
+            event_type="response",
+            event_at="2020-02-21T09:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="silent-company-site",
+            first_seen_at="2020-03-01T09:00:00+00:00",
+            last_activity_at="2020-03-01T09:00:00+00:00",
+            source="company_site",
+        )
+        insert_event(
+            connection,
+            event_id="silent-company-site-applied",
+            application_id="silent-company-site",
+            event_type="applied",
+            event_at="2020-03-01T09:00:00+00:00",
+        )
+        insert_application(
+            connection,
+            application_id="silent-linkedin",
+            first_seen_at="2020-04-01T09:00:00+00:00",
+            last_activity_at="2020-04-01T09:00:00+00:00",
+            source="linkedin",
+        )
+        insert_event(
+            connection,
+            event_id="silent-linkedin-applied",
+            application_id="silent-linkedin",
+            event_type="applied",
+            event_at="2020-04-01T09:00:00+00:00",
+        )
+
+    response = create_test_client(database_path, ghost_threshold_days=30).get("/metrics/summary")
+
+    assert response.status_code == 200
+    assert response.json()["personal_ghost_threshold"] == {
+        "threshold_days": 20,
+        "threshold_source": "response_percentile",
+        "response_sample_size": 2,
+        "silent_application_count": 2,
+        "silence_age_distribution": [
+            {"bucket": "0_7", "min_days": 0, "max_days": 7, "application_count": 0},
+            {"bucket": "8_14", "min_days": 8, "max_days": 14, "application_count": 0},
+            {"bucket": "15_30", "min_days": 15, "max_days": 30, "application_count": 0},
+            {"bucket": "31_60", "min_days": 31, "max_days": 60, "application_count": 0},
+            {"bucket": "61_plus", "min_days": 61, "max_days": None, "application_count": 2},
+        ],
+    }
+
+    filtered_response = create_test_client(database_path, ghost_threshold_days=30).get(
+        "/metrics/summary?source=company_site",
+    )
+
+    assert filtered_response.status_code == 200
+    assert filtered_response.json()["personal_ghost_threshold"] == {
+        "threshold_days": 5,
+        "threshold_source": "response_percentile",
+        "response_sample_size": 1,
+        "silent_application_count": 1,
+        "silence_age_distribution": [
+            {"bucket": "0_7", "min_days": 0, "max_days": 7, "application_count": 0},
+            {"bucket": "8_14", "min_days": 8, "max_days": 14, "application_count": 0},
+            {"bucket": "15_30", "min_days": 15, "max_days": 30, "application_count": 0},
+            {"bucket": "31_60", "min_days": 31, "max_days": 60, "application_count": 0},
+            {"bucket": "61_plus", "min_days": 61, "max_days": None, "application_count": 1},
+        ],
     }
 
 

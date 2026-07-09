@@ -50,6 +50,19 @@ function mockApplicationResponses() {
             average_hours: 48,
           },
           distinct_company_count: 1,
+          personal_ghost_threshold: {
+            threshold_days: 20,
+            threshold_source: "response_percentile",
+            response_sample_size: 2,
+            silent_application_count: 3,
+            silence_age_distribution: [
+              { bucket: "0_7", min_days: 0, max_days: 7, application_count: 0 },
+              { bucket: "8_14", min_days: 8, max_days: 14, application_count: 1 },
+              { bucket: "15_30", min_days: 15, max_days: 30, application_count: 2 },
+              { bucket: "31_60", min_days: 31, max_days: 60, application_count: 0 },
+              { bucket: "61_plus", min_days: 61, max_days: null, application_count: 0 },
+            ],
+          },
         }), {
           headers: { "Content-Type": "application/json" },
           status: 200,
@@ -694,6 +707,25 @@ describe("DashboardPage", () => {
     expect(
       within(metric).getByText("Averaged across 2 rejected applications"),
     ).toBeTruthy();
+  });
+
+  it("renders Q-19 personal ghost threshold and silence age distribution", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const metric = await screen.findByRole("region", {
+      name: "Personal ghost threshold",
+    });
+
+    expect(within(metric).getByText("20 days")).toBeTruthy();
+    expect(within(metric).getByText("Inferred from 2 response timings")).toBeTruthy();
+    expect(within(metric).getByText("3 silent applications in distribution")).toBeTruthy();
+    expect(within(metric).getByText("8 to 14 days")).toBeTruthy();
+    expect(within(metric).getByText("1")).toBeTruthy();
+    expect(within(metric).getByText("15 to 30 days")).toBeTruthy();
+    expect(within(metric).getByText("2")).toBeTruthy();
   });
 
   it("renders source breakdown chart summary and table from deterministic metrics", async () => {

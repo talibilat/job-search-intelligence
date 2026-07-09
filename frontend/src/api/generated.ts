@@ -639,6 +639,14 @@ export interface GhostInferenceRunResponse {
   threshold_days: number;
 }
 
+export type GhostThresholdSource =
+  (typeof GhostThresholdSource)[keyof typeof GhostThresholdSource];
+
+export const GhostThresholdSource = {
+  response_percentile: "response_percentile",
+  configured_fallback: "configured_fallback",
+} as const;
+
 export type ValidationErrorCtx = { [key: string]: unknown };
 
 export interface ValidationError {
@@ -844,6 +852,37 @@ export interface TimeToRejectionMetric {
   average_hours?: number | null;
 }
 
+export type SilenceAgeBucketName =
+  (typeof SilenceAgeBucketName)[keyof typeof SilenceAgeBucketName];
+
+export const SilenceAgeBucketName = {
+  "0_7": "0_7",
+  "8_14": "8_14",
+  "15_30": "15_30",
+  "31_60": "31_60",
+  "61_plus": "61_plus",
+} as const;
+
+export interface SilenceAgeBucketMetric {
+  /** @minimum 0 */
+  application_count: number;
+  bucket: SilenceAgeBucketName;
+  max_days?: number | null;
+  /** @minimum 0 */
+  min_days: number;
+}
+
+export interface PersonalGhostThresholdMetric {
+  /** @minimum 0 */
+  response_sample_size: number;
+  silence_age_distribution: SilenceAgeBucketMetric[];
+  /** @minimum 0 */
+  silent_application_count: number;
+  /** @minimum 1 */
+  threshold_days: number;
+  threshold_source: GhostThresholdSource;
+}
+
 /**
  * Deterministic summary metrics for the dashboard.
  */
@@ -862,6 +901,7 @@ export interface MetricsSummaryResponse {
   interview_invitation_count: number;
   /** @minimum 0 */
   offers_received: number;
+  personal_ghost_threshold: PersonalGhostThresholdMetric;
   /**
    * Total applications whose canonical current status is rejected.
    * @minimum 0

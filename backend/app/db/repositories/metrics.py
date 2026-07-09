@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import math
 import sqlite3
 from collections.abc import Sequence
 
 from app.db.repositories.base import BaseRepository
 from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 from app.models.metrics import (
+    GhostThresholdSource,
     MetricBreakdownRow,
     MetricFunnelStage,
     MetricRateName,
@@ -14,7 +16,10 @@ from app.models.metrics import (
     MetricsBreakdownDimension,
     MetricsFilter,
     MetricTimeseriesPoint,
+    PersonalGhostThresholdMetric,
     ResponseSilenceMetric,
+    SilenceAgeBucketMetric,
+    SilenceAgeBucketName,
     TimeToFirstResponseMetric,
     TimeToRejectionMetric,
 )
@@ -146,6 +151,45 @@ class MetricsRepository(BaseRepository[int]):
             average_hours=None if average_hours is None else round(float(average_hours), 6),
         )
 
+    def get_personal_ghost_threshold_metric(
+        self,
+        *,
+        evaluated_at: str,
+        fallback_threshold_days: int,
+        filters: MetricsFilter | None = None,
+    ) -> PersonalGhostThresholdMetric:
+        response_days = self._first_response_days(filters=filters)
+        if response_days:
+            percentile_index = max(0, math.ceil(len(response_days) * 0.95) - 1)
+            threshold_days = max(1, math.ceil(response_days[percentile_index]))
+            threshold_source: GhostThresholdSource = "response_percentile"
+        else:
+            threshold_days = fallback_threshold_days
+            threshold_source = "configured_fallback"
+
+        distribution = _empty_silence_age_distribution()
+        for silence_days in self._silent_application_ages(
+            evaluated_at=evaluated_at,
+            filters=filters,
+        ):
+            distribution[_silence_age_bucket(silence_days)] += 1
+
+        return PersonalGhostThresholdMetric(
+            threshold_days=threshold_days,
+            threshold_source=threshold_source,
+            response_sample_size=len(response_days),
+            silent_application_count=sum(distribution.values()),
+            silence_age_distribution=[
+                SilenceAgeBucketMetric(
+                    bucket=bucket,
+                    min_days=min_days,
+                    max_days=max_days,
+                    application_count=distribution[bucket],
+                )
+                for bucket, min_days, max_days in _SILENCE_AGE_BUCKETS
+            ],
+        )
+
     def get_rate_metrics(
         self,
         *,
@@ -196,6 +240,96 @@ class MetricsRepository(BaseRepository[int]):
                 denominator=interviewed_applications,
             ),
         )
+
+    def _first_response_days(self, filters: MetricsFilter | None) -> list[float]:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        filter_clause = where_clause.replace("WHERE", "AND", 1)
+        rows = self.execute(
+            f"""
+            WITH first_response AS (
+                SELECT
+                    applications.id AS application_id,
+                    julianday(applications.first_seen_at) AS application_seen_day,
+                    MIN(julianday(application_events.event_at)) AS response_day
+                FROM applications
+                INNER JOIN application_events
+                    ON application_events.application_id = applications.id
+                WHERE application_events.event_type IN ({_response_placeholders()})
+                  AND julianday(application_events.event_at) >= (
+                    julianday(applications.first_seen_at)
+                  )
+                  {filter_clause}
+                GROUP BY applications.id
+            )
+            SELECT response_day - application_seen_day AS response_days
+            FROM first_response
+            ORDER BY response_days ASC
+            """,
+            (*_RESPONSE_LIKE_EVENT_TYPES, *filter_parameters),
+        ).fetchall()
+        return [max(0.0, float(row["response_days"])) for row in rows]
+
+    def _silent_application_ages(
+        self,
+        *,
+        evaluated_at: str,
+        filters: MetricsFilter | None,
+    ) -> list[int]:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        prefix = "AND" if where_clause else "WHERE"
+        rows = self.execute(
+            f"""
+            WITH event_order AS (
+                SELECT
+                    application_events.application_id,
+                    application_events.id,
+                    application_events.event_type,
+                    application_events.event_at,
+                    COALESCE(raw_emails.sent_at, application_events.event_at) AS email_sent_at,
+                    COALESCE(
+                        email_classifications.classified_at,
+                        COALESCE(raw_emails.sent_at, application_events.event_at)
+                    ) AS classified_at
+                FROM application_events
+                LEFT JOIN raw_emails
+                    ON raw_emails.id = application_events.email_id
+                LEFT JOIN email_classifications
+                    ON email_classifications.email_id = application_events.email_id
+                WHERE application_events.event_type != 'ghost_inferred'
+            ),
+            latest_applied AS (
+                SELECT event_order.*
+                FROM event_order
+                WHERE event_order.event_type = 'applied'
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM event_order AS newer_applied
+                    WHERE newer_applied.application_id = event_order.application_id
+                      AND newer_applied.event_type = 'applied'
+                      AND ({_newer_event_predicate('newer_applied', 'event_order')})
+                  )
+            )
+            SELECT
+                CASE
+                    WHEN julianday(?) - julianday(latest_applied.event_at) < 0 THEN 0
+                    ELSE CAST(julianday(?) - julianday(latest_applied.event_at) AS INTEGER)
+                END AS silence_days
+            FROM applications
+            INNER JOIN latest_applied
+                ON latest_applied.application_id = applications.id
+            {where_clause}
+            {prefix} applications.current_status != 'withdrawn'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM event_order AS response_event
+                WHERE response_event.application_id = applications.id
+                  AND response_event.event_type IN ({_response_placeholders()})
+                  AND ({_newer_event_predicate('response_event', 'latest_applied')})
+              )
+            """,
+            (evaluated_at, evaluated_at, *filter_parameters, *_RESPONSE_LIKE_EVENT_TYPES),
+        ).fetchall()
+        return [max(0, int(row["silence_days"])) for row in rows]
 
     def get_funnel_metrics(
         self,
@@ -695,6 +829,47 @@ class MetricsRepository(BaseRepository[int]):
 
 def _response_placeholders() -> str:
     return ", ".join("?" for _ in _RESPONSE_LIKE_EVENT_TYPES)
+
+
+def _newer_event_predicate(left_alias: str, right_alias: str) -> str:
+    return f"""
+    {left_alias}.event_at > {right_alias}.event_at
+    OR (
+        {left_alias}.event_at = {right_alias}.event_at
+        AND {left_alias}.email_sent_at > {right_alias}.email_sent_at
+    )
+    OR (
+        {left_alias}.event_at = {right_alias}.event_at
+        AND {left_alias}.email_sent_at = {right_alias}.email_sent_at
+        AND {left_alias}.classified_at > {right_alias}.classified_at
+    )
+    OR (
+        {left_alias}.event_at = {right_alias}.event_at
+        AND {left_alias}.email_sent_at = {right_alias}.email_sent_at
+        AND {left_alias}.classified_at = {right_alias}.classified_at
+        AND {left_alias}.id > {right_alias}.id
+    )
+    """
+
+
+_SILENCE_AGE_BUCKETS: tuple[tuple[SilenceAgeBucketName, int, int | None], ...] = (
+    ("0_7", 0, 7),
+    ("8_14", 8, 14),
+    ("15_30", 15, 30),
+    ("31_60", 31, 60),
+    ("61_plus", 61, None),
+)
+
+
+def _empty_silence_age_distribution() -> dict[SilenceAgeBucketName, int]:
+    return {bucket: 0 for bucket, _min_days, _max_days in _SILENCE_AGE_BUCKETS}
+
+
+def _silence_age_bucket(silence_days: int) -> SilenceAgeBucketName:
+    for bucket, min_days, max_days in _SILENCE_AGE_BUCKETS:
+        if silence_days >= min_days and (max_days is None or silence_days <= max_days):
+            return bucket
+    return "61_plus"
 
 
 def _rate_metric(*, name: MetricRateName, numerator: int, denominator: int) -> MetricRateRow:
