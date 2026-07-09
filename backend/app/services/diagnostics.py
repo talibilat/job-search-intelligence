@@ -52,10 +52,18 @@ class DiagnosticsService:
             numerator=baseline_success_count,
             denominator=response_silence.total_applications,
         )
+        baseline_negative_count = self._metrics_repository.count_negative_applications(
+            filters=filters,
+        )
+        baseline_negative_rate = _rate(
+            numerator=baseline_negative_count,
+            denominator=response_silence.total_applications,
+        )
         segments = self._segments_for_dimensions(
             dimensions=dimensions,
             baseline_response_rate=baseline_response_rate,
             baseline_success_rate=baseline_success_rate,
+            baseline_negative_rate=baseline_negative_rate,
             filters=filters,
         )
 
@@ -65,6 +73,8 @@ class DiagnosticsService:
             baseline_response_rate=baseline_response_rate,
             baseline_success_count=baseline_success_count,
             baseline_success_rate=baseline_success_rate,
+            baseline_negative_count=baseline_negative_count,
+            baseline_negative_rate=baseline_negative_rate,
             segments=segments,
             strongest_response_segments=_strongest_segments(
                 segments,
@@ -78,6 +88,10 @@ class DiagnosticsService:
                 segments,
                 limit=self._highlight_limit,
             ),
+            negative_outcome_segments=_negative_outcome_segments(
+                segments,
+                limit=self._highlight_limit,
+            ),
         )
 
     def _segments_for_dimensions(
@@ -86,6 +100,7 @@ class DiagnosticsService:
         dimensions: Sequence[MetricsBreakdownDimension],
         baseline_response_rate: float | None,
         baseline_success_rate: float | None,
+        baseline_negative_rate: float | None,
         filters: MetricsFilter | None,
     ) -> list[DiagnosticSegmentComparison]:
         segments: list[DiagnosticSegmentComparison] = []
@@ -94,13 +109,19 @@ class DiagnosticsService:
                 dimension,
                 filters=filters,
             )
+            negative_counts = self._metrics_repository.get_negative_application_breakdown(
+                dimension,
+                filters=filters,
+            )
             for row in self._metrics_repository.get_breakdown(dimension, filters=filters):
                 segments.append(
                     _diagnostic_segment(
                         row=row,
                         success_count=success_counts.get(row.value, 0),
+                        negative_count=negative_counts.get(row.value, 0),
                         baseline_response_rate=baseline_response_rate,
                         baseline_success_rate=baseline_success_rate,
+                        baseline_negative_rate=baseline_negative_rate,
                     ),
                 )
         return sorted(
@@ -118,8 +139,10 @@ def _diagnostic_segment(
     *,
     row: MetricBreakdownRow,
     success_count: int,
+    negative_count: int,
     baseline_response_rate: float | None,
     baseline_success_rate: float | None,
+    baseline_negative_rate: float | None,
 ) -> DiagnosticSegmentComparison:
     response_rate = _rate(
         numerator=row.response_count,
@@ -127,6 +150,10 @@ def _diagnostic_segment(
     )
     success_rate = _rate(
         numerator=success_count,
+        denominator=row.application_count,
+    )
+    negative_rate = _rate(
+        numerator=negative_count,
         denominator=row.application_count,
     )
     return DiagnosticSegmentComparison(
@@ -137,6 +164,7 @@ def _diagnostic_segment(
         interview_count=row.interview_count,
         offer_count=row.offer_count,
         success_count=success_count,
+        negative_count=negative_count,
         response_rate=response_rate,
         interview_rate=_rate(
             numerator=row.interview_count,
@@ -147,12 +175,16 @@ def _diagnostic_segment(
             denominator=row.application_count,
         ),
         success_rate=success_rate,
+        negative_rate=negative_rate,
         response_rate_lift=None
         if response_rate is None or baseline_response_rate is None
         else response_rate - baseline_response_rate,
         success_rate_lift=None
         if success_rate is None or baseline_success_rate is None
         else success_rate - baseline_success_rate,
+        negative_rate_lift=None
+        if negative_rate is None or baseline_negative_rate is None
+        else negative_rate - baseline_negative_rate,
     )
 
 
@@ -221,6 +253,30 @@ def _successful_application_segments(
         key=lambda segment: (
             -float(segment.success_rate_lift or 0),
             -segment.success_count,
+            -segment.application_count,
+            segment.dimension,
+            segment.value,
+        ),
+    )[:limit]
+
+
+def _negative_outcome_segments(
+    segments: Sequence[DiagnosticSegmentComparison],
+    *,
+    limit: int,
+) -> list[DiagnosticSegmentComparison]:
+    negative_segments = [
+        segment
+        for segment in segments
+        if segment.negative_count > 0
+        and segment.negative_rate_lift is not None
+        and segment.negative_rate_lift > 0
+    ]
+    return sorted(
+        negative_segments,
+        key=lambda segment: (
+            -float(segment.negative_rate_lift or 0),
+            -segment.negative_count,
             -segment.application_count,
             segment.dimension,
             segment.value,
