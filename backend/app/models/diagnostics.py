@@ -27,6 +27,7 @@ class DiagnosticSegmentComparison(BaseModel):
 class MetricsDiagnosticsResponse(BaseModel):
     total_applications: int = Field(ge=0)
     best_roi_source: DiagnosticSegmentComparison | None = None
+    sponsorship_response_impact: DiagnosticSegmentComparison | None = None
     baseline_response_count: int = Field(ge=0)
     baseline_response_rate: float | None = Field(default=None, ge=0, le=1)
     baseline_success_count: int = Field(ge=0)

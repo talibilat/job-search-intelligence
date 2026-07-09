@@ -79,6 +79,7 @@ class DiagnosticsService:
         return MetricsDiagnosticsResponse(
             total_applications=response_silence.total_applications,
             best_roi_source=_best_roi_source(segments),
+            sponsorship_response_impact=_sponsorship_response_impact(segments),
             baseline_response_count=response_silence.human_response_count,
             baseline_response_rate=baseline_response_rate,
             baseline_success_count=baseline_success_count,
@@ -307,6 +308,26 @@ def _best_roi_source(
         key=lambda segment: (
             -float(segment.interview_rate or 0),
             -segment.interview_count,
+            -segment.application_count,
+            segment.value,
+        ),
+    )[0]
+
+
+def _sponsorship_response_impact(
+    segments: Sequence[DiagnosticSegmentComparison],
+) -> DiagnosticSegmentComparison | None:
+    sponsorship_segments = [
+        segment
+        for segment in segments
+        if segment.dimension == "sponsorship" and segment.response_rate_lift is not None
+    ]
+    if not sponsorship_segments:
+        return None
+    return sorted(
+        sponsorship_segments,
+        key=lambda segment: (
+            float(segment.response_rate_lift or 0),
             -segment.application_count,
             segment.value,
         ),

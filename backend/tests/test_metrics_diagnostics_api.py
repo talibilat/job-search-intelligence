@@ -55,6 +55,8 @@ def test_metrics_diagnostics_returns_segment_comparisons(tmp_path: Path) -> None
         for segment in payload["segments"]
         if segment["dimension"] == "source" and segment["value"] == "linkedin"
     )
+    assert payload["sponsorship_response_impact"] is not None
+    assert payload["sponsorship_response_impact"]["dimension"] == "sponsorship"
     assert payload["successful_application_segments"] == [
         {
             "dimension": "source",

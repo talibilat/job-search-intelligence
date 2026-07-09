@@ -2489,6 +2489,16 @@
             "title": "Segments",
             "type": "array"
           },
+          "sponsorship_response_impact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "strongest_response_correlate": {
             "anyOf": [
               {
