@@ -396,6 +396,28 @@ function sortedBreakdownRows(rows: MetricBreakdownRow[]) {
   });
 }
 
+function interviewConversionRate(row: MetricBreakdownRow) {
+  if (row.application_count === 0) {
+    return null;
+  }
+  return row.interview_count / row.application_count;
+}
+
+function sortedRoleConversionRows(rows: MetricBreakdownRow[]) {
+  return [...rows].sort((left, right) => {
+    const rateOrder =
+      (interviewConversionRate(right) ?? -1) - (interviewConversionRate(left) ?? -1);
+    if (rateOrder !== 0) {
+      return rateOrder;
+    }
+    const interviewOrder = right.interview_count - left.interview_count;
+    if (interviewOrder !== 0) {
+      return interviewOrder;
+    }
+    return right.application_count - left.application_count;
+  });
+}
+
 function sortedTimeseriesPoints(points: MetricTimeseriesPoint[]) {
   return [...points].sort((left, right) =>
     left.period_start.localeCompare(right.period_start),
@@ -425,6 +447,10 @@ export function DashboardPage() {
   const [breakdownLoadState, setBreakdownLoadState] =
     useState<BreakdownLoadState>("loading");
   const [breakdownError, setBreakdownError] = useState<string | null>(null);
+  const [roleConversionRows, setRoleConversionRows] = useState<MetricBreakdownRow[]>([]);
+  const [roleConversionLoadState, setRoleConversionLoadState] =
+    useState<BreakdownLoadState>("loading");
+  const [roleConversionError, setRoleConversionError] = useState<string | null>(null);
   const [timeseriesPoints, setTimeseriesPoints] = useState<
     MetricTimeseriesPoint[]
   >([]);
@@ -673,6 +699,51 @@ export function DashboardPage() {
       isCancelled = true;
     };
   }, [appliedFilters, breakdownDimension]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadRoleConversion() {
+      setRoleConversionLoadState("loading");
+      setRoleConversionError(null);
+      setRoleConversionRows([]);
+
+      const response = await getMetricsBreakdownMetricsBreakdownGet({
+        dimension: MetricsBreakdownDimension.role,
+        ...queryParamsFromFilters(appliedFilters),
+      });
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setRoleConversionRows([]);
+        setRoleConversionError(
+          publicError(response.data, "Role conversion metrics are unavailable."),
+        );
+        setRoleConversionLoadState("error");
+        return;
+      }
+
+      setRoleConversionRows(sortedRoleConversionRows(response.data.rows));
+      setRoleConversionLoadState("loaded");
+    }
+
+    void loadRoleConversion().catch(() => {
+      if (!isCancelled) {
+        setRoleConversionRows([]);
+        setRoleConversionError(
+          "Role conversion metrics are unavailable. Start the local backend to load Q-23.",
+        );
+        setRoleConversionLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1288,6 +1359,56 @@ export function DashboardPage() {
           rowKey={(row) => `${row.dimension}-${row.value}`}
           rows={breakdownRows}
         />
+      </section>
+
+      <section
+        aria-labelledby="best-converting-titles-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div>
+          <p className="eyebrow">Q-23</p>
+          <h2 id="best-converting-titles-title">Best-converting titles</h2>
+          <p className="dashboard-card__meta">
+            Roles are ranked by deterministic interview conversion from role breakdown rows.
+          </p>
+        </div>
+
+        {roleConversionError ? (
+          <Alert title="Best-converting titles unavailable" tone="danger">
+            <p>{roleConversionError}</p>
+          </Alert>
+        ) : null}
+
+        <ol className="dashboard-breakdown-ranks">
+          {roleConversionRows.length > 0 ? (
+            roleConversionRows.slice(0, 5).map((row) => (
+              <li key={`${row.dimension}-${row.value}`}>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {titleize(row.value)}
+                  </span>
+                  <span>{formatNullableRate(interviewConversionRate(row))} interview rate</span>
+                </div>
+                <p>
+                  {`${row.interview_count} of ${row.application_count} applications reached interview`}
+                </p>
+              </li>
+            ))
+          ) : (
+            <li>
+              <div>
+                <span className="dashboard-breakdown-rank__label">
+                  {roleConversionLoadState === "loading" ? "Loading" : "No rows"}
+                </span>
+                <span>
+                  {roleConversionLoadState === "loading"
+                    ? "Fetching role conversions"
+                    : "No title conversion data"}
+                </span>
+              </div>
+            </li>
+          )}
+        </ol>
       </section>
 
       <section

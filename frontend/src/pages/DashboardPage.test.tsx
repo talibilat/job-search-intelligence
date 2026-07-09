@@ -147,6 +147,38 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url === "/metrics/breakdown?dimension=role") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "role",
+            rows: [
+              {
+                application_count: 4,
+                dimension: "role",
+                interview_count: 2,
+                offer_count: 1,
+                response_count: 3,
+                value: "backend engineer",
+              },
+              {
+                application_count: 3,
+                dimension: "role",
+                interview_count: 0,
+                offer_count: 0,
+                response_count: 1,
+                value: "frontend engineer",
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
     if (url === "/metrics/timeseries") {
       return Promise.resolve(
         new Response(
@@ -534,6 +566,25 @@ describe("DashboardPage", () => {
     expect(within(trend).getByText("80% on Jul 8, 2026"));
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/response-rate-trend",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("renders Q-23 best-converting titles by interview conversion", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const leaders = await screen.findByRole("region", {
+      name: "Best-converting titles",
+    });
+
+    expect(within(leaders).getByText("Backend engineer")).toBeTruthy();
+    expect(within(leaders).getByText("50% interview rate")).toBeTruthy();
+    expect(within(leaders).getByText("2 of 4 applications reached interview")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=role",
       expect.objectContaining({ method: "GET" }),
     );
   });
