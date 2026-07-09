@@ -41,3 +41,5 @@ class MetricsDiagnosticsResponse(BaseModel):
     wasted_effort_segments: list[DiagnosticSegmentComparison]
     successful_application_segments: list[DiagnosticSegmentComparison]
     negative_outcome_segments: list[DiagnosticSegmentComparison]
+    selling_skill_segments: list[DiagnosticSegmentComparison]
+    dead_weight_skill_segments: list[DiagnosticSegmentComparison]

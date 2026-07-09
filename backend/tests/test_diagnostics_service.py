@@ -209,6 +209,20 @@ def test_diagnostics_service_returns_sponsorship_response_impact(
     }
 
 
+def test_diagnostics_service_returns_skill_signal_segments(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        seed_diagnostic_fixture(connection)
+        service = DiagnosticsService(metrics_repository=MetricsRepository(connection))
+
+        diagnostics = service.get_diagnostics(dimensions=("tech",))
+
+    assert [segment.value for segment in diagnostics.selling_skill_segments] == ["python"]
+    assert diagnostics.dead_weight_skill_segments == []
+
+
 def test_diagnostics_service_handles_empty_application_set(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -224,6 +238,8 @@ def test_diagnostics_service_handles_empty_application_set(tmp_path: Path) -> No
     assert diagnostics.weakest_response_segments == []
     assert diagnostics.wasted_effort_segments == []
     assert diagnostics.best_roi_source is None
+    assert diagnostics.selling_skill_segments == []
+    assert diagnostics.dead_weight_skill_segments == []
 
 
 def migrated_database(tmp_path: Path) -> Path:

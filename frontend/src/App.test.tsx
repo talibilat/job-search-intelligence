@@ -157,6 +157,7 @@ function metricsDiagnosticsResponse(
   const response: MetricsDiagnosticsResponse = {
     best_roi_source: null,
     sponsorship_response_impact: null,
+    dead_weight_skill_segments: [],
     baseline_response_count: 0,
     baseline_response_rate: null,
     baseline_success_count: 0,
@@ -165,6 +166,7 @@ function metricsDiagnosticsResponse(
     baseline_negative_rate: null,
     negative_outcome_segments: [],
     segments: [],
+    selling_skill_segments: [],
     strongest_response_correlate: null,
     strongest_response_segments: [],
     successful_application_segments: [],

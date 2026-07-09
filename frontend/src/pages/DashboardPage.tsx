@@ -1200,6 +1200,8 @@ export function DashboardPage() {
   const wastedEffortSegment = diagnostics?.wasted_effort_segments[0];
   const bestRoiSource = diagnostics?.best_roi_source;
   const sponsorshipImpact = diagnostics?.sponsorship_response_impact;
+  const sellingSkill = diagnostics?.selling_skill_segments[0];
+  const deadWeightSkill = diagnostics?.dead_weight_skill_segments[0];
 
   return (
     <main
@@ -2444,6 +2446,33 @@ export function DashboardPage() {
                     sponsorshipImpact.response_rate_lift,
                   )}`
                 : "No sponsorship segment can be compared yet"}
+            </p>
+          </article>
+
+          <article className="metric-placeholder">
+            <h3 className="metric-placeholder__label">
+              Q-38 selling vs dead-weight skills
+            </h3>
+            <p className="metric-placeholder__value">
+              {diagnosticsError
+                ? "Unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading"
+                : sellingSkill
+                ? titleize(sellingSkill.value)
+                : "No selling skill"}
+            </p>
+            <p className="dashboard-card__meta">
+              {diagnosticsError
+                ? "Skill diagnostics are unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading skill interview conversion"
+                : sellingSkill
+                ? `${titleize(sellingSkill.value)} is selling`
+                : "No skill has interview evidence yet"}
+              {deadWeightSkill
+                ? `; ${titleize(deadWeightSkill.value)} is below response baseline`
+                : ""}
             </p>
           </article>
         </div>

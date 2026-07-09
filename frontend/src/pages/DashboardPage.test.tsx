@@ -471,6 +471,27 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
               negative_rate_lift: (2 / 3) - 0.4,
               value: "not_offered",
             },
+            dead_weight_skill_segments: [],
+            selling_skill_segments: [
+              {
+                application_count: 5,
+                dimension: "tech",
+                interview_count: 1,
+                interview_rate: 0.2,
+                offer_count: 1,
+                offer_rate: 0.2,
+                response_count: 3,
+                response_rate: 0.6,
+                response_rate_lift: 0,
+                success_count: 1,
+                success_rate: 0.2,
+                success_rate_lift: -0.2,
+                negative_count: 2,
+                negative_rate: 0.4,
+                negative_rate_lift: 0,
+                value: "python",
+              },
+            ],
             baseline_negative_count: 2,
             baseline_negative_rate: 0.4,
             negative_outcome_segments: [
@@ -614,8 +635,10 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             baseline_negative_rate: 1,
             best_roi_source: null,
             sponsorship_response_impact: null,
+            dead_weight_skill_segments: [],
             negative_outcome_segments: [],
             segments: [],
+            selling_skill_segments: [],
             strongest_response_correlate: null,
             strongest_response_segments: [],
             successful_application_segments: [],
@@ -883,6 +906,9 @@ describe("DashboardPage", () => {
       .toBeTruthy();
     expect(within(diagnostics).getByText("Q-37 sponsorship response impact")).toBeTruthy();
     expect(within(diagnostics).getByText("Not offered (Sponsorship) is -26.7 pp vs baseline"))
+      .toBeTruthy();
+    expect(within(diagnostics).getByText("Q-38 selling vs dead-weight skills")).toBeTruthy();
+    expect(within(diagnostics).getByText("Python is selling"))
       .toBeTruthy();
     expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
     expect(within(diagnostics).getAllByText("Linkedin (Source)").length).toBeGreaterThan(
