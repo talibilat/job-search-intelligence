@@ -18,6 +18,7 @@ import {
   WorkMode,
   getMetricsBreakdownMetricsBreakdownGet,
   getMetricsRatesMetricsRatesGet,
+  getMetricsResponseRateTrendMetricsResponseRateTrendGet,
   getMetricsSummaryMetricsSummaryGet,
   getMetricsTimeseriesMetricsTimeseriesGet,
   listApplicationsApplicationsGet,
@@ -28,6 +29,7 @@ import {
   type ListApplicationsApplicationsGetParams,
   type MetricBreakdownRow,
   type MetricRate,
+  type MetricResponseRateTrendPoint,
   type MetricTimeseriesPoint,
   type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
   type MetricsSummaryResponse,
@@ -429,6 +431,14 @@ export function DashboardPage() {
   const [timeseriesLoadState, setTimeseriesLoadState] =
     useState<TimeseriesLoadState>("loading");
   const [timeseriesError, setTimeseriesError] = useState<string | null>(null);
+  const [responseRateTrendPoints, setResponseRateTrendPoints] = useState<
+    MetricResponseRateTrendPoint[]
+  >([]);
+  const [responseRateTrendLoadState, setResponseRateTrendLoadState] =
+    useState<TimeseriesLoadState>("loading");
+  const [responseRateTrendError, setResponseRateTrendError] = useState<
+    string | null
+  >(null);
   const [filters, setFilters] = useState<DashboardFilters>(() =>
     filtersFromSearch(window.location.search),
   );
@@ -547,6 +557,54 @@ export function DashboardPage() {
           "Application statuses are unavailable. Start the local backend to load Q-09.",
         );
         setLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadResponseRateTrend() {
+      setResponseRateTrendLoadState("loading");
+      setResponseRateTrendError(null);
+      setResponseRateTrendPoints([]);
+
+      const response = await getMetricsResponseRateTrendMetricsResponseRateTrendGet(
+        queryParamsFromFilters(appliedFilters),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setResponseRateTrendPoints([]);
+        setResponseRateTrendError(
+          publicError(response.data, "Response rate trend is unavailable."),
+        );
+        setResponseRateTrendLoadState("error");
+        return;
+      }
+
+      setResponseRateTrendPoints(
+        [...response.data.points].sort((left, right) =>
+          left.period_start.localeCompare(right.period_start),
+        ),
+      );
+      setResponseRateTrendLoadState("loaded");
+    }
+
+    void loadResponseRateTrend().catch(() => {
+      if (!isCancelled) {
+        setResponseRateTrendPoints([]);
+        setResponseRateTrendError(
+          "Response rate trend is unavailable. Start the local backend to load Q-21.",
+        );
+        setResponseRateTrendLoadState("error");
       }
     });
 
@@ -744,7 +802,7 @@ export function DashboardPage() {
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
           Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
-          Q-15, Q-17, Q-20, and Tier 3 breakdowns now render from deterministic application and metrics
+          Q-15, Q-17, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
         </p>
@@ -1330,6 +1388,100 @@ export function DashboardPage() {
       </section>
 
       <section
+        aria-labelledby="response-rate-trend-title"
+        className="dashboard-card dashboard-breakdown-card"
+      >
+        <div>
+          <p className="eyebrow">Q-21</p>
+          <h2 id="response-rate-trend-title">Response rate trend</h2>
+          <p className="dashboard-card__meta">
+            Response-rate trend points come from deterministic response evidence
+            over canonical applications grouped by first_seen_at date.
+          </p>
+        </div>
+
+        {responseRateTrendError ? (
+          <Alert title="Response rate trend unavailable" tone="danger">
+            <p>{responseRateTrendError}</p>
+          </Alert>
+        ) : null}
+
+        <div className="dashboard-breakdown-layout">
+          <div className="dashboard-breakdown-chart-card">
+            <ChartPanel
+              description="Response rates grouped over time from local application and response-event evidence."
+              emptyState={{
+                title:
+                  responseRateTrendLoadState === "loading"
+                    ? "Loading response rate trend"
+                    : "No response rate trend yet",
+                description:
+                  responseRateTrendLoadState === "loading"
+                    ? "Loading deterministic response-rate trend points from the local backend."
+                    : "No applications exist for the response-rate trend yet.",
+              }}
+              height={260}
+              title="Daily response rate"
+            >
+              {responseRateTrendPoints.length > 0 ? (
+                <LineChart
+                  data={responseRateTrendPoints.map((point) => ({
+                    period: formatTrendDate(point.period_start),
+                    responseRate:
+                      point.response_rate === null ? null : point.response_rate * 100,
+                  }))}
+                  margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+                >
+                  <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                  <XAxis dataKey="period" stroke="#c9d8ce" />
+                  <YAxis allowDecimals={false} stroke="#c9d8ce" unit="%" />
+                  <Tooltip />
+                  <Line
+                    dataKey="responseRate"
+                    dot={{ fill: "#b8e2af", r: 4 }}
+                    name="Response rate"
+                    stroke="#b8e2af"
+                    strokeWidth={3}
+                    type="monotone"
+                  />
+                </LineChart>
+              ) : undefined}
+            </ChartPanel>
+          </div>
+          <ol className="dashboard-breakdown-ranks">
+            {responseRateTrendPoints.length > 0 ? (
+              responseRateTrendPoints.map((point) => (
+                <li key={point.period_start}>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {formatTrendDate(point.period_start)}
+                    </span>
+                    <span>{formatNullableRate(point.response_rate)}</span>
+                  </div>
+                  <p>
+                    {`${formatNullableRate(point.response_rate)} on ${formatTrendDate(point.period_start)}`}
+                  </p>
+                </li>
+              ))
+            ) : (
+              <li>
+                <div>
+                  <span className="dashboard-breakdown-rank__label">
+                    {responseRateTrendLoadState === "loading" ? "Loading" : "No rows"}
+                  </span>
+                  <span>
+                    {responseRateTrendLoadState === "loading"
+                      ? "Fetching trend"
+                      : "No response-rate trend"}
+                  </span>
+                </div>
+              </li>
+            )}
+          </ol>
+        </div>
+      </section>
+
+      <section
         aria-labelledby="live-applications-title"
         className="dashboard-card dashboard-live-applications"
       >
@@ -1415,6 +1567,10 @@ function formatRateValue(
     return "No data";
   }
   return percentageFormatter.format(metric.rate);
+}
+
+function formatNullableRate(rate: number | null) {
+  return rate === null ? "No data" : percentageFormatter.format(rate);
 }
 
 function formatResponseRateMeta(

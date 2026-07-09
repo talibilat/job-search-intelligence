@@ -10,6 +10,7 @@ from app.api.dependencies import (
     get_metrics_breakdown_service,
     get_metrics_funnel_service,
     get_metrics_rates_service,
+    get_metrics_response_rate_trend_service,
     get_metrics_summary_service,
     get_metrics_timeseries_service,
 )
@@ -20,6 +21,7 @@ from app.models import (
     MetricsFilter,
     MetricsFunnelResponse,
     MetricsRatesResponse,
+    MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
@@ -29,6 +31,7 @@ from app.services.metrics import (
     MetricsBreakdownService,
     MetricsFunnelService,
     MetricsRatesService,
+    MetricsResponseRateTrendService,
     MetricsSummaryService,
     MetricsTimeseriesService,
     MetricsWindowValidationError,
@@ -226,6 +229,26 @@ def get_metrics_timeseries(
     filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
 ) -> MetricsTimeseriesResponse:
     return service.get_timeseries(filters=filters)
+
+
+@router.get(
+    "/response-rate-trend",
+    response_model=MetricsResponseRateTrendResponse,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="Get Metrics Response Rate Trend",
+    description=(
+        "Returns deterministic response-rate trend points from local applications "
+        "and application_events data."
+    ),
+)
+def get_metrics_response_rate_trend(
+    service: Annotated[
+        MetricsResponseRateTrendService,
+        Depends(get_metrics_response_rate_trend_service),
+    ],
+    filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
+) -> MetricsResponseRateTrendResponse:
+    return service.get_response_rate_trend(filters=filters)
 
 
 @router.get(

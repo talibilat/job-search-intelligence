@@ -2011,6 +2011,45 @@
         "title": "MetricRate",
         "type": "object"
       },
+      "MetricResponseRateTrendPoint": {
+        "properties": {
+          "application_count": {
+            "minimum": 0.0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "period_start": {
+            "title": "Period Start",
+            "type": "string"
+          },
+          "response_count": {
+            "minimum": 0.0,
+            "title": "Response Count",
+            "type": "integer"
+          },
+          "response_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Rate"
+          }
+        },
+        "required": [
+          "period_start",
+          "response_count",
+          "application_count",
+          "response_rate"
+        ],
+        "title": "MetricResponseRateTrendPoint",
+        "type": "object"
+      },
       "MetricTimeseriesPoint": {
         "properties": {
           "application_count": {
@@ -2114,6 +2153,22 @@
           "interview_to_offer_rate"
         ],
         "title": "MetricsRatesResponse",
+        "type": "object"
+      },
+      "MetricsResponseRateTrendResponse": {
+        "properties": {
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/MetricResponseRateTrendPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "points"
+        ],
+        "title": "MetricsResponseRateTrendResponse",
         "type": "object"
       },
       "MetricsSummaryResponse": {
@@ -4464,6 +4519,188 @@
           }
         },
         "summary": "Get Metrics Rates",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/response-rate-trend": {
+      "get": {
+        "description": "Returns deterministic response-rate trend points from local applications and application_events data.",
+        "operationId": "get_metrics_response_rate_trend_metrics_response_rate_trend_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationSource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sponsorship",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SponsorshipStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sponsorship"
+            }
+          },
+          {
+            "in": "query",
+            "name": "first_seen_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "First Seen From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "first_seen_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "First Seen To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "salary_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Salary Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "salary_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Salary Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "work_mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WorkMode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Work Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponseRateTrendResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Metrics Response Rate Trend",
         "tags": [
           "metrics"
         ]

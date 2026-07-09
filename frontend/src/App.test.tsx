@@ -12,6 +12,7 @@ import App from "./App";
 import type {
   MetricsBreakdownResponse,
   MetricsRatesResponse,
+  MetricsResponseRateTrendResponse,
   MetricsSummaryResponse,
   MetricsTimeseriesResponse,
 } from "./api";
@@ -111,6 +112,16 @@ function metricsTimeseriesResponse(
   return response as unknown as MockObjectResponseBody;
 }
 
+function metricsResponseRateTrendResponse(
+  overrides: Partial<MetricsResponseRateTrendResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsResponseRateTrendResponse = {
+    points: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
 function isMockResponseConfig(
   value: MockResponse,
 ): value is { body: MockResponseBody; status: number } {
@@ -150,6 +161,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
       if (path === "/metrics/timeseries") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsTimeseriesResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/response-rate-trend") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsResponseRateTrendResponse()), {
             headers: { "Content-Type": "application/json" },
             status: 200,
           }),
@@ -855,6 +875,7 @@ describe("App", () => {
       "/applications?status=assessment",
       "/applications?status=interview",
       "/applications",
+      "/metrics/response-rate-trend",
       "/metrics/breakdown?dimension=source",
       "/metrics/timeseries",
       "/metrics/rates",

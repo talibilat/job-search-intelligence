@@ -10,6 +10,7 @@ from app.models.metrics import (
     MetricFunnelStage,
     MetricRateName,
     MetricRateRow,
+    MetricResponseRateTrendPoint,
     MetricsBreakdownDimension,
     MetricsFilter,
     MetricTimeseriesPoint,
@@ -179,6 +180,36 @@ class MetricsRepository(BaseRepository[int]):
             MetricTimeseriesPoint(
                 period_start=str(row["period_start"]),
                 application_count=int(row["application_count"]),
+            )
+            for row in rows
+        )
+
+    def get_response_rate_timeseries(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> tuple[MetricResponseRateTrendPoint, ...]:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        rows = self.execute(
+            f"""
+            SELECT substr(first_seen_at, 1, 10) AS period_start,
+                COUNT(*) AS application_count,
+                COALESCE(SUM({_exists_response_case()}), 0) AS response_count
+            FROM applications
+            {where_clause}
+            GROUP BY period_start
+            ORDER BY period_start ASC
+            """,
+            (*_RESPONSE_LIKE_EVENT_TYPES, *filter_parameters),
+        ).fetchall()
+        return tuple(
+            MetricResponseRateTrendPoint(
+                period_start=str(row["period_start"]),
+                application_count=int(row["application_count"]),
+                response_count=int(row["response_count"]),
+                response_rate=_rate_or_none(
+                    numerator=int(row["response_count"]),
+                    denominator=int(row["application_count"]),
+                ),
             )
             for row in rows
         )
@@ -564,13 +595,16 @@ def _response_placeholders() -> str:
 
 
 def _rate_metric(*, name: MetricRateName, numerator: int, denominator: int) -> MetricRateRow:
-    rate = None if denominator == 0 else numerator / denominator
     return MetricRateRow(
         name=name,
         numerator=numerator,
         denominator=denominator,
-        rate=rate,
+        rate=_rate_or_none(numerator=numerator, denominator=denominator),
     )
+
+
+def _rate_or_none(*, numerator: int, denominator: int) -> float | None:
+    return None if denominator == 0 else numerator / denominator
 
 
 def _dimension_expression(dimension: MetricsBreakdownDimension) -> str:

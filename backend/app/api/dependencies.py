@@ -35,6 +35,7 @@ from app.services.metrics import (
     MetricsBreakdownService,
     MetricsFunnelService,
     MetricsRatesService,
+    MetricsResponseRateTrendService,
     MetricsSummaryService,
     MetricsTimeseriesService,
 )
@@ -256,6 +257,18 @@ def get_metrics_timeseries_service(
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
         yield MetricsTimeseriesService(metrics_repository=MetricsRepository(connection))
+    finally:
+        connection.close()
+
+
+def get_metrics_response_rate_trend_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[MetricsResponseRateTrendService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield MetricsResponseRateTrendService(metrics_repository=MetricsRepository(connection))
     finally:
         connection.close()
 
