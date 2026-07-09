@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LLMMessageRole(StrEnum):
@@ -74,20 +74,12 @@ class LLMEmbeddingRequest(BaseModel):
 
 
 class LLMEmbedding(BaseModel):
-    """One provider-neutral sqlite-vec compatible embedding vector."""
+    """One provider-neutral embedding vector."""
 
     model_config = ConfigDict(frozen=True)
 
     index: int = Field(ge=0)
-    embedding: tuple[float, ...] = Field(repr=False)
-
-    @field_validator("embedding")
-    @classmethod
-    def validate_embedding_dimensions(cls, value: tuple[float, ...]) -> tuple[float, ...]:
-        if len(value) != 1536:
-            msg = "embeddings must have 1536 dimensions"
-            raise ValueError(msg)
-        return value
+    embedding: tuple[float, ...] = Field(min_length=1, repr=False)
 
 
 class LLMEmbeddingResponse(BaseModel):

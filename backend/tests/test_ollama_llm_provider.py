@@ -252,7 +252,8 @@ def test_ollama_provider_posts_embedding_request() -> None:
 
 
 def test_ollama_provider_health_check_reports_configured_models_available() -> None:
-    provider = OllamaLLMProvider(settings=_settings(), transport=FakeOllamaTransport())
+    transport = FakeOllamaTransport()
+    provider = OllamaLLMProvider(settings=_settings(), transport=transport)
 
     response = asyncio.run(
         provider.health_check(
@@ -263,6 +264,9 @@ def test_ollama_provider_health_check_reports_configured_models_available() -> N
         )
     )
 
+    assert len(transport.embedding_calls) == 1
+    assert transport.embedding_calls[0].payload.model == "nomic-embed-text"
+    assert transport.embedding_calls[0].payload.input == ("Health check.",)
     assert response.provider_name == "ollama"
     assert response.status is LLMModelHealthStatus.AVAILABLE
     assert [(check.kind, check.model, check.status) for check in response.checks] == [

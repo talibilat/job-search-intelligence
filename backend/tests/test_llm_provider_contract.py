@@ -224,12 +224,12 @@ def test_embedding_request_requires_at_least_one_input_and_hides_content_from_re
         LLMEmbeddingRequest(inputs=())
 
 
-def test_embedding_vector_validates_sqlite_vec_dimensions_and_hides_values() -> None:
+def test_embedding_vector_requires_values_and_hides_values() -> None:
     embedding = LLMEmbedding(index=0, embedding=EMBEDDING_1536)
 
     assert "0.001" not in repr(embedding)
-    with pytest.raises(ValidationError, match="embeddings must have 1536 dimensions"):
-        LLMEmbedding(index=0, embedding=(0.0, 1.0))
+    with pytest.raises(ValidationError):
+        LLMEmbedding(index=0, embedding=())
 
 
 def test_generation_message_requires_content() -> None:

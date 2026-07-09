@@ -41,6 +41,7 @@ from .types import (
 _OLLAMA_CHAT_PATH = "/api/chat"
 _OLLAMA_EMBED_PATH = "/api/embed"
 _OLLAMA_JSON_FORMAT = "json"
+_EMBEDDING_HEALTH_INPUT = "Health check."
 _INVALID_RESPONSE_MESSAGE = "Ollama returned invalid generation data."
 
 
@@ -345,6 +346,12 @@ class OllamaLLMProvider:
                 ),
                 model=request.chat_model,
                 options=LLMGenerationOptions(temperature=0, max_output_tokens=4),
+            )
+        )
+        await self.embed(
+            LLMEmbeddingRequest(
+                inputs=(_EMBEDDING_HEALTH_INPUT,),
+                model=request.embedding_model,
             )
         )
         return LLMProviderHealthCheckResponse(
