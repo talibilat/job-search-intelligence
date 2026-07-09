@@ -75,6 +75,27 @@ class MetricsRepository(BaseRepository[int]):
     ) -> int:
         return self._count_applications_with_event("offer", filters=filters)
 
+    def count_successful_applications(self, filters: MetricsFilter | None = None) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        return self._fetch_count(
+            f"""
+            SELECT COUNT(*)
+            FROM applications
+            {where_clause}
+            {"WHERE" if not where_clause else "AND"} ({_exists_success_case()}) = 1
+            """,
+            filter_parameters,
+        )
+
+    def get_successful_application_breakdown(
+        self,
+        dimension: MetricsBreakdownDimension,
+        filters: MetricsFilter | None = None,
+    ) -> dict[str, int]:
+        if dimension == "tech":
+            return self._get_successful_tech_breakdown(filters=filters)
+        return self._get_successful_application_breakdown(dimension, filters=filters)
+
     def get_time_to_first_response_metric(
         self,
         filters: MetricsFilter | None = None,
@@ -306,7 +327,7 @@ class MetricsRepository(BaseRepository[int]):
                     FROM event_order AS newer_applied
                     WHERE newer_applied.application_id = event_order.application_id
                       AND newer_applied.event_type = 'applied'
-                      AND ({_newer_event_predicate('newer_applied', 'event_order')})
+                      AND ({_newer_event_predicate("newer_applied", "event_order")})
                   )
             )
             SELECT
@@ -324,7 +345,7 @@ class MetricsRepository(BaseRepository[int]):
                 FROM event_order AS response_event
                 WHERE response_event.application_id = applications.id
                   AND response_event.event_type IN ({_response_placeholders()})
-                  AND ({_newer_event_predicate('response_event', 'latest_applied')})
+                  AND ({_newer_event_predicate("response_event", "latest_applied")})
               )
             """,
             (evaluated_at, evaluated_at, *filter_parameters, *_RESPONSE_LIKE_EVENT_TYPES),
@@ -538,7 +559,7 @@ class MetricsRepository(BaseRepository[int]):
             INNER JOIN applications
                 ON applications.id = application_events.application_id
             WHERE application_events.event_type = ?
-              {where_clause.replace('WHERE', 'AND', 1)}
+              {where_clause.replace("WHERE", "AND", 1)}
             """,
             (event_type, *filter_parameters),
         )
@@ -695,6 +716,56 @@ class MetricsRepository(BaseRepository[int]):
             ),
         ).fetchall()
         return tuple(_breakdown_row(dimension="tech", row=row) for row in rows)
+
+    def _get_successful_application_breakdown(
+        self,
+        dimension: MetricsBreakdownDimension,
+        *,
+        filters: MetricsFilter | None,
+    ) -> dict[str, int]:
+        expression = _dimension_expression(dimension)
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        rows = self.execute(
+            f"""
+            SELECT {expression} AS value,
+                COUNT(*) AS success_count
+            FROM applications
+            LEFT JOIN company_profiles
+                ON company_profiles.normalized_company = LOWER(TRIM(applications.company))
+            {where_clause}
+            {"WHERE" if not where_clause else "AND"} ({_exists_success_case()}) = 1
+            GROUP BY value
+            """,
+            filter_parameters,
+        ).fetchall()
+        return {str(row["value"]): int(row["success_count"]) for row in rows}
+
+    def _get_successful_tech_breakdown(
+        self,
+        *,
+        filters: MetricsFilter | None,
+    ) -> dict[str, int]:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        rows = self.execute(
+            f"""
+            WITH tech_applications AS (
+                SELECT DISTINCT
+                    applications.id AS application_id,
+                    LOWER(TRIM(json_each.value)) AS value
+                FROM applications
+                INNER JOIN json_each(applications.tech_stack)
+                WHERE TRIM(json_each.value) != ''
+                  {where_clause.replace("WHERE", "AND", 1)}
+            )
+            SELECT tech_applications.value AS value,
+                COUNT(*) AS success_count
+            FROM tech_applications
+            WHERE ({_exists_success_case("tech_applications.application_id")}) = 1
+            GROUP BY tech_applications.value
+            """,
+            filter_parameters,
+        ).fetchall()
+        return {str(row["value"]): int(row["success_count"]) for row in rows}
 
     def _fetch_count(self, sql: str, parameters: Sequence[object] = ()) -> int:
         row = self.execute(sql, parameters).fetchone()
@@ -1034,6 +1105,17 @@ def _exists_event_case() -> str:
         FROM application_events
         WHERE application_events.application_id = applications.id
           AND application_events.event_type = ?
+    ) THEN 1 ELSE 0 END
+    """
+
+
+def _exists_success_case(application_id_expression: str = "applications.id") -> str:
+    return f"""
+    CASE WHEN EXISTS (
+        SELECT 1
+        FROM application_events
+        WHERE application_events.application_id = {application_id_expression}
+          AND application_events.event_type IN ('interview_scheduled', 'offer')
     ) THEN 1 ELSE 0 END
     """
 

@@ -546,12 +546,27 @@ function formatResponseLift(lift: number | null | undefined) {
   return `${sign}${percentagePointFormatter.format(lift * 100)} pp vs baseline`;
 }
 
+function formatSuccessLift(lift: number | null | undefined) {
+  if (lift == null) {
+    return "No success baseline";
+  }
+  const sign = lift > 0 ? "+" : "";
+  return `${sign}${percentagePointFormatter.format(lift * 100)} pp success lift`;
+}
+
 function diagnosticSegmentTitle(segment: DiagnosticSegmentComparison) {
   return `${titleize(segment.value)} (${titleize(segment.dimension)})`;
 }
 
 function diagnosticSegmentEvidence(segment: DiagnosticSegmentComparison) {
   return `${countLabel(segment.response_count, "response")} from ${countLabel(
+    segment.application_count,
+    "application",
+  )}`;
+}
+
+function diagnosticSuccessEvidence(segment: DiagnosticSegmentComparison) {
+  return `${countLabel(segment.success_count, "successful application")} from ${countLabel(
     segment.application_count,
     "application",
   )}`;
@@ -1164,6 +1179,7 @@ export function DashboardPage() {
   );
   const strongestDiagnostic = diagnostics?.strongest_response_segments[0];
   const weakestDiagnostic = diagnostics?.weakest_response_segments[0];
+  const successfulDiagnostic = diagnostics?.successful_application_segments[0];
 
   return (
     <main
@@ -2157,6 +2173,55 @@ export function DashboardPage() {
           </article>
 
           <article>
+            <h3>Q-32 successful application traits</h3>
+            <p className="dashboard-card__meta">
+              {diagnosticsError
+                ? "Successful-trait diagnostics are unavailable"
+                : diagnosticsLoadState === "loading"
+                ? "Loading successful application baseline"
+                : diagnostics
+                ? `${formatNullableRate(
+                    diagnostics.baseline_success_rate,
+                  )} baseline success rate`
+                : "Loading deterministic success baseline"}
+            </p>
+            <ol className="dashboard-breakdown-ranks">
+              {diagnostics?.successful_application_segments.length ? (
+                diagnostics.successful_application_segments.map((segment) => (
+                  <li key={`success-${segment.dimension}-${segment.value}`}>
+                    <div>
+                      <span className="dashboard-breakdown-rank__label">
+                        {diagnosticSegmentTitle(segment)}
+                      </span>
+                      <span>{formatSuccessLift(segment.success_rate_lift)}</span>
+                    </div>
+                    <p>{diagnosticSuccessEvidence(segment)}</p>
+                  </li>
+                ))
+              ) : (
+                <li>
+                  <div>
+                    <span className="dashboard-breakdown-rank__label">
+                      {diagnosticsError
+                        ? "Unavailable"
+                        : diagnosticsLoadState === "loading"
+                          ? "Loading"
+                          : "No successful traits"}
+                    </span>
+                    <span>
+                      {diagnosticsError
+                        ? "Diagnostic request failed"
+                        : diagnosticsLoadState === "loading"
+                        ? "Fetching diagnostics"
+                        : "No positive success lift"}
+                    </span>
+                  </div>
+                </li>
+              )}
+            </ol>
+          </article>
+
+          <article>
             <h3>Weakest response signals</h3>
             <ol className="dashboard-breakdown-ranks">
               {diagnostics?.weakest_response_segments.length ? (
@@ -2214,6 +2279,12 @@ export function DashboardPage() {
                           weakestDiagnostic.response_rate_lift,
                         )}.`
                       : "No negative response-rate lift is available yet."
+                  } ${
+                    successfulDiagnostic
+                      ? `${diagnosticSegmentTitle(successfulDiagnostic)} is ${formatSuccessLift(
+                          successfulDiagnostic.success_rate_lift,
+                        )}.`
+                      : "No successful application trait lift is available yet."
                   }`}
           </p>
         </article>
@@ -2307,8 +2378,8 @@ function formatRateValue(
   return percentageFormatter.format(metric.rate);
 }
 
-function formatNullableRate(rate: number | null) {
-  return rate === null ? "No data" : percentageFormatter.format(rate);
+function formatNullableRate(rate: number | null | undefined) {
+  return rate == null ? "No data" : percentageFormatter.format(rate);
 }
 
 function formatResponseRateMeta(

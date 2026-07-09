@@ -454,6 +454,10 @@ export interface DiagnosticSegmentComparison {
   response_count: number;
   response_rate?: number | null;
   response_rate_lift?: number | null;
+  /** @minimum 0 */
+  success_count: number;
+  success_rate?: number | null;
+  success_rate_lift?: number | null;
   value: string;
 }
 
@@ -819,8 +823,12 @@ export interface MetricsDiagnosticsResponse {
   /** @minimum 0 */
   baseline_response_count: number;
   baseline_response_rate?: number | null;
+  /** @minimum 0 */
+  baseline_success_count: number;
+  baseline_success_rate?: number | null;
   segments: DiagnosticSegmentComparison[];
   strongest_response_segments: DiagnosticSegmentComparison[];
+  successful_application_segments: DiagnosticSegmentComparison[];
   /** @minimum 0 */
   total_applications: number;
   weakest_response_segments: DiagnosticSegmentComparison[];

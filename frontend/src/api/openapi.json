@@ -1352,6 +1352,37 @@
             ],
             "title": "Response Rate Lift"
           },
+          "success_count": {
+            "minimum": 0.0,
+            "title": "Success Count",
+            "type": "integer"
+          },
+          "success_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Rate"
+          },
+          "success_rate_lift": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": -1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Rate Lift"
+          },
           "value": {
             "title": "Value",
             "type": "string"
@@ -1363,7 +1394,8 @@
           "application_count",
           "response_count",
           "interview_count",
-          "offer_count"
+          "offer_count",
+          "success_count"
         ],
         "title": "DiagnosticSegmentComparison",
         "type": "object"
@@ -2365,6 +2397,24 @@
             ],
             "title": "Baseline Response Rate"
           },
+          "baseline_success_count": {
+            "minimum": 0.0,
+            "title": "Baseline Success Count",
+            "type": "integer"
+          },
+          "baseline_success_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Success Rate"
+          },
           "segments": {
             "items": {
               "$ref": "#/components/schemas/DiagnosticSegmentComparison"
@@ -2377,6 +2427,13 @@
               "$ref": "#/components/schemas/DiagnosticSegmentComparison"
             },
             "title": "Strongest Response Segments",
+            "type": "array"
+          },
+          "successful_application_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticSegmentComparison"
+            },
+            "title": "Successful Application Segments",
             "type": "array"
           },
           "total_applications": {
@@ -2395,9 +2452,11 @@
         "required": [
           "total_applications",
           "baseline_response_count",
+          "baseline_success_count",
           "segments",
           "strongest_response_segments",
-          "weakest_response_segments"
+          "weakest_response_segments",
+          "successful_application_segments"
         ],
         "title": "MetricsDiagnosticsResponse",
         "type": "object"

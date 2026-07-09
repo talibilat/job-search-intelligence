@@ -32,10 +32,13 @@ def test_diagnostics_service_compares_segments_against_baseline(
             "response_count": 2,
             "interview_count": 0,
             "offer_count": 0,
+            "success_count": 0,
             "response_rate": 1.0,
             "interview_rate": 0.0,
             "offer_rate": 0.0,
+            "success_rate": 0.0,
             "response_rate_lift": 0.4,
+            "success_rate_lift": -0.2,
         },
         {
             "dimension": "source",
@@ -44,10 +47,13 @@ def test_diagnostics_service_compares_segments_against_baseline(
             "response_count": 1,
             "interview_count": 1,
             "offer_count": 1,
+            "success_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
+            "success_rate": 1 / 3,
             "response_rate_lift": (1 / 3) - 0.6,
+            "success_rate_lift": (1 / 3) - 0.2,
         },
     ]
     assert [segment.model_dump() for segment in diagnostics.strongest_response_segments] == [
@@ -55,6 +61,37 @@ def test_diagnostics_service_compares_segments_against_baseline(
     ]
     assert [segment.model_dump() for segment in diagnostics.weakest_response_segments] == [
         diagnostics.segments[1].model_dump(),
+    ]
+
+
+def test_diagnostics_service_returns_successful_application_traits(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        seed_diagnostic_fixture(connection)
+        service = DiagnosticsService(metrics_repository=MetricsRepository(connection))
+
+        diagnostics = service.get_diagnostics(dimensions=("source",))
+
+    assert diagnostics.baseline_success_count == 1
+    assert diagnostics.baseline_success_rate == 0.2
+    assert [segment.model_dump() for segment in diagnostics.successful_application_segments] == [
+        {
+            "dimension": "source",
+            "value": "linkedin",
+            "application_count": 3,
+            "response_count": 1,
+            "interview_count": 1,
+            "offer_count": 1,
+            "success_count": 1,
+            "response_rate": 1 / 3,
+            "interview_rate": 1 / 3,
+            "offer_rate": 1 / 3,
+            "success_rate": 1 / 3,
+            "response_rate_lift": (1 / 3) - 0.6,
+            "success_rate_lift": (1 / 3) - 0.2,
+        },
     ]
 
 
@@ -79,10 +116,13 @@ def test_diagnostics_service_composes_metrics_filters(tmp_path: Path) -> None:
             "response_count": 1,
             "interview_count": 1,
             "offer_count": 1,
+            "success_count": 1,
             "response_rate": 1 / 3,
             "interview_rate": 1 / 3,
             "offer_rate": 1 / 3,
+            "success_rate": 1 / 3,
             "response_rate_lift": 0.0,
+            "success_rate_lift": 0.0,
         },
     ]
 
