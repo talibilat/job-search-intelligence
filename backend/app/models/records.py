@@ -8,7 +8,7 @@ from app.models.application import (
     WorkMode,
 )
 from app.models.chat import ChatMessageRecord, ChatMessageRole
-from app.models.chunk import EmailChunkRecord
+from app.models.chunk import EmailChunkRecord, EmailChunkSource, EmailTextChunk
 from app.models.classification import (
     ClassificationRunRecord,
     EmailClassificationCandidate,
@@ -63,6 +63,7 @@ __all__ = [
     "EmailBackfillStatus",
     "EmailCandidateQueryStrategy",
     "EmailChunkRecord",
+    "EmailChunkSource",
     "EmailClassificationCandidate",
     "EmailClassificationRecord",
     "EmailClassificationResult",
@@ -70,6 +71,7 @@ __all__ = [
     "EmailFilterDecisionOutcome",
     "EmailFilterDecisionRecord",
     "EmailSyncStateRecord",
+    "EmailTextChunk",
     "InsightRecord",
     "InsightInput",
     "InsightInputEvidence",

@@ -15,7 +15,12 @@ from app.models.classification import (
     EmailClassificationRecord,
 )
 from app.models.raw_email import RawEmailPreviewOrder
-from app.models.records import RawEmailBodyRetentionState, RawEmailPreviewRecord, RawEmailRecord
+from app.models.records import (
+    EmailChunkSource,
+    RawEmailBodyRetentionState,
+    RawEmailPreviewRecord,
+    RawEmailRecord,
+)
 from app.providers.email import EmailAddress, EmailMessageBody, EmailMessageMetadata
 
 
@@ -230,8 +235,6 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         rows = self.execute(
             f"""
             SELECT
-                raw_emails.id,
-                raw_emails.thread_id,
                 raw_emails.from_addr,
                 raw_emails.to_addr,
                 raw_emails.subject,
@@ -242,7 +245,6 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                         AND raw_emails.body_text IS NOT NULL
                     THEN 1 ELSE 0
                 END AS has_retained_body,
-                raw_emails.labels,
                 raw_emails.provider,
                 raw_emails.ingested_at,
                 email_filter_decisions.outcome AS filter_outcome,
@@ -258,7 +260,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             parameters,
         ).fetchall()
 
-        return tuple(RawEmailPreviewRecord.model_validate(row_to_dict(row)) for row in rows)
+        return tuple(_raw_email_preview_from_row(row) for row in rows)
 
     def get_classification_candidate_stats(
         self,
@@ -513,6 +515,35 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         ).fetchall()
         return [EmailClassificationCandidate.model_validate(row_to_dict(row)) for row in rows]
 
+    def list_chunkable_retained_emails(self, *, limit: int) -> list[EmailChunkSource]:
+        """Return retained job-related email bodies eligible for chunking."""
+
+        if limit < 1:
+            msg = "limit must be at least 1"
+            raise ValueError(msg)
+
+        if not self._table_exists("raw_emails") or not self._table_exists("email_classifications"):
+            return []
+
+        rows = self.execute(
+            """
+            SELECT
+                raw_emails.id AS email_id,
+                raw_emails.body_text AS body_text
+            FROM raw_emails
+            INNER JOIN email_classifications
+                ON email_classifications.email_id = raw_emails.id
+            WHERE raw_emails.body_retention_state = ?
+                AND raw_emails.body_text IS NOT NULL
+                AND LENGTH(TRIM(raw_emails.body_text)) > 0
+                AND email_classifications.is_job_related = 1
+            ORDER BY raw_emails.sent_at, raw_emails.id
+            LIMIT ?
+            """,
+            (RawEmailBodyRetentionState.RETAINED.value, limit),
+        ).fetchall()
+        return [EmailChunkSource.model_validate(row_to_dict(row)) for row in rows]
+
     def upsert_email_classifications(
         self,
         records: Iterable[EmailClassificationRecord],
@@ -619,6 +650,39 @@ def _format_email_addresses(addresses: tuple[EmailAddress, ...]) -> str | None:
     return ", ".join(
         address for address in (_format_email_address(item) for item in addresses) if address
     )
+
+
+def _raw_email_preview_from_row(row: sqlite3.Row) -> RawEmailPreviewRecord:
+    row_data = row_to_dict(row)
+    from_addr = row_data.pop("from_addr")
+    to_addr = row_data.pop("to_addr")
+    subject = row_data.pop("subject")
+    row_data["from_domain"] = _email_address_domain(from_addr)
+    row_data["to_domains"] = _email_address_domains(to_addr)
+    row_data["subject_present"] = bool(str(subject or "").strip())
+    return RawEmailPreviewRecord.model_validate(row_data)
+
+
+def _email_address_domains(value: object) -> list[str]:
+    if value is None:
+        return []
+    domains = {
+        domain
+        for domain in (_email_address_domain(part) for part in str(value).split(","))
+        if domain is not None
+    }
+    return sorted(domains)
+
+
+def _email_address_domain(value: object) -> str | None:
+    if value is None:
+        return None
+    address = str(value).strip().rstrip(">")
+    _local_part, separator, domain = address.rpartition("@")
+    if not separator:
+        return None
+    normalized_domain = domain.strip().lower()
+    return normalized_domain or None
 
 
 def _format_datetime(value: datetime | None) -> str | None:

@@ -6,9 +6,83 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from app.db.repositories import ApplicationRepository, EventRepository, MetricsRepository
+from app.db.repositories import (
+    ApplicationRepository,
+    EventRepository,
+    MetricsRepository,
+    SyntheticFixtureRepository,
+)
+from app.models.metrics import MetricsFilter
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SYNTHETIC_FIXTURE_PATH = BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "basic_job_search.json"
+
+
+def test_metrics_repository_matches_basic_synthetic_fixture() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(SYNTHETIC_FIXTURE_PATH)
+        repository = MetricsRepository(connection)
+
+        total_applications = repository.count_total_applications()
+        rejected_applications = repository.count_rejected_applications()
+        rates = {
+            metric.name: metric
+            for metric in repository.get_rate_metrics(ghost_cutoff_at="2026-08-01T00:00:00+00:00")
+        }
+        funnel = {stage.stage: stage.count for stage in repository.get_funnel_metrics()}
+        timeseries = repository.get_application_timeseries()
+        role_rows = repository.get_breakdown("role")
+        source_rows = repository.get_breakdown("source")
+        salary_rows = repository.get_breakdown("salary")
+        tech_rows = repository.get_breakdown("tech")
+        sponsorship_rows = repository.get_breakdown("sponsorship")
+        seniority_rows = repository.get_breakdown("seniority")
+        work_mode_rows = repository.get_breakdown("work_mode")
+
+    assert total_applications == 1
+    assert rejected_applications == 1
+    assert rates["response"].numerator == 1
+    assert rates["response"].denominator == 1
+    assert rates["response"].rate == 1.0
+    assert rates["rejection"].rate == 1.0
+    assert rates["ghost"].rate == 0.0
+    assert rates["application_to_interview"].rate == 0.0
+    assert rates["interview_to_offer"].rate is None
+    assert funnel == {
+        "applied": 1,
+        "screen": 1,
+        "interview": 0,
+        "final": 0,
+        "offer": 0,
+    }
+    assert [(point.period_start, point.application_count) for point in timeseries] == [
+        ("2026-07-04", 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in role_rows] == [
+        ("backend engineer", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in source_rows] == [
+        ("company_site", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in salary_rows] == [
+        ("100k_149k", 1, 1),
+    ]
+    assert salary_rows[0].response_rate == 1.0
+    assert salary_rows[0].interview_rate == 0.0
+    assert salary_rows[0].offer_rate == 0.0
+    assert [(row.value, row.application_count, row.response_count) for row in tech_rows] == [
+        ("fastapi", 1, 1),
+        ("python", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in sponsorship_rows] == [
+        ("unknown", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in seniority_rows] == [
+        ("senior", 1, 1),
+    ]
+    assert [(row.value, row.application_count, row.response_count) for row in work_mode_rows] == [
+        ("remote", 1, 1),
+    ]
 
 
 def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> None:
@@ -34,9 +108,9 @@ def test_metrics_repository_returns_counts_rates_and_funnel(tmp_path: Path) -> N
     assert rates["interview_to_offer"].rate == 1.0
     assert funnel == {
         "applied": 5,
-        "response": 3,
-        "assessment": 1,
+        "screen": 3,
         "interview": 1,
+        "final": 0,
         "offer": 1,
     }
 
@@ -68,8 +142,9 @@ def test_funnel_metrics_count_offers_only_after_interviews(tmp_path: Path) -> No
         }
 
     assert funnel["applied"] == 2
-    assert funnel["response"] == 2
+    assert funnel["screen"] == 2
     assert funnel["interview"] == 1
+    assert funnel["final"] == 0
     assert funnel["offer"] == 0
 
 
@@ -217,6 +292,20 @@ def test_metrics_repository_returns_application_timeseries(tmp_path: Path) -> No
     ]
 
 
+def test_metrics_repository_filters_application_timeseries(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        seed_metric_fixture(connection)
+        points = MetricsRepository(connection).get_application_timeseries(
+            filters=MetricsFilter(source="company_site"),
+        )
+
+    assert [(point.period_start, point.application_count) for point in points] == [
+        ("2026-07-01", 1),
+        ("2026-07-02", 1),
+    ]
+
+
 def test_metrics_repository_returns_breakdowns(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -239,6 +328,64 @@ def test_metrics_repository_returns_breakdowns(tmp_path: Path) -> None:
     assert linkedin.response_count == 1
     assert linkedin.interview_count == 1
     assert linkedin.offer_count == 1
+    assert linkedin.response_rate == 1 / 3
+    assert linkedin.interview_rate == 1 / 3
+    assert linkedin.offer_rate == 1 / 3
+
+
+def test_metrics_repository_returns_salary_band_conversion_rates(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-under-100k",
+            source="linkedin",
+            first_seen_at="2026-07-01T09:00:00+00:00",
+            current_status="applied",
+            salary_min=80_000,
+            salary_max=95_000,
+            tech_stack=["Python"],
+            event_types=("applied",),
+        )
+        insert_application(
+            connection,
+            application_id="app-100k-149k",
+            source="linkedin",
+            first_seen_at="2026-07-01T10:00:00+00:00",
+            current_status="rejected",
+            salary_min=120_000,
+            salary_max=140_000,
+            tech_stack=["Python"],
+            event_types=("applied", "rejection"),
+        )
+        insert_application(
+            connection,
+            application_id="app-150k-plus",
+            source="company_site",
+            first_seen_at="2026-07-01T11:00:00+00:00",
+            current_status="offer",
+            salary_min=155_000,
+            salary_max=180_000,
+            tech_stack=["Python"],
+            event_types=("applied", "interview_scheduled", "offer"),
+        )
+
+        rows = MetricsRepository(connection).get_breakdown("salary")
+
+    assert [
+        (
+            row.value,
+            row.application_count,
+            row.response_rate,
+            row.interview_rate,
+            row.offer_rate,
+        )
+        for row in rows
+    ] == [
+        ("100k_149k", 1, 1.0, 0.0, 0.0),
+        ("150k_plus", 1, 1.0, 1.0, 1.0),
+        ("under_100k", 1, 0.0, 0.0, 0.0),
+    ]
 
 
 def test_tech_breakdown_counts_event_metrics_once_per_application(
@@ -269,6 +416,9 @@ def test_tech_breakdown_counts_event_metrics_once_per_application(
     assert python.response_count == 1
     assert python.interview_count == 1
     assert python.offer_count == 1
+    assert python.response_rate == 1.0
+    assert python.interview_rate == 1.0
+    assert python.offer_rate == 1.0
 
 
 def migrated_database(tmp_path: Path) -> Path:
@@ -336,6 +486,8 @@ def insert_application(
     current_status: str,
     tech_stack: list[str],
     event_types: tuple[str, ...],
+    salary_min: int | None = 120000,
+    salary_max: int | None = 150000,
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -347,8 +499,8 @@ def insert_application(
         last_activity_at="2026-07-05T09:00:00+00:00",
         created_at=first_seen_at,
         updated_at="2026-07-05T09:00:00+00:00",
-        salary_min=120000,
-        salary_max=150000,
+        salary_min=salary_min,
+        salary_max=salary_max,
         currency="USD",
         location="Remote",
         work_mode="remote",

@@ -11,6 +11,8 @@ from app.config import AppSettings, ClassificationMode, LLMProviderName, get_set
 from app.db.repositories import ClassificationRunRepository, EmailRepository
 from app.main import create_app
 from app.providers.llm import (
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMFinishReason,
     LLMGenerationRequest,
     LLMGenerationResponse,
@@ -296,6 +298,9 @@ class _FakeLLMProvider:
         if not self._responses:
             raise AssertionError("unexpected LLM request")
         return self._responses.pop(0)
+
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        raise NotImplementedError
 
     async def health_check(
         self,

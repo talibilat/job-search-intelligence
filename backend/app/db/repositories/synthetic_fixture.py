@@ -115,6 +115,19 @@ class SyntheticFixtureRepository(BaseRepository[sqlite3.Row]):
             )
             """,
         )
+        self.execute(
+            """
+            CREATE TABLE IF NOT EXISTS company_profiles (
+                normalized_company TEXT PRIMARY KEY,
+                display_company TEXT NOT NULL,
+                company_type TEXT NOT NULL,
+                industry TEXT,
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """,
+        )
 
     def _load_emails(self, fixture: SyntheticFixtureFile) -> None:
         self.execute_many(

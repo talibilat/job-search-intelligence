@@ -253,7 +253,7 @@ export function SyncStatusPanel() {
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isStartingSync, setIsStartingSync] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [maxMessages, setMaxMessages] = useState("500");
+  const [maxMessages, setMaxMessages] = useState("");
   const [sinceDate, setSinceDate] = useState("");
   const [beforeDate, setBeforeDate] = useState("");
   const [maxAgeDays, setMaxAgeDays] = useState("");
@@ -435,6 +435,7 @@ export function SyncStatusPanel() {
                   maxMessages: undefined,
                 }));
               }}
+              placeholder="500"
               type="number"
               value={maxMessages}
             />

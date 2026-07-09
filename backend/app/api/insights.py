@@ -28,7 +28,10 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 async def list_insights(
     service: Annotated[InsightReadService, Depends(get_insight_read_service)],
 ) -> InsightListResponse:
-    return InsightListResponse(insights=service.list_latest_insights())
+    return InsightListResponse(
+        insights=service.list_latest_insights(),
+        regeneration_cost_estimates=service.list_regeneration_cost_estimates(),
+    )
 
 
 @router.post(
@@ -61,4 +64,5 @@ async def regenerate_insight(
         insight=result.insight,
         cached=result.cached,
         evidence_citation_ids=[item.citation_id for item in result.input.evidence],
+        cost=result.cost,
     )

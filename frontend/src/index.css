@@ -462,26 +462,88 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.insights-panel {
-  align-items: start;
+.insights-page {
+  display: grid;
+  gap: 32px;
 }
 
-.insights-panel > div,
-.insights-panel__body,
-.insights-panel__insight {
-  display: grid;
-  gap: 16px;
+.insights-hero {
+  max-width: none;
+}
+
+.insights-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   min-width: 0;
 }
 
-.insights-panel p:not(.eyebrow) {
+.insights-summary span,
+.insight-card__badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0.45rem 0.78rem;
+  border: 1px solid #b8c8ae;
+  border-radius: 999px;
+  background: #edf6eb;
+  color: #203f2c;
+  font-size: 0.84rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.insights-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  min-width: 0;
+}
+
+.insights-board > .ui-alert,
+.insights-board > .insights-panel__empty {
+  grid-column: 1 / -1;
+}
+
+.insight-card {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #d8d0bf;
+  border-radius: 28px;
+  background: #fffaf0;
+  box-shadow: 0 18px 50px rgb(36 50 38 / 10%);
+}
+
+.insight-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.insight-card__header > div,
+.insight-card__content,
+.insight-card__actions {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.insight-card__description,
+.insights-panel__empty,
+.insights-panel__meta {
   margin-bottom: 0;
   color: #4e5e53;
 }
 
-.insights-panel__insight,
-.insights-panel__empty {
-  min-width: 0;
+.insight-card__content {
+  align-content: start;
   padding: 18px;
   border: 1px solid #d8d0bf;
   border-radius: 20px;
@@ -489,13 +551,52 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.insights-panel__insight p:not(.eyebrow) {
+.insight-card__content p:not(.eyebrow) {
+  margin-bottom: 0;
   color: #203f2c;
   font-weight: 700;
 }
 
-.insights-panel__insight .insights-panel__meta {
-  color: #657167;
+.insight-card__inline-citations {
+  color: #3f6b52;
+  font-size: 0.9em;
+  font-weight: 850;
+}
+
+.insight-card__inline-citations a {
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.insight-card__cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.insight-card__cost span {
+  max-width: 100%;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid #d8d0bf;
+  border-radius: 999px;
+  background: #f7f0df;
+  color: #203f2c;
+  font-size: 0.8rem;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.insights-panel__empty {
+  min-width: 0;
+  padding: 18px;
+  border: 1px dashed #d8d0bf;
+  border-radius: 20px;
+  background: #fffdf7;
+  overflow-wrap: anywhere;
+}
+
+.insights-panel__meta {
   font-size: 0.86rem;
   font-weight: 800;
 }
@@ -772,6 +873,142 @@ h3 {
 
 .dashboard-live-applications {
   gap: 24px;
+}
+
+.dashboard-funnel-card {
+  overflow: hidden;
+}
+
+.dashboard-funnel-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-funnel-stage {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #edf6eb;
+  color: #203f2c;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-funnel-stage__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-funnel-stage__header span {
+  color: #102417;
+  font-size: 1.08rem;
+  font-weight: 900;
+}
+
+.dashboard-funnel-stage__header strong {
+  color: #3f6b52;
+  font-size: 0.92rem;
+}
+
+.dashboard-funnel-stage__bar {
+  min-width: 0;
+  height: 12px;
+  border-radius: 999px;
+  background: #d8d0bf;
+  overflow: hidden;
+}
+
+.dashboard-funnel-stage__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #203f2c;
+}
+
+.dashboard-breakdown-card {
+  overflow: hidden;
+}
+
+.dashboard-breakdown-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 18px;
+  align-items: end;
+  min-width: 0;
+}
+
+.dashboard-breakdown-header > div {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-breakdown-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
+  gap: 18px;
+  min-width: 0;
+}
+
+.dashboard-breakdown-chart-card,
+.dashboard-breakdown-ranks {
+  min-width: 0;
+}
+
+.dashboard-breakdown-chart-card .chart-panel {
+  height: 100%;
+  margin-top: 0;
+}
+
+.dashboard-breakdown-ranks {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-breakdown-ranks li {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #edf6eb;
+  color: #203f2c;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-breakdown-ranks div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 900;
+}
+
+.dashboard-breakdown-ranks p {
+  margin-bottom: 0;
+  color: #4e5e53;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.dashboard-breakdown-rank__label {
+  color: #102417;
+  font-size: 1.05rem;
 }
 
 .dashboard-live-applications__header {
@@ -1356,6 +1593,7 @@ h3 {
   .dashboard-hero,
   .dashboard-filter-panel,
   .dashboard-card,
+  .insight-card,
   .application-detail-hero,
   .application-detail-card,
   .feature-status-hero,
@@ -1367,11 +1605,14 @@ h3 {
   }
 
   .dashboard-layout,
+  .dashboard-breakdown-header,
+  .dashboard-breakdown-layout,
   .dashboard-live-card,
   .application-detail-grid,
   .filter-placeholder-list,
   .dashboard-filter-grid,
   .dashboard-metric-grid,
+  .insights-board,
   .sync-panel__controls,
   .sync-panel__metrics,
   .sync-panel__recent-meta,
@@ -1387,6 +1628,7 @@ h3 {
 
   .feature-section__header,
   .feature-card__header,
+  .insight-card__header,
   .sync-panel__recent-email-header,
   .dashboard-live-card__meta {
     align-items: flex-start;

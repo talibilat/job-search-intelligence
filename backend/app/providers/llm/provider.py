@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from .types import (
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMGenerationRequest,
     LLMGenerationResponse,
     LLMProviderHealthCheckRequest,
@@ -20,9 +22,24 @@ class LLMProvider(Protocol):
         """Generate provider-neutral content for a typed request."""
         ...
 
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        """Generate provider-neutral embeddings for retained local text chunks."""
+        ...
+
     async def health_check(
         self,
         request: LLMProviderHealthCheckRequest,
     ) -> LLMProviderHealthCheckResponse:
         """Verify the configured provider models can be used before a run starts."""
+        ...
+
+
+@runtime_checkable
+class LLMEmbeddingProvider(Protocol):
+    """Strategy seam for provider-specific embedding adapters."""
+
+    provider_name: str
+
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        """Generate provider-neutral embeddings for retained local text chunks."""
         ...

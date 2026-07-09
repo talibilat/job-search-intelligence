@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 import pytest
 from app.config import AppSettings
 from app.providers.llm import (
+    LLMEmbedding,
+    LLMEmbeddingProvider,
+    LLMEmbeddingRequest,
     LLMFinishReason,
     LLMGenerationOptions,
     LLMGenerationRequest,
@@ -31,6 +34,7 @@ AZURE_API_KEY_REF = SecretRef(
     provider="azure_openai",
     name="api_key",
 )
+EMBEDDING_1536 = tuple(0.002 for _ in range(1536))
 
 
 class FakeSecretStore:
@@ -83,6 +87,12 @@ class FakeAzureTransport:
             raise self.error
         if self.response is not None:
             return self.response
+        if "/embeddings?" in url:
+            return {
+                "model": "jobtracker-embedding",
+                "data": [{"index": 0, "embedding": list(EMBEDDING_1536)}],
+                "usage": {"prompt_tokens": 2, "total_tokens": 2},
+            }
         return {
             "model": "gpt-4o-mini",
             "choices": [
@@ -140,6 +150,7 @@ def test_azure_openai_provider_satisfies_llm_provider_protocol() -> None:
     )
 
     assert isinstance(provider, LLMProvider)
+    assert isinstance(provider, LLMEmbeddingProvider)
 
 
 def test_azure_openai_health_check_verifies_chat_deployment() -> None:
@@ -159,13 +170,17 @@ def test_azure_openai_health_check_verifies_chat_deployment() -> None:
         )
     )
 
-    assert len(transport.calls) == 1
+    assert len(transport.calls) == 2
     assert transport.calls[0].url == (
         "https://example.openai.azure.com/openai/deployments/"
         "jobtracker-chat/chat/completions?api-version=2024-06-01"
     )
+    assert transport.calls[1].url == (
+        "https://example.openai.azure.com/openai/deployments/"
+        "jobtracker-embedding/embeddings?api-version=2024-06-01"
+    )
     assert response.provider_name == "azure_openai"
-    assert response.status is LLMModelHealthStatus.UNAVAILABLE
+    assert response.status is LLMModelHealthStatus.AVAILABLE
     assert response.checks == (
         LLMModelHealthCheck(
             kind=LLMModelKind.CHAT,
@@ -175,8 +190,7 @@ def test_azure_openai_health_check_verifies_chat_deployment() -> None:
         LLMModelHealthCheck(
             kind=LLMModelKind.EMBEDDING,
             model="jobtracker-embedding",
-            status=LLMModelHealthStatus.UNAVAILABLE,
-            detail="Azure OpenAI embedding health checks are not implemented yet.",
+            status=LLMModelHealthStatus.AVAILABLE,
         ),
     )
 
@@ -224,6 +238,48 @@ def test_azure_openai_provider_posts_chat_completion_request() -> None:
         completion_tokens=7,
         total_tokens=18,
     )
+
+
+def test_azure_openai_provider_posts_embedding_request() -> None:
+    secret_store = FakeSecretStore("secret-api-key")
+    transport = FakeAzureTransport(
+        response={
+            "model": "jobtracker-embedding",
+            "data": [
+                {"index": 0, "embedding": list(EMBEDDING_1536)},
+                {"index": 1, "embedding": list(EMBEDDING_1536)},
+            ],
+            "usage": {"prompt_tokens": 9, "total_tokens": 9},
+        }
+    )
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=secret_store,
+        transport=transport,
+    )
+
+    response = asyncio.run(
+        provider.embed(
+            LLMEmbeddingRequest(
+                inputs=("first retained chunk", "second retained chunk"),
+            )
+        )
+    )
+
+    assert secret_store.requested_refs == [AZURE_API_KEY_REF]
+    assert len(transport.calls) == 1
+    call = transport.calls[0]
+    assert call.url == (
+        "https://example.openai.azure.com/openai/deployments/"
+        "jobtracker-embedding/embeddings?api-version=2024-06-01"
+    )
+    assert call.payload == {"input": ["first retained chunk", "second retained chunk"]}
+    assert response.model == "jobtracker-embedding"
+    assert response.embeddings == (
+        LLMEmbedding(index=0, embedding=EMBEDDING_1536),
+        LLMEmbedding(index=1, embedding=EMBEDDING_1536),
+    )
+    assert response.usage == LLMTokenUsage(prompt_tokens=9, total_tokens=9)
 
 
 def test_azure_openai_provider_uses_request_model_as_deployment_override() -> None:

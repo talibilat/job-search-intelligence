@@ -26,6 +26,7 @@ from app.security import SecretStore
 from app.services.sync_service import (
     BackfillStateService,
     EmailSyncOptions,
+    EmailSyncPreviewService,
     EmailSyncRunState,
     EmailSyncRuntime,
     EmailSyncService,
@@ -118,6 +119,25 @@ class ConfiguredEmailSyncRuntime:
 
     def current_status(self) -> EmailSyncStatus:
         return self._status_store.current_status()
+
+    def recent_email_previews(
+        self,
+        *,
+        limit: int = 10,
+        order: RawEmailPreviewOrder = RawEmailPreviewOrder.SENT_AT,
+    ) -> tuple[RawEmailPreviewRecord, ...]:
+        database_path = sqlite_database_path(self._settings.database_url)
+        if not database_path.exists():
+            return ()
+
+        with sqlite3.connect(database_path) as sqlite_connection:
+            return EmailSyncPreviewService(
+                email_repository=EmailRepository(sqlite_connection),
+            ).list_recent_email_previews(
+                provider=self._settings.email_provider,
+                limit=limit,
+                order=order,
+            )
 
 
 _sync_status_store = EmailSyncStatusStore()
@@ -212,7 +232,7 @@ def sync_status(
 
 @router.get("/recent-emails", response_model=list[RawEmailPreviewRecord])
 def sync_recent_emails(
-    settings: Annotated[AppSettings, Depends(get_settings)],
+    sync_runtime: Annotated[EmailSyncRuntime, Depends(get_email_sync_runtime)],
     limit: int = 10,
     order: RawEmailPreviewOrder = RawEmailPreviewOrder.SENT_AT,
 ) -> list[RawEmailPreviewRecord]:
@@ -222,16 +242,4 @@ def sync_recent_emails(
     ``order=ingested_at`` is the diagnostic view of what the latest sync wrote.
     """
 
-    database_path = sqlite_database_path(settings.database_url)
-    if not database_path.exists():
-        return []
-
-    bounded_limit = min(max(limit, 1), 50)
-    with sqlite3.connect(database_path) as sqlite_connection:
-        return list(
-            EmailRepository(sqlite_connection).list_recent_email_previews(
-                provider=settings.email_provider,
-                limit=bounded_limit,
-                order_by=order,
-            )
-        )
+    return list(sync_runtime.recent_email_previews(limit=limit, order=order))

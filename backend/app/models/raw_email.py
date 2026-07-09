@@ -72,23 +72,15 @@ class RawEmailPreviewOrder(StrEnum):
 class RawEmailPreviewRecord(BaseModel):
     """Public-safe raw email metadata preview without body text."""
 
-    id: str
-    thread_id: str | None
-    from_addr: str | None
-    to_addr: str | None
-    subject: str | None
+    from_domain: str | None
+    to_domains: list[str]
+    subject_present: bool
     sent_at: datetime | None
     body_retention_state: RawEmailBodyRetentionState
     has_retained_body: bool
-    labels: list[str]
     provider: str
     ingested_at: datetime
     filter_outcome: str | None = None
     filter_reason: str | None = None
     classification_category: str | None = None
     classification_is_job_related: bool | None = None
-
-    @field_validator("labels", mode="before")
-    @classmethod
-    def parse_preview_labels(cls, value: object) -> object:
-        return parse_json_column(value)

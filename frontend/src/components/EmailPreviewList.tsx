@@ -28,8 +28,7 @@ const detailDateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 function subjectLabel(email: RawEmailPreviewRecord) {
-  const subject = email.subject?.trim();
-  return subject && subject.length > 0 ? subject : "(No subject)";
+  return email.subject_present ? "Subject captured" : "No subject";
 }
 
 function sentLabel(email: RawEmailPreviewRecord) {
@@ -65,6 +64,25 @@ function processingBadge(email: RawEmailPreviewRecord) {
   return null;
 }
 
+function formatEmailDomains(domains: string[]) {
+  return domains.length > 0 ? domains.join(", ") : "Unknown recipient";
+}
+
+function emailRowKey(email: RawEmailPreviewRecord) {
+  return [
+    email.provider,
+    email.ingested_at,
+    email.sent_at,
+    email.from_domain,
+    email.subject_present ? "subject" : "no-subject",
+    email.filter_outcome,
+    email.filter_reason,
+    email.classification_category,
+  ]
+    .filter(Boolean)
+    .join(":");
+}
+
 function EmailRow({
   email,
   isExpanded,
@@ -86,7 +104,7 @@ function EmailRow({
         type="button"
       >
         <span className="email-preview__sender">
-          {email.from_addr ?? "Unknown sender"}
+          {email.from_domain ?? "Unknown sender"}
         </span>
         <span className="email-preview__subject">{subjectLabel(email)}</span>
         <span className="email-preview__badges">
@@ -105,20 +123,20 @@ function EmailRow({
       {isExpanded ? (
         <dl className="email-preview__detail">
           <div>
-            <dt>Provider message ID</dt>
-            <dd>{email.id}</dd>
+            <dt>Provider</dt>
+            <dd>{email.provider}</dd>
           </div>
           <div>
-            <dt>Thread ID</dt>
-            <dd>{email.thread_id ?? "None"}</dd>
+            <dt>From domain</dt>
+            <dd>{email.from_domain ?? "Unknown sender"}</dd>
           </div>
           <div>
-            <dt>To</dt>
-            <dd>{email.to_addr ?? "Unknown recipient"}</dd>
+            <dt>To domains</dt>
+            <dd>{formatEmailDomains(email.to_domains)}</dd>
           </div>
           <div>
-            <dt>Labels</dt>
-            <dd>{email.labels.length > 0 ? email.labels.join(", ") : "None"}</dd>
+            <dt>Subject</dt>
+            <dd>{subjectLabel(email)}</dd>
           </div>
           <div>
             <dt>Sent</dt>
@@ -166,7 +184,7 @@ export function EmailPreviewList({ refreshToken = 0 }: { refreshToken?: number }
   const [emails, setEmails] = useState<RawEmailPreviewRecord[]>([]);
   const [order, setOrder] = useState<RawEmailPreviewOrder>("sent_at");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
@@ -227,7 +245,7 @@ export function EmailPreviewList({ refreshToken = 0 }: { refreshToken?: number }
             aria-pressed={order === "sent_at"}
             onClick={() => {
               setOrder("sent_at");
-              setExpandedId(null);
+              setExpandedKey(null);
             }}
             variant={order === "sent_at" ? "primary" : "secondary"}
           >
@@ -237,7 +255,7 @@ export function EmailPreviewList({ refreshToken = 0 }: { refreshToken?: number }
             aria-pressed={order === "ingested_at"}
             onClick={() => {
               setOrder("ingested_at");
-              setExpandedId(null);
+              setExpandedKey(null);
             }}
             variant={order === "ingested_at" ? "primary" : "secondary"}
           >
@@ -260,18 +278,21 @@ export function EmailPreviewList({ refreshToken = 0 }: { refreshToken?: number }
       ) : visibleEmails.length > 0 ? (
         <>
           <ul className="email-preview__list">
-            {visibleEmails.map((email) => (
-              <EmailRow
-                email={email}
-                isExpanded={expandedId === email.id}
-                key={email.id}
-                onToggle={() =>
-                  setExpandedId((currentId) =>
-                    currentId === email.id ? null : email.id,
-                  )
-                }
-              />
-            ))}
+            {visibleEmails.map((email) => {
+              const key = emailRowKey(email);
+              return (
+                <EmailRow
+                  email={email}
+                  isExpanded={expandedKey === key}
+                  key={key}
+                  onToggle={() =>
+                    setExpandedKey((currentKey) =>
+                      currentKey === key ? null : key,
+                    )
+                  }
+                />
+              );
+            })}
           </ul>
           {emails.length > defaultVisibleRows ? (
             <Button

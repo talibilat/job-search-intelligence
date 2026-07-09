@@ -10,6 +10,7 @@ from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.repositories import (
     ApplicationRepository,
+    ChatRepository,
     CorrectionConflictRepository,
     CorrectionRepository,
     EventRepository,
@@ -28,13 +29,17 @@ from app.services.applications import (
     ApplicationDetailService,
     ApplicationEventsService,
 )
+from app.services.chat_history import ChatHistoryService
+from app.services.diagnostics import DiagnosticsService
 from app.services.ghost_inference import GhostInferenceService
 from app.services.insights_service import InsightGenerationService, InsightReadService
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.metrics import (
     MetricsBreakdownService,
+    MetricsFunnelService,
     MetricsRatesService,
+    MetricsResponseRateTrendService,
     MetricsSummaryService,
     MetricsTimeseriesService,
 )
@@ -81,6 +86,18 @@ def get_insight_repository(
     connection = sqlite3.connect(database_path, check_same_thread=False)
     try:
         yield InsightRepository(connection)
+    finally:
+        connection.close()
+
+
+def get_chat_history_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ChatHistoryService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield ChatHistoryService(ChatRepository(connection))
     finally:
         connection.close()
 
@@ -257,7 +274,10 @@ def get_metrics_rates_service(
     connection_target = str(database_path) if database_path.exists() else ":memory:"
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
-        yield MetricsRatesService(metrics_repository=MetricsRepository(connection))
+        yield MetricsRatesService(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=settings.ghost_threshold_days,
+        )
     finally:
         connection.close()
 
@@ -274,6 +294,30 @@ def get_metrics_timeseries_service(
         connection.close()
 
 
+def get_metrics_response_rate_trend_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[MetricsResponseRateTrendService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield MetricsResponseRateTrendService(metrics_repository=MetricsRepository(connection))
+    finally:
+        connection.close()
+
+
+def get_metrics_funnel_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[MetricsFunnelService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield MetricsFunnelService(metrics_repository=MetricsRepository(connection))
+    finally:
+        connection.close()
+
+
 def get_metrics_breakdown_service(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> Iterator[MetricsBreakdownService]:
@@ -282,6 +326,18 @@ def get_metrics_breakdown_service(
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
         yield MetricsBreakdownService(metrics_repository=MetricsRepository(connection))
+    finally:
+        connection.close()
+
+
+def get_metrics_diagnostics_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[DiagnosticsService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield DiagnosticsService(metrics_repository=MetricsRepository(connection))
     finally:
         connection.close()
 
@@ -355,6 +411,9 @@ def get_insight_read_service(
     connection_target = str(database_path) if database_path.exists() else ":memory:"
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
-        yield InsightReadService(InsightRepository(connection))
+        yield InsightReadService(
+            settings=settings,
+            insight_repository=InsightRepository(connection),
+        )
     finally:
         connection.close()

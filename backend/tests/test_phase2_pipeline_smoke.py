@@ -32,6 +32,8 @@ from app.models import (
 from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import EmailAccountRef, EmailAddress, EmailMessageMetadata, EmailMessageRef
 from app.providers.llm import (
+    LLMEmbeddingRequest,
+    LLMEmbeddingResponse,
     LLMFinishReason,
     LLMGenerationRequest,
     LLMGenerationResponse,
@@ -201,6 +203,9 @@ class FixtureLLMProvider:
             finish_reason=LLMFinishReason.STOP,
             usage=LLMTokenUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
         )
+
+    async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
+        raise NotImplementedError
 
     async def health_check(
         self,

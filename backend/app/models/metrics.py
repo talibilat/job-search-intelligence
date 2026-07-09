@@ -24,6 +24,10 @@ class MetricRate(BaseModel):
 
 class MetricsRatesResponse(BaseModel):
     overall_response_rate: MetricRate
+    rejection_rate: MetricRate
+    ghost_rate: MetricRate
+    application_to_interview_rate: MetricRate
+    interview_to_offer_rate: MetricRate
 
 
 class MetricsApplicationWindow(StrEnum):
@@ -107,11 +111,15 @@ type MetricRateName = Literal[
     "application_to_interview",
     "interview_to_offer",
 ]
-type MetricFunnelStageName = Literal["applied", "response", "assessment", "interview", "offer"]
+type MetricFunnelStageName = Literal["applied", "screen", "interview", "final", "offer"]
+type SilenceAgeBucketName = Literal["0_7", "8_14", "15_30", "31_60", "61_plus"]
+type GhostThresholdSource = Literal["response_percentile", "configured_fallback"]
 type MetricsBreakdownDimension = Literal[
     "role",
     "source",
     "salary",
+    "company_type",
+    "industry",
     "tech",
     "sponsorship",
     "seniority",
@@ -131,6 +139,10 @@ class MetricFunnelStage(BaseModel):
     count: int = Field(ge=0)
 
 
+class MetricsFunnelResponse(BaseModel):
+    stages: list[MetricFunnelStage]
+
+
 class MetricTimeseriesPoint(BaseModel):
     period_start: str
     application_count: int = Field(ge=0)
@@ -140,18 +152,57 @@ class MetricsTimeseriesResponse(BaseModel):
     points: list[MetricTimeseriesPoint]
 
 
+class MetricResponseRateTrendPoint(BaseModel):
+    period_start: str
+    response_count: int = Field(ge=0)
+    application_count: int = Field(ge=0)
+    response_rate: float | None = Field(ge=0, le=1)
+
+
+class MetricsResponseRateTrendResponse(BaseModel):
+    points: list[MetricResponseRateTrendPoint]
+
+
 class MetricBreakdownRow(BaseModel):
     dimension: MetricsBreakdownDimension
     value: str
     application_count: int = Field(ge=0)
     response_count: int = Field(ge=0)
+    response_rate: float | None = Field(ge=0, le=1)
     interview_count: int = Field(ge=0)
+    interview_rate: float | None = Field(ge=0, le=1)
     offer_count: int = Field(ge=0)
+    offer_rate: float | None = Field(ge=0, le=1)
 
 
 class MetricsBreakdownResponse(BaseModel):
     dimension: MetricsBreakdownDimension
     rows: list[MetricBreakdownRow]
+
+
+class TimeToFirstResponseMetric(BaseModel):
+    application_count: int = Field(ge=0)
+    average_hours: float | None = Field(default=None, ge=0)
+
+
+class TimeToRejectionMetric(BaseModel):
+    application_count: int = Field(ge=0)
+    average_hours: float | None = Field(default=None, ge=0)
+
+
+class SilenceAgeBucketMetric(BaseModel):
+    bucket: SilenceAgeBucketName
+    min_days: int = Field(ge=0)
+    max_days: int | None = Field(default=None, ge=0)
+    application_count: int = Field(ge=0)
+
+
+class PersonalGhostThresholdMetric(BaseModel):
+    threshold_days: int = Field(ge=1)
+    threshold_source: GhostThresholdSource
+    response_sample_size: int = Field(ge=0)
+    silent_application_count: int = Field(ge=0)
+    silence_age_distribution: list[SilenceAgeBucketMetric]
 
 
 class MetricsSummaryResponse(BaseModel):
@@ -168,4 +219,7 @@ class MetricsSummaryResponse(BaseModel):
     ghost_threshold_days: int = Field(ge=1)
     evaluated_at: datetime
     interview_invitation_count: int = Field(ge=0)
+    average_time_to_first_response: TimeToFirstResponseMetric
+    average_time_to_rejection: TimeToRejectionMetric
+    personal_ghost_threshold: PersonalGhostThresholdMetric
     application_windows: list[ApplicationWindowMetric]

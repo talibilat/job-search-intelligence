@@ -306,6 +306,32 @@ export const BackfillProgressState = {
   failed: "failed",
 } as const;
 
+export type JsonObjectList = JsonObject[];
+
+export type ChatMessageRole =
+  (typeof ChatMessageRole)[keyof typeof ChatMessageRole];
+
+export const ChatMessageRole = {
+  user: "user",
+  assistant: "assistant",
+  tool: "tool",
+  system: "system",
+} as const;
+
+export interface ChatMessageRecord {
+  citations_json: JsonObjectList;
+  content: string;
+  conversation_id: string;
+  created_at: string;
+  id: number;
+  role: ChatMessageRole;
+  tool_outputs_json: JsonObjectList;
+}
+
+export interface ChatHistoryResponse {
+  messages: ChatMessageRecord[];
+}
+
 export type ClassificationMode =
   (typeof ClassificationMode)[keyof typeof ClassificationMode];
 
@@ -444,6 +470,46 @@ export interface ClassificationRunResponse {
   started_at: string;
   /** @minimum 0 */
   total_tokens: number;
+}
+
+export type MetricsBreakdownDimension =
+  (typeof MetricsBreakdownDimension)[keyof typeof MetricsBreakdownDimension];
+
+export const MetricsBreakdownDimension = {
+  role: "role",
+  source: "source",
+  salary: "salary",
+  company_type: "company_type",
+  industry: "industry",
+  tech: "tech",
+  sponsorship: "sponsorship",
+  seniority: "seniority",
+  work_mode: "work_mode",
+} as const;
+
+export interface DiagnosticSegmentComparison {
+  /** @minimum 0 */
+  application_count: number;
+  dimension: MetricsBreakdownDimension;
+  /** @minimum 0 */
+  interview_count: number;
+  interview_rate?: number | null;
+  /** @minimum 0 */
+  negative_count: number;
+  negative_rate?: number | null;
+  negative_rate_lift?: number | null;
+  /** @minimum 0 */
+  offer_count: number;
+  offer_rate?: number | null;
+  /** @minimum 0 */
+  response_count: number;
+  response_rate?: number | null;
+  response_rate_lift?: number | null;
+  /** @minimum 0 */
+  success_count: number;
+  success_rate?: number | null;
+  success_rate_lift?: number | null;
+  value: string;
 }
 
 /**
@@ -632,6 +698,14 @@ export interface GhostInferenceRunResponse {
   threshold_days: number;
 }
 
+export type GhostThresholdSource =
+  (typeof GhostThresholdSource)[keyof typeof GhostThresholdSource];
+
+export const GhostThresholdSource = {
+  response_percentile: "response_percentile",
+  configured_fallback: "configured_fallback",
+} as const;
+
 export type ValidationErrorCtx = { [key: string]: unknown };
 
 export interface ValidationError {
@@ -673,8 +747,32 @@ export interface InsightRecord {
   type: InsightType;
 }
 
+export interface InsightRegenerationCost {
+  actual_completion_tokens?: number | null;
+  actual_cost_usd?: number | null;
+  actual_prompt_tokens?: number | null;
+  actual_total_tokens?: number | null;
+  cost_estimate_available: boolean;
+  currency?: string;
+  /** @minimum 0 */
+  estimated_completion_tokens: number;
+  estimated_cost_usd?: number | null;
+  /** @minimum 0 */
+  estimated_prompt_tokens: number;
+  /** @minimum 0 */
+  estimated_total_tokens: number;
+  /** @minLength 1 */
+  token_estimate_method: string;
+}
+
+export interface InsightRegenerationEstimate {
+  cost: InsightRegenerationCost;
+  type: InsightType;
+}
+
 export interface InsightListResponse {
   insights: InsightRecord[];
+  regeneration_cost_estimates?: InsightRegenerationEstimate[];
 }
 
 export interface InsightRegenerateRequest {
@@ -685,6 +783,7 @@ export interface InsightRegenerateRequest {
 
 export interface InsightRegenerateResponse {
   cached: boolean;
+  cost: InsightRegenerationCost;
   evidence_citation_ids: string[];
   insight: InsightRecord;
 }
@@ -737,30 +836,37 @@ export interface LLMProviderHealthCheckResponse {
   status: LLMModelHealthStatus;
 }
 
-export type MetricsBreakdownDimension =
-  (typeof MetricsBreakdownDimension)[keyof typeof MetricsBreakdownDimension];
-
-export const MetricsBreakdownDimension = {
-  role: "role",
-  source: "source",
-  salary: "salary",
-  tech: "tech",
-  sponsorship: "sponsorship",
-  seniority: "seniority",
-  work_mode: "work_mode",
-} as const;
-
 export interface MetricBreakdownRow {
   /** @minimum 0 */
   application_count: number;
   dimension: MetricsBreakdownDimension;
   /** @minimum 0 */
   interview_count: number;
+  interview_rate: number | null;
   /** @minimum 0 */
   offer_count: number;
+  offer_rate: number | null;
   /** @minimum 0 */
   response_count: number;
+  response_rate: number | null;
   value: string;
+}
+
+export type MetricFunnelStageName =
+  (typeof MetricFunnelStageName)[keyof typeof MetricFunnelStageName];
+
+export const MetricFunnelStageName = {
+  applied: "applied",
+  screen: "screen",
+  interview: "interview",
+  final: "final",
+  offer: "offer",
+} as const;
+
+export interface MetricFunnelStage {
+  /** @minimum 0 */
+  count: number;
+  stage: MetricFunnelStageName;
 }
 
 export interface MetricRate {
@@ -769,6 +875,15 @@ export interface MetricRate {
   /** @minimum 0 */
   numerator: number;
   rate: number | null;
+}
+
+export interface MetricResponseRateTrendPoint {
+  /** @minimum 0 */
+  application_count: number;
+  period_start: string;
+  /** @minimum 0 */
+  response_count: number;
+  response_rate: number | null;
 }
 
 export interface MetricTimeseriesPoint {
@@ -782,8 +897,89 @@ export interface MetricsBreakdownResponse {
   rows: MetricBreakdownRow[];
 }
 
+export interface MetricsDiagnosticsResponse {
+  adjacent_role_suggestions: DiagnosticSegmentComparison[];
+  /** @minimum 0 */
+  baseline_negative_count: number;
+  baseline_negative_rate?: number | null;
+  /** @minimum 0 */
+  baseline_response_count: number;
+  baseline_response_rate?: number | null;
+  /** @minimum 0 */
+  baseline_success_count: number;
+  baseline_success_rate?: number | null;
+  best_roi_source?: DiagnosticSegmentComparison | null;
+  dead_weight_skill_segments: DiagnosticSegmentComparison[];
+  negative_outcome_segments: DiagnosticSegmentComparison[];
+  segments: DiagnosticSegmentComparison[];
+  selling_skill_segments: DiagnosticSegmentComparison[];
+  sponsorship_response_impact?: DiagnosticSegmentComparison | null;
+  strongest_response_correlate?: DiagnosticSegmentComparison | null;
+  strongest_response_segments: DiagnosticSegmentComparison[];
+  successful_application_segments: DiagnosticSegmentComparison[];
+  /** @minimum 0 */
+  total_applications: number;
+  wasted_effort_segments: DiagnosticSegmentComparison[];
+  weakest_response_segments: DiagnosticSegmentComparison[];
+}
+
+export interface MetricsFunnelResponse {
+  stages: MetricFunnelStage[];
+}
+
 export interface MetricsRatesResponse {
+  application_to_interview_rate: MetricRate;
+  ghost_rate: MetricRate;
+  interview_to_offer_rate: MetricRate;
   overall_response_rate: MetricRate;
+  rejection_rate: MetricRate;
+}
+
+export interface MetricsResponseRateTrendResponse {
+  points: MetricResponseRateTrendPoint[];
+}
+
+export interface TimeToFirstResponseMetric {
+  /** @minimum 0 */
+  application_count: number;
+  average_hours?: number | null;
+}
+
+export interface TimeToRejectionMetric {
+  /** @minimum 0 */
+  application_count: number;
+  average_hours?: number | null;
+}
+
+export type SilenceAgeBucketName =
+  (typeof SilenceAgeBucketName)[keyof typeof SilenceAgeBucketName];
+
+export const SilenceAgeBucketName = {
+  "0_7": "0_7",
+  "8_14": "8_14",
+  "15_30": "15_30",
+  "31_60": "31_60",
+  "61_plus": "61_plus",
+} as const;
+
+export interface SilenceAgeBucketMetric {
+  /** @minimum 0 */
+  application_count: number;
+  bucket: SilenceAgeBucketName;
+  max_days?: number | null;
+  /** @minimum 0 */
+  min_days: number;
+}
+
+export interface PersonalGhostThresholdMetric {
+  /** @minimum 0 */
+  response_sample_size: number;
+  silence_age_distribution: SilenceAgeBucketMetric[];
+  /** @minimum 0 */
+  silent_application_count: number;
+  /** @minimum 1 */
+  threshold_days: number;
+  threshold_source: GhostThresholdSource;
 }
 
 /**
@@ -791,6 +987,8 @@ export interface MetricsRatesResponse {
  */
 export interface MetricsSummaryResponse {
   application_windows: ApplicationWindowMetric[];
+  average_time_to_first_response: TimeToFirstResponseMetric;
+  average_time_to_rejection: TimeToRejectionMetric;
   /** @minimum 0 */
   distinct_company_count: number;
   evaluated_at: string;
@@ -802,6 +1000,7 @@ export interface MetricsSummaryResponse {
   interview_invitation_count: number;
   /** @minimum 0 */
   offers_received: number;
+  personal_ghost_threshold: PersonalGhostThresholdMetric;
   /**
    * Total applications whose canonical current status is rejected.
    * @minimum 0
@@ -973,16 +1172,13 @@ export interface RawEmailPreviewRecord {
   classification_is_job_related?: boolean | null;
   filter_outcome?: string | null;
   filter_reason?: string | null;
-  from_addr: string | null;
+  from_domain: string | null;
   has_retained_body: boolean;
-  id: string;
   ingested_at: string;
-  labels: string[];
   provider: string;
   sent_at: string | null;
-  subject: string | null;
-  thread_id: string | null;
-  to_addr: string | null;
+  subject_present: boolean;
+  to_domains: string[];
 }
 
 export interface ResponseSilenceMetric {
@@ -1076,8 +1272,74 @@ export type GmailAuthCallbackAuthGmailCallbackGetParams = {
   state: string;
 };
 
+export type GetChatHistoryChatHistoryGetParams = {
+  conversation_id?: string | null;
+  /**
+   * @minimum 1
+   * @maximum 500
+   */
+  limit?: number;
+};
+
 export type GetMetricsBreakdownMetricsBreakdownGetParams = {
   dimension: MetricsBreakdownDimension;
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetMetricsDiagnosticsMetricsDiagnosticsGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetMetricsFunnelMetricsFunnelGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetMetricsRatesMetricsRatesGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetMetricsResponseRateTrendMetricsResponseRateTrendGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
 };
 
 export type GetMetricsSummaryMetricsSummaryGetParams = {
@@ -1093,6 +1355,27 @@ export type GetMetricsSummaryMetricsSummaryGetParams = {
    * Exclusive timezone-aware custom window end.
    */
   custom_end_at?: string | null;
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetMetricsTimeseriesMetricsTimeseriesGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
 };
 
 export type SyncRecentEmailsSyncRecentEmailsGetParams = {
@@ -1898,6 +2181,71 @@ export const gmailAuthCallbackAuthGmailCallbackGet = async (
   } as gmailAuthCallbackAuthGmailCallbackGetResponse;
 };
 
+export type getChatHistoryChatHistoryGetResponse200 = {
+  data: ChatHistoryResponse;
+  status: 200;
+};
+
+export type getChatHistoryChatHistoryGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type getChatHistoryChatHistoryGetResponseSuccess =
+  getChatHistoryChatHistoryGetResponse200 & {
+    headers: Headers;
+  };
+export type getChatHistoryChatHistoryGetResponseError =
+  getChatHistoryChatHistoryGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getChatHistoryChatHistoryGetResponse =
+  | getChatHistoryChatHistoryGetResponseSuccess
+  | getChatHistoryChatHistoryGetResponseError;
+
+export const getGetChatHistoryChatHistoryGetUrl = (
+  params?: GetChatHistoryChatHistoryGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/chat/history?${stringifiedParams}`
+    : `/chat/history`;
+};
+
+/**
+ * @summary Get Chat History
+ */
+export const getChatHistoryChatHistoryGet = async (
+  params?: GetChatHistoryChatHistoryGetParams,
+  options?: RequestInit,
+): Promise<getChatHistoryChatHistoryGetResponse> => {
+  const res = await fetch(getGetChatHistoryChatHistoryGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChatHistoryChatHistoryGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getChatHistoryChatHistoryGetResponse;
+};
+
 export type classificationEstimateClassificationEstimateGetResponse200 = {
   data: ClassificationPreRunEstimate;
   status: 200;
@@ -2432,20 +2780,180 @@ export const getMetricsBreakdownMetricsBreakdownGet = async (
   } as getMetricsBreakdownMetricsBreakdownGetResponse;
 };
 
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponse200 = {
+  data: MetricsDiagnosticsResponse;
+  status: 200;
+};
+
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponseSuccess =
+  getMetricsDiagnosticsMetricsDiagnosticsGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponseError =
+  getMetricsDiagnosticsMetricsDiagnosticsGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getMetricsDiagnosticsMetricsDiagnosticsGetResponse =
+  | getMetricsDiagnosticsMetricsDiagnosticsGetResponseSuccess
+  | getMetricsDiagnosticsMetricsDiagnosticsGetResponseError;
+
+export const getGetMetricsDiagnosticsMetricsDiagnosticsGetUrl = (
+  params?: GetMetricsDiagnosticsMetricsDiagnosticsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/diagnostics?${stringifiedParams}`
+    : `/metrics/diagnostics`;
+};
+
+/**
+ * Returns deterministic Phase 3.5 diagnostic segment comparisons from local applications and application_events data.
+ * @summary Get Metrics Diagnostics
+ */
+export const getMetricsDiagnosticsMetricsDiagnosticsGet = async (
+  params?: GetMetricsDiagnosticsMetricsDiagnosticsGetParams,
+  options?: RequestInit,
+): Promise<getMetricsDiagnosticsMetricsDiagnosticsGetResponse> => {
+  const res = await fetch(
+    getGetMetricsDiagnosticsMetricsDiagnosticsGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsDiagnosticsMetricsDiagnosticsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsDiagnosticsMetricsDiagnosticsGetResponse;
+};
+
+export type getMetricsFunnelMetricsFunnelGetResponse200 = {
+  data: MetricsFunnelResponse;
+  status: 200;
+};
+
+export type getMetricsFunnelMetricsFunnelGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type getMetricsFunnelMetricsFunnelGetResponseSuccess =
+  getMetricsFunnelMetricsFunnelGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsFunnelMetricsFunnelGetResponseError =
+  getMetricsFunnelMetricsFunnelGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getMetricsFunnelMetricsFunnelGetResponse =
+  | getMetricsFunnelMetricsFunnelGetResponseSuccess
+  | getMetricsFunnelMetricsFunnelGetResponseError;
+
+export const getGetMetricsFunnelMetricsFunnelGetUrl = (
+  params?: GetMetricsFunnelMetricsFunnelGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/funnel?${stringifiedParams}`
+    : `/metrics/funnel`;
+};
+
+/**
+ * Returns deterministic Q-16 funnel counts for applied, screen, interview, final, and offer stages from local applications and application_events data. The final stage is explicitly zero until final-round evidence is represented in the data model.
+ * @summary Get Metrics Funnel
+ */
+export const getMetricsFunnelMetricsFunnelGet = async (
+  params?: GetMetricsFunnelMetricsFunnelGetParams,
+  options?: RequestInit,
+): Promise<getMetricsFunnelMetricsFunnelGetResponse> => {
+  const res = await fetch(getGetMetricsFunnelMetricsFunnelGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsFunnelMetricsFunnelGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsFunnelMetricsFunnelGetResponse;
+};
+
 export type getMetricsRatesMetricsRatesGetResponse200 = {
   data: MetricsRatesResponse;
   status: 200;
+};
+
+export type getMetricsRatesMetricsRatesGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
 };
 
 export type getMetricsRatesMetricsRatesGetResponseSuccess =
   getMetricsRatesMetricsRatesGetResponse200 & {
     headers: Headers;
   };
-export type getMetricsRatesMetricsRatesGetResponse =
-  getMetricsRatesMetricsRatesGetResponseSuccess;
+export type getMetricsRatesMetricsRatesGetResponseError =
+  getMetricsRatesMetricsRatesGetResponse422 & {
+    headers: Headers;
+  };
 
-export const getGetMetricsRatesMetricsRatesGetUrl = () => {
-  return `/metrics/rates`;
+export type getMetricsRatesMetricsRatesGetResponse =
+  | getMetricsRatesMetricsRatesGetResponseSuccess
+  | getMetricsRatesMetricsRatesGetResponseError;
+
+export const getGetMetricsRatesMetricsRatesGetUrl = (
+  params?: GetMetricsRatesMetricsRatesGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/rates?${stringifiedParams}`
+    : `/metrics/rates`;
 };
 
 /**
@@ -2453,9 +2961,10 @@ export const getGetMetricsRatesMetricsRatesGetUrl = () => {
  * @summary Get Metrics Rates
  */
 export const getMetricsRatesMetricsRatesGet = async (
+  params?: GetMetricsRatesMetricsRatesGetParams,
   options?: RequestInit,
 ): Promise<getMetricsRatesMetricsRatesGetResponse> => {
-  const res = await fetch(getGetMetricsRatesMetricsRatesGetUrl(), {
+  const res = await fetch(getGetMetricsRatesMetricsRatesGetUrl(params), {
     ...options,
     method: "GET",
   });
@@ -2470,6 +2979,76 @@ export const getMetricsRatesMetricsRatesGet = async (
     status: res.status,
     headers: res.headers,
   } as getMetricsRatesMetricsRatesGetResponse;
+};
+
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse200 =
+  {
+    data: MetricsResponseRateTrendResponse;
+    status: 200;
+  };
+
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse422 =
+  {
+    data: ApiErrorResponse;
+    status: 422;
+  };
+
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponseSuccess =
+  getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse200 & {
+    headers: Headers;
+  };
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponseError =
+  getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse =
+  | getMetricsResponseRateTrendMetricsResponseRateTrendGetResponseSuccess
+  | getMetricsResponseRateTrendMetricsResponseRateTrendGetResponseError;
+
+export const getGetMetricsResponseRateTrendMetricsResponseRateTrendGetUrl = (
+  params?: GetMetricsResponseRateTrendMetricsResponseRateTrendGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/response-rate-trend?${stringifiedParams}`
+    : `/metrics/response-rate-trend`;
+};
+
+/**
+ * Returns deterministic response-rate trend points from local applications and application_events data.
+ * @summary Get Metrics Response Rate Trend
+ */
+export const getMetricsResponseRateTrendMetricsResponseRateTrendGet = async (
+  params?: GetMetricsResponseRateTrendMetricsResponseRateTrendGetParams,
+  options?: RequestInit,
+): Promise<getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse> => {
+  const res = await fetch(
+    getGetMetricsResponseRateTrendMetricsResponseRateTrendGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMetricsResponseRateTrendMetricsResponseRateTrendGetResponse;
 };
 
 export type getResponseSilenceMetricMetricsResponseSilenceGetResponse200 = {
@@ -2585,15 +3164,40 @@ export type getMetricsTimeseriesMetricsTimeseriesGetResponse200 = {
   status: 200;
 };
 
+export type getMetricsTimeseriesMetricsTimeseriesGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type getMetricsTimeseriesMetricsTimeseriesGetResponseSuccess =
   getMetricsTimeseriesMetricsTimeseriesGetResponse200 & {
     headers: Headers;
   };
-export type getMetricsTimeseriesMetricsTimeseriesGetResponse =
-  getMetricsTimeseriesMetricsTimeseriesGetResponseSuccess;
+export type getMetricsTimeseriesMetricsTimeseriesGetResponseError =
+  getMetricsTimeseriesMetricsTimeseriesGetResponse422 & {
+    headers: Headers;
+  };
 
-export const getGetMetricsTimeseriesMetricsTimeseriesGetUrl = () => {
-  return `/metrics/timeseries`;
+export type getMetricsTimeseriesMetricsTimeseriesGetResponse =
+  | getMetricsTimeseriesMetricsTimeseriesGetResponseSuccess
+  | getMetricsTimeseriesMetricsTimeseriesGetResponseError;
+
+export const getGetMetricsTimeseriesMetricsTimeseriesGetUrl = (
+  params?: GetMetricsTimeseriesMetricsTimeseriesGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/timeseries?${stringifiedParams}`
+    : `/metrics/timeseries`;
 };
 
 /**
@@ -2601,12 +3205,16 @@ export const getGetMetricsTimeseriesMetricsTimeseriesGetUrl = () => {
  * @summary Get Metrics Timeseries
  */
 export const getMetricsTimeseriesMetricsTimeseriesGet = async (
+  params?: GetMetricsTimeseriesMetricsTimeseriesGetParams,
   options?: RequestInit,
 ): Promise<getMetricsTimeseriesMetricsTimeseriesGetResponse> => {
-  const res = await fetch(getGetMetricsTimeseriesMetricsTimeseriesGetUrl(), {
-    ...options,
-    method: "GET",
-  });
+  const res = await fetch(
+    getGetMetricsTimeseriesMetricsTimeseriesGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 

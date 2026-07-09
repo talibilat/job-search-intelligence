@@ -1,0 +1,422 @@
+{
+  "schema_version": "1",
+  "fixture_id": "diagnostic-job-search",
+  "description": "Private-data-free fixture for Phase 3.5 diagnostic segment comparisons.",
+  "contains_private_data": false,
+  "emails": [
+    {
+      "id": "email-silent-applied",
+      "provider": "gmail",
+      "thread_id": "thread-silent",
+      "from_addr": "no-reply@jobs.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Application received",
+      "sent_at": "2026-07-01T09:00:00Z",
+      "body_text": "Thank you for applying to Silent Systems.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-01T09:01:00Z"
+    },
+    {
+      "id": "email-rejected-applied",
+      "provider": "gmail",
+      "thread_id": "thread-rejected",
+      "from_addr": "no-reply@company-site.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Application received",
+      "sent_at": "2026-07-01T10:00:00Z",
+      "body_text": "Thank you for applying to Rejected Labs.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-01T10:01:00Z"
+    },
+    {
+      "id": "email-rejected-rejection",
+      "provider": "gmail",
+      "thread_id": "thread-rejected",
+      "from_addr": "recruiting@company-site.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Application update",
+      "sent_at": "2026-07-02T09:00:00Z",
+      "body_text": "We are moving forward with other candidates.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-02T09:01:00Z"
+    },
+    {
+      "id": "email-offer-applied",
+      "provider": "gmail",
+      "thread_id": "thread-offer",
+      "from_addr": "no-reply@linkedin.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Application received",
+      "sent_at": "2026-07-01T11:00:00Z",
+      "body_text": "Thank you for applying to Offer Works.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-01T11:01:00Z"
+    },
+    {
+      "id": "email-offer-response",
+      "provider": "gmail",
+      "thread_id": "thread-offer",
+      "from_addr": "recruiting@linkedin.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Next steps",
+      "sent_at": "2026-07-02T09:00:00Z",
+      "body_text": "A recruiter replied with next steps.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-02T09:01:00Z"
+    },
+    {
+      "id": "email-offer-interview",
+      "provider": "gmail",
+      "thread_id": "thread-offer",
+      "from_addr": "recruiting@linkedin.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Interview scheduled",
+      "sent_at": "2026-07-03T09:00:00Z",
+      "body_text": "Your interview is scheduled.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-03T09:01:00Z"
+    },
+    {
+      "id": "email-offer-offer",
+      "provider": "gmail",
+      "thread_id": "thread-offer",
+      "from_addr": "recruiting@linkedin.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Offer",
+      "sent_at": "2026-07-04T09:00:00Z",
+      "body_text": "We are extending a synthetic offer.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-04T09:01:00Z"
+    },
+    {
+      "id": "email-assessment-applied",
+      "provider": "gmail",
+      "thread_id": "thread-assessment",
+      "from_addr": "no-reply@company-site.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Application received",
+      "sent_at": "2026-07-02T09:00:00Z",
+      "body_text": "Thank you for applying to Assessment Co.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-02T09:01:00Z"
+    },
+    {
+      "id": "email-assessment-assessment",
+      "provider": "gmail",
+      "thread_id": "thread-assessment",
+      "from_addr": "recruiting@company-site.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Assessment request",
+      "sent_at": "2026-07-02T09:30:00Z",
+      "body_text": "Please complete this synthetic assessment.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-02T09:31:00Z"
+    },
+    {
+      "id": "email-ghosted-applied",
+      "provider": "gmail",
+      "thread_id": "thread-ghosted",
+      "from_addr": "no-reply@linkedin.example",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Application received",
+      "sent_at": "2026-07-02T10:00:00Z",
+      "body_text": "Thank you for applying to Ghosted Apps.",
+      "body_retention_state": "retained",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-02T10:01:00Z"
+    }
+  ],
+  "classifications": [
+    {
+      "email_id": "email-silent-applied",
+      "is_job_related": true,
+      "category": "application_confirmation",
+      "confidence": 0.98,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-01T09:02:00Z"
+    },
+    {
+      "email_id": "email-rejected-applied",
+      "is_job_related": true,
+      "category": "application_confirmation",
+      "confidence": 0.98,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-01T10:02:00Z"
+    },
+    {
+      "email_id": "email-rejected-rejection",
+      "is_job_related": true,
+      "category": "rejection",
+      "confidence": 0.97,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-02T09:02:00Z"
+    },
+    {
+      "email_id": "email-offer-applied",
+      "is_job_related": true,
+      "category": "application_confirmation",
+      "confidence": 0.98,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-01T11:02:00Z"
+    },
+    {
+      "email_id": "email-offer-response",
+      "is_job_related": true,
+      "category": "follow_up",
+      "confidence": 0.94,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-02T09:02:00Z"
+    },
+    {
+      "email_id": "email-offer-interview",
+      "is_job_related": true,
+      "category": "interview_invite",
+      "confidence": 0.96,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-03T09:02:00Z"
+    },
+    {
+      "email_id": "email-offer-offer",
+      "is_job_related": true,
+      "category": "offer",
+      "confidence": 0.99,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-04T09:02:00Z"
+    },
+    {
+      "email_id": "email-assessment-applied",
+      "is_job_related": true,
+      "category": "application_confirmation",
+      "confidence": 0.98,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-02T09:02:00Z"
+    },
+    {
+      "email_id": "email-assessment-assessment",
+      "is_job_related": true,
+      "category": "assessment",
+      "confidence": 0.95,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-02T09:32:00Z"
+    },
+    {
+      "email_id": "email-ghosted-applied",
+      "is_job_related": true,
+      "category": "application_confirmation",
+      "confidence": 0.98,
+      "model": "synthetic-classifier",
+      "prompt_version": "synthetic-v1",
+      "classified_at": "2026-07-02T10:02:00Z"
+    }
+  ],
+  "applications": [
+    {
+      "id": "app-silent",
+      "company": "Silent Systems",
+      "role_title": "Software Engineer",
+      "source": "linkedin",
+      "first_seen_at": "2026-07-01T09:00:00Z",
+      "current_status": "applied",
+      "salary_min": 120000,
+      "salary_max": 150000,
+      "currency": "USD",
+      "location": "Remote",
+      "work_mode": "remote",
+      "seniority": "senior",
+      "sponsorship": "unknown",
+      "tech_stack": ["Python"],
+      "last_activity_at": "2026-07-05T09:00:00Z",
+      "manual_lock": false,
+      "created_at": "2026-07-01T09:00:00Z",
+      "updated_at": "2026-07-05T09:00:00Z"
+    },
+    {
+      "id": "app-rejected",
+      "company": "Rejected Labs",
+      "role_title": "Software Engineer",
+      "source": "company_site",
+      "first_seen_at": "2026-07-01T10:00:00Z",
+      "current_status": "rejected",
+      "salary_min": 120000,
+      "salary_max": 150000,
+      "currency": "USD",
+      "location": "Remote",
+      "work_mode": "remote",
+      "seniority": "senior",
+      "sponsorship": "not_offered",
+      "tech_stack": ["Python"],
+      "last_activity_at": "2026-07-05T09:00:00Z",
+      "manual_lock": false,
+      "created_at": "2026-07-01T10:00:00Z",
+      "updated_at": "2026-07-05T09:00:00Z"
+    },
+    {
+      "id": "app-interview-offer",
+      "company": "Offer Works",
+      "role_title": "Platform Engineer",
+      "source": "linkedin",
+      "first_seen_at": "2026-07-01T11:00:00Z",
+      "current_status": "offer",
+      "salary_min": 160000,
+      "salary_max": 190000,
+      "currency": "USD",
+      "location": "Hybrid City",
+      "work_mode": "hybrid",
+      "seniority": "lead",
+      "sponsorship": "offered",
+      "tech_stack": ["Go", "Kubernetes"],
+      "last_activity_at": "2026-07-05T09:00:00Z",
+      "manual_lock": false,
+      "created_at": "2026-07-01T11:00:00Z",
+      "updated_at": "2026-07-05T09:00:00Z"
+    },
+    {
+      "id": "app-assessment",
+      "company": "Assessment Co",
+      "role_title": "Software Engineer",
+      "source": "company_site",
+      "first_seen_at": "2026-07-02T09:00:00Z",
+      "current_status": "assessment",
+      "salary_min": 120000,
+      "salary_max": 150000,
+      "currency": "USD",
+      "location": "Remote",
+      "work_mode": "remote",
+      "seniority": "senior",
+      "sponsorship": "unknown",
+      "tech_stack": ["Python"],
+      "last_activity_at": "2026-07-05T09:00:00Z",
+      "manual_lock": false,
+      "created_at": "2026-07-02T09:00:00Z",
+      "updated_at": "2026-07-05T09:00:00Z"
+    },
+    {
+      "id": "app-ghosted",
+      "company": "Ghosted Apps",
+      "role_title": "Data Engineer",
+      "source": "linkedin",
+      "first_seen_at": "2026-07-02T10:00:00Z",
+      "current_status": "ghosted",
+      "salary_min": 100000,
+      "salary_max": 130000,
+      "currency": "USD",
+      "location": "Onsite City",
+      "work_mode": "onsite",
+      "seniority": "mid",
+      "sponsorship": "unknown",
+      "tech_stack": ["SQL"],
+      "last_activity_at": "2026-08-01T09:00:00Z",
+      "manual_lock": false,
+      "created_at": "2026-07-02T10:00:00Z",
+      "updated_at": "2026-08-01T09:00:00Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "event-silent-applied",
+      "application_id": "app-silent",
+      "email_id": "email-silent-applied",
+      "event_type": "applied",
+      "event_at": "2026-07-01T09:00:00Z",
+      "extract_note": "Application confirmation received."
+    },
+    {
+      "id": "event-rejected-applied",
+      "application_id": "app-rejected",
+      "email_id": "email-rejected-applied",
+      "event_type": "applied",
+      "event_at": "2026-07-01T10:00:00Z",
+      "extract_note": "Application confirmation received."
+    },
+    {
+      "id": "event-rejected-rejection",
+      "application_id": "app-rejected",
+      "email_id": "email-rejected-rejection",
+      "event_type": "rejection",
+      "event_at": "2026-07-02T09:00:00Z",
+      "extract_note": "Rejection received."
+    },
+    {
+      "id": "event-offer-applied",
+      "application_id": "app-interview-offer",
+      "email_id": "email-offer-applied",
+      "event_type": "applied",
+      "event_at": "2026-07-01T11:00:00Z",
+      "extract_note": "Application confirmation received."
+    },
+    {
+      "id": "event-offer-response",
+      "application_id": "app-interview-offer",
+      "email_id": "email-offer-response",
+      "event_type": "response",
+      "event_at": "2026-07-02T09:00:00Z",
+      "extract_note": "Recruiter response received."
+    },
+    {
+      "id": "event-offer-interview",
+      "application_id": "app-interview-offer",
+      "email_id": "email-offer-interview",
+      "event_type": "interview_scheduled",
+      "event_at": "2026-07-03T09:00:00Z",
+      "extract_note": "Interview scheduled."
+    },
+    {
+      "id": "event-offer-offer",
+      "application_id": "app-interview-offer",
+      "email_id": "email-offer-offer",
+      "event_type": "offer",
+      "event_at": "2026-07-04T09:00:00Z",
+      "extract_note": "Offer received."
+    },
+    {
+      "id": "event-assessment-applied",
+      "application_id": "app-assessment",
+      "email_id": "email-assessment-applied",
+      "event_type": "applied",
+      "event_at": "2026-07-02T09:00:00Z",
+      "extract_note": "Application confirmation received."
+    },
+    {
+      "id": "event-assessment-assessment",
+      "application_id": "app-assessment",
+      "email_id": "email-assessment-assessment",
+      "event_type": "assessment",
+      "event_at": "2026-07-02T09:30:00Z",
+      "extract_note": "Assessment request received."
+    },
+    {
+      "id": "event-ghosted-applied",
+      "application_id": "app-ghosted",
+      "email_id": "email-ghosted-applied",
+      "event_type": "applied",
+      "event_at": "2026-07-02T10:00:00Z",
+      "extract_note": "Application confirmation received."
+    },
+    {
+      "id": "event-ghosted-inferred",
+      "application_id": "app-ghosted",
+      "email_id": null,
+      "event_type": "ghost_inferred",
+      "event_at": "2026-08-01T09:00:00Z",
+      "extract_note": "Ghost inferred after silence."
+    }
+  ]
+}

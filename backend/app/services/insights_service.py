@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from math import ceil
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,6 +17,8 @@ from app.models import (
     InsightInputEvidence,
     InsightInputFact,
     InsightRecord,
+    InsightRegenerationCost,
+    InsightRegenerationEstimate,
     InsightRoleOutcomeSummary,
 )
 from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
@@ -31,6 +34,7 @@ from app.providers.llm import (
     LLMProviderUnavailableError,
     LLMResponseFormat,
 )
+from app.services.llm_costs import calculate_llm_cost_usd
 
 type Clock = Callable[[], datetime]
 
@@ -68,8 +72,16 @@ SUPPORTED_INSIGHT_TYPES: tuple[InsightType, ...] = (
 class InsightReadService:
     """Read cached narrative insights for the API boundary."""
 
-    def __init__(self, insight_repository: InsightRepository) -> None:
+    def __init__(
+        self,
+        *,
+        settings: AppSettings,
+        insight_repository: InsightRepository,
+        input_builder: InsightInputBuilder | None = None,
+    ) -> None:
+        self._settings = settings
         self._insight_repository = insight_repository
+        self._input_builder = input_builder or InsightInputBuilder(insight_repository)
 
     def list_latest_insights(self) -> list[InsightRecord]:
         insights: list[InsightRecord] = []
@@ -82,6 +94,21 @@ class InsightReadService:
                 insights.append(insight)
         return insights
 
+    def list_regeneration_cost_estimates(self) -> list[InsightRegenerationEstimate]:
+        estimates: list[InsightRegenerationEstimate] = []
+        for insight_type in SUPPORTED_INSIGHT_TYPES:
+            insight_input = self._input_builder.build(insight_type)
+            estimates.append(
+                InsightRegenerationEstimate(
+                    type=insight_type,
+                    cost=_estimate_regeneration_cost_for_input(
+                        settings=self._settings,
+                        insight_input=insight_input,
+                    ),
+                ),
+            )
+        return estimates
+
 
 class InsightGenerationResult(BaseModel):
     """Provider-backed narrative insight generation result."""
@@ -91,6 +118,7 @@ class InsightGenerationResult(BaseModel):
     insight: InsightRecord
     input: InsightInput
     cached: bool
+    cost: InsightRegenerationCost
 
 
 class InsightGenerationService:
@@ -137,6 +165,7 @@ class InsightGenerationService:
                     insight=cached,
                     input=insight_input,
                     cached=True,
+                    cost=_no_llm_cost("fresh cached insight reused"),
                 )
 
         insufficient_content = _insufficient_recurring_feedback_content(insight_input)
@@ -152,11 +181,18 @@ class InsightGenerationService:
                 insight=insight,
                 input=insight_input,
                 cached=False,
+                cost=_no_llm_cost(
+                    "insufficient evidence response did not call an LLM",
+                    include_actual=True,
+                ),
             )
 
-        response = await self._llm_provider.generate(
-            build_insight_generation_request(insight_input, model=model),
+        request = build_insight_generation_request(insight_input, model=model)
+        estimated_cost = _estimate_regeneration_cost(
+            settings=self._settings,
+            request=request,
         )
+        response = await self._llm_provider.generate(request)
         content = _validated_insight_content(response, insight_input)
         insight = self._insight_repository.save_generated_insight(
             insight_type=insight_type,
@@ -169,6 +205,11 @@ class InsightGenerationService:
             insight=insight,
             input=insight_input,
             cached=False,
+            cost=_with_actual_regeneration_cost(
+                settings=self._settings,
+                estimated_cost=estimated_cost,
+                response=response,
+            ),
         )
 
 
@@ -199,6 +240,122 @@ def build_insight_generation_request(
             temperature=INSIGHT_GENERATION_TEMPERATURE,
             max_output_tokens=INSIGHT_GENERATION_MAX_OUTPUT_TOKENS,
         ),
+    )
+
+
+def _estimate_regeneration_cost(
+    *,
+    settings: AppSettings,
+    request: LLMGenerationRequest,
+) -> InsightRegenerationCost:
+    prompt_char_count = sum(len(message.content) for message in request.messages)
+    prompt_tokens = ceil(prompt_char_count / settings.insight_estimate_chars_per_unit)
+    completion_tokens = request.options.max_output_tokens or 0
+    estimated_cost_usd, cost_available = _insight_cost_usd(
+        settings=settings,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
+    return InsightRegenerationCost(
+        estimated_prompt_tokens=prompt_tokens,
+        estimated_completion_tokens=completion_tokens,
+        estimated_total_tokens=prompt_tokens + completion_tokens,
+        estimated_cost_usd=estimated_cost_usd,
+        actual_prompt_tokens=None,
+        actual_completion_tokens=None,
+        actual_total_tokens=None,
+        actual_cost_usd=None,
+        currency="USD",
+        cost_estimate_available=cost_available,
+        token_estimate_method=(
+            "ceil(insight prompt characters / "
+            f"{settings.insight_estimate_chars_per_unit}) + configured max output tokens"
+        ),
+    )
+
+
+def _estimate_regeneration_cost_for_input(
+    *,
+    settings: AppSettings,
+    insight_input: InsightInput,
+) -> InsightRegenerationCost:
+    if _insufficient_recurring_feedback_content(insight_input) is not None:
+        return _no_llm_cost(
+            "insufficient evidence response does not call an LLM",
+            include_actual=False,
+        )
+
+    return _estimate_regeneration_cost(
+        settings=settings,
+        request=build_insight_generation_request(
+            insight_input,
+            model=_configured_chat_model(settings),
+        ),
+    )
+
+
+def _with_actual_regeneration_cost(
+    *,
+    settings: AppSettings,
+    estimated_cost: InsightRegenerationCost,
+    response: LLMGenerationResponse,
+) -> InsightRegenerationCost:
+    if response.usage is None:
+        if settings.llm_provider is LLMProviderName.OLLAMA:
+            return estimated_cost.model_copy(update={"actual_cost_usd": 0.0})
+        return estimated_cost
+
+    prompt_tokens = response.usage.prompt_tokens
+    completion_tokens = response.usage.completion_tokens
+    total_tokens = max(response.usage.total_tokens, prompt_tokens + completion_tokens)
+    actual_cost_usd, cost_available = _insight_cost_usd(
+        settings=settings,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
+    return estimated_cost.model_copy(
+        update={
+            "actual_prompt_tokens": prompt_tokens,
+            "actual_completion_tokens": completion_tokens,
+            "actual_total_tokens": total_tokens,
+            "actual_cost_usd": actual_cost_usd,
+            "cost_estimate_available": cost_available,
+        },
+    )
+
+
+def _no_llm_cost(
+    token_estimate_method: str,
+    *,
+    include_actual: bool = False,
+) -> InsightRegenerationCost:
+    return InsightRegenerationCost(
+        estimated_prompt_tokens=0,
+        estimated_completion_tokens=0,
+        estimated_total_tokens=0,
+        estimated_cost_usd=0.0,
+        actual_prompt_tokens=0 if include_actual else None,
+        actual_completion_tokens=0 if include_actual else None,
+        actual_total_tokens=0 if include_actual else None,
+        actual_cost_usd=0.0 if include_actual else None,
+        currency="USD",
+        cost_estimate_available=True,
+        token_estimate_method=token_estimate_method,
+    )
+
+
+def _insight_cost_usd(
+    *,
+    settings: AppSettings,
+    prompt_tokens: int,
+    completion_tokens: int,
+) -> tuple[float | None, bool]:
+    return calculate_llm_cost_usd(
+        is_local_provider=settings.llm_provider is LLMProviderName.OLLAMA,
+        input_rate_per_1k_units_usd=settings.insight_input_cost_per_1k_units_usd,
+        output_rate_per_1k_units_usd=settings.insight_output_cost_per_1k_units_usd,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
     )
 
 

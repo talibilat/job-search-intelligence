@@ -9,7 +9,15 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import type { MetricsSummaryResponse } from "./api";
+import type {
+  MetricsBreakdownResponse,
+  MetricsDiagnosticsResponse,
+  MetricsFunnelResponse,
+  MetricsRatesResponse,
+  MetricsResponseRateTrendResponse,
+  MetricsSummaryResponse,
+  MetricsTimeseriesResponse,
+} from "./api";
 import styles from "./index.css?raw";
 
 function renderAtPath(pathname: string) {
@@ -34,12 +42,33 @@ function metricsSummaryResponse(
 ): MockObjectResponseBody {
   const response: MetricsSummaryResponse = {
     application_windows: [],
+    average_time_to_first_response: {
+      application_count: 0,
+      average_hours: null,
+    },
+    average_time_to_rejection: {
+      application_count: 0,
+      average_hours: null,
+    },
     distinct_company_count: 0,
     evaluated_at: "2026-07-07T20:00:00Z",
     ghost_threshold_days: 30,
     ghosted_applications: 0,
     interview_invitation_count: 0,
     offers_received: 0,
+    personal_ghost_threshold: {
+      threshold_days: 30,
+      threshold_source: "configured_fallback",
+      response_sample_size: 0,
+      silent_application_count: 0,
+      silence_age_distribution: [
+        { application_count: 0, bucket: "0_7", max_days: 7, min_days: 0 },
+        { application_count: 0, bucket: "8_14", max_days: 14, min_days: 8 },
+        { application_count: 0, bucket: "15_30", max_days: 30, min_days: 15 },
+        { application_count: 0, bucket: "31_60", max_days: 60, min_days: 31 },
+        { application_count: 0, bucket: "61_plus", max_days: null, min_days: 61 },
+      ],
+    },
     rejected_applications: 0,
     total_applications: 0,
     ...overrides,
@@ -103,6 +132,109 @@ function idleSyncStatusResponse(): MockObjectResponseBody {
   };
 }
 
+function metricsRatesResponse(
+  overrides: Partial<MetricsRatesResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsRatesResponse = {
+    overall_response_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
+    rejection_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
+    ghost_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
+    application_to_interview_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
+    interview_to_offer_rate: {
+      denominator: 0,
+      numerator: 0,
+      rate: null,
+    },
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
+function metricsBreakdownResponse(
+  overrides: Partial<MetricsBreakdownResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsBreakdownResponse = {
+    dimension: "source",
+    rows: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
+function metricsTimeseriesResponse(
+  overrides: Partial<MetricsTimeseriesResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsTimeseriesResponse = {
+    points: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
+function metricsResponseRateTrendResponse(
+  overrides: Partial<MetricsResponseRateTrendResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsResponseRateTrendResponse = {
+    points: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
+function metricsFunnelResponse(
+  overrides: Partial<MetricsFunnelResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsFunnelResponse = {
+    stages: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
+function metricsDiagnosticsResponse(
+  overrides: Partial<MetricsDiagnosticsResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsDiagnosticsResponse = {
+    adjacent_role_suggestions: [],
+    best_roi_source: null,
+    sponsorship_response_impact: null,
+    dead_weight_skill_segments: [],
+    baseline_response_count: 0,
+    baseline_response_rate: null,
+    baseline_success_count: 0,
+    baseline_success_rate: null,
+    baseline_negative_count: 0,
+    baseline_negative_rate: null,
+    negative_outcome_segments: [],
+    segments: [],
+    selling_skill_segments: [],
+    strongest_response_correlate: null,
+    strongest_response_segments: [],
+    successful_application_segments: [],
+    total_applications: 0,
+    wasted_effort_segments: [],
+    weakest_response_segments: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
 function isMockResponseConfig(
   value: MockResponse,
 ): value is { body: MockResponseBody; status: number } {
@@ -130,6 +262,69 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
     const config = responseQueues.get(path);
 
     if (!config) {
+      if (path === "/metrics/funnel") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsFunnelResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/breakdown?dimension=source") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsBreakdownResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/breakdown?dimension=role") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsBreakdownResponse({ dimension: "role" })), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/breakdown?dimension=company_type") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsBreakdownResponse({ dimension: "company_type" })), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/timeseries") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsTimeseriesResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/response-rate-trend") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsResponseRateTrendResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/metrics/diagnostics") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsDiagnosticsResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
       throw new Error(`Unhandled fetch request: ${path}`);
     }
 
@@ -193,8 +388,11 @@ describe("App", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Feedback consistently says to improve system design examples. [application:app-1|event:event-1|email:email-1]",
+        "Feedback consistently says to improve system design examples.",
       ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("application:app-1|event:event-1|email:email-1"),
     ).toBeTruthy();
   });
 
@@ -245,13 +443,7 @@ describe("App", () => {
         total_applications: 12,
         distinct_company_count: 3,
       }),
-      "/metrics/rates": {
-        overall_response_rate: {
-          numerator: 0,
-          denominator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications": { body: [], status: 200 },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
@@ -273,13 +465,13 @@ describe("App", () => {
       "/metrics/summary": {
         distinct_company_count: 3,
       },
-      "/metrics/rates": {
+      "/metrics/rates": metricsRatesResponse({
         overall_response_rate: {
           numerator: 3,
           denominator: 5,
           rate: 0.6,
         },
-      },
+      }),
     });
 
     renderAtPath("/dashboard");
@@ -439,15 +631,12 @@ describe("App", () => {
           new Response(
             JSON.stringify([
               {
-                id: "gmail-msg-1",
-                thread_id: "thread-1",
-                from_addr: "jobs@example.com",
-                to_addr: "me@example.com",
-                subject: "Application received",
+                from_domain: "example.com",
+                to_domains: ["example.com"],
+                subject_present: true,
                 sent_at: "2026-07-05T12:00:00Z",
                 body_retention_state: "retained",
                 has_retained_body: true,
-                labels: ["INBOX"],
                 provider: "gmail",
                 ingested_at: "2026-07-05T12:01:00Z",
                 filter_outcome: "candidate",
@@ -471,19 +660,20 @@ describe("App", () => {
     expect(
       await screen.findByText("Newest synced mailbox messages"),
     ).toBeTruthy();
-    expect(screen.getByText("Application received")).toBeTruthy();
-    expect(screen.getByText("jobs@example.com")).toBeTruthy();
+    expect(screen.getByText("Subject captured")).toBeTruthy();
+    expect(screen.getAllByText("example.com").length).toBeGreaterThan(0);
     expect(screen.getByText("kept by filter")).toBeTruthy();
     expect(screen.getByText("body retained")).toBeTruthy();
     expect(screen.queryByText("Private body")).toBeNull();
+    expect(screen.queryByText("gmail-msg-1")).toBeNull();
+    expect(screen.queryByText("thread-1")).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Application received/ }),
+      screen.getByRole("button", { name: /Subject captured/ }),
     );
-    expect(screen.getByText("Provider message ID")).toBeTruthy();
-    expect(screen.getByText("gmail-msg-1")).toBeTruthy();
-    expect(screen.getByText("thread-1")).toBeTruthy();
-    expect(screen.getAllByText("me@example.com").length).toBeGreaterThan(0);
+    expect(screen.getByText("Provider")).toBeTruthy();
+    expect(screen.getByText("From domain")).toBeTruthy();
+    expect(screen.getByText("To domains")).toBeTruthy();
     expect(
       screen.getByText("sender_domain:example.com", { exact: false }),
     ).toBeTruthy();
@@ -945,13 +1135,7 @@ describe("App", () => {
   it("renders the Q-09 application status table at the dashboard route", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications": { body: [], status: 200 },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
@@ -985,12 +1169,15 @@ describe("App", () => {
       await screen.findByText("No applications match these filters."),
     ).toBeTruthy();
 
-    const emptyState = screen.getByRole("status", {
-      name: "Dashboard metrics pending",
+    const volumeTrend = screen.getByRole("region", {
+      name: "Application volume trend",
+    });
+    const emptyState = within(volumeTrend).getByRole("status", {
+      name: "No application volume yet",
     });
 
     expect(emptyState.textContent).toContain(
-      "Broader deterministic metrics will appear here as additional metrics APIs are available.",
+      "No applications exist for the volume trend yet.",
     );
   });
 
@@ -1004,13 +1191,7 @@ describe("App", () => {
         interview_invitation_count: 3,
         rejected_applications: 1,
       }),
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications": { body: [], status: 200 },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
@@ -1042,13 +1223,7 @@ describe("App", () => {
         offers_received: 2,
         evaluated_at: "2026-07-07T12:00:00+00:00",
       },
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
     });
 
     renderAtPath("/dashboard");
@@ -1077,13 +1252,7 @@ describe("App", () => {
         interview_invitation_count: 4,
         rejected_applications: 1,
       }),
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications?status=applied": {
         body: [
           {
@@ -1189,11 +1358,18 @@ describe("App", () => {
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
       "/pipeline/status",
       "/metrics/summary",
+      "/metrics/breakdown?dimension=company_type",
       "/applications?status=applied",
       "/applications?status=in_review",
       "/applications?status=assessment",
       "/applications?status=interview",
       "/applications",
+      "/metrics/response-rate-trend",
+      "/metrics/funnel",
+      "/metrics/breakdown?dimension=source",
+      "/metrics/breakdown?dimension=role",
+      "/metrics/timeseries",
+      "/metrics/diagnostics",
       "/metrics/rates",
     ]);
   });
@@ -1207,9 +1383,9 @@ describe("App", () => {
         unclassified_retained_count: 2,
       }),
       "/metrics/summary": metricsSummaryResponse({ total_applications: 0 }),
-      "/metrics/rates": {
+      "/metrics/rates": metricsRatesResponse({
         overall_response_rate: { denominator: 0, numerator: 0, rate: null },
-      },
+      }),
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
       "/applications?status=assessment": { body: [], status: 200 },
@@ -1243,9 +1419,9 @@ describe("App", () => {
           "All candidates are classified and none produced a job application.",
       }),
       "/metrics/summary": metricsSummaryResponse({ total_applications: 0 }),
-      "/metrics/rates": {
+      "/metrics/rates": metricsRatesResponse({
         overall_response_rate: { denominator: 0, numerator: 0, rate: null },
-      },
+      }),
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
       "/applications?status=assessment": { body: [], status: 200 },
@@ -1265,13 +1441,7 @@ describe("App", () => {
       "/metrics/summary": metricsSummaryResponse({
         evaluated_at: "2026-07-07T12:00:00Z",
       }),
-      "/metrics/rates": {
-        overall_response_rate: {
-          denominator: 0,
-          numerator: 0,
-          rate: null,
-        },
-      },
+      "/metrics/rates": metricsRatesResponse(),
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
       "/applications?status=assessment": { body: [], status: 200 },
@@ -1370,7 +1540,7 @@ describe("App", () => {
     expect(screen.getAllByText("Completed features").length).toBeGreaterThan(0);
     expect(screen.getByText("First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Dashboard route shell")).toBeTruthy();
-    expect(screen.getByText("Insights recurring-feedback view")).toBeTruthy();
+    expect(screen.getByText("Insights cached narrative view")).toBeTruthy();
     expect(screen.getByText("Chat route shell")).toBeTruthy();
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();

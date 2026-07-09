@@ -7,6 +7,7 @@ from .application_edit import (
     ApplicationStatusEditResponse,
 )
 from .application_merge import ApplicationMergeRequest, ApplicationMergeResponse
+from .chat_history import ChatHistoryResponse
 from .classification import (
     ClassificationCandidateStats,
     ClassificationPreRunEstimate,
@@ -15,6 +16,7 @@ from .classification import (
     ClassificationReprocessingStats,
     ClassificationRunResponse,
 )
+from .company_profile import CompanyProfileRecord, CompanyProfileSource, CompanyType
 from .correction import (
     ApplicationResetLockRequest,
     ApplicationResetLockResponse,
@@ -23,12 +25,15 @@ from .correction import (
     ApplicationSplitResponse,
     ApplicationSplitSourceApplication,
 )
+from .diagnostics import DiagnosticSegmentComparison, MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunResponse
 from .health import HealthResponse
 from .insight import (
     InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,
+    InsightRegenerationCost,
+    InsightRegenerationEstimate,
 )
 from .metrics import (
     ApplicationWindowMetric,
@@ -36,15 +41,21 @@ from .metrics import (
     MetricFunnelStage,
     MetricRate,
     MetricRateRow,
+    MetricResponseRateTrendPoint,
     MetricsApplicationWindow,
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
     MetricsFilter,
+    MetricsFunnelResponse,
     MetricsRatesResponse,
+    MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     MetricTimeseriesPoint,
+    PersonalGhostThresholdMetric,
     ResponseSilenceMetric,
+    SilenceAgeBucketMetric,
+    TimeToRejectionMetric,
 )
 from .pipeline import (
     BackfillProgressState,
@@ -76,6 +87,7 @@ from .records import (
     EmailBackfillStatus,
     EmailCandidateQueryStrategy,
     EmailChunkRecord,
+    EmailChunkSource,
     EmailClassificationCandidate,
     EmailClassificationRecord,
     EmailClassificationResult,
@@ -83,6 +95,7 @@ from .records import (
     EmailFilterDecisionOutcome,
     EmailFilterDecisionRecord,
     EmailSyncStateRecord,
+    EmailTextChunk,
     InsightInput,
     InsightInputEvidence,
     InsightInputFact,
@@ -113,19 +126,27 @@ from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
     "ClassificationPromptOutput",
+    "CompanyProfileRecord",
+    "CompanyProfileSource",
+    "CompanyType",
+    "DiagnosticSegmentComparison",
     "EmailProviderConfigResponse",
     "GhostInferenceRunResponse",
     "HealthResponse",
     "LLMProviderConfigResponse",
     "MetricBreakdownRow",
     "MetricsBreakdownResponse",
+    "MetricsDiagnosticsResponse",
     "MetricFunnelStage",
     "MetricRate",
     "MetricRateRow",
+    "MetricResponseRateTrendPoint",
     "MetricsApplicationWindow",
     "MetricsBreakdownDimension",
     "MetricsFilter",
+    "MetricsFunnelResponse",
     "MetricsRatesResponse",
+    "MetricsResponseRateTrendResponse",
     "MetricsSummaryResponse",
     "MetricsTimeseriesResponse",
     "MetricTimeseriesPoint",
@@ -152,6 +173,7 @@ __all__ = [
     "ApplicationSplitSourceApplication",
     "ChatMessageRecord",
     "ChatMessageRole",
+    "ChatHistoryResponse",
     "ClassificationRunRecord",
     "CorrectionConflictType",
     "ClassificationCandidateStats",
@@ -165,6 +187,7 @@ __all__ = [
     "EmailBackfillStatus",
     "EmailCandidateQueryStrategy",
     "EmailChunkRecord",
+    "EmailChunkSource",
     "EmailClassificationCandidate",
     "EmailClassificationRecord",
     "EmailClassificationResult",
@@ -172,11 +195,14 @@ __all__ = [
     "EmailFilterDecisionOutcome",
     "EmailFilterDecisionRecord",
     "EmailSyncStateRecord",
+    "EmailTextChunk",
     "InsightInput",
     "InsightInputEvidence",
     "InsightInputFact",
     "InsightListResponse",
     "InsightRecord",
+    "InsightRegenerationCost",
+    "InsightRegenerationEstimate",
     "InsightRegenerateRequest",
     "InsightRegenerateResponse",
     "InsightRoleOutcomeSummary",
@@ -189,7 +215,10 @@ __all__ = [
     "RawEmailPreviewOrder",
     "RawEmailPreviewRecord",
     "RawEmailRecord",
+    "PersonalGhostThresholdMetric",
     "ResponseSilenceMetric",
+    "SilenceAgeBucketMetric",
+    "TimeToRejectionMetric",
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",
