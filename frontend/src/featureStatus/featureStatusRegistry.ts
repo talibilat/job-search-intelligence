@@ -258,26 +258,27 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       "raw_emails",
     ],
     description:
-      "Backend-backed insights page that loads all Tier 5 cached narrative insights, shows stale cache state and citations, and regenerates one insight at a time through the user-triggered insights API without making LLM counts authoritative.",
+      "Backend-backed insights page that loads all Tier 5 cached narrative insights, shows stale cache state, citations, and regeneration cost, and regenerates one insight at a time through the user-triggered insights API without making LLM counts authoritative.",
     endpoints: ["GET /insights", "POST /insights/regenerate"],
     files: ["frontend/src/pages/Insights.tsx"],
     howToUse: {
       expectedBehaviour:
-        "The page loads cached Tier 5 insights, shows each supported insight card, surfaces stale cache state and citation IDs, and can request per-insight regeneration through the backend.",
+        "The page loads cached Tier 5 insights, shows each supported insight card, surfaces stale cache state and citation IDs, and can request per-insight regeneration with estimated and actual cost returned by the backend.",
       expectedSuccessResult:
-        "QA can confirm cached insights render with model metadata and citations, regeneration is explicit per insight, and dashboard counts are not produced by the LLM.",
+        "QA can confirm cached insights render with model metadata and citations, regeneration is explicit per insight, cost is visible after regeneration, and dashboard counts are not produced by the LLM.",
       navigationPath: "Primary navigation -> Insights",
       prerequisites: ["Frontend dev server"],
       qaValidationPoints: [
         "The page calls GET /insights on load through the generated API client.",
         "Each regenerate action calls POST /insights/regenerate with the selected insight type.",
+        "A successful regenerate response surfaces estimated cost, actual cost, and actual token count when available.",
         "The page shows backend errors without exposing email content or provider payloads.",
       ],
       steps: [
         "Open /insights.",
         "Read the Tier 5 insight cards from Q-40 through Q-46.",
         "Seed or mock cached insights and confirm stale state plus citation IDs render.",
-        "Press a regenerate action and confirm the returned insight replaces that card.",
+        "Press a regenerate action and confirm the returned insight plus cost summary replaces that card.",
       ],
     },
     id: "frontend-insights-shell",
@@ -308,6 +309,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "Tier 5 insight cards render",
         "Stale state and citation IDs render when present",
         "Per-insight regenerate actions are available",
+        "Regeneration cost appears after a successful regenerate response",
       ],
       requiredSetup: ["Frontend dev server", "Mock or running insights API"],
     },

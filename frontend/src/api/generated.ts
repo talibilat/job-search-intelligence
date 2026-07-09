@@ -724,8 +724,32 @@ export interface InsightRecord {
   type: InsightType;
 }
 
+export interface InsightRegenerationCost {
+  actual_completion_tokens?: number | null;
+  actual_cost_usd?: number | null;
+  actual_prompt_tokens?: number | null;
+  actual_total_tokens?: number | null;
+  cost_estimate_available: boolean;
+  currency?: string;
+  /** @minimum 0 */
+  estimated_completion_tokens: number;
+  estimated_cost_usd?: number | null;
+  /** @minimum 0 */
+  estimated_prompt_tokens: number;
+  /** @minimum 0 */
+  estimated_total_tokens: number;
+  /** @minLength 1 */
+  token_estimate_method: string;
+}
+
+export interface InsightRegenerationEstimate {
+  cost: InsightRegenerationCost;
+  type: InsightType;
+}
+
 export interface InsightListResponse {
   insights: InsightRecord[];
+  regeneration_cost_estimates?: InsightRegenerationEstimate[];
 }
 
 export interface InsightRegenerateRequest {
@@ -736,6 +760,7 @@ export interface InsightRegenerateRequest {
 
 export interface InsightRegenerateResponse {
   cached: boolean;
+  cost: InsightRegenerationCost;
   evidence_citation_ids: string[];
   insight: InsightRecord;
 }

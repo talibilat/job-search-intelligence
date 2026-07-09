@@ -568,6 +568,25 @@ h3 {
   text-underline-offset: 3px;
 }
 
+.insight-card__cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.insight-card__cost span {
+  max-width: 100%;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid #d8d0bf;
+  border-radius: 999px;
+  background: #f7f0df;
+  color: #203f2c;
+  font-size: 0.8rem;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
 .insights-panel__empty {
   min-width: 0;
   padding: 18px;

@@ -1992,6 +1992,13 @@
             },
             "title": "Insights",
             "type": "array"
+          },
+          "regeneration_cost_estimates": {
+            "items": {
+              "$ref": "#/components/schemas/InsightRegenerationEstimate"
+            },
+            "title": "Regeneration Cost Estimates",
+            "type": "array"
           }
         },
         "required": [
@@ -2067,6 +2074,9 @@
             "title": "Cached",
             "type": "boolean"
           },
+          "cost": {
+            "$ref": "#/components/schemas/InsightRegenerationCost"
+          },
           "evidence_citation_ids": {
             "items": {
               "type": "string"
@@ -2081,9 +2091,128 @@
         "required": [
           "insight",
           "cached",
-          "evidence_citation_ids"
+          "evidence_citation_ids",
+          "cost"
         ],
         "title": "InsightRegenerateResponse",
+        "type": "object"
+      },
+      "InsightRegenerationCost": {
+        "properties": {
+          "actual_completion_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Completion Tokens"
+          },
+          "actual_cost_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Cost Usd"
+          },
+          "actual_prompt_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Prompt Tokens"
+          },
+          "actual_total_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Total Tokens"
+          },
+          "cost_estimate_available": {
+            "title": "Cost Estimate Available",
+            "type": "boolean"
+          },
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "estimated_completion_tokens": {
+            "minimum": 0.0,
+            "title": "Estimated Completion Tokens",
+            "type": "integer"
+          },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          },
+          "estimated_prompt_tokens": {
+            "minimum": 0.0,
+            "title": "Estimated Prompt Tokens",
+            "type": "integer"
+          },
+          "estimated_total_tokens": {
+            "minimum": 0.0,
+            "title": "Estimated Total Tokens",
+            "type": "integer"
+          },
+          "token_estimate_method": {
+            "minLength": 1,
+            "title": "Token Estimate Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "estimated_prompt_tokens",
+          "estimated_completion_tokens",
+          "estimated_total_tokens",
+          "cost_estimate_available",
+          "token_estimate_method"
+        ],
+        "title": "InsightRegenerationCost",
+        "type": "object"
+      },
+      "InsightRegenerationEstimate": {
+        "properties": {
+          "cost": {
+            "$ref": "#/components/schemas/InsightRegenerationCost"
+          },
+          "type": {
+            "$ref": "#/components/schemas/InsightType"
+          }
+        },
+        "required": [
+          "type",
+          "cost"
+        ],
+        "title": "InsightRegenerationEstimate",
         "type": "object"
       },
       "InsightType": {

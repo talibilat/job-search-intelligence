@@ -32,6 +32,8 @@ from .insight import (
     InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,
+    InsightRegenerationCost,
+    InsightRegenerationEstimate,
 )
 from .metrics import (
     ApplicationWindowMetric,
@@ -192,6 +194,8 @@ __all__ = [
     "InsightInputFact",
     "InsightListResponse",
     "InsightRecord",
+    "InsightRegenerationCost",
+    "InsightRegenerationEstimate",
     "InsightRegenerateRequest",
     "InsightRegenerateResponse",
     "InsightRoleOutcomeSummary",

@@ -393,6 +393,9 @@ def get_insight_read_service(
     connection_target = str(database_path) if database_path.exists() else ":memory:"
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
-        yield InsightReadService(InsightRepository(connection))
+        yield InsightReadService(
+            settings=settings,
+            insight_repository=InsightRepository(connection),
+        )
     finally:
         connection.close()

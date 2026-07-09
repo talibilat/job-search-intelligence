@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   listInsightsInsightsGet,
   regenerateInsightInsightsRegeneratePost,
+  type InsightRegenerationCost,
   type InsightRecord,
 } from "../api";
 import { Alert, Button } from "../components/ui";
@@ -14,6 +15,7 @@ import {
 
 type LoadState = "loading" | "ready" | "error";
 type RegeneratingType = InsightRecord["type"] | null;
+type CostByInsightType = Partial<Record<InsightRecord["type"], InsightRegenerationCost>>;
 
 function apiErrorMessage(data: unknown, fallback: string) {
   if (
@@ -48,12 +50,64 @@ function replaceInsight(
   ];
 }
 
+function costEstimatesByType(
+  estimates: { cost: InsightRegenerationCost; type: InsightRecord["type"] }[],
+) {
+  const costs: CostByInsightType = {};
+  for (const estimate of estimates) {
+    costs[estimate.type] = estimate.cost;
+  }
+  return costs;
+}
+
+function formatCost(value: number | null | undefined, currency: string) {
+  if (value === null || value === undefined) {
+    return "unavailable";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    currency,
+    maximumFractionDigits: 6,
+    style: "currency",
+  }).format(value);
+}
+
+function formatTokenCount(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return "Actual tokens unavailable";
+  }
+
+  return `${value.toLocaleString("en-US")} actual tokens`;
+}
+
+function InsightCostSummary({ cost }: { cost: InsightRegenerationCost }) {
+  const currency = cost.currency ?? "USD";
+  const hasActualCost = cost.actual_cost_usd !== null && cost.actual_cost_usd !== undefined;
+  const hasActualTokens =
+    cost.actual_total_tokens !== null && cost.actual_total_tokens !== undefined;
+  const hasActualDetails = hasActualCost || hasActualTokens;
+  return (
+    <div className="insight-card__cost" aria-label="Regeneration cost">
+      <span>Estimated cost {formatCost(cost.estimated_cost_usd, currency)}</span>
+      <span>{cost.estimated_total_tokens.toLocaleString("en-US")} estimated tokens</span>
+      {hasActualDetails ? (
+        <>
+          <span>Actual cost {formatCost(cost.actual_cost_usd, currency)}</span>
+          {hasActualTokens ? <span>{formatTokenCount(cost.actual_total_tokens)}</span> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function Insights() {
   const [insights, setInsights] = useState<InsightRecord[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [regeneratingType, setRegeneratingType] =
     useState<RegeneratingType>(null);
+  const [costByInsightType, setCostByInsightType] =
+    useState<CostByInsightType>({});
 
   useEffect(() => {
     let ignore = false;
@@ -77,6 +131,9 @@ export function Insights() {
 
         if (!ignore) {
           setInsights(response.data.insights);
+          setCostByInsightType(
+            costEstimatesByType(response.data.regeneration_cost_estimates ?? []),
+          );
           setErrorMessage(null);
           setLoadState("ready");
         }
@@ -118,6 +175,10 @@ export function Insights() {
       setInsights((currentInsights) =>
         replaceInsight(currentInsights, response.data.insight),
       );
+      setCostByInsightType((currentCosts) => ({
+        ...currentCosts,
+        [response.data.insight.type]: response.data.cost,
+      }));
       setLoadState("ready");
     } catch {
       setErrorMessage(
@@ -159,6 +220,7 @@ export function Insights() {
                 (item) => item.type === config.type,
               );
               const isRegenerating = regeneratingType === config.type;
+              const cost = costByInsightType[config.type];
 
               return (
                 <article className="insight-card" key={config.type}>
@@ -190,6 +252,7 @@ export function Insights() {
                       {config.emptyMessage}
                     </p>
                   )}
+                  {cost ? <InsightCostSummary cost={cost} /> : null}
 
                   <div className="insight-card__actions">
                     <Button

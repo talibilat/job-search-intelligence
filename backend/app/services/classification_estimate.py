@@ -6,6 +6,7 @@ from app.config import AppSettings, ClassificationMode
 from app.db.repositories import EmailRepository
 from app.models import ClassificationPreRunEstimate
 from app.services.classification_target import resolve_classification_model
+from app.services.llm_costs import calculate_llm_cost_usd
 
 
 def build_classification_pre_run_estimate(
@@ -66,13 +67,10 @@ def _estimate_cost_usd(
     prompt_tokens: int,
     completion_tokens: int,
 ) -> tuple[float | None, bool]:
-    if settings.classification_mode is ClassificationMode.LOCAL:
-        return 0.0, True
-
-    input_rate = settings.classification_input_cost_per_1k_units_usd
-    output_rate = settings.classification_output_cost_per_1k_units_usd
-    if input_rate == 0 or output_rate == 0:
-        return None, False
-
-    cost = (prompt_tokens / 1000 * input_rate) + (completion_tokens / 1000 * output_rate)
-    return round(cost, 6), True
+    return calculate_llm_cost_usd(
+        is_local_provider=settings.classification_mode is ClassificationMode.LOCAL,
+        input_rate_per_1k_units_usd=settings.classification_input_cost_per_1k_units_usd,
+        output_rate_per_1k_units_usd=settings.classification_output_cost_per_1k_units_usd,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
