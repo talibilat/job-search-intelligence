@@ -23,6 +23,7 @@ from .correction import (
     ApplicationSplitResponse,
     ApplicationSplitSourceApplication,
 )
+from .diagnostics import DiagnosticSegmentComparison, MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunResponse
 from .health import HealthResponse
 from .insight import (
@@ -109,12 +110,14 @@ from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
     "ClassificationPromptOutput",
+    "DiagnosticSegmentComparison",
     "EmailProviderConfigResponse",
     "GhostInferenceRunResponse",
     "HealthResponse",
     "LLMProviderConfigResponse",
     "MetricBreakdownRow",
     "MetricsBreakdownResponse",
+    "MetricsDiagnosticsResponse",
     "MetricFunnelStage",
     "MetricRate",
     "MetricRateRow",
