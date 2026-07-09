@@ -93,6 +93,21 @@ def test_diagnostics_fixture_exercises_default_diagnostic_dimensions(
         dimension="sponsorship",
         value="offered",
     )
+    role_platform = segment_by(
+        diagnostics.segments,
+        dimension="role",
+        value="platform engineer",
+    )
+    salary_high = segment_by(
+        diagnostics.segments,
+        dimension="salary",
+        value="150k_plus",
+    )
+    seniority_lead = segment_by(
+        diagnostics.segments,
+        dimension="seniority",
+        value="lead",
+    )
     tech_go = segment_by(diagnostics.segments, dimension="tech", value="go")
     work_mode_onsite = segment_by(
         diagnostics.segments,
@@ -104,6 +119,12 @@ def test_diagnostics_fixture_exercises_default_diagnostic_dimensions(
     assert sponsorship_offered.success_count == 1
     assert sponsorship_offered.success_rate == 1.0
     assert sponsorship_offered.success_rate_lift == 0.8
+    assert role_platform.application_count == 1
+    assert role_platform.success_count == 1
+    assert salary_high.application_count == 1
+    assert salary_high.success_count == 1
+    assert seniority_lead.application_count == 1
+    assert seniority_lead.success_count == 1
     assert tech_go.application_count == 1
     assert tech_go.success_count == 1
     assert work_mode_onsite.application_count == 1

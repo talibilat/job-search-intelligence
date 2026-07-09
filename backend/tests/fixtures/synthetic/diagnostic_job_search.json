@@ -399,7 +399,7 @@
       "application_id": "app-assessment",
       "email_id": "email-assessment-assessment",
       "event_type": "assessment",
-      "event_at": "2026-07-02T09:00:00Z",
+      "event_at": "2026-07-02T09:30:00Z",
       "extract_note": "Assessment request received."
     },
     {
