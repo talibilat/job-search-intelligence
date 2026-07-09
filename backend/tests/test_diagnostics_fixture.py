@@ -6,7 +6,8 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from app.db.repositories import MetricsRepository, SyntheticFixtureRepository
-from app.models.metrics import MetricsFilter
+from app.models.diagnostics import DiagnosticSegmentComparison
+from app.models.metrics import MetricsBreakdownDimension, MetricsFilter
 from app.services.diagnostics import DEFAULT_DIAGNOSTIC_DIMENSIONS, DiagnosticsService
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -87,6 +88,26 @@ def test_diagnostics_fixture_exercises_default_diagnostic_dimensions(
     assert {segment.dimension for segment in diagnostics.segments} == set(
         DEFAULT_DIAGNOSTIC_DIMENSIONS
     )
+    sponsorship_offered = segment_by(
+        diagnostics.segments,
+        dimension="sponsorship",
+        value="offered",
+    )
+    tech_go = segment_by(diagnostics.segments, dimension="tech", value="go")
+    work_mode_onsite = segment_by(
+        diagnostics.segments,
+        dimension="work_mode",
+        value="onsite",
+    )
+
+    assert sponsorship_offered.application_count == 1
+    assert sponsorship_offered.success_count == 1
+    assert sponsorship_offered.success_rate == 1.0
+    assert sponsorship_offered.success_rate_lift == 0.8
+    assert tech_go.application_count == 1
+    assert tech_go.success_count == 1
+    assert work_mode_onsite.application_count == 1
+    assert work_mode_onsite.negative_count == 1
 
 
 def test_diagnostics_fixture_outputs_compose_with_filters(tmp_path: Path) -> None:
@@ -137,3 +158,16 @@ def migrated_database(tmp_path: Path) -> Path:
 
 def diagnostic_fixture_path() -> Path:
     return BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+
+
+def segment_by(
+    segments: list[DiagnosticSegmentComparison],
+    *,
+    dimension: MetricsBreakdownDimension,
+    value: str,
+) -> DiagnosticSegmentComparison:
+    matching_segments = [
+        segment for segment in segments if segment.dimension == dimension and segment.value == value
+    ]
+    assert len(matching_segments) == 1
+    return matching_segments[0]
