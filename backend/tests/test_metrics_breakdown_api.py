@@ -57,6 +57,106 @@ def test_metrics_breakdown_returns_source_rows(tmp_path: Path) -> None:
     }
 
 
+def test_metrics_breakdown_composes_status_filter(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application_with_events(
+            connection,
+            "app-linkedin",
+            "linkedin",
+            ("applied", "response"),
+        )
+        insert_application_with_events(
+            connection,
+            "app-company-interview",
+            "company_site",
+            ("applied", "interview_scheduled"),
+            current_status="interview",
+        )
+
+    response = create_test_client(database_path).get(
+        "/metrics/breakdown?dimension=source&status=interview",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "dimension": "source",
+        "rows": [
+            {
+                "dimension": "source",
+                "value": "company_site",
+                "application_count": 1,
+                "response_count": 1,
+                "interview_count": 1,
+                "offer_count": 0,
+            },
+        ],
+    }
+
+
+def test_metrics_breakdown_rejects_invalid_filter_ranges(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+
+    response = create_test_client(database_path).get(
+        "/metrics/breakdown?dimension=source&salary_min=200000&salary_max=100000",
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "validation_error",
+            "message": "Request validation failed.",
+            "details": [
+                {
+                    "field": "query.salary_min",
+                    "message": "salary_min must be less than or equal to salary_max",
+                    "type": "value_error",
+                },
+            ],
+        },
+    }
+
+
+def test_metrics_breakdown_role_filter_treats_like_wildcards_literally(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application_with_events(
+            connection,
+            "app-percent-literal",
+            "linkedin",
+            ("applied",),
+            role_title="C++ 100% Systems Engineer",
+        )
+        insert_application_with_events(
+            connection,
+            "app-percent-wildcard",
+            "company_site",
+            ("applied",),
+            role_title="C++ 1000 Systems Engineer",
+        )
+
+    response = create_test_client(database_path).get(
+        "/metrics/breakdown?dimension=source&role=100%25",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "dimension": "source",
+        "rows": [
+            {
+                "dimension": "source",
+                "value": "linkedin",
+                "application_count": 1,
+                "response_count": 0,
+                "interview_count": 0,
+                "offer_count": 0,
+            },
+        ],
+    }
+
+
 def test_metrics_breakdown_endpoint_is_documented_in_openapi() -> None:
     response = TestClient(create_app()).get("/openapi.json")
 
@@ -92,14 +192,17 @@ def insert_application_with_events(
     application_id: str,
     source: str,
     event_types: tuple[str, ...],
+    *,
+    current_status: str = "applied",
+    role_title: str = "Software Engineer",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
         company=f"{application_id} Corp",
-        role_title="Software Engineer",
+        role_title=role_title,
         source=source,
         first_seen_at="2026-07-01T09:00:00+00:00",
-        current_status="applied",
+        current_status=current_status,
         last_activity_at="2026-07-01T09:00:00+00:00",
         created_at="2026-07-01T09:01:00+00:00",
         updated_at="2026-07-01T09:01:00+00:00",

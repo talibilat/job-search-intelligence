@@ -11,6 +11,7 @@ from app.models.metrics import (
     MetricRateName,
     MetricRateRow,
     MetricsBreakdownDimension,
+    MetricsFilter,
     MetricTimeseriesPoint,
     ResponseSilenceMetric,
     TimeToFirstResponseMetric,
@@ -169,10 +170,11 @@ class MetricsRepository(BaseRepository[int]):
     def get_breakdown(
         self,
         dimension: MetricsBreakdownDimension,
+        filters: MetricsFilter | None = None,
     ) -> tuple[MetricBreakdownRow, ...]:
         if dimension == "tech":
-            return self._get_tech_breakdown()
-        return self._get_application_breakdown(dimension)
+            return self._get_tech_breakdown(filters=filters)
+        return self._get_application_breakdown(dimension, filters=filters)
 
     def get_response_silence_metric(self) -> ResponseSilenceMetric:
         row = self.execute(
@@ -309,8 +311,11 @@ class MetricsRepository(BaseRepository[int]):
     def _get_application_breakdown(
         self,
         dimension: MetricsBreakdownDimension,
+        *,
+        filters: MetricsFilter | None,
     ) -> tuple[MetricBreakdownRow, ...]:
         expression = _dimension_expression(dimension)
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
         rows = self.execute(
             f"""
             SELECT {expression} AS value,
@@ -319,14 +324,25 @@ class MetricsRepository(BaseRepository[int]):
                 COALESCE(SUM({_exists_event_case()}), 0) AS interview_count,
                 COALESCE(SUM({_exists_event_case()}), 0) AS offer_count
             FROM applications
+            {where_clause}
             GROUP BY value
             ORDER BY value ASC
             """,
-            (*_RESPONSE_LIKE_EVENT_TYPES, "interview_scheduled", "offer"),
+            (
+                *_RESPONSE_LIKE_EVENT_TYPES,
+                "interview_scheduled",
+                "offer",
+                *filter_parameters,
+            ),
         ).fetchall()
         return tuple(_breakdown_row(dimension=dimension, row=row) for row in rows)
 
-    def _get_tech_breakdown(self) -> tuple[MetricBreakdownRow, ...]:
+    def _get_tech_breakdown(
+        self,
+        *,
+        filters: MetricsFilter | None,
+    ) -> tuple[MetricBreakdownRow, ...]:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
         rows = self.execute(
             f"""
             WITH tech_applications AS (
@@ -336,6 +352,7 @@ class MetricsRepository(BaseRepository[int]):
                 FROM applications
                 INNER JOIN json_each(applications.tech_stack)
                 WHERE TRIM(json_each.value) != ''
+                  {where_clause.replace('WHERE', 'AND', 1)}
             )
             SELECT tech_applications.value AS value,
                 COUNT(*) AS application_count,
@@ -367,7 +384,12 @@ class MetricsRepository(BaseRepository[int]):
             GROUP BY tech_applications.value
             ORDER BY value ASC
             """,
-            (*_RESPONSE_LIKE_EVENT_TYPES, "interview_scheduled", "offer"),
+            (
+                *filter_parameters,
+                *_RESPONSE_LIKE_EVENT_TYPES,
+                "interview_scheduled",
+                "offer",
+            ),
         ).fetchall()
         return tuple(_breakdown_row(dimension="tech", row=row) for row in rows)
 
@@ -532,6 +554,49 @@ def _dimension_expression(dimension: MetricsBreakdownDimension) -> str:
         return "COALESCE(NULLIF(work_mode, ''), 'unknown')"
     msg = f"Unsupported breakdown dimension: {dimension}"
     raise ValueError(msg)
+
+
+def _metrics_filter_where_clause(filters: MetricsFilter | None) -> tuple[str, tuple[object, ...]]:
+    if filters is None:
+        return "", ()
+
+    clauses: list[str] = []
+    parameters: list[object] = []
+    if filters.status is not None:
+        clauses.append("current_status = ?")
+        parameters.append(str(filters.status))
+    if filters.source is not None:
+        clauses.append("source = ?")
+        parameters.append(str(filters.source))
+    if filters.sponsorship is not None:
+        clauses.append("sponsorship = ?")
+        parameters.append(str(filters.sponsorship))
+    if filters.first_seen_from is not None:
+        clauses.append("first_seen_at >= ?")
+        parameters.append(filters.first_seen_from.isoformat())
+    if filters.first_seen_to is not None:
+        clauses.append("first_seen_at <= ?")
+        parameters.append(filters.first_seen_to.isoformat())
+    if filters.role is not None:
+        clauses.append("LOWER(role_title) LIKE ? ESCAPE '\\'")
+        parameters.append(f"%{_escape_like(filters.role.lower())}%")
+    if filters.salary_min is not None:
+        clauses.append("COALESCE(salary_max, salary_min) >= ?")
+        parameters.append(filters.salary_min)
+    if filters.salary_max is not None:
+        clauses.append("COALESCE(salary_min, salary_max) <= ?")
+        parameters.append(filters.salary_max)
+    if filters.work_mode is not None:
+        clauses.append("work_mode = ?")
+        parameters.append(str(filters.work_mode))
+
+    if not clauses:
+        return "", ()
+    return f"WHERE {' AND '.join(clauses)}", tuple(parameters)
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _exists_response_case() -> str:

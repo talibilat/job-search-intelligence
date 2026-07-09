@@ -91,6 +91,62 @@ function mockApplicationResponses() {
       );
     }
 
+    if (url === "/metrics/breakdown?dimension=source") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "source",
+            rows: [
+              {
+                application_count: 3,
+                dimension: "source",
+                interview_count: 2,
+                offer_count: 1,
+                response_count: 2,
+                value: "linkedin",
+              },
+              {
+                application_count: 2,
+                dimension: "source",
+                interview_count: 0,
+                offer_count: 0,
+                response_count: 1,
+                value: "company_site",
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/breakdown?dimension=tech") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            dimension: "tech",
+            rows: [
+              {
+                application_count: 4,
+                dimension: "tech",
+                interview_count: 2,
+                offer_count: 1,
+                response_count: 3,
+                value: "python",
+              },
+            ],
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
     if (url === "/applications") {
       return Promise.resolve(
         new Response(JSON.stringify([baseApplication]), {
@@ -321,5 +377,51 @@ describe("DashboardPage", () => {
     expect(
       within(metric).getByText("Averaged across 2 applications with response evidence"),
     ).toBeTruthy();
+  });
+
+  it("renders source breakdown chart summary and table from deterministic metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const breakdown = await screen.findByRole("region", {
+      name: "Source breakdown",
+    });
+
+    expect(within(breakdown).getByText("Source breakdown")).toBeTruthy();
+    expect(within(breakdown).getAllByText("Linkedin").length).toBeGreaterThan(0);
+    expect(within(breakdown).getAllByText("Company site").length).toBeGreaterThan(0);
+    expect(within(breakdown).getByText("3 applications")).toBeTruthy();
+    expect(within(breakdown).getByText(/2 responses/)).toBeTruthy();
+    expect(within(breakdown).getByText(/1 offer/)).toBeTruthy();
+    expect(
+      within(breakdown).getByRole("table", {
+        name: "Source metric breakdown",
+      }),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=source",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Dimension"), {
+      target: { value: "tech" },
+    });
+
+    const techBreakdown = await screen.findByRole("region", {
+      name: "Tech breakdown",
+    });
+
+    expect(within(techBreakdown).getAllByText("Python").length).toBeGreaterThan(0);
+    expect(
+      within(techBreakdown).getByRole("table", {
+        name: "Tech metric breakdown",
+      }),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/breakdown?dimension=tech",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 });
