@@ -9,7 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.db.repositories import MetricsRepository
 from app.models import MetricsBreakdownDimension, MetricsFilter
 
-StructuredQueryTemplate = Literal["total_applications", "rates", "funnel", "breakdown"]
+StructuredQueryTemplate = Literal[
+    "total_applications",
+    "summary_counts",
+    "rates",
+    "funnel",
+    "breakdown",
+]
 StructuredQueryScalar = str | int | float | None
 
 
@@ -84,10 +90,51 @@ class StructuredQueryTool:
                 ),
             )
 
-        if request.template == "rates":
-            ghost_cutoff_at = self._clock().astimezone(UTC) - timedelta(
-                days=self._ghost_threshold_days,
+        if request.template == "summary_counts":
+            ghost_cutoff_at = self._ghost_cutoff_at()
+            response_silence = self._metrics_repository.get_response_silence_metric(
+                filters=request.filters,
             )
+            total_applications = self._metrics_repository.count_total_applications(
+                filters=request.filters,
+            )
+            distinct_company_count = self._metrics_repository.count_distinct_companies(
+                filters=request.filters,
+            )
+            offers_received = self._metrics_repository.count_applications_with_offer_events(
+                filters=request.filters,
+            )
+            ghosted_applications = self._metrics_repository.count_threshold_ghosted_applications(
+                cutoff_at=ghost_cutoff_at.isoformat(),
+                filters=request.filters,
+            )
+            rejected_applications = self._metrics_repository.count_rejected_applications(
+                filters=request.filters,
+            )
+            interview_invitation_count = self._metrics_repository.count_interview_invitation_events(
+                filters=request.filters,
+            )
+            return StructuredQueryResult(
+                template=request.template,
+                rows=(
+                    StructuredQueryRow(
+                        label="summary_counts",
+                        values={
+                            "total_applications": total_applications,
+                            "distinct_company_count": distinct_company_count,
+                            "offers_received": offers_received,
+                            "ghosted_applications": ghosted_applications,
+                            "rejected_applications": rejected_applications,
+                            "interview_invitation_count": interview_invitation_count,
+                            "human_response_count": response_silence.human_response_count,
+                            "silent_count": response_silence.silent_count,
+                        },
+                    ),
+                ),
+            )
+
+        if request.template == "rates":
+            ghost_cutoff_at = self._ghost_cutoff_at()
             return StructuredQueryResult(
                 template=request.template,
                 rows=tuple(
@@ -141,6 +188,9 @@ class StructuredQueryTool:
                 )
             ),
         )
+
+    def _ghost_cutoff_at(self) -> datetime:
+        return self._clock().astimezone(UTC) - timedelta(days=self._ghost_threshold_days)
 
 
 def _utcnow() -> datetime:

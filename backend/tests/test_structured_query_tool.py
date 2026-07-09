@@ -35,6 +35,29 @@ def test_structured_query_tool_answers_total_applications_from_metrics_repositor
     assert result.rows[0].values == {"application_count": 1}
 
 
+def test_structured_query_tool_answers_summary_counts_from_metrics_repository() -> None:
+    with fixture_connection() as connection:
+        tool = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        )
+
+        result = tool.run(StructuredQueryRequest(template="summary_counts"))
+
+    assert result.template == "summary_counts"
+    assert result.rows[0].values == {
+        "total_applications": 1,
+        "distinct_company_count": 1,
+        "offers_received": 0,
+        "ghosted_applications": 0,
+        "rejected_applications": 1,
+        "interview_invitation_count": 0,
+        "human_response_count": 1,
+        "silent_count": 0,
+    }
+
+
 def test_structured_query_tool_answers_rate_and_funnel_templates() -> None:
     with fixture_connection() as connection:
         tool = StructuredQueryTool(
@@ -87,6 +110,7 @@ def test_structured_query_request_exposes_no_raw_sql_field() -> None:
 def test_structured_query_template_is_explicit_whitelist() -> None:
     assert set(get_args(StructuredQueryTemplate)) == {
         "total_applications",
+        "summary_counts",
         "rates",
         "funnel",
         "breakdown",
