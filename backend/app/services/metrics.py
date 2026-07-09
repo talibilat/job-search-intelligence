@@ -293,6 +293,18 @@ class MetricsFunnelService:
         )
 
 
+class MetricsFunnelService:
+    """Build deterministic Q-16 funnel metrics from local SQLite."""
+
+    def __init__(self, *, metrics_repository: MetricsRepository) -> None:
+        self._metrics_repository = metrics_repository
+
+    def get_funnel(self, filters: MetricsFilter | None = None) -> MetricsFunnelResponse:
+        return MetricsFunnelResponse(
+            stages=list(self._metrics_repository.get_funnel_metrics(filters)),
+        )
+
+
 class MetricsBreakdownService:
     """Build deterministic dashboard breakdown metrics from local SQLite."""
 

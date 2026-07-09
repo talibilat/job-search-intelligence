@@ -16,6 +16,7 @@ import {
   MetricsBreakdownDimension,
   SponsorshipStatus,
   WorkMode,
+  getMetricsFunnelMetricsFunnelGet,
   getMetricsBreakdownMetricsBreakdownGet,
   getMetricsRatesMetricsRatesGet,
   getMetricsSummaryMetricsSummaryGet,
@@ -25,8 +26,10 @@ import {
   type ApplicationRecord,
   type ApplicationSource as ApplicationSourceValue,
   type ApplicationStatus as ApplicationStatusValue,
+  type GetMetricsFunnelMetricsFunnelGetParams,
   type ListApplicationsApplicationsGetParams,
   type MetricBreakdownRow,
+  type MetricFunnelStage,
   type MetricRate,
   type MetricTimeseriesPoint,
   type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
@@ -46,6 +49,7 @@ import {
 
 type LoadState = "loading" | "loaded" | "error";
 type BreakdownLoadState = "loading" | "loaded" | "error";
+type FunnelLoadState = "loading" | "loaded" | "error";
 type LiveApplicationsState = "loading" | "ready" | "error";
 type ResponseRateLoadState = "loading" | "loaded" | "error";
 type TimeseriesLoadState = "loading" | "loaded" | "error";
@@ -168,7 +172,7 @@ function optionalNumber(value: string) {
 
 function queryParamsFromFilters(
   filters: DashboardFilters,
-): ListApplicationsApplicationsGetParams {
+): ListApplicationsApplicationsGetParams & GetMetricsFunnelMetricsFunnelGetParams {
   return {
     first_seen_from: optionalText(filters.firstSeenFrom),
     first_seen_to: optionalText(filters.firstSeenTo),
@@ -384,6 +388,26 @@ function countLabel(count: number, singular: string) {
   return `${numberFormatter.format(count)} ${singular}${count === 1 ? "" : "s"}`;
 }
 
+function funnelStageLabel(stage: MetricFunnelStage["stage"]) {
+  return titleize(stage);
+}
+
+function funnelStageMeta(stage: MetricFunnelStage["stage"]) {
+  if (stage === "screen") {
+    return "Applications with explicit response evidence";
+  }
+  if (stage === "interview") {
+    return "Applications with interview_scheduled events";
+  }
+  if (stage === "final") {
+    return "Pending final-round evidence in the data model";
+  }
+  if (stage === "offer") {
+    return "Offers counted only after interview evidence";
+  }
+  return "All applications in the source of truth";
+}
+
 function sortedBreakdownRows(rows: MetricBreakdownRow[]) {
   return [...rows].sort((left, right) => {
     const applicationOrder = right.application_count - left.application_count;
@@ -417,6 +441,9 @@ export function DashboardPage() {
     useState<MetricRate | null>(null);
   const [responseRateLoadState, setResponseRateLoadState] =
     useState<ResponseRateLoadState>("loading");
+  const [funnelStages, setFunnelStages] = useState<MetricFunnelStage[]>([]);
+  const [funnelLoadState, setFunnelLoadState] =
+    useState<FunnelLoadState>("loading");
   const [breakdownDimension, setBreakdownDimension] =
     useState<MetricsBreakdownDimensionValue>(MetricsBreakdownDimension.source);
   const [breakdownRows, setBreakdownRows] = useState<MetricBreakdownRow[]>([]);
@@ -663,6 +690,38 @@ export function DashboardPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    async function loadFunnel() {
+      try {
+        const response = await getMetricsFunnelMetricsFunnelGet(
+          queryParamsFromFilters(appliedFilters),
+        );
+        if (!isCancelled) {
+          if (response.status === 200) {
+            setFunnelStages(response.data.stages);
+            setFunnelLoadState("loaded");
+          } else {
+            setFunnelStages([]);
+            setFunnelLoadState("error");
+          }
+        }
+      } catch {
+        if (!isCancelled) {
+          setFunnelStages([]);
+          setFunnelLoadState("error");
+        }
+      }
+    }
+
+    void loadFunnel();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
     async function loadResponseRate() {
       try {
         const response = await getMetricsRatesMetricsRatesGet();
@@ -743,8 +802,8 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14, and
-          Q-15, Q-17, Q-20, and Tier 3 breakdowns now render from deterministic application and metrics
+          Q-01, Q-03, Q-07, Q-08, Q-09, Q-10, Q-11, Q-12, Q-13, Q-14,
+          Q-15, Q-16, Q-17, Q-20, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
         </p>
@@ -1073,6 +1132,60 @@ export function DashboardPage() {
           </div>
         </section>
       </div>
+
+      <section
+        aria-label="Full funnel"
+        className="dashboard-card"
+      >
+        <div>
+          <p className="eyebrow">Tier 2 funnel</p>
+          <h2>Q-16 full funnel</h2>
+          <p className="dashboard-card__meta">
+            Stage counts come from deterministic SQLite reads over applications
+            and application_events. The funnel uses explicit response evidence
+            for screen and keeps final at zero until final-round evidence exists
+            in the event taxonomy.
+          </p>
+        </div>
+        {funnelLoadState === "error" ? (
+          <Alert title="Full funnel unavailable" tone="danger">
+            <p>Start the local backend to load the Q-16 funnel.</p>
+          </Alert>
+        ) : null}
+        <div className="dashboard-metric-grid">
+          {funnelLoadState === "loading" ? (
+            <article className="metric-placeholder">
+              <p className="metric-placeholder__label">Full funnel</p>
+              <p className="metric-placeholder__value">Loading</p>
+              <p className="dashboard-card__meta">
+                Loading deterministic funnel stages
+              </p>
+            </article>
+          ) : null}
+          {funnelLoadState === "loaded" && funnelStages.length === 0 ? (
+            <article className="metric-placeholder">
+              <p className="metric-placeholder__label">Full funnel</p>
+              <p className="metric-placeholder__value">No data</p>
+              <p className="dashboard-card__meta">
+                No application timeline evidence is available yet
+              </p>
+            </article>
+          ) : null}
+          {funnelStages.map((stage) => (
+            <article className="metric-placeholder" key={stage.stage}>
+              <p className="metric-placeholder__label">
+                {funnelStageLabel(stage.stage)}
+              </p>
+              <p className="metric-placeholder__value">
+                {numberFormatter.format(stage.count)}
+              </p>
+              <p className="dashboard-card__meta">
+                {funnelStageMeta(stage.stage)}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section
         className="dashboard-card status-table-card"
