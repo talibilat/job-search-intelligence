@@ -142,6 +142,32 @@ function averageFirstResponseHours() {
   );
 }
 
+function averageTimeToRejectionHours() {
+  const rejectionHours = applications.flatMap((application) => {
+    const rejections = applicationEvents
+      .filter(
+        (event) =>
+          event.application_id === application.id && event.event_type === "rejection",
+      )
+      .sort((left, right) => left.event_at.localeCompare(right.event_at));
+    const firstRejection = rejections[0];
+    if (!firstRejection) {
+      return [];
+    }
+
+    return [
+      (Date.parse(firstRejection.event_at) - Date.parse(application.first_seen_at)) /
+        3_600_000,
+    ];
+  });
+
+  if (rejectionHours.length === 0) {
+    return null;
+  }
+
+  return rejectionHours.reduce((total, hours) => total + hours, 0) / rejectionHours.length;
+}
+
 function sourceBreakdownRows() {
   const responseIds = responseApplicationIds();
   const interviewIds = applicationsWithEvent("interview_scheduled");
@@ -266,6 +292,7 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
   await page.route("**/metrics/summary", async (route) => {
     const responseIds = responseApplicationIds();
     const averageHours = averageFirstResponseHours();
+    const averageRejectionHours = averageTimeToRejectionHours();
     await route.fulfill({
       contentType: "application/json",
       json: {
@@ -273,6 +300,10 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
         average_time_to_first_response: {
           application_count: responseIds.size,
           average_hours: averageHours,
+        },
+        average_time_to_rejection: {
+          application_count: applicationsWithEvent("rejection").size,
+          average_hours: averageRejectionHours,
         },
         distinct_company_count: new Set(
           applications.map((application) => application.company.toLowerCase()),

@@ -49,6 +49,7 @@ class MetricsSummaryService:
         anchor_at: datetime | None = None,
         custom_start_at: datetime | None = None,
         custom_end_at: datetime | None = None,
+        filters: MetricsFilter | None = None,
     ) -> MetricsSummaryResponse:
         evaluated_at = self._clock()
         cutoff_at = evaluated_at - timedelta(days=self._ghost_threshold_days)
@@ -61,23 +62,33 @@ class MetricsSummaryService:
             else evaluated_at.astimezone(UTC)
         )
         return MetricsSummaryResponse(
-            total_applications=self._metrics_repository.count_total_applications(),
-            distinct_company_count=self._metrics_repository.count_distinct_companies(),
-            offers_received=self._metrics_repository.count_applications_with_offer_events(),
+            total_applications=self._metrics_repository.count_total_applications(filters=filters),
+            distinct_company_count=self._metrics_repository.count_distinct_companies(
+                filters=filters,
+            ),
+            offers_received=self._metrics_repository.count_applications_with_offer_events(
+                filters=filters,
+            ),
             ghosted_applications=ghosted_applications,
-            rejected_applications=self._metrics_repository.count_rejected_applications(),
+            rejected_applications=self._metrics_repository.count_rejected_applications(
+                filters=filters,
+            ),
             ghost_threshold_days=self._ghost_threshold_days,
             evaluated_at=evaluated_at,
             interview_invitation_count=(
-                self._metrics_repository.count_interview_invitation_events()
+                self._metrics_repository.count_interview_invitation_events(filters=filters)
             ),
             average_time_to_first_response=(
-                self._metrics_repository.get_time_to_first_response_metric()
+                self._metrics_repository.get_time_to_first_response_metric(filters=filters)
+            ),
+            average_time_to_rejection=(
+                self._metrics_repository.get_time_to_rejection_metric(filters=filters)
             ),
             application_windows=self._application_windows(
                 anchor_at=anchor,
                 custom_start_at=custom_start_at,
                 custom_end_at=custom_end_at,
+                filters=filters,
             ),
         )
 
@@ -90,6 +101,7 @@ class MetricsSummaryService:
         anchor_at: datetime,
         custom_start_at: datetime | None,
         custom_end_at: datetime | None,
+        filters: MetricsFilter | None,
     ) -> list[ApplicationWindowMetric]:
         week_start = _week_start(anchor_at)
         month_start = datetime(anchor_at.year, anchor_at.month, 1, tzinfo=UTC)
@@ -97,20 +109,23 @@ class MetricsSummaryService:
 
         windows = [
             self._application_window(
-                window=MetricsApplicationWindow.WEEK,
-                start_at=week_start,
-                end_at=week_start + timedelta(days=7),
-            ),
+                    window=MetricsApplicationWindow.WEEK,
+                    start_at=week_start,
+                    end_at=week_start + timedelta(days=7),
+                    filters=filters,
+                ),
             self._application_window(
-                window=MetricsApplicationWindow.MONTH,
-                start_at=month_start,
-                end_at=_next_month_start(month_start),
-            ),
+                    window=MetricsApplicationWindow.MONTH,
+                    start_at=month_start,
+                    end_at=_next_month_start(month_start),
+                    filters=filters,
+                ),
             self._application_window(
-                window=MetricsApplicationWindow.YEAR,
-                start_at=year_start,
-                end_at=datetime(anchor_at.year + 1, 1, 1, tzinfo=UTC),
-            ),
+                    window=MetricsApplicationWindow.YEAR,
+                    start_at=year_start,
+                    end_at=datetime(anchor_at.year + 1, 1, 1, tzinfo=UTC),
+                    filters=filters,
+                ),
         ]
 
         if custom_start_at is not None or custom_end_at is not None:
@@ -123,6 +138,7 @@ class MetricsSummaryService:
                     window=MetricsApplicationWindow.CUSTOM,
                     start_at=custom_start,
                     end_at=custom_end,
+                    filters=filters,
                 ),
             )
 
@@ -134,10 +150,12 @@ class MetricsSummaryService:
         window: MetricsApplicationWindow,
         start_at: datetime,
         end_at: datetime,
+        filters: MetricsFilter | None,
     ) -> ApplicationWindowMetric:
         count = self._metrics_repository.count_applications_between(
             start_at=start_at.isoformat(),
             end_at=end_at.isoformat(),
+            filters=filters,
         )
         return ApplicationWindowMetric(
             window=window,
