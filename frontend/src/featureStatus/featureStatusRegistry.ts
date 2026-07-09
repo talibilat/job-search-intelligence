@@ -250,7 +250,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       "Insights API",
       "Deterministic application evidence",
     ],
-    completedDate: "2026-07-05",
+    completedDate: "2026-07-09",
     dependencies: [
       "GET /insights",
       "POST /insights/regenerate",
@@ -258,32 +258,32 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       "raw_emails",
     ],
     description:
-      "Backend-backed insights page that loads cached Q-41 recurring recruiter feedback and regenerates it through the user-triggered insights API without making LLM counts authoritative.",
+      "Backend-backed insights page that loads all Tier 5 cached narrative insights, shows stale cache state and citations, and regenerates one insight at a time through the user-triggered insights API without making LLM counts authoritative.",
     endpoints: ["GET /insights", "POST /insights/regenerate"],
     files: ["frontend/src/pages/Insights.tsx"],
     howToUse: {
       expectedBehaviour:
-        "The page loads fresh cached insights, shows the Q-41 recurring recruiter feedback insight when available, and can request regeneration through the backend.",
+        "The page loads cached Tier 5 insights, shows each supported insight card, surfaces stale cache state and citation IDs, and can request per-insight regeneration through the backend.",
       expectedSuccessResult:
-        "QA can confirm cached recurring feedback renders with model metadata, regeneration is explicit, and dashboard counts are not produced by the LLM.",
+        "QA can confirm cached insights render with model metadata and citations, regeneration is explicit per insight, and dashboard counts are not produced by the LLM.",
       navigationPath: "Primary navigation -> Insights",
       prerequisites: ["Frontend dev server"],
       qaValidationPoints: [
         "The page calls GET /insights on load through the generated API client.",
-        "The Regenerate Q-41 action calls POST /insights/regenerate with type recurring_feedback.",
+        "Each regenerate action calls POST /insights/regenerate with the selected insight type.",
         "The page shows backend errors without exposing email content or provider payloads.",
       ],
       steps: [
         "Open /insights.",
-        "Read the Q-41 recurring recruiter feedback card.",
-        "Seed or mock a cached recurring_feedback insight and confirm it renders.",
-        "Press Regenerate Q-41 and confirm the returned insight replaces the cached card.",
+        "Read the Tier 5 insight cards from Q-40 through Q-46.",
+        "Seed or mock cached insights and confirm stale state plus citation IDs render.",
+        "Press a regenerate action and confirm the returned insight replaces that card.",
       ],
     },
     id: "frontend-insights-shell",
     implementationStatus:
-      "Implemented as the Phase 4 Q-41 recurring-feedback view backed by cached insights APIs.",
-    name: "Insights recurring-feedback view",
+      "Implemented as the Phase 4 cached insights frontend backed by GET /insights and POST /insights/regenerate.",
+    name: "Insights cached narrative view",
     relationship: [
       { label: "Insights", type: "screen" },
       { label: "Insights", type: "component" },
@@ -298,15 +298,16 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     routes: ["/insights"],
     screens: ["Insights"],
     sharedUi: ["Button", "Alert"],
-    stateConnections: ["Cached insight state", "Regeneration request state"],
+    stateConnections: ["Cached insight state", "Per-insight regeneration request state"],
     status: "completed",
     testing: {
       canTestNow: true,
       entryPoint: "/insights",
-      exampleInputs: ["Cached recurring_feedback insight"],
+      exampleInputs: ["Cached Tier 5 insights"],
       expectedOutputs: [
-        "Recurring feedback insight renders",
-        "Regenerate Q-41 action is available",
+        "Tier 5 insight cards render",
+        "Stale state and citation IDs render when present",
+        "Per-insight regenerate actions are available",
       ],
       requiredSetup: ["Frontend dev server", "Mock or running insights API"],
     },
