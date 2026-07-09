@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type {
   MetricsBreakdownResponse,
+  MetricsFunnelResponse,
   MetricsRatesResponse,
   MetricsResponseRateTrendResponse,
   MetricsSummaryResponse,
@@ -122,6 +123,16 @@ function metricsResponseRateTrendResponse(
   return response as unknown as MockObjectResponseBody;
 }
 
+function metricsFunnelResponse(
+  overrides: Partial<MetricsFunnelResponse> = {},
+): MockObjectResponseBody {
+  const response: MetricsFunnelResponse = {
+    stages: [],
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
+}
+
 function isMockResponseConfig(
   value: MockResponse,
 ): value is { body: MockResponseBody; status: number } {
@@ -149,6 +160,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
     const config = responseQueues.get(path);
 
     if (!config) {
+      if (path === "/metrics/funnel") {
+        return Promise.resolve(
+          new Response(JSON.stringify(metricsFunnelResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
       if (path === "/metrics/breakdown?dimension=source") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsBreakdownResponse()), {
@@ -876,6 +896,7 @@ describe("App", () => {
       "/applications?status=interview",
       "/applications",
       "/metrics/response-rate-trend",
+      "/metrics/funnel",
       "/metrics/breakdown?dimension=source",
       "/metrics/timeseries",
       "/metrics/rates",
