@@ -88,6 +88,10 @@ function eventFormGhostInferenceHasSourceEmail(eventForm: EventEditFormState) {
   return eventForm.eventType === "ghost_inferred" && eventForm.emailId.trim().length > 0;
 }
 
+function eventIdsAreSafePathSegments(eventIds: string[]) {
+  return eventIds.every((eventId) => isSafeGeneratedApiPathSegment(eventId));
+}
+
 function eventTimeHasTimezoneOffset(value: string) {
   return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim());
 }
@@ -422,6 +426,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     if (
       splitEventIds.length === 0 ||
       splitEventIds.length === events.length ||
+      !eventIdsAreSafePathSegments(splitEventIds) ||
       splitCompany.trim().length === 0 ||
       splitRole.trim().length === 0
     ) {
@@ -493,6 +498,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     !selectedEventId || isSafeGeneratedApiPathSegment(selectedEventId);
   const hasSafeMergeSourceId =
     mergeSourceId.trim().length === 0 || isSafeGeneratedApiPathSegment(mergeSourceId.trim());
+  const hasSafeSplitEventIds = eventIdsAreSafePathSegments(splitEventIds);
   const hasStatusChange = statusValue !== application?.current_status;
 
   if (loadState === "loading") {
@@ -611,6 +617,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
           onToggleEvent={toggleSplitEvent}
           reason={splitReason}
           role={splitRole}
+          hasSafeSelectedEventIds={hasSafeSplitEventIds}
           selectedEventIds={splitEventIds}
         />
       </section>

@@ -1099,6 +1099,37 @@ describe("ApplicationDetailPage", () => {
     expect(requestJson(fetchMock, "/applications/app-1/merge")).toBeNull();
   });
 
+  it("blocks unsafe split event IDs", async () => {
+    const unsafeEvent = {
+      ...applicationEvent,
+      id: "event/1",
+    };
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[unsafeEvent, secondApplicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /event\/1/ }));
+    fireEvent.change(screen.getByLabelText("New application company"), {
+      target: { value: "Beta Corp" },
+    });
+    fireEvent.change(screen.getByLabelText("New application role"), {
+      target: { value: "Backend Engineer" },
+    });
+
+    expect(screen.getByText("One or more selected event IDs are malformed or unsupported.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Split selected events" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Split selected events" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/split")).toBeNull();
+  });
+
   it("disables split when the new application identity is missing", async () => {
     const fetchMock = mockFetchResponses({
       "/applications/app-1": applicationRecord,

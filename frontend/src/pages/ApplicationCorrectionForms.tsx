@@ -82,6 +82,7 @@ interface EventCorrectionFormProps {
 interface SplitCorrectionFormProps {
   company: string;
   events: ApplicationEventRecord[];
+  hasSafeSelectedEventIds: boolean;
   isSubmitting: boolean;
   onCompanyChange: (value: string) => void;
   onReasonChange: (value: string) => void;
@@ -552,6 +553,7 @@ export function EventCorrectionForm({
 export function SplitCorrectionForm({
   company,
   events,
+  hasSafeSelectedEventIds,
   isSubmitting,
   onCompanyChange,
   onReasonChange,
@@ -610,6 +612,9 @@ export function SplitCorrectionForm({
         {events.length > 0 && selectedEventIds.length === 0 ? (
           <p>Select at least one timeline event before splitting.</p>
         ) : null}
+        {!hasSafeSelectedEventIds ? (
+          <p>One or more selected event IDs are malformed or unsupported.</p>
+        ) : null}
         {company.trim().length === 0 || role.trim().length === 0 ? (
           <p>Enter the new application company and role before splitting events.</p>
         ) : null}
@@ -641,6 +646,7 @@ export function SplitCorrectionForm({
             isSubmitting ||
             selectedEventIds.length === 0 ||
             allSourceEventsSelected ||
+            !hasSafeSelectedEventIds ||
             company.trim().length === 0 ||
             role.trim().length === 0
           }
