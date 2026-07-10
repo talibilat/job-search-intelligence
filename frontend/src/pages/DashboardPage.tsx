@@ -1286,6 +1286,16 @@ export function DashboardPage() {
               : "No applications exist for the funnel yet. Run sync, classification, and aggregation from Feature Status first.",
         }}
         height={300}
+        info={{
+          dataSource: "GET /metrics/funnel",
+          dataTable: "applications and application_events",
+          howItWorks:
+            "Counts each application once through deterministic funnel stages built from local application statuses and timeline events. No LLM produces these funnel counts.",
+          howToGenerate:
+            "Run sync, classification, and aggregation from Feature Status so retained job-search emails become applications with ordered timeline events.",
+          missingData:
+            "If funnel rows are zero or missing, check whether classified emails have been aggregated into applications with ordered timeline events.",
+        }}
         title="Application funnel"
       >
         {funnelStages.length > 0 ? (

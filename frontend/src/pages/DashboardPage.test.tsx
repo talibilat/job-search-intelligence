@@ -912,6 +912,39 @@ describe("DashboardPage", () => {
       within(timing).getByText(
         "If timing values are zero or missing, check whether application timelines contain response or rejection events with timestamps after aggregation.",
       ),
+      ).toBeTruthy();
+  });
+
+  it("explains the application funnel chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const funnel = await screen.findByRole("region", {
+      name: "Application funnel",
+    });
+    const infoControl = within(funnel).getByRole("button", {
+      name: "About Application funnel",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(funnel).getByText("How this chart works")).toBeTruthy();
+    expect(within(funnel).getByText("GET /metrics/funnel")).toBeTruthy();
+    expect(within(funnel).getByText("applications and application_events")).toBeTruthy();
+    expect(
+      within(funnel).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(funnel).getByText(
+        "If funnel rows are zero or missing, check whether classified emails have been aggregated into applications with ordered timeline events.",
+      ),
     ).toBeTruthy();
   });
 
