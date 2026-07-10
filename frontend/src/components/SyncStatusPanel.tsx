@@ -234,10 +234,8 @@ function optionalPositiveInteger(value: string) {
     return null;
   }
 
-  const parsedValue = Number.parseInt(trimmedValue, 10);
-  return Number.isFinite(parsedValue) && parsedValue > 0
-    ? parsedValue
-    : null;
+  const parsedValue = Number(trimmedValue);
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
 }
 
 function validatePositiveInteger(value: string, label: string) {
@@ -246,9 +244,12 @@ function validatePositiveInteger(value: string, label: string) {
     return null;
   }
 
-  const parsedValue = Number.parseInt(trimmedValue, 10);
+  const parsedValue = Number(trimmedValue);
   if (!Number.isFinite(parsedValue) || parsedValue < 1) {
     return `${label} must be at least 1.`;
+  }
+  if (!Number.isInteger(parsedValue)) {
+    return `${label} must be a whole number.`;
   }
 
   return null;
