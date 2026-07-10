@@ -930,9 +930,15 @@ describe("DashboardPage", () => {
     expect(within(diagnostics).getByText("Q-35 wasted-effort segments")).toBeTruthy();
     expect(within(diagnostics).getByText("Linkedin (Source) is below baseline"))
       .toBeTruthy();
-    expect(within(diagnostics).getByText("Q-36 best ROI source")).toBeTruthy();
-    expect(within(diagnostics).getByText("Linkedin (Source) has the best interview ROI"))
-      .toBeTruthy();
+    const bestRoi = await within(diagnostics).findByRole("region", {
+      name: "Q-36 best ROI source",
+    });
+
+    expect(within(bestRoi).getByRole("img")).toBeTruthy();
+    expect(within(bestRoi).queryByText("Linkedin (Source)")).toBeNull();
+    expect(
+      within(bestRoi).queryByText("Linkedin (Source) has the best interview ROI"),
+    ).toBeNull();
     expect(within(diagnostics).getByText("Q-37 sponsorship response impact")).toBeTruthy();
     expect(within(diagnostics).getByText("Not offered (Sponsorship) is -26.7 pp vs baseline"))
       .toBeTruthy();

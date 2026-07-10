@@ -888,6 +888,15 @@ export function DashboardPage() {
           },
         ]
       : [];
+  const bestRoiSourceRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError && bestRoiSource
+      ? [
+          {
+            rate: Number(bestRoiSource.interview_rate ?? 0) * 100,
+            source: "Best ROI source",
+          },
+        ]
+      : [];
 
   return (
     <main
@@ -1882,27 +1891,34 @@ export function DashboardPage() {
             </p>
           </article>
 
-          <article className="metric-placeholder">
-            <h3 className="metric-placeholder__label">Q-36 best ROI source</h3>
-            <p className="metric-placeholder__value">
-              {diagnosticsError
-                ? "Unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading"
-                : bestRoiSource
-                ? diagnosticSegmentTitle(bestRoiSource)
-                : "No source"}
-            </p>
-            <p className="dashboard-card__meta">
-              {diagnosticsError
-                ? "Best ROI source is unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading source interview ROI"
-                : bestRoiSource
-                ? `${diagnosticSegmentTitle(bestRoiSource)} has the best interview ROI`
-                : "No source has interview evidence yet"}
-            </p>
-          </article>
+          <ChartPanel
+            description="Q-36 uses deterministic /metrics/diagnostics interview-rate data to chart the source with the strongest interview ROI."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading best ROI source"
+                  : "No best ROI source yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic source ROI diagnostics from the local backend."
+                  : "No source has interview evidence yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Q-36 best ROI source"
+          >
+            {bestRoiSourceRows.length > 0 ? (
+              <BarChart
+                data={bestRoiSourceRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="source" stroke="#c9d8ce" />
+                <YAxis allowDecimals={false} stroke="#c9d8ce" type="number" unit="%" />
+                <Tooltip />
+                <Bar dataKey="rate" fill="#f7c873" name="Interview rate" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <article className="metric-placeholder">
             <h3 className="metric-placeholder__label">
