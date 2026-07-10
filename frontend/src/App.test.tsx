@@ -516,6 +516,93 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains classification run results through an accessible info control", async () => {
+    mockFetchResponses({
+      "/classification/estimate": {
+        cost_estimate_available: true,
+        currency: "USD",
+        estimated_completion_tokens: 600,
+        estimated_cost_usd: 0.42,
+        estimated_prompt_tokens: 3_600,
+        estimated_total_tokens: 4_200,
+        llm_provider: "azure_openai",
+        model: "gpt-4.1-mini",
+        prompt_version: "classification-v1",
+        token_estimate_method: "retained_body_length_plus_overhead",
+      },
+      "/classification/reprocessing-plan": {
+        blocked_by_missing_target_model_count: 0,
+        classification_mode: "hybrid",
+        email_provider: "gmail",
+        llm_provider: "azure_openai",
+        reprocess_count: 2,
+        retained_candidate_count: 3,
+        selection_policy: "unclassified_or_stale_model_or_prompt",
+        should_reprocess: true,
+        stale_model_count: 0,
+        stale_prompt_version_count: 0,
+        target_model: "gpt-4.1-mini",
+        target_model_configured: true,
+        target_prompt_version: "classification-v1",
+        unclassified_count: 2,
+        up_to_date_count: 1,
+      },
+      "/classification/run": {
+        accepted_count: 2,
+        applications_upserted: 1,
+        classified_count: 2,
+        events_upserted: 3,
+        malformed_count: 0,
+        manual_conflict_count: 0,
+        skipped_not_job_related_count: 0,
+      },
+      "/pipeline/status": pipelineStatusResponse({
+        next_action: "run_classification",
+        next_action_reason:
+          "2 job-search candidate emails are waiting for classification.",
+        unclassified_retained_count: 2,
+      }),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Run classification" }),
+    );
+
+    await screen.findByText(
+      "Classified 2 candidate emails, upserted 1 applications and 3 timeline events.",
+    );
+    const resultAlert = screen
+      .getByText("Classification finished")
+      .closest<HTMLElement>(".ui-alert");
+    expect(resultAlert).toBeTruthy();
+
+    const infoButton = within(resultAlert!).getByRole("button", {
+      name: "About Classification run results",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(resultAlert!).getByText("Data source: POST /classification/run"),
+    ).toBeTruthy();
+    expect(
+      within(resultAlert!).getByText(
+        "Table: email_classifications, applications, application_events",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(resultAlert!).getByText(
+        "If classified or upserted counts are zero, check Classification readiness for retained candidates, target model configuration, malformed provider output, and whether accepted classifications contained application evidence.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("explains retained classification candidates through an accessible info control", async () => {
     mockFetchResponses({
       "/classification/estimate": {

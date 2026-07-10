@@ -374,7 +374,24 @@ export function PipelineActivityPanel() {
       </Alert>
 
       {classificationMessage ? (
-        <Alert title="Classification finished" tone="success">
+        <Alert role="status" title="Classification finished" tone="success">
+          <div className="pipeline-panel__stage-heading">
+            <p className="pipeline-panel__readiness-label">
+              Classification run results
+            </p>
+            <StageCountInfo
+              info={{
+                dataSource: "POST /classification/run",
+                dataTable:
+                  "email_classifications, applications, application_events",
+                howItWorks:
+                  "Reports the deterministic side effects of the user-triggered classification run: accepted classifications stored locally, application rows upserted, timeline events upserted, malformed provider responses quarantined, and manual aggregation conflicts preserved.",
+                missingData:
+                  "If classified or upserted counts are zero, check Classification readiness for retained candidates, target model configuration, malformed provider output, and whether accepted classifications contained application evidence.",
+              }}
+              label="Classification run results"
+            />
+          </div>
           <p>{classificationMessage}</p>
         </Alert>
       ) : null}
