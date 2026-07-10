@@ -43,6 +43,24 @@ def get_configured_llm_provider(
     raise LLMProviderUnavailableError(public_message="LLM provider adapter is not configured.")
 
 
+async def validate_llm_provider_health_request_body(
+    request: Request,
+) -> LLMProviderHealthCheckApiRequest:
+    raw_body = await request.body()
+    if not raw_body.strip():
+        return LLMProviderHealthCheckApiRequest()
+
+    try:
+        return LLMProviderHealthCheckApiRequest.model_validate_json(raw_body)
+    except ValidationError as error:
+        raise ApiError(
+            status_code=422,
+            code=ApiErrorCode.VALIDATION_ERROR,
+            message="LLM provider health request validation failed.",
+            details=_settings_validation_details(error),
+        ) from error
+
+
 def _settings_validation_details(error: ValidationError) -> list[ApiErrorDetail]:
     return [
         ApiErrorDetail(
@@ -105,26 +123,21 @@ def update_provider_config(
         raise _provider_configuration_error(error) from error
 
 
-@router.post("/providers/llm/health", response_model=LLMProviderHealthCheckResponse)
+@router.post(
+    "/providers/llm/health",
+    response_model=LLMProviderHealthCheckResponse,
+    responses={422: {"model": ApiErrorResponse}},
+)
 async def check_llm_provider_health(
-    request: Request,
+    _request: Annotated[
+        LLMProviderHealthCheckApiRequest,
+        Depends(validate_llm_provider_health_request_body),
+    ],
     settings: Annotated[AppSettings, Depends(get_settings)],
     registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
     llm_provider: Annotated[LLMProvider, Depends(get_configured_llm_provider)],
 ) -> LLMProviderHealthCheckResponse:
     """Verify selected LLM provider models through the configured provider adapter."""
-
-    raw_body = await request.body()
-    if raw_body.strip():
-        try:
-            LLMProviderHealthCheckApiRequest.model_validate_json(raw_body)
-        except ValidationError as error:
-            raise ApiError(
-                status_code=422,
-                code=ApiErrorCode.VALIDATION_ERROR,
-                message="LLM provider health request validation failed.",
-                details=_settings_validation_details(error),
-            ) from error
 
     try:
         return await check_configured_llm_provider_health(

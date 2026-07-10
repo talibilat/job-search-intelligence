@@ -260,6 +260,9 @@ describe("Insights", () => {
     ).toBeTruthy();
 
     fireEvent.click(rejectionThemesInfo);
+    expect(rejectionThemesInfo.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(rejectionThemesInfo);
     expect(rejectionThemesInfo.getAttribute("aria-expanded")).toBe("false");
   });
 

@@ -1,8 +1,8 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PipelineActivityPanel } from "../components/PipelineActivityPanel";
 import { SyncStatusPanel } from "../components/SyncStatusPanel";
-import { FormField, Tabs, TextInput } from "../components/ui";
+import { FormField, InfoDisclosure, Tabs, TextInput } from "../components/ui";
 import {
   featureStatusLabels,
   featureStatusRegistry,
@@ -122,6 +122,42 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   },
   {
     howToRun:
+      "Feature Status applications area: review the deterministic application records after classification has built timelines.",
+    info: {
+      dataSource: "GET /applications",
+      dataTable: "applications",
+      howItWorks:
+        "Lists each reconstructed application with its current deterministic status from the application timeline, answering Q-09 outside the chart-only dashboard.",
+      missingData:
+        "If no statuses appear, sync Gmail and run classification so aggregation can create application rows with current_status values.",
+    },
+    name: "Application status table",
+    whatItMeans:
+      "Shows the current status of every reconstructed application: applied, in review, assessment, interview, offer, rejected, ghosted, or withdrawn.",
+    worksToday: "yes",
+    worksTodayNote:
+      "Uses deterministic application records; detailed application links open each saved application timeline.",
+  },
+  {
+    howToRun:
+      "Feature Status applications area: filter the application list to statuses that are still awaiting a reply.",
+    info: {
+      dataSource: "GET /applications?status=applied, GET /applications?status=in_review, GET /applications?status=assessment, and GET /applications?status=interview",
+      dataTable: "applications and application_events",
+      howItWorks:
+        "Surfaces applications whose deterministic current status is still active, answering Q-10 without turning the dashboard back into a mixed table page.",
+      missingData:
+        "If the live queue is empty, check whether aggregation has marked applications as rejected, ghosted, withdrawn, or offer instead of active statuses.",
+    },
+    name: "Live applications queue",
+    whatItMeans:
+      "Identifies applications still awaiting a reply right now so the chart-only dashboard does not hide live status behavior.",
+    worksToday: "yes",
+    worksTodayNote:
+      "Derived from deterministic application statuses and compatible with the existing application detail surface.",
+  },
+  {
+    howToRun:
       "Insights page: request narrative insights after applications exist. Requires an LLM provider.",
     info: {
       dataSource: "GET /insights and POST /insights/regenerate",
@@ -209,70 +245,29 @@ function FeatureGuideInfo({
   feature: string;
   info: UserFacingFeatureInfo;
 }) {
-  const infoId = useId();
-  const [isInfoPinned, setIsInfoPinned] = useState(false);
-  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
-  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
-  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
-
   return (
-    <div className="feature-guide__info">
-      <button
-        aria-controls={infoId}
-        aria-expanded={isInfoOpen}
-        aria-label={`About ${feature}`}
-        className="feature-guide__info-button"
-        onBlur={() => {
-          setIsInfoPreviewed(false);
-          setIsInfoDismissed(false);
-        }}
-        onClick={() => {
-          if (isInfoOpen) {
-            setIsInfoPinned(false);
-            setIsInfoPreviewed(false);
-            setIsInfoDismissed(true);
-            return;
-          }
-
-          setIsInfoPinned(true);
-          setIsInfoDismissed(false);
-        }}
-        onFocus={() => {
-          setIsInfoPreviewed(true);
-          setIsInfoDismissed(false);
-        }}
-        onMouseEnter={() => {
-          setIsInfoPreviewed(true);
-          setIsInfoDismissed(false);
-        }}
-        onMouseLeave={() => {
-          setIsInfoPreviewed(false);
-          setIsInfoDismissed(false);
-        }}
-        type="button"
-      >
-        i
-      </button>
-      {isInfoOpen ? (
-        <div className="feature-guide__info-panel" id={infoId}>
-          <p>{info.howItWorks}</p>
-          <dl>
-            <div>
-              <dt>Data source</dt>
-              <dd>Data source: {info.dataSource}</dd>
-            </div>
-            <div>
-              <dt>Table</dt>
-              <dd>Table: {info.dataTable}</dd>
-            </div>
-            <div>
-              <dt>If values are zero or missing</dt>
-              <dd>{info.missingData}</dd>
-            </div>
-          </dl>
+    <InfoDisclosure
+      ariaLabel={`About ${feature}`}
+      buttonClassName="feature-guide__info-button"
+      className="feature-guide__info"
+      panelClassName="feature-guide__info-panel"
+    >
+      <p>{info.howItWorks}</p>
+      <dl>
+        <div>
+          <dt>Data source</dt>
+          <dd>Data source: {info.dataSource}</dd>
         </div>
-      ) : null}
-    </div>
+        <div>
+          <dt>Table</dt>
+          <dd>Table: {info.dataTable}</dd>
+        </div>
+        <div>
+          <dt>If values are zero or missing</dt>
+          <dd>{info.missingData}</dd>
+        </div>
+      </dl>
+    </InfoDisclosure>
   );
 }
 

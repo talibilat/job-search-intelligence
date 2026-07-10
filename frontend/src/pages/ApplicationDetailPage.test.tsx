@@ -321,6 +321,8 @@ describe("ApplicationDetailPage", () => {
     expect(screen.getByText(/If no events are available to split/)).toBeTruthy();
 
     fireEvent.click(infoButton);
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(infoButton);
     expect(infoButton.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.click(infoButton);
@@ -354,6 +356,8 @@ describe("ApplicationDetailPage", () => {
     expect(screen.getByText(/Manual status, event, merge, or split corrections create the lock/)).toBeTruthy();
     expect(screen.getByText(/If the manual lock is not enabled/)).toBeTruthy();
 
+    fireEvent.click(infoButton);
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(infoButton);
     expect(infoButton.getAttribute("aria-expanded")).toBe("false");
 

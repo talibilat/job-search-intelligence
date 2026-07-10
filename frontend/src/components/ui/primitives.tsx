@@ -41,6 +41,82 @@ export function Button({
   );
 }
 
+export interface InfoDisclosureProps {
+  ariaLabel: string;
+  buttonClassName: string;
+  children: ReactNode;
+  className: string;
+  panelClassName: string;
+  useButtonPrimitive?: boolean;
+}
+
+export function InfoDisclosure({
+  ariaLabel,
+  buttonClassName,
+  children,
+  className,
+  panelClassName,
+  useButtonPrimitive = false,
+}: InfoDisclosureProps) {
+  const infoId = useId();
+  const [isPinned, setIsPinned] = useState(false);
+  const [isPreviewed, setIsPreviewed] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
+  const isOpen = isPinned || (isPreviewed && !isDismissed);
+  const controlProps = {
+    "aria-controls": infoId,
+    "aria-expanded": isOpen,
+    "aria-label": ariaLabel,
+    className: buttonClassName,
+    onBlur: () => {
+      setIsPreviewed(false);
+      setIsDismissed(false);
+    },
+    onClick: () => {
+      if (isPinned) {
+        setIsPinned(false);
+        setIsPreviewed(false);
+        setIsDismissed(true);
+        return;
+      }
+
+      setIsPinned(true);
+      setIsDismissed(false);
+    },
+    onFocus: () => {
+      setIsPreviewed(true);
+      setIsDismissed(false);
+    },
+    onMouseEnter: () => {
+      setIsPreviewed(true);
+      setIsDismissed(false);
+    },
+    onMouseLeave: () => {
+      setIsPreviewed(false);
+      setIsDismissed(false);
+    },
+  };
+
+  return (
+    <div className={className}>
+      {useButtonPrimitive ? (
+        <Button {...controlProps} variant="ghost">
+          i
+        </Button>
+      ) : (
+        <button {...controlProps} type="button">
+          i
+        </button>
+      )}
+      {isOpen ? (
+        <div className={panelClassName} id={infoId}>
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean;
 }

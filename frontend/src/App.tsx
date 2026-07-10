@@ -110,6 +110,26 @@ function ApplicationRouteUnavailablePage() {
   );
 }
 
+function ChatUnavailablePage() {
+  return (
+    <main aria-labelledby="chat-unavailable-title" className="app-shell">
+      <section className="dashboard-hero" aria-labelledby="chat-unavailable-title">
+        <p className="eyebrow">Phase 5 chat</p>
+        <h1 id="chat-unavailable-title">Chat unavailable</h1>
+        <Alert title="Chat is not built yet" tone="warning">
+          <p>
+            Chat arrives in Phase 5 after the hybrid RAG agent can answer with
+            deterministic metrics, cited retrieval, and persisted local history.
+          </p>
+          <p>
+            <a href="/features">Go to Feature Status</a>
+          </p>
+        </Alert>
+      </section>
+    </main>
+  );
+}
+
 function App() {
   const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
   const isApplicationRoute =
@@ -122,6 +142,8 @@ function App() {
     ? null
     : routePaths.has(routePath)
       ? routePath
+      : routePath === "/chat"
+        ? "/chat"
       : "/";
 
   return (
@@ -155,6 +177,8 @@ function App() {
         <FeatureStatusDashboard />
       ) : currentPath === "/insights" ? (
         <Insights />
+      ) : currentPath === "/chat" ? (
+        <ChatUnavailablePage />
       ) : (
         <JobSearchPage />
       )}

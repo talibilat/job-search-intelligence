@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   classificationEstimateClassificationEstimateGet,
@@ -10,7 +10,7 @@ import {
   type ClassificationRunResponse,
   type PipelineStatus,
 } from "../api";
-import { Alert, Button } from "./ui";
+import { Alert, Button, InfoDisclosure } from "./ui";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const pipelinePollIntervalMs = 10000;
@@ -67,70 +67,30 @@ function StageCount({
 }
 
 function StageCountInfo({ info, label }: { info: StageInfo; label: string }) {
-  const infoId = useId();
-  const [isInfoPinned, setIsInfoPinned] = useState(false);
-  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
-  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
-  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
-
   return (
-    <div className="pipeline-panel__stage-info">
-      <Button
-        aria-controls={infoId}
-        aria-expanded={isInfoOpen}
-        aria-label={`About ${label}`}
-        className="pipeline-panel__stage-info-button"
-        onBlur={() => {
-          setIsInfoPreviewed(false);
-          setIsInfoDismissed(false);
-        }}
-        onClick={() => {
-          if (isInfoOpen) {
-            setIsInfoPinned(false);
-            setIsInfoPreviewed(false);
-            setIsInfoDismissed(true);
-            return;
-          }
-
-          setIsInfoPinned(true);
-          setIsInfoDismissed(false);
-        }}
-        onFocus={() => {
-          setIsInfoPreviewed(true);
-          setIsInfoDismissed(false);
-        }}
-        onMouseEnter={() => {
-          setIsInfoPreviewed(true);
-          setIsInfoDismissed(false);
-        }}
-        onMouseLeave={() => {
-          setIsInfoPreviewed(false);
-          setIsInfoDismissed(false);
-        }}
-        variant="ghost"
-      >
-        i
-      </Button>
-      {isInfoOpen ? (
-        <div className="pipeline-panel__stage-info-panel" id={infoId}>
-          <p>{info.howItWorks}</p>
-          <dl>
-            <div>
-              <dt>Data source</dt>
-              <dd>Data source: {info.dataSource}</dd>
-            </div>
-            <div>
-              <dt>Table</dt>
-              <dd>Table: {info.dataTable}</dd>
-            </div>
-            <div>
-              <dt>If values are zero or missing</dt>
-              <dd>{info.missingData}</dd>
-            </div>
-          </dl>
+    <InfoDisclosure
+      ariaLabel={`About ${label}`}
+      buttonClassName="pipeline-panel__stage-info-button"
+      className="pipeline-panel__stage-info"
+      panelClassName="pipeline-panel__stage-info-panel"
+      useButtonPrimitive
+    >
+      <p>{info.howItWorks}</p>
+      <dl>
+        <div>
+          <dt>Data source</dt>
+          <dd>Data source: {info.dataSource}</dd>
         </div>
-      ) : null}
-    </div>
+        <div>
+          <dt>Table</dt>
+          <dd>Table: {info.dataTable}</dd>
+        </div>
+        <div>
+          <dt>If values are zero or missing</dt>
+          <dd>{info.missingData}</dd>
+        </div>
+      </dl>
+    </InfoDisclosure>
   );
 }
 

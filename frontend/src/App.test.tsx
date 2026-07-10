@@ -1061,6 +1061,8 @@ describe("App", () => {
     ).toBeTruthy();
 
     fireEvent.click(syncInfoButton);
+    expect(syncInfoButton.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(syncInfoButton);
     expect(syncInfoButton.getAttribute("aria-expanded")).toBe("false");
     expect(
       screen.queryByText("Data source: POST /sync and GET /sync/status"),
@@ -2516,7 +2518,7 @@ describe("App", () => {
     expect(await screen.findByText("Setup choices saved")).toBeTruthy();
   });
 
-  it("does not expose the unfinished chat shell at the chat route", () => {
+  it("shows a clear unavailable state at the unfinished chat route", () => {
     window.history.pushState({}, "", "/chat");
 
     render(<App />);
@@ -2524,12 +2526,13 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: /your job search, from inbox to insight/i,
+        name: /chat unavailable/i,
       }),
     ).toBeTruthy();
     expect(
-      screen.queryByText(/chat agent work arrives in phase 5/i),
-    ).toBeNull();
+      screen.getByText(/chat arrives in phase 5 after the hybrid rag agent/i),
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Go to Feature Status" })).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: /message/i })).toBeNull();
   });
 
@@ -2949,6 +2952,8 @@ describe("App", () => {
     expect(
       screen.getByText("Classify and build applications"),
     ).toBeTruthy();
+    expect(screen.getByText("Application status table")).toBeTruthy();
+    expect(screen.getByText("Live applications queue")).toBeTruthy();
     expect(screen.getByText("Glossary")).toBeTruthy();
     expect(screen.getByText("Raw email")).toBeTruthy();
     expect(screen.getByText("Retained body")).toBeTruthy();
@@ -3003,6 +3008,16 @@ describe("App", () => {
       "Future GET /metrics/summary",
     );
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
+
+    const connectGmailInfo = screen.getByRole("button", {
+      name: "About Connect Gmail",
+    });
+    fireEvent.focus(connectGmailInfo);
+    expect(connectGmailInfo.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(connectGmailInfo);
+    expect(connectGmailInfo.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(connectGmailInfo);
+    expect(connectGmailInfo.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.change(screen.getByLabelText("Search features"), {
       target: { value: "sync" },

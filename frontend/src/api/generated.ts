@@ -2501,12 +2501,23 @@ export type checkLlmProviderHealthConfigProvidersLlmHealthPostResponse200 = {
   status: 200;
 };
 
+export type checkLlmProviderHealthConfigProvidersLlmHealthPostResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type checkLlmProviderHealthConfigProvidersLlmHealthPostResponseSuccess =
   checkLlmProviderHealthConfigProvidersLlmHealthPostResponse200 & {
     headers: Headers;
   };
+export type checkLlmProviderHealthConfigProvidersLlmHealthPostResponseError =
+  checkLlmProviderHealthConfigProvidersLlmHealthPostResponse422 & {
+    headers: Headers;
+  };
+
 export type checkLlmProviderHealthConfigProvidersLlmHealthPostResponse =
-  checkLlmProviderHealthConfigProvidersLlmHealthPostResponseSuccess;
+  | checkLlmProviderHealthConfigProvidersLlmHealthPostResponseSuccess
+  | checkLlmProviderHealthConfigProvidersLlmHealthPostResponseError;
 
 export const getCheckLlmProviderHealthConfigProvidersLlmHealthPostUrl = () => {
   return `/config/providers/llm/health`;

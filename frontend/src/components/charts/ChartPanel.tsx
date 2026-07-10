@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import { useId, useState } from "react";
+import { useId } from "react";
 import { ResponsiveContainer } from "recharts";
+
+import { InfoDisclosure } from "../ui";
 
 interface ChartEmptyStateProps {
   title: string;
@@ -36,10 +38,6 @@ export function ChartPanel({
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descriptionId = `${chartId}-description`;
-  const infoId = `${chartId}-info`;
-  const [isInfoPinned, setIsInfoPinned] = useState(false);
-  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
-  const isInfoOpen = isInfoPinned || isInfoPreviewed;
   const surfaceStyle = {
     "--chart-min-height": `${height}px`,
   } as CSSProperties;
@@ -57,52 +55,41 @@ export function ChartPanel({
             <h2 id={titleId}>{title}</h2>
           </div>
           {info ? (
-            <button
-              aria-controls={infoId}
-              aria-expanded={isInfoOpen}
-              aria-label={`About ${title}`}
-              className="chart-panel__info-button"
-              onBlur={() => setIsInfoPreviewed(false)}
-              onClick={() => setIsInfoPinned((current) => !current)}
-              onFocus={() => setIsInfoPreviewed(true)}
-              onMouseEnter={() => setIsInfoPreviewed(true)}
-              onMouseLeave={() => setIsInfoPreviewed(false)}
-              type="button"
+            <InfoDisclosure
+              ariaLabel={`About ${title}`}
+              buttonClassName="chart-panel__info-button"
+              className="chart-panel__info-control"
+              panelClassName="chart-panel__info"
             >
-              i
-            </button>
+              <h3>How this chart works</h3>
+              <dl>
+                <div>
+                  <dt>What it does</dt>
+                  <dd>{info.howItWorks}</dd>
+                </div>
+                <div>
+                  <dt>Endpoint</dt>
+                  <dd>{info.dataSource}</dd>
+                </div>
+                <div>
+                  <dt>Table</dt>
+                  <dd>{info.dataTable}</dd>
+                </div>
+                <div>
+                  <dt>How to get data</dt>
+                  <dd>{info.howToGenerate}</dd>
+                </div>
+                <div>
+                  <dt>If values are zero or missing</dt>
+                  <dd>{info.missingData}</dd>
+                </div>
+              </dl>
+            </InfoDisclosure>
           ) : null}
         </div>
         <p className="chart-panel__description" id={descriptionId}>
           {description}
         </p>
-        {info && isInfoOpen ? (
-          <div className="chart-panel__info" id={infoId}>
-            <h3>How this chart works</h3>
-            <dl>
-              <div>
-                <dt>What it does</dt>
-                <dd>{info.howItWorks}</dd>
-              </div>
-              <div>
-                <dt>Endpoint</dt>
-                <dd>{info.dataSource}</dd>
-              </div>
-              <div>
-                <dt>Table</dt>
-                <dd>{info.dataTable}</dd>
-              </div>
-              <div>
-                <dt>How to get data</dt>
-                <dd>{info.howToGenerate}</dd>
-              </div>
-              <div>
-                <dt>If values are zero or missing</dt>
-                <dd>{info.missingData}</dd>
-              </div>
-            </dl>
-          </div>
-        ) : null}
       </div>
 
       <div className="chart-panel__surface" style={surfaceStyle}>

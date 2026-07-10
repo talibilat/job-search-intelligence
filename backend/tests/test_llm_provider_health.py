@@ -170,6 +170,29 @@ def test_llm_provider_health_endpoint_rejects_unexpected_payload_fields() -> Non
     assert provider.requests == []
 
 
+def test_llm_provider_health_endpoint_validates_payload_before_provider_config() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        classification_mode=ClassificationMode.HYBRID,
+        azure_openai_endpoint="",
+        azure_openai_chat_deployment="",
+        azure_openai_embedding_deployment="",
+    )
+    fastapi_app = create_app()
+    fastapi_app.dependency_overrides[get_settings] = lambda: settings
+    client = TestClient(fastapi_app)
+
+    response = client.post(
+        "/config/providers/llm/health",
+        json={"api_key": "super-secret-api-key"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert "super-secret-api-key" not in response.text
+
+
 def test_llm_provider_health_endpoint_checks_configured_azure_deployments() -> None:
     settings = AppSettings(
         _env_file=None,
@@ -404,6 +427,10 @@ def test_llm_provider_health_endpoint_is_documented_in_openapi() -> None:
     operation = response.json()["paths"]["/config/providers/llm/health"]["post"]
     schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     assert schema["$ref"] == "#/components/schemas/LLMProviderHealthCheckResponse"
+    validation_schema = operation["responses"]["422"]["content"]["application/json"][
+        "schema"
+    ]
+    assert validation_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
 def test_llm_health_boundary_models_do_not_define_credential_fields() -> None:

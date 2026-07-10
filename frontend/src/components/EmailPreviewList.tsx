@@ -1,11 +1,11 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   syncRecentEmailsSyncRecentEmailsGet,
   type RawEmailPreviewOrder,
   type RawEmailPreviewRecord,
 } from "../api";
-import { Alert, Button } from "./ui";
+import { Alert, Button, InfoDisclosure } from "./ui";
 
 const fetchLimit = 50;
 const defaultVisibleRows = 10;
@@ -84,78 +84,37 @@ function emailRowKey(email: RawEmailPreviewRecord) {
 }
 
 function EmailPreviewInfo() {
-  const infoId = useId();
-  const [isInfoPinned, setIsInfoPinned] = useState(false);
-  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
-  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
-  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
-
   return (
-    <div className="email-preview__info">
-      <Button
-        aria-controls={infoId}
-        aria-expanded={isInfoOpen}
-        aria-label="About synced email metadata"
-        className="email-preview__info-button"
-        onBlur={() => {
-          setIsInfoPreviewed(false);
-          setIsInfoDismissed(false);
-        }}
-        onClick={() => {
-          if (isInfoOpen) {
-            setIsInfoPinned(false);
-            setIsInfoPreviewed(false);
-            setIsInfoDismissed(true);
-            return;
-          }
-
-          setIsInfoPinned(true);
-          setIsInfoDismissed(false);
-        }}
-        onFocus={() => {
-          setIsInfoPreviewed(true);
-          setIsInfoDismissed(false);
-        }}
-        onMouseEnter={() => {
-          setIsInfoPreviewed(true);
-          setIsInfoDismissed(false);
-        }}
-        onMouseLeave={() => {
-          setIsInfoPreviewed(false);
-          setIsInfoDismissed(false);
-        }}
-        variant="ghost"
-      >
-        i
-      </Button>
-      {isInfoOpen ? (
-        <div className="email-preview__info-panel" id={infoId}>
-          <p>
-            Shows public-safe Gmail metadata rows returned by sync without
-            exposing raw body text, snippets, provider message IDs, or thread IDs.
-          </p>
-          <dl>
-            <div>
-              <dt>Data source</dt>
-              <dd>Data source: GET /sync/recent-emails</dd>
-            </div>
-            <div>
-              <dt>Table</dt>
-              <dd>Table: raw_emails</dd>
-            </div>
-            <div>
-              <dt>If values are zero or missing</dt>
-              <dd>
-                Run Sync now after connecting Gmail. If this list is empty while
-                sync counts are non-zero, the backend has not stored public-safe
-                raw email metadata yet or the selected ordering has no rows to
-                show.
-              </dd>
-            </div>
-          </dl>
+    <InfoDisclosure
+      ariaLabel="About synced email metadata"
+      buttonClassName="email-preview__info-button"
+      className="email-preview__info"
+      panelClassName="email-preview__info-panel"
+      useButtonPrimitive
+    >
+      <p>
+        Shows public-safe Gmail metadata rows returned by sync without exposing
+        raw body text, snippets, provider message IDs, or thread IDs.
+      </p>
+      <dl>
+        <div>
+          <dt>Data source</dt>
+          <dd>Data source: GET /sync/recent-emails</dd>
         </div>
-      ) : null}
-    </div>
+        <div>
+          <dt>Table</dt>
+          <dd>Table: raw_emails</dd>
+        </div>
+        <div>
+          <dt>If values are zero or missing</dt>
+          <dd>
+            Run Sync now after connecting Gmail. If this list is empty while sync
+            counts are non-zero, the backend has not stored public-safe raw email
+            metadata yet or the selected ordering has no rows to show.
+          </dd>
+        </div>
+      </dl>
+    </InfoDisclosure>
   );
 }
 

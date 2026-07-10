@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   setupStatusSetupStatusGet,
@@ -8,7 +8,7 @@ import {
   type EmailSyncStatus,
 } from "../api";
 import { EmailPreviewList } from "./EmailPreviewList";
-import { Alert, Button, FormField, TextInput } from "./ui";
+import { Alert, Button, FormField, InfoDisclosure, TextInput } from "./ui";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const syncStatusPollIntervalMs = 5000;
@@ -166,70 +166,29 @@ function SyncMetricInfoButton({
   info: SyncMetricInfo;
   label: string;
 }) {
-  const infoId = useId();
-  const [isInfoPinned, setIsInfoPinned] = useState(false);
-  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
-  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
-  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
-
   return (
-    <div className="sync-panel__metric-info">
-      <button
-        aria-controls={infoId}
-        aria-expanded={isInfoOpen}
-        aria-label={`About ${label}`}
-        className="sync-panel__metric-info-button"
-        onBlur={() => {
-          setIsInfoPreviewed(false);
-          setIsInfoDismissed(false);
-        }}
-        onClick={() => {
-          if (isInfoOpen) {
-            setIsInfoPinned(false);
-            setIsInfoPreviewed(false);
-            setIsInfoDismissed(true);
-            return;
-          }
-
-          setIsInfoPinned(true);
-          setIsInfoDismissed(false);
-        }}
-        onFocus={() => {
-          setIsInfoPreviewed(true);
-          setIsInfoDismissed(false);
-        }}
-        onMouseEnter={() => {
-          setIsInfoPreviewed(true);
-          setIsInfoDismissed(false);
-        }}
-        onMouseLeave={() => {
-          setIsInfoPreviewed(false);
-          setIsInfoDismissed(false);
-        }}
-        type="button"
-      >
-        i
-      </button>
-      {isInfoOpen ? (
-        <div className="sync-panel__metric-info-panel" id={infoId}>
-          <p>{info.howItWorks}</p>
-          <dl>
-            <div>
-              <dt>Data source</dt>
-              <dd>Data source: {info.dataSource}</dd>
-            </div>
-            <div>
-              <dt>Table</dt>
-              <dd>Table: {info.dataTable}</dd>
-            </div>
-            <div>
-              <dt>If values are zero or missing</dt>
-              <dd>{info.missingData}</dd>
-            </div>
-          </dl>
+    <InfoDisclosure
+      ariaLabel={`About ${label}`}
+      buttonClassName="sync-panel__metric-info-button"
+      className="sync-panel__metric-info"
+      panelClassName="sync-panel__metric-info-panel"
+    >
+      <p>{info.howItWorks}</p>
+      <dl>
+        <div>
+          <dt>Data source</dt>
+          <dd>Data source: {info.dataSource}</dd>
         </div>
-      ) : null}
-    </div>
+        <div>
+          <dt>Table</dt>
+          <dd>Table: {info.dataTable}</dd>
+        </div>
+        <div>
+          <dt>If values are zero or missing</dt>
+          <dd>{info.missingData}</dd>
+        </div>
+      </dl>
+    </InfoDisclosure>
   );
 }
 

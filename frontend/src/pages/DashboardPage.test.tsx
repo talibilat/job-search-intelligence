@@ -892,6 +892,10 @@ describe("DashboardPage", () => {
 
     expect(infoControl.getAttribute("aria-expanded")).toBe("false");
 
+    fireEvent.focus(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+
     fireEvent.click(infoControl);
 
     expect(infoControl.getAttribute("aria-expanded")).toBe("true");
@@ -908,6 +912,10 @@ describe("DashboardPage", () => {
         "If values are zero or missing, inspect Feature Status for the next missing pipeline stage: Gmail connection, sync, classification, or aggregation.",
       ),
     ).toBeTruthy();
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("explains the outcome rates chart through an accessible info control", async () => {
