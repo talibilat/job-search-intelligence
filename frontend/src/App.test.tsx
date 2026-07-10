@@ -457,6 +457,44 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains runnable feature guide entries through accessible info controls", () => {
+    renderAtPath("/features");
+
+    const syncInfoButton = screen.getByRole("button", {
+      name: "About Sync mailbox metadata",
+    });
+    expect(syncInfoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(syncInfoButton);
+
+    expect(syncInfoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByText("Data source: POST /sync and GET /sync/status"),
+    ).toBeTruthy();
+    expect(screen.getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "If values are zero or missing, connect Gmail on Setup, then run Sync now in this Feature Status section.",
+      ),
+    ).toBeTruthy();
+
+    fireEvent.click(syncInfoButton);
+    expect(syncInfoButton.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.queryByText("Data source: POST /sync and GET /sync/status"),
+    ).toBeNull();
+
+    fireEvent.click(syncInfoButton);
+    expect(syncInfoButton.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(syncInfoButton);
+    expect(syncInfoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.mouseEnter(syncInfoButton);
+    expect(syncInfoButton.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.mouseLeave(syncInfoButton);
+    expect(syncInfoButton.getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({

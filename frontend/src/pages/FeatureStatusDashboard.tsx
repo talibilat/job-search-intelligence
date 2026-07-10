@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { PipelineActivityPanel } from "../components/PipelineActivityPanel";
 import { SyncStatusPanel } from "../components/SyncStatusPanel";
@@ -18,16 +18,32 @@ const areaLabels: Record<FeatureArea, string> = {
 
 interface UserFacingFeature {
   howToRun: string;
+  info?: UserFacingFeatureInfo;
   name: string;
   whatItMeans: string;
   worksToday: "yes" | "partial" | "no";
   worksTodayNote: string;
 }
 
+interface UserFacingFeatureInfo {
+  dataSource: string;
+  dataTable: string;
+  howItWorks: string;
+  missingData: string;
+}
+
 const userFacingFeatures: readonly UserFacingFeature[] = [
   {
     howToRun:
       "Setup page: save provider choices, then use the Gmail connect flow with your own Google OAuth client.",
+    info: {
+      dataSource: "GET /setup/status, GET /auth/gmail, and GET /auth/gmail/callback",
+      dataTable: "email_connections plus encrypted SecretStore token refs",
+      howItWorks:
+        "Starts a read-only Gmail OAuth flow, stores token material behind SecretStore, and keeps only non-secret connection metadata in SQLite.",
+      missingData:
+        "If Gmail is disconnected, configure your Google OAuth client on Setup and complete the Continue to Google flow.",
+    },
     name: "Connect Gmail",
     whatItMeans:
       "Authorizes read-only access to your Gmail account. Tokens are stored encrypted on this machine and never leave it.",
@@ -37,6 +53,14 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   {
     howToRun:
       'Job Search page: press "Sync now". Optional limits (email count, dates, pages) bound each run.',
+    info: {
+      dataSource: "POST /sync and GET /sync/status",
+      dataTable: "raw_emails",
+      howItWorks:
+        "Runs Gmail metadata backfill or incremental sync through the local backend, persists public-safe metadata, and fetches retained bodies only for likely job-search candidates.",
+      missingData:
+        "If values are zero or missing, connect Gmail on Setup, then run Sync now in this Feature Status section.",
+    },
     name: "Sync mailbox metadata",
     whatItMeans:
       "Downloads Gmail message metadata into the local database. The first pass is a one-time historical backfill from newest to oldest mail; after it completes, each sync fetches only new mail.",
@@ -46,6 +70,14 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   {
     howToRun:
       "Runs automatically during every sync; outcomes appear on each email row in the Job Search page preview.",
+    info: {
+      dataSource: "GET /pipeline/status and GET /sync/recent-emails",
+      dataTable: "email_filter_decisions and raw_emails",
+      howItWorks:
+        "Scores synced metadata with public-safe sender, subject, label, and same-page thread signals before any model call.",
+      missingData:
+        "If filter counts are zero, run sync first and inspect recent email metadata for candidate or rejected filter decisions.",
+    },
     name: "Job-search email filter",
     whatItMeans:
       "A deterministic heuristic (known recruiter domains, keywords, labels) decides which synced emails look job-related. Only those keep their body text locally for classification.",
@@ -55,6 +87,14 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   {
     howToRun:
       'Job Search page: press "Run classification" when candidates are waiting. Requires a configured LLM provider (Ollama or Azure OpenAI).',
+    info: {
+      dataSource: "GET /classification/estimate, GET /classification/reprocessing-plan, and POST /classification/run",
+      dataTable: "email_classifications, classification_runs, applications, and application_events",
+      howItWorks:
+        "Classifies retained candidate emails through the configured provider, stores accepted classifications, and deterministically aggregates application timelines.",
+      missingData:
+        "If nothing runs, configure an LLM provider on Setup, sync retained candidates, then use Run classification when the pipeline says candidates are waiting.",
+    },
     name: "Classify and build applications",
     whatItMeans:
       "The configured model categorizes each kept email (confirmation, rejection, interview, offer, and so on), and deterministic aggregation reconstructs one application per company and role with a timeline of events.",
@@ -65,6 +105,14 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   {
     howToRun:
       "Dashboard page: metrics fill in automatically once applications exist. Filters live in the URL.",
+    info: {
+      dataSource: "GET /metrics/summary, /metrics/rates, /metrics/funnel, /metrics/timeseries, /metrics/breakdown, and /metrics/diagnostics",
+      dataTable: "applications and application_events",
+      howItWorks:
+        "Computes counts, rates, funnels, trends, and diagnostics with deterministic backend queries over local application records.",
+      missingData:
+        "If charts are empty, follow the upstream Feature Status action: connect Gmail, sync, classify, then review dashboard.",
+    },
     name: "Deterministic dashboard",
     whatItMeans:
       "Counts, statuses, and rates computed by SQL over the applications table. No model ever produces these numbers.",
@@ -75,6 +123,14 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   {
     howToRun:
       "Insights page: request narrative insights after applications exist. Requires an LLM provider.",
+    info: {
+      dataSource: "GET /insights and POST /insights/regenerate",
+      dataTable: "insights plus cited applications, application_events, and raw_emails",
+      howItWorks:
+        "Builds deterministic cited facts first, then asks the configured model for cached narrative synthesis only when regeneration is requested.",
+      missingData:
+        "If insights are missing, produce classified applications first and configure an LLM provider before regenerating an insight.",
+    },
     name: "Narrative insights",
     whatItMeans:
       "Cached model-written summaries (why rejections happen, skill gaps) grounded in cited applications and emails.",
@@ -85,6 +141,14 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   {
     howToRun:
       "Not runnable from the product UI yet. Track the Phase 5 plan in the advanced developer inventory.",
+    info: {
+      dataSource: "Phase 5 planned POST /chat and GET /chat/history",
+      dataTable: "planned chat_messages and email_chunks",
+      howItWorks:
+        "Will route questions through deterministic structured-query tools and cited semantic retrieval after the RAG agent is built.",
+      missingData:
+        "There is no user action yet; chat is hidden from primary navigation until the backend route and grounded UI work perfectly.",
+    },
     name: "Chat with your history",
     whatItMeans:
       "A hybrid question-answering agent over your job-search history, planned for a later phase.",
@@ -137,6 +201,80 @@ const worksTodayLabels: Record<UserFacingFeature["worksToday"], string> = {
   partial: "Partially",
   yes: "Works today",
 };
+
+function FeatureGuideInfo({
+  feature,
+  info,
+}: {
+  feature: string;
+  info: UserFacingFeatureInfo;
+}) {
+  const infoId = useId();
+  const [isInfoPinned, setIsInfoPinned] = useState(false);
+  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
+  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
+  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
+
+  return (
+    <div className="feature-guide__info">
+      <button
+        aria-controls={infoId}
+        aria-expanded={isInfoOpen}
+        aria-label={`About ${feature}`}
+        className="feature-guide__info-button"
+        onBlur={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        onClick={() => {
+          if (isInfoOpen) {
+            setIsInfoPinned(false);
+            setIsInfoPreviewed(false);
+            setIsInfoDismissed(true);
+            return;
+          }
+
+          setIsInfoPinned(true);
+          setIsInfoDismissed(false);
+        }}
+        onFocus={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseEnter={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseLeave={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        type="button"
+      >
+        i
+      </button>
+      {isInfoOpen ? (
+        <div className="feature-guide__info-panel" id={infoId}>
+          <p>{info.howItWorks}</p>
+          <dl>
+            <div>
+              <dt>Data source</dt>
+              <dd>Data source: {info.dataSource}</dd>
+            </div>
+            <div>
+              <dt>Table</dt>
+              <dd>Table: {info.dataTable}</dd>
+            </div>
+            <div>
+              <dt>If values are zero or missing</dt>
+              <dd>{info.missingData}</dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type FeatureTab = FeatureArea;
 type FeatureStatusFilter = "all" | FeatureStatus;
@@ -754,11 +892,16 @@ export function FeatureStatusDashboard() {
             <li className="feature-guide__item" key={feature.name}>
               <div className="feature-guide__item-header">
                 <h3>{feature.name}</h3>
-                <span
-                  className={`feature-guide__works feature-guide__works--${feature.worksToday}`}
-                >
-                  {worksTodayLabels[feature.worksToday]}
-                </span>
+                <div className="feature-guide__item-actions">
+                  {feature.info ? (
+                    <FeatureGuideInfo feature={feature.name} info={feature.info} />
+                  ) : null}
+                  <span
+                    className={`feature-guide__works feature-guide__works--${feature.worksToday}`}
+                  >
+                    {worksTodayLabels[feature.worksToday]}
+                  </span>
+                </div>
               </div>
               <p>{feature.whatItMeans}</p>
               <p>
