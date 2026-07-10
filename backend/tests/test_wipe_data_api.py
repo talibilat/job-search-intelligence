@@ -22,6 +22,22 @@ def test_wipe_data_requires_exact_confirmation_phrase() -> None:
     assert response.json()["error"]["code"] == "validation_error"
 
 
+def test_wipe_data_rejects_unexpected_payload_fields(tmp_path: Path) -> None:
+    data_dir, marker_file, client = create_wipe_data_test_client(tmp_path)
+
+    response = client.post(
+        "/local-data/wipe",
+        json={
+            "confirmation": "wipe-local-data",
+            "delete_external_backups": True,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert marker_file.exists()
+
+
 def test_wipe_data_endpoint_is_sync_to_avoid_blocking_event_loop() -> None:
     assert not iscoroutinefunction(wipe_data)
 
@@ -29,18 +45,7 @@ def test_wipe_data_endpoint_is_sync_to_avoid_blocking_event_loop() -> None:
 def test_wipe_data_endpoint_deletes_configured_local_data(
     tmp_path: Path,
 ) -> None:
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    (data_dir / APP_OWNED_DATA_DIR_MARKER).touch()
-    (data_dir / "jobtracker.sqlite3").write_text("db")
-    settings = AppSettings(
-        _env_file=None,
-        data_dir=data_dir,
-        database_url=f"sqlite+aiosqlite:///{data_dir / 'jobtracker.sqlite3'}",
-    )
-    app = create_app()
-    app.dependency_overrides[get_settings] = lambda: settings
-    client = TestClient(app)
+    data_dir, _marker_file, client = create_wipe_data_test_client(tmp_path)
 
     response = client.post(
         "/local-data/wipe",
@@ -51,6 +56,22 @@ def test_wipe_data_endpoint_deletes_configured_local_data(
     assert response.json()["status"] == "wiped"
     assert str(data_dir.resolve()) in response.json()["deleted_paths"]
     assert not data_dir.exists()
+
+
+def create_wipe_data_test_client(tmp_path: Path) -> tuple[Path, Path, TestClient]:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / APP_OWNED_DATA_DIR_MARKER).touch()
+    marker_file = data_dir / "jobtracker.sqlite3"
+    marker_file.write_text("db")
+    settings = AppSettings(
+        _env_file=None,
+        data_dir=data_dir,
+        database_url=f"sqlite+aiosqlite:///{marker_file}",
+    )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: settings
+    return data_dir, marker_file, TestClient(app)
 
 
 def test_wipe_data_endpoint_is_documented_in_openapi() -> None:

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 WIPE_DATA_CONFIRMATION = "wipe-local-data"
 
 
 class WipeDataRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     confirmation: Literal["wipe-local-data"] = Field(
         description="Must exactly equal wipe-local-data to confirm local data deletion.",
     )
