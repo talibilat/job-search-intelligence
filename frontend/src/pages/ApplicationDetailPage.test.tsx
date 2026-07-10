@@ -293,6 +293,27 @@ describe("ApplicationDetailPage", () => {
     expect(infoButton.getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("disables manual lock reset when automatic updates are already allowed", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    expect(await screen.findByText("Automatic updates allowed")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Manual lock reset is only available after a manual correction has locked this application.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reset manual lock" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByLabelText("Reset reason")).toHaveProperty("disabled", true);
+  });
+
   it("explains the event correction data source", async () => {
     mockFetchResponses({
       "/applications/app-1": applicationRecord,

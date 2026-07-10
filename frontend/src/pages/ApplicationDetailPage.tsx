@@ -425,6 +425,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
         <ResetLockForm
           isSubmitting={isSubmitting}
+          manualLock={application.manual_lock}
           onReasonChange={setResetReason}
           onSubmit={(event) => {
             void handleResetSubmit(event);

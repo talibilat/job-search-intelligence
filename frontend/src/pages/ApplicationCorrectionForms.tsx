@@ -42,6 +42,7 @@ interface MergeCorrectionFormProps {
 
 interface ResetLockFormProps {
   isSubmitting: boolean;
+  manualLock: boolean;
   onReasonChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   reason: string;
@@ -285,6 +286,7 @@ export function MergeCorrectionForm({
 
 export function ResetLockForm({
   isSubmitting,
+  manualLock,
   onReasonChange,
   onSubmit,
   reason,
@@ -308,15 +310,21 @@ export function ResetLockForm({
           label="Manual lock reset"
         />
       </div>
+      {!manualLock ? (
+        <p>
+          Manual lock reset is only available after a manual correction has locked this application.
+        </p>
+      ) : null}
       <form className="application-detail-form" onSubmit={onSubmit}>
         <FormField htmlFor="reset-reason" label="Reset reason">
           <TextInput
+            disabled={!manualLock}
             id="reset-reason"
             onChange={(event) => onReasonChange(event.target.value)}
             value={reason}
           />
         </FormField>
-        <Button disabled={isSubmitting} type="submit" variant="secondary">
+        <Button disabled={isSubmitting || !manualLock} type="submit" variant="secondary">
           Reset manual lock
         </Button>
       </form>
