@@ -83,12 +83,14 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
       "API and page exist; useful output needs classified applications plus an LLM provider.",
   },
   {
-    howToRun: "Chat page.",
+    howToRun:
+      "Not runnable from the product UI yet. Track the Phase 5 plan in the advanced developer inventory.",
     name: "Chat with your history",
     whatItMeans:
       "A hybrid question-answering agent over your job-search history, planned for a later phase.",
     worksToday: "no",
-    worksTodayNote: "Not built yet; the page is a placeholder shell.",
+    worksTodayNote:
+      "Not built yet; no chat route, composer, backend request, or provider call is exposed.",
   },
 ];
 

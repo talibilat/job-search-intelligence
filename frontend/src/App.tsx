@@ -1,5 +1,4 @@
 import { ApplicationDetailPage } from "./pages/ApplicationDetailPage";
-import Chat from "./pages/Chat";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FeatureStatusDashboard } from "./pages/FeatureStatusDashboard";
 import { Insights } from "./pages/Insights";
@@ -13,7 +12,7 @@ const navigationItems = [
   { href: "/insights", label: "Insights" },
 ] as const;
 
-const routePaths = new Set(["/", "/dashboard", "/setup", "/features", "/insights", "/chat"]);
+const routePaths = new Set(["/", "/dashboard", "/setup", "/features", "/insights"]);
 
 const productFlowSteps = [
   {
@@ -123,8 +122,6 @@ function App() {
         <FeatureStatusDashboard />
       ) : currentPath === "/insights" ? (
         <Insights />
-      ) : currentPath === "/chat" ? (
-        <Chat />
       ) : (
         <JobSearchPage />
       )}

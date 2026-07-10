@@ -18,7 +18,6 @@ import type {
   MetricsSummaryResponse,
   MetricsTimeseriesResponse,
 } from "./api";
-import styles from "./index.css?raw";
 
 function renderAtPath(pathname: string) {
   window.history.pushState({}, "", pathname);
@@ -1131,7 +1130,7 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
-  it("renders the empty chat shell at the chat route", () => {
+  it("does not expose the unfinished chat shell at the chat route", () => {
     window.history.pushState({}, "", "/chat");
 
     render(<App />);
@@ -1139,30 +1138,13 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: /ask your job search history/i,
+        name: /your job search, from inbox to insight/i,
       }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("main", { name: /ask your job search history/i }),
-    ).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: /message/i })).toHaveProperty(
-      "disabled",
-      true,
-    );
-    expect(
-      screen.getByText(/chat agent work arrives in phase 5/i),
-    ).toBeTruthy();
-  });
-
-  it("keeps the chat shell constrained on narrow mobile viewports", () => {
-    expect(styles).toContain(".chat-hero h1");
-    expect(styles).toContain("font-size: clamp(2rem, 9vw, 2.45rem)");
-    expect(styles).toContain("width: min(100%, 390px)");
-    expect(styles).toContain("margin: 0 auto 0 0");
-    expect(styles).toContain(".chat-panel");
-    expect(styles).toContain("padding: 18px");
-    expect(styles).toContain(".chat-card");
-    expect(styles).toContain("padding: 20px");
+      screen.queryByText(/chat agent work arrives in phase 5/i),
+    ).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /message/i })).toBeNull();
   });
 
   it("keeps the dashboard chart-focused and moves the Q-09 status table out", async () => {
@@ -1423,7 +1405,8 @@ describe("App", () => {
     expect(screen.getByText("First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Dashboard route shell")).toBeTruthy();
     expect(screen.getByText("Insights cached narrative view")).toBeTruthy();
-    expect(screen.getByText("Chat route shell")).toBeTruthy();
+    expect(screen.getByText("Chat unavailable marker")).toBeTruthy();
+    expect(screen.queryByText("Chat route shell")).toBeNull();
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();
     expect(
