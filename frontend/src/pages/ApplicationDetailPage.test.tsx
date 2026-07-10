@@ -138,6 +138,37 @@ afterEach(() => {
 });
 
 describe("ApplicationDetailPage", () => {
+  it("explains the application event timeline data source", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Acme Corp - Software Engineer",
+    });
+
+    const infoButton = screen.getByRole("button", {
+      name: "About Event timeline",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("GET /applications/{id}/events")).toBeTruthy();
+    expect(screen.getByText("application_events")).toBeTruthy();
+    expect(
+      screen.getByText(/Run Gmail sync, classification, and aggregation/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/If the timeline is empty, confirm classification produced job-related evidence/),
+    ).toBeTruthy();
+  });
+
   it("loads application detail and saves a manual status correction", async () => {
     const rejectedApplication = {
       ...applicationRecord,

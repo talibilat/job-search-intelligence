@@ -1,3 +1,5 @@
+import { useId, useState } from "react";
+
 import {
   ApplicationEventType,
   ApplicationStatus,
@@ -49,6 +51,13 @@ interface TimelineTableProps {
   events: ApplicationEventRecord[];
 }
 
+interface ApplicationSurfaceInfo {
+  dataSource: string;
+  dataTable: string;
+  howItWorks: string;
+  missingData: string;
+}
+
 interface EventCorrectionFormProps {
   eventForm: EventEditFormState;
   events: ApplicationEventRecord[];
@@ -88,6 +97,80 @@ export function ApplicationSummary({ application }: ApplicationSummaryProps) {
       <span>Status: {toTitle(application.current_status)}</span>
       <span>{application.manual_lock ? "Manual lock enabled" : "Automatic updates allowed"}</span>
       <span>{toTitle(application.source)}</span>
+    </div>
+  );
+}
+
+function ApplicationSurfaceInfoButton({
+  info,
+  label,
+}: {
+  info: ApplicationSurfaceInfo;
+  label: string;
+}) {
+  const infoId = useId();
+  const [isInfoPinned, setIsInfoPinned] = useState(false);
+  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
+  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
+  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
+
+  return (
+    <div className="pipeline-panel__stage-info">
+      <Button
+        aria-controls={infoId}
+        aria-expanded={isInfoOpen}
+        aria-label={`About ${label}`}
+        className="pipeline-panel__stage-info-button"
+        onBlur={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        onClick={() => {
+          if (isInfoOpen) {
+            setIsInfoPinned(false);
+            setIsInfoPreviewed(false);
+            setIsInfoDismissed(true);
+            return;
+          }
+
+          setIsInfoPinned(true);
+          setIsInfoDismissed(false);
+        }}
+        onFocus={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseEnter={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseLeave={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        variant="ghost"
+      >
+        i
+      </Button>
+      {isInfoOpen ? (
+        <div className="pipeline-panel__stage-info-panel" id={infoId}>
+          <p>{info.howItWorks}</p>
+          <dl>
+            <div>
+              <dt>Data source</dt>
+              <dd>{info.dataSource}</dd>
+            </div>
+            <div>
+              <dt>Table</dt>
+              <dd>{info.dataTable}</dd>
+            </div>
+            <div>
+              <dt>If values are zero or missing</dt>
+              <dd>{info.missingData}</dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -205,9 +288,22 @@ export function ResetLockForm({
 export function TimelineTable({ events }: TimelineTableProps) {
   return (
     <article className="application-detail-card application-detail-card--wide">
-      <div>
-        <p className="eyebrow">Timeline</p>
-        <h2>Event timeline</h2>
+      <div className="pipeline-panel__stage-heading">
+        <div>
+          <p className="eyebrow">Timeline</p>
+          <h2>Event timeline</h2>
+        </div>
+        <ApplicationSurfaceInfoButton
+          info={{
+            dataSource: "GET /applications/{id}/events",
+            dataTable: "application_events",
+            howItWorks:
+              "Shows the ordered timeline events for this reconstructed application. Classification extracts candidate facts, aggregation groups them into an application, and this view reads the audited local timeline from SQLite.",
+            missingData:
+              "Run Gmail sync, classification, and aggregation from Feature Status. If the timeline is empty, confirm classification produced job-related evidence and aggregation created application events for this application.",
+          }}
+          label="Event timeline"
+        />
       </div>
       <DataTable
         caption="Application event timeline"
