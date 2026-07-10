@@ -1152,7 +1152,7 @@ describe("DashboardPage", () => {
     );
   });
 
-  it("renders Q-21 response rate trend from deterministic metrics", async () => {
+  it("renders Q-21 response rate trend as a chart-only surface from deterministic metrics", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
@@ -1163,8 +1163,9 @@ describe("DashboardPage", () => {
     });
 
     expect(within(trend).getByText("Response rate trend")).toBeTruthy();
-    expect(within(trend).getByText("50% on Jul 1, 2026"));
-    expect(within(trend).getByText("80% on Jul 8, 2026"));
+    expect(within(trend).getByRole("img")).toBeTruthy();
+    expect(within(trend).queryByText("50% on Jul 1, 2026")).toBeNull();
+    expect(within(trend).queryByText("80% on Jul 8, 2026")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/response-rate-trend",
       expect.objectContaining({ method: "GET" }),

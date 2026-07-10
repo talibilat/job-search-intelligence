@@ -1783,36 +1783,6 @@ export function DashboardPage() {
               ) : undefined}
             </ChartPanel>
           </div>
-          <ol className="dashboard-breakdown-ranks">
-            {responseRateTrendPoints.length > 0 ? (
-              responseRateTrendPoints.map((point) => (
-                <li key={point.period_start}>
-                  <div>
-                    <span className="dashboard-breakdown-rank__label">
-                      {formatTrendDate(point.period_start)}
-                    </span>
-                    <span>{formatNullableRate(point.response_rate)}</span>
-                  </div>
-                  <p>
-                    {`${formatNullableRate(point.response_rate)} on ${formatTrendDate(point.period_start)}`}
-                  </p>
-                </li>
-              ))
-            ) : (
-              <li>
-                <div>
-                  <span className="dashboard-breakdown-rank__label">
-                    {responseRateTrendLoadState === "loading" ? "Loading" : "No rows"}
-                  </span>
-                  <span>
-                    {responseRateTrendLoadState === "loading"
-                      ? "Fetching trend"
-                      : "No response-rate trend"}
-                  </span>
-                </div>
-              </li>
-            )}
-          </ol>
         </div>
       </section>
 
