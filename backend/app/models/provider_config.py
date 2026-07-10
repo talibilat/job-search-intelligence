@@ -95,3 +95,9 @@ class ProviderConfigUpdateRequest(BaseModel):
     ollama_base_url: str | None = Field(default=None, min_length=1)
     ollama_chat_model: str | None = Field(default=None, min_length=1)
     ollama_embedding_model: str | None = Field(default=None, min_length=1)
+
+
+class LLMProviderHealthCheckApiRequest(BaseModel):
+    """Empty request body accepted by the LLM provider health endpoint."""
+
+    model_config = ConfigDict(extra="forbid")

@@ -66,6 +66,7 @@ from .pipeline import (
 from .provider_config import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
+    LLMProviderHealthCheckApiRequest,
     ProviderConfigRequirementResponse,
     ProviderConfigResponse,
     ProviderConfigUpdateRequest,
@@ -134,6 +135,7 @@ __all__ = [
     "GhostInferenceRunResponse",
     "HealthResponse",
     "LLMProviderConfigResponse",
+    "LLMProviderHealthCheckApiRequest",
     "MetricBreakdownRow",
     "MetricsBreakdownResponse",
     "MetricsDiagnosticsResponse",

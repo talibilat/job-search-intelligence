@@ -148,6 +148,28 @@ def test_llm_provider_health_endpoint_checks_configured_ollama_models() -> None:
     ]
 
 
+def test_llm_provider_health_endpoint_rejects_unexpected_payload_fields() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.OLLAMA,
+        classification_mode=ClassificationMode.LOCAL,
+        ollama_chat_model="llama3.2",
+        ollama_embedding_model="nomic-embed-text",
+    )
+    provider = FakeLLMHealthProvider()
+    client = TestClient(create_health_test_app(settings=settings, provider=provider))
+
+    response = client.post(
+        "/config/providers/llm/health",
+        json={"api_key": "super-secret-api-key"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert "super-secret-api-key" not in response.text
+    assert provider.requests == []
+
+
 def test_llm_provider_health_endpoint_checks_configured_azure_deployments() -> None:
     settings = AppSettings(
         _env_file=None,

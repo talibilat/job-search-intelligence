@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import ValidationError
 
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail
 from app.config import AppSettings, get_settings
-from app.models import ProviderConfigResponse, ProviderConfigUpdateRequest
+from app.models import (
+    LLMProviderHealthCheckApiRequest,
+    ProviderConfigResponse,
+    ProviderConfigUpdateRequest,
+)
 from app.providers import ProviderConfigurationError, ProviderRegistry, provider_registry
 from app.providers.llm import (
     LLMProvider,
@@ -99,11 +103,24 @@ def update_provider_config(
 
 @router.post("/providers/llm/health", response_model=LLMProviderHealthCheckResponse)
 async def check_llm_provider_health(
+    request: Request,
     settings: Annotated[AppSettings, Depends(get_settings)],
     registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
     llm_provider: Annotated[LLMProvider, Depends(get_configured_llm_provider)],
 ) -> LLMProviderHealthCheckResponse:
     """Verify selected LLM provider models through the configured provider adapter."""
+
+    raw_body = await request.body()
+    if raw_body.strip():
+        try:
+            LLMProviderHealthCheckApiRequest.model_validate_json(raw_body)
+        except ValidationError as error:
+            raise ApiError(
+                status_code=422,
+                code=ApiErrorCode.VALIDATION_ERROR,
+                message="LLM provider health request validation failed.",
+                details=_settings_validation_details(error),
+            ) from error
 
     try:
         return await check_configured_llm_provider_health(
