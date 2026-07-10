@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   listInsightsInsightsGet,
@@ -11,6 +11,7 @@ import {
   INSIGHT_CARDS,
   renderTextWithCitationLinks,
   type InsightDisplayConfig,
+  type InsightDisplayInfo,
 } from "./insightDisplay";
 
 type LoadState = "loading" | "ready" | "error";
@@ -95,6 +96,74 @@ function InsightCostSummary({ cost }: { cost: InsightRegenerationCost }) {
           <span>Actual cost {formatCost(cost.actual_cost_usd, currency)}</span>
           {hasActualTokens ? <span>{formatTokenCount(cost.actual_total_tokens)}</span> : null}
         </>
+      ) : null}
+    </div>
+  );
+}
+
+function InsightInfo({ info, title }: { info: InsightDisplayInfo; title: string }) {
+  const infoId = useId();
+  const [isInfoPinned, setIsInfoPinned] = useState(false);
+  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
+  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
+  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
+
+  return (
+    <div className="feature-guide__info insight-card__info">
+      <button
+        aria-controls={infoId}
+        aria-expanded={isInfoOpen}
+        aria-label={`About ${title}`}
+        className="feature-guide__info-button"
+        onBlur={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        onClick={() => {
+          if (isInfoOpen) {
+            setIsInfoPinned(false);
+            setIsInfoPreviewed(false);
+            setIsInfoDismissed(true);
+            return;
+          }
+
+          setIsInfoPinned(true);
+          setIsInfoDismissed(false);
+        }}
+        onFocus={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseEnter={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseLeave={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        type="button"
+      >
+        i
+      </button>
+      {isInfoOpen ? (
+        <div className="feature-guide__info-panel insight-card__info-panel" id={infoId}>
+          <p>{info.howItWorks}</p>
+          <dl>
+            <div>
+              <dt>Data source</dt>
+              <dd>Data source: {info.dataSource}</dd>
+            </div>
+            <div>
+              <dt>Table</dt>
+              <dd>Table: {info.dataTable}</dd>
+            </div>
+            <div>
+              <dt>If this insight is zero or missing</dt>
+              <dd>{info.missingData}</dd>
+            </div>
+          </dl>
+        </div>
       ) : null}
     </div>
   );
@@ -229,9 +298,12 @@ export function Insights() {
                       <p className="eyebrow">{config.question}</p>
                       <h2>{config.title}</h2>
                     </div>
-                    {insight?.is_stale ? (
-                      <span className="insight-card__badge">Stale cache</span>
-                    ) : null}
+                    <div className="insight-card__header-actions">
+                      <InsightInfo info={config.info} title={config.title} />
+                      {insight?.is_stale ? (
+                        <span className="insight-card__badge">Stale cache</span>
+                      ) : null}
+                    </div>
                   </div>
                   <p className="insight-card__description">
                     {config.description}

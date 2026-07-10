@@ -202,4 +202,44 @@ describe("Insights", () => {
       }),
     );
   });
+
+  it("explains cached insight generation through an accessible info control", async () => {
+    mockFetch();
+
+    render(<Insights />);
+
+    await screen.findByText("7 Tier 5 insights");
+
+    const rejectionThemesInfo = screen.getByRole("button", {
+      name: "About Rejection themes",
+    });
+    expect(rejectionThemesInfo.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(rejectionThemesInfo);
+
+    expect(rejectionThemesInfo.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByText(
+        "Data source: GET /insights and POST /insights/regenerate",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Table: insights plus cited applications, application_events, and raw_emails",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Builds deterministic cited rejection evidence first, then asks the configured LLM for cached narrative synthesis only when regeneration is requested.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "If this insight is empty, sync Gmail, run classification to create rejected applications with cited evidence, configure an LLM provider, then regenerate Rejection themes.",
+      ),
+    ).toBeTruthy();
+
+    fireEvent.click(rejectionThemesInfo);
+    expect(rejectionThemesInfo.getAttribute("aria-expanded")).toBe("false");
+  });
 });
