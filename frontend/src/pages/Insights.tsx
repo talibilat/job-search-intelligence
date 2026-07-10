@@ -290,6 +290,12 @@ export function Insights() {
             backend.
           </p>
         ) : null}
+        {regeneratingType ? (
+          <p className="insights-panel__empty" role="status">
+            Regeneration is in progress. Other regenerate actions are disabled
+            until it finishes.
+          </p>
+        ) : null}
         {loadState === "loading" ? (
           <p className="insights-panel__empty">Loading cached insights.</p>
         ) : null}
