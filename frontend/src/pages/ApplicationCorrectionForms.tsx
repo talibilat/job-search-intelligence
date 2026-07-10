@@ -345,10 +345,32 @@ export function EventCorrectionForm({
 }: EventCorrectionFormProps) {
   return (
     <article className="application-detail-card">
-      <div>
-        <p className="eyebrow">Event edit</p>
-        <h2>Edit timeline event</h2>
+      <div className="pipeline-panel__stage-heading">
+        <div>
+          <p className="eyebrow">Event edit</p>
+          <h2>Edit timeline event</h2>
+        </div>
+        <ApplicationSurfaceInfoButton
+          info={{
+            dataSource: "PATCH /applications/{application_id}/events/{event_id}",
+            dataTable: "application_events, application_corrections",
+            howItWorks:
+              "Updates one local timeline event, recalculates the application status from the edited timeline, protects that source evidence from automatic overwrite, and writes an audited event_edit correction in SQLite.",
+            missingData:
+              "Run Gmail sync, classification, and aggregation from Feature Status to create timeline events. If event details look wrong, compare them with the source email and the event timeline first. Use this correction only when aggregation misread the local evidence, then add a reason so future reruns can surface conflicts instead of silently overwriting the edit.",
+          }}
+          label="Event correction"
+        />
       </div>
+      {events.length === 0 ? (
+        <div>
+          <p>No timeline events are available to edit.</p>
+          <p>
+            Run Gmail sync, classification, and aggregation from Feature Status, then confirm the event timeline
+            has local evidence before editing.
+          </p>
+        </div>
+      ) : null}
       <form className="application-detail-form" onSubmit={onSubmit}>
         <FormField htmlFor="event-id" label="Event to edit">
           <select

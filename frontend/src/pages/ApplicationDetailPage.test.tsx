@@ -198,6 +198,59 @@ describe("ApplicationDetailPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the event correction data source", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Acme Corp - Software Engineer",
+    });
+
+    const infoButton = screen.getByRole("button", {
+      name: "About Event correction",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByText("PATCH /applications/{application_id}/events/{event_id}"),
+    ).toBeTruthy();
+    expect(screen.getByText("application_events, application_corrections")).toBeTruthy();
+    expect(screen.getByText(/writes an audited event_edit correction/)).toBeTruthy();
+    expect(screen.getByText(/Run Gmail sync, classification, and aggregation/)).toBeTruthy();
+    expect(screen.getByText(/If event details look wrong, compare them with the source email/)).toBeTruthy();
+  });
+
+  it("explains the disabled event correction state when no events exist", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Acme Corp - Software Engineer",
+    });
+
+    expect(screen.getByText("No timeline events are available to edit.")).toBeTruthy();
+    expect(
+      screen.getByText(/Run Gmail sync, classification, and aggregation from Feature Status/),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save event correction" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+  });
+
   it("loads application detail and saves a manual status correction", async () => {
     const rejectedApplication = {
       ...applicationRecord,
