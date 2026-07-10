@@ -342,7 +342,12 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   async function handleSplitSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (splitEventIds.length === 0 || splitEventIds.length === events.length) {
+    if (
+      splitEventIds.length === 0 ||
+      splitEventIds.length === events.length ||
+      splitCompany.trim().length === 0 ||
+      splitRole.trim().length === 0
+    ) {
       return;
     }
 

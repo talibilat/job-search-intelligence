@@ -776,4 +776,27 @@ describe("ApplicationDetailPage", () => {
 
     expect(requestJson(fetchMock, "/applications/app-1/split")).toBeNull();
   });
+
+  it("disables split when the new application identity is missing", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent, secondApplicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /event-1/ }));
+
+    expect(
+      screen.getByText("Enter the new application company and role before splitting events."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Split selected events" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Split selected events" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/split")).toBeNull();
+  });
 });

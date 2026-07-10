@@ -560,6 +560,9 @@ export function SplitCorrectionForm({
             Leave at least one event on the source application. Move only the events that belong to the new application.
           </p>
         ) : null}
+        {company.trim().length === 0 || role.trim().length === 0 ? (
+          <p>Enter the new application company and role before splitting events.</p>
+        ) : null}
         <FormField htmlFor="split-company" label="New application company">
           <TextInput
             id="split-company"
