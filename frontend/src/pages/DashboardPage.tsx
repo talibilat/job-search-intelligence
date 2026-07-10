@@ -81,14 +81,6 @@ const sponsorshipOptions = Object.values(SponsorshipStatus);
 const workModeOptions = Object.values(WorkMode);
 const breakdownDimensionOptions = Object.values(MetricsBreakdownDimension);
 const numberFormatter = new Intl.NumberFormat("en-US");
-const percentageFormatter = new Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 1,
-  style: "percent",
-});
-const percentagePointFormatter = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 1,
-});
-
 function titleize(value: string) {
   return value
     .split("_")
@@ -227,10 +219,6 @@ function formatTrendDate(value: string) {
   }).format(new Date(value));
 }
 
-function countLabel(count: number, singular: string) {
-  return `${numberFormatter.format(count)} ${singular}${count === 1 ? "" : "s"}`;
-}
-
 function sortedBreakdownRows(rows: MetricBreakdownRow[]) {
   return [...rows].sort((left, right) => {
     const applicationOrder = right.application_count - left.application_count;
@@ -278,23 +266,8 @@ function sortedFunnelStages(stages: MetricFunnelStage[]) {
   );
 }
 
-function formatNegativeLift(lift: number | null | undefined) {
-  if (lift == null) {
-    return "No negative baseline";
-  }
-  const sign = lift > 0 ? "+" : "";
-  return `${sign}${percentagePointFormatter.format(lift * 100)} pp negative lift`;
-}
-
 function diagnosticSegmentTitle(segment: DiagnosticSegmentComparison) {
   return `${titleize(segment.value)} (${titleize(segment.dimension)})`;
-}
-
-function diagnosticNegativeEvidence(segment: DiagnosticSegmentComparison) {
-  return `${countLabel(segment.negative_count, "negative outcome")} from ${countLabel(
-    segment.application_count,
-    "application",
-  )}`;
 }
 
 export function DashboardPage() {
@@ -870,6 +843,13 @@ export function DashboardPage() {
     diagnosticsLoadState === "loaded" && !diagnosticsError
       ? (diagnostics?.successful_application_segments ?? []).map((segment) => ({
           lift: Number(segment.success_rate_lift ?? 0) * 100,
+          segment: diagnosticSegmentTitle(segment),
+        }))
+      : [];
+  const rejectedOrGhostedTraitRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError
+      ? (diagnostics?.negative_outcome_segments ?? []).map((segment) => ({
+          lift: Number(segment.negative_rate_lift ?? 0) * 100,
           segment: diagnosticSegmentTitle(segment),
         }))
       : [];
@@ -1759,54 +1739,34 @@ export function DashboardPage() {
             ) : undefined}
           </ChartPanel>
 
-          <article>
-            <h3>Q-33 rejected or ghosted traits</h3>
-            <p className="dashboard-card__meta">
-              {diagnosticsError
-                ? "Negative-outcome diagnostics are unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading negative outcome baseline"
-                : diagnostics
-                ? `${formatNullableRate(
-                    diagnostics.baseline_negative_rate,
-                  )} baseline negative rate`
-                : "Loading deterministic negative baseline"}
-            </p>
-            <ol className="dashboard-breakdown-ranks">
-              {diagnostics?.negative_outcome_segments.length ? (
-                diagnostics.negative_outcome_segments.map((segment) => (
-                  <li key={`negative-${segment.dimension}-${segment.value}`}>
-                    <div>
-                      <span className="dashboard-breakdown-rank__label">
-                        {diagnosticSegmentTitle(segment)}
-                      </span>
-                      <span>{formatNegativeLift(segment.negative_rate_lift)}</span>
-                    </div>
-                    <p>{diagnosticNegativeEvidence(segment)}</p>
-                  </li>
-                ))
-              ) : (
-                <li>
-                  <div>
-                    <span className="dashboard-breakdown-rank__label">
-                      {diagnosticsError
-                        ? "Unavailable"
-                        : diagnosticsLoadState === "loading"
-                          ? "Loading"
-                          : "No negative traits"}
-                    </span>
-                    <span>
-                      {diagnosticsError
-                        ? "Diagnostic request failed"
-                        : diagnosticsLoadState === "loading"
-                        ? "Fetching diagnostics"
-                        : "No positive negative-outcome lift"}
-                    </span>
-                  </div>
-                </li>
-              )}
-            </ol>
-          </article>
+          <ChartPanel
+            description="Q-33 rejected or ghosted traits use deterministic /metrics/diagnostics negative-outcome lift to chart segments above the filtered negative-outcome baseline."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading rejected or ghosted traits"
+                  : "No rejected or ghosted traits yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic negative-outcome diagnostics from the local backend."
+                  : "No segment is above the filtered negative-outcome baseline yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Q-33 rejected or ghosted traits"
+          >
+            {rejectedOrGhostedTraitRows.length > 0 ? (
+              <BarChart
+                data={rejectedOrGhostedTraitRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="segment" stroke="#c9d8ce" />
+                <YAxis stroke="#c9d8ce" type="number" unit=" pp" />
+                <Tooltip />
+                <Bar dataKey="lift" fill="#ff8f70" name="Negative-outcome lift" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <ChartPanel
             description="Q-34 uses deterministic /metrics/diagnostics response-rate lift to chart the strongest segment above the filtered baseline."
@@ -1987,8 +1947,4 @@ export function DashboardPage() {
 
     </main>
   );
-}
-
-function formatNullableRate(rate: number | null | undefined) {
-  return rate == null ? "No data" : percentageFormatter.format(rate);
 }

@@ -927,9 +927,27 @@ describe("DashboardPage", () => {
     expect(
       within(successfulTraits).queryByText("2 successful applications from 2 applications"),
     ).toBeNull();
-    expect(within(diagnostics).getByText("Q-33 rejected or ghosted traits")).toBeTruthy();
-    expect(within(diagnostics).getByText("40% baseline negative rate")).toBeTruthy();
-    expect(within(diagnostics).getByText("+26.7 pp negative lift")).toBeTruthy();
+    const rejectedOrGhostedTraits = await within(diagnostics).findByRole("region", {
+      name: "Q-33 rejected or ghosted traits",
+    });
+
+    expect(within(rejectedOrGhostedTraits).getByRole("img")).toBeTruthy();
+    expect(
+      within(rejectedOrGhostedTraits).getByText(
+        "Q-33 rejected or ghosted traits use deterministic /metrics/diagnostics negative-outcome lift to chart segments above the filtered negative-outcome baseline.",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(rejectedOrGhostedTraits).queryByText("40% baseline negative rate"),
+    ).toBeNull();
+    expect(
+      within(rejectedOrGhostedTraits).queryByText("+26.7 pp negative lift"),
+    ).toBeNull();
+    expect(
+      within(rejectedOrGhostedTraits).queryByText(
+        "2 negative outcomes from 3 applications",
+      ),
+    ).toBeNull();
     const strongestCorrelate = await within(diagnostics).findByRole("region", {
       name: "Q-34 strongest response correlate",
     });
