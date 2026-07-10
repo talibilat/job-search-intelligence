@@ -240,6 +240,11 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
   async function handleMergeSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (mergeSourceId.trim() === applicationId) {
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -421,6 +426,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
           }}
           reason={mergeReason}
           sourceId={mergeSourceId}
+          targetId={applicationId}
         />
 
         <ResetLockForm

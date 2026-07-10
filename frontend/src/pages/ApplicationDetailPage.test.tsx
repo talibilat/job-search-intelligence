@@ -225,6 +225,35 @@ describe("ApplicationDetailPage", () => {
     expect(screen.getByText(/If the source application ID is missing/)).toBeTruthy();
   });
 
+  it("disables merge when the source is the current application", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Acme Corp - Software Engineer",
+    });
+
+    fireEvent.change(screen.getByLabelText("Source application ID"), {
+      target: { value: "app-1" },
+    });
+
+    expect(
+      screen.getByText(
+        "Choose a different source application. An application cannot be merged into itself.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Merge source application" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(requestJson(fetchMock, "/applications/app-1/merge")).toBeNull();
+  });
+
   it("explains the split correction data source", async () => {
     mockFetchResponses({
       "/applications/app-1": applicationRecord,

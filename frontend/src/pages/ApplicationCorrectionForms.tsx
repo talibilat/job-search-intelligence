@@ -38,6 +38,7 @@ interface MergeCorrectionFormProps {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   reason: string;
   sourceId: string;
+  targetId: string;
 }
 
 interface ResetLockFormProps {
@@ -240,7 +241,11 @@ export function MergeCorrectionForm({
   onSubmit,
   reason,
   sourceId,
+  targetId,
 }: MergeCorrectionFormProps) {
+  const trimmedSourceId = sourceId.trim();
+  const sourceIsTarget = trimmedSourceId.length > 0 && trimmedSourceId === targetId;
+
   return (
     <article className="application-detail-card">
       <div className="pipeline-panel__stage-heading">
@@ -276,7 +281,10 @@ export function MergeCorrectionForm({
             value={reason}
           />
         </FormField>
-        <Button disabled={isSubmitting || sourceId.trim().length === 0} type="submit">
+        {sourceIsTarget ? (
+          <p>Choose a different source application. An application cannot be merged into itself.</p>
+        ) : null}
+        <Button disabled={isSubmitting || trimmedSourceId.length === 0 || sourceIsTarget} type="submit">
           Merge source application
         </Button>
       </form>
