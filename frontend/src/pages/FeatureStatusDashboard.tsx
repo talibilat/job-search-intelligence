@@ -15,6 +15,7 @@ import {
   type FeatureStatus,
   type FeatureStatusRecord,
 } from "../featureStatus/featureStatusRegistry";
+import { applicationDetailPathForId } from "../lib/applicationRoutes";
 
 const areaLabels: Record<FeatureArea, string> = {
   backend: "Backend",
@@ -188,14 +189,14 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
       howItWorks:
         "Will route questions through deterministic structured-query tools and cited semantic retrieval after the RAG agent is built.",
       missingData:
-        "There is no user action yet; chat is hidden from primary navigation until the backend route and grounded UI work perfectly.",
+        "There is no user action yet; chat is hidden from primary navigation and direct /chat URLs show an unavailable Phase 5 state until the backend route and grounded UI work perfectly.",
     },
     name: "Chat with your history",
     whatItMeans:
       "A hybrid question-answering agent over your job-search history, planned for a later phase.",
     worksToday: "no",
     worksTodayNote:
-      "Not built yet; no chat route, composer, backend request, or provider call is exposed.",
+      "Hidden from primary navigation; direct /chat URLs show the unavailable Phase 5 state until the grounded chat route is built.",
   },
 ];
 
@@ -267,6 +268,16 @@ function formatApplicationDate(value: string) {
         month: "short",
         year: "numeric",
       }).format(date);
+}
+
+function ApplicationCompanyLink({ application }: { application: ApplicationRecord }) {
+  const detailPath = applicationDetailPathForId(application.id);
+
+  return detailPath ? (
+    <a href={detailPath}>{application.company}</a>
+  ) : (
+    <span>{application.company}</span>
+  );
 }
 
 function FeatureGuideInfo({
@@ -413,9 +424,7 @@ function ApplicationStatusSurface() {
                 {state.applications.map((application) => (
                   <tr key={application.id}>
                     <td>
-                      <a href={`/applications/${application.id}`}>
-                        {application.company}
-                      </a>
+                      <ApplicationCompanyLink application={application} />
                     </td>
                     <td>{application.role_title}</td>
                     <td>{applicationStatusLabel(application.current_status)}</td>
@@ -436,7 +445,7 @@ function ApplicationStatusSurface() {
               <ul>
                 {liveApplications.map((application) => (
                   <li key={application.id}>
-                    <a href={`/applications/${application.id}`}>{application.company}</a>
+                    <ApplicationCompanyLink application={application} />
                     <span>{application.role_title}</span>
                     <strong>{applicationStatusLabel(application.current_status)}</strong>
                   </li>

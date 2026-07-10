@@ -567,6 +567,35 @@ describe("App", () => {
     );
   });
 
+  it("does not link unsafe application ids from feature status", async () => {
+    mockFetchResponses({
+      "/applications": {
+        body: [
+          applicationRecord({
+            company: "Unsafe Co",
+            current_status: "interview",
+            id: "app/unsafe",
+            role_title: "Platform Engineer",
+          }),
+        ],
+        status: 200,
+      },
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const statusTable = await screen.findByRole("table", {
+      name: "Application current statuses",
+    });
+    const companyCell = within(statusTable).getByText("Unsafe Co");
+
+    expect(companyCell.closest("a")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Unsafe Co" })).toBeNull();
+  });
+
   it("shows classification estimate and reprocessing readiness in the runnable feature section", async () => {
     mockFetchResponses({
       "/classification/estimate": {
@@ -3035,6 +3064,11 @@ describe("App", () => {
     ).toBeTruthy();
     expect(screen.getByText("Application status table")).toBeTruthy();
     expect(screen.getByText("Live applications queue")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Hidden from primary navigation; direct /chat URLs show the unavailable Phase 5 state until the grounded chat route is built.",
+      ),
+    ).toBeTruthy();
     expect(screen.getByText("Glossary")).toBeTruthy();
     expect(screen.getByText("Raw email")).toBeTruthy();
     expect(screen.getByText("Retained body")).toBeTruthy();
