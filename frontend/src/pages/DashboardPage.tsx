@@ -171,10 +171,28 @@ function firstSeenFilterText(value: string | null) {
   return validateFirstSeenFilter(trimmed, "First seen") === null ? trimmed : "";
 }
 
+function hasInvalidFirstSeenRange(firstSeenFrom: string, firstSeenTo: string) {
+  return (
+    firstSeenFrom.length > 0 &&
+    firstSeenTo.length > 0 &&
+    Date.parse(firstSeenFrom) > Date.parse(firstSeenTo)
+  );
+}
+
+function hasInvalidSalaryRange(salaryMin: string, salaryMax: string) {
+  return (
+    salaryMin.length > 0 &&
+    salaryMax.length > 0 &&
+    Number(salaryMin) > Number(salaryMax)
+  );
+}
+
 function validateDashboardFilters(filters: DashboardFilters) {
   const errors: DashboardFilterErrors = {};
-  const firstSeenFrom = Date.parse(filters.firstSeenFrom.trim());
-  const firstSeenTo = Date.parse(filters.firstSeenTo.trim());
+  const firstSeenFrom = filters.firstSeenFrom.trim();
+  const firstSeenTo = filters.firstSeenTo.trim();
+  const salaryMin = filters.salaryMin.trim();
+  const salaryMax = filters.salaryMax.trim();
   const firstSeenErrors: Record<FirstSeenFilterKey, string | null> = {
     firstSeenFrom: validateFirstSeenFilter(
       filters.firstSeenFrom,
@@ -184,8 +202,6 @@ function validateDashboardFilters(filters: DashboardFilters) {
   };
   const salaryMinError = validateSalaryFilter(filters.salaryMin, "Salary min");
   const salaryMaxError = validateSalaryFilter(filters.salaryMax, "Salary max");
-  const salaryMin = Number(filters.salaryMin.trim());
-  const salaryMax = Number(filters.salaryMax.trim());
 
   if (firstSeenErrors.firstSeenFrom) {
     errors.firstSeenFrom = firstSeenErrors.firstSeenFrom;
@@ -196,11 +212,7 @@ function validateDashboardFilters(filters: DashboardFilters) {
   if (
     !firstSeenErrors.firstSeenFrom &&
     !firstSeenErrors.firstSeenTo &&
-    filters.firstSeenFrom.trim().length > 0 &&
-    filters.firstSeenTo.trim().length > 0 &&
-    Number.isFinite(firstSeenFrom) &&
-    Number.isFinite(firstSeenTo) &&
-    firstSeenFrom > firstSeenTo
+    hasInvalidFirstSeenRange(firstSeenFrom, firstSeenTo)
   ) {
     errors.firstSeenFrom =
       "First seen from must be less than or equal to first seen to.";
@@ -214,9 +226,7 @@ function validateDashboardFilters(filters: DashboardFilters) {
   if (
     !salaryMinError &&
     !salaryMaxError &&
-    filters.salaryMin.trim().length > 0 &&
-    filters.salaryMax.trim().length > 0 &&
-    salaryMin > salaryMax
+    hasInvalidSalaryRange(salaryMin, salaryMax)
   ) {
     errors.salaryMin = "Salary min must be less than or equal to salary max.";
   }
@@ -230,21 +240,15 @@ function filtersFromSearch(search: string): DashboardFilters {
   const firstSeenTo = firstSeenFilterText(params.get("first_seen_to"));
   const salaryMax = numericFilterText(params.get("salary_max"));
   const salaryMin = numericFilterText(params.get("salary_min"));
-  const hasInvalidFirstSeenRange =
-    firstSeenFrom.length > 0 &&
-    firstSeenTo.length > 0 &&
-    Date.parse(firstSeenFrom) > Date.parse(firstSeenTo);
-  const hasInvalidSalaryRange =
-    salaryMin.length > 0 &&
-    salaryMax.length > 0 &&
-    Number(salaryMin) > Number(salaryMax);
+  const invalidFirstSeenRange = hasInvalidFirstSeenRange(firstSeenFrom, firstSeenTo);
+  const invalidSalaryRange = hasInvalidSalaryRange(salaryMin, salaryMax);
 
   return {
-    firstSeenFrom: hasInvalidFirstSeenRange ? "" : firstSeenFrom,
-    firstSeenTo: hasInvalidFirstSeenRange ? "" : firstSeenTo,
+    firstSeenFrom: invalidFirstSeenRange ? "" : firstSeenFrom,
+    firstSeenTo: invalidFirstSeenRange ? "" : firstSeenTo,
     role: params.get("role")?.trim() ?? "",
-    salaryMax: hasInvalidSalaryRange ? "" : salaryMax,
-    salaryMin: hasInvalidSalaryRange ? "" : salaryMin,
+    salaryMax: invalidSalaryRange ? "" : salaryMax,
+    salaryMin: invalidSalaryRange ? "" : salaryMin,
     source: filterValue(params, "source", sourceOptions),
     sponsorship: filterValue(params, "sponsorship", sponsorshipOptions),
     status: filterValue(params, "status", statusOptions),
