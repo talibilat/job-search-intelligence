@@ -1188,8 +1188,8 @@ describe("App", () => {
         name: "Application current statuses",
       }),
     ).toBeNull();
-    expect(screen.getByText("Application statuses moved to Feature Status"))
-      .toBeTruthy();
+    expect(screen.queryByText("Application statuses moved to Feature Status"))
+      .toBeNull();
 
     const volumeTrend = screen.getByRole("region", {
       name: "Application volume trend",

@@ -735,8 +735,9 @@ describe("DashboardPage", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Application statuses moved to Feature Status"))
-      .toBeTruthy();
+    await screen.findByRole("region", { name: "Application funnel" });
+    expect(screen.queryByText("Application statuses moved to Feature Status"))
+      .toBeNull();
     expect(screen.queryByRole("table", {
       name: "Application current statuses",
     })).toBeNull();
@@ -797,8 +798,9 @@ describe("DashboardPage", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Application statuses moved to Feature Status"))
-      .toBeTruthy();
+    await screen.findByRole("region", { name: "Application funnel" });
+    expect(screen.queryByText("Application statuses moved to Feature Status"))
+      .toBeNull();
     expect(screen.getByLabelText("Status")).toHaveProperty("value", "rejected");
     expect(screen.getByLabelText("Role")).toHaveProperty("value", "platform");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -824,8 +826,9 @@ describe("DashboardPage", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Application statuses moved to Feature Status"))
-      .toBeTruthy();
+    await screen.findByRole("region", { name: "Application funnel" });
+    expect(screen.queryByText("Application statuses moved to Feature Status"))
+      .toBeNull();
     expect(window.location.search).toBe("");
     expect(screen.getByLabelText("Status")).toHaveProperty("value", "");
     expect(screen.getByLabelText("Salary min")).toHaveProperty("value", "");

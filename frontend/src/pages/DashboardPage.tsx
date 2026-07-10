@@ -1037,7 +1037,7 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-01, Q-03, Q-07, Q-08, Q-09, Q-11, Q-12, Q-13, Q-14, and
+          Q-01, Q-03, Q-07, Q-08, Q-11, Q-12, Q-13, Q-14, and
           Q-15, Q-16, Q-17, Q-18, Q-19, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
@@ -1306,13 +1306,6 @@ export function DashboardPage() {
                 {averageRejectionValue}
               </p>
               <p className="dashboard-card__meta">{averageRejectionMeta}</p>
-            </article>
-            <article className="metric-placeholder">
-              <p className="metric-placeholder__label">Answer</p>
-              <p className="metric-placeholder__value">Q-09</p>
-              <p className="dashboard-card__meta">
-                Application statuses moved to Feature Status
-              </p>
             </article>
             <article
               aria-label="Response rate metric"
