@@ -342,7 +342,11 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
     const trimmedMergeSourceId = mergeSourceId.trim();
 
-    if (trimmedMergeSourceId.length === 0 || trimmedMergeSourceId === applicationId) {
+    if (
+      trimmedMergeSourceId.length === 0 ||
+      trimmedMergeSourceId === applicationId ||
+      !isSafeGeneratedApiPathSegment(trimmedMergeSourceId)
+    ) {
       return;
     }
 
@@ -487,6 +491,8 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   const ghostInferenceHasSourceEmail = eventFormGhostInferenceHasSourceEmail(eventForm);
   const hasSafeSelectedEventId =
     !selectedEventId || isSafeGeneratedApiPathSegment(selectedEventId);
+  const hasSafeMergeSourceId =
+    mergeSourceId.trim().length === 0 || isSafeGeneratedApiPathSegment(mergeSourceId.trim());
   const hasStatusChange = statusValue !== application?.current_status;
 
   if (loadState === "loading") {
@@ -549,6 +555,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         />
 
         <MergeCorrectionForm
+          hasSafeSourceId={hasSafeMergeSourceId}
           isSubmitting={isSubmitting}
           onReasonChange={setMergeReason}
           onSourceIdChange={setMergeSourceId}

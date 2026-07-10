@@ -1075,6 +1075,30 @@ describe("ApplicationDetailPage", () => {
     expect(requestJson(fetchMock, "/applications/app-1/split")).toBeNull();
   });
 
+  it("blocks unsafe merge source application IDs", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Source application ID");
+    fireEvent.change(screen.getByLabelText("Source application ID"), {
+      target: { value: "duplicate/app" },
+    });
+
+    expect(screen.getByText("This source application ID is malformed or unsupported.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Merge source application" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Merge source application" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/merge")).toBeNull();
+  });
+
   it("disables split when the new application identity is missing", async () => {
     const fetchMock = mockFetchResponses({
       "/applications/app-1": applicationRecord,

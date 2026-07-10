@@ -33,6 +33,7 @@ interface StatusCorrectionFormProps {
 }
 
 interface MergeCorrectionFormProps {
+  hasSafeSourceId: boolean;
   isSubmitting: boolean;
   onReasonChange: (value: string) => void;
   onSourceIdChange: (value: string) => void;
@@ -247,6 +248,7 @@ export function StatusCorrectionForm({
 }
 
 export function MergeCorrectionForm({
+  hasSafeSourceId,
   isSubmitting,
   onReasonChange,
   onSourceIdChange,
@@ -299,7 +301,10 @@ export function MergeCorrectionForm({
         {trimmedSourceId.length === 0 ? (
           <p>Enter the duplicate source application ID before merging.</p>
         ) : null}
-        <Button disabled={isSubmitting || trimmedSourceId.length === 0 || sourceIsTarget} type="submit">
+        {trimmedSourceId.length > 0 && !hasSafeSourceId ? (
+          <p>This source application ID is malformed or unsupported.</p>
+        ) : null}
+        <Button disabled={isSubmitting || trimmedSourceId.length === 0 || sourceIsTarget || !hasSafeSourceId} type="submit">
           Merge source application
         </Button>
       </form>
