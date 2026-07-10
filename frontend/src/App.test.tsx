@@ -2689,6 +2689,9 @@ describe("App", () => {
         .getByRole("link", { name: "Job Search" })
         .getAttribute("aria-current"),
     ).toBeNull();
+    expect(screen.getByRole("link", { name: "Go to Feature Status" }).getAttribute("href")).toBe(
+      "/features",
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

@@ -96,7 +96,13 @@ function ApplicationRouteUnavailablePage() {
         <p className="eyebrow">Application detail</p>
         <h1 id="application-detail-title">Application unavailable</h1>
         <Alert title="Application detail unavailable" tone="danger">
-          <p>The application link is malformed. Open a saved application from Feature Status or Insights.</p>
+          <p>
+            The application link is malformed or unsupported. Open a saved application from Feature
+            Status or Insights.
+          </p>
+          <p>
+            <a href="/features">Go to Feature Status</a>
+          </p>
         </Alert>
       </section>
     </main>
