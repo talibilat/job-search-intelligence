@@ -64,6 +64,7 @@ interface ApplicationSurfaceInfo {
 interface EventCorrectionFormProps {
   eventForm: EventEditFormState;
   hasEventFieldChanges: boolean;
+  hasEventTime: boolean;
   events: ApplicationEventRecord[];
   isSubmitting: boolean;
   onEventFormChange: (form: EventEditFormState) => void;
@@ -388,6 +389,7 @@ export function TimelineTable({ events }: TimelineTableProps) {
 export function EventCorrectionForm({
   eventForm,
   hasEventFieldChanges,
+  hasEventTime,
   events,
   isSubmitting,
   onEventFormChange,
@@ -425,6 +427,9 @@ export function EventCorrectionForm({
       ) : null}
       {selectedEventId && !hasEventFieldChanges ? (
         <p>Change at least one event field before saving an event correction.</p>
+      ) : null}
+      {selectedEventId && !hasEventTime ? (
+        <p>Enter an event time before saving an event correction.</p>
       ) : null}
       <form className="application-detail-form" onSubmit={onSubmit}>
         <FormField htmlFor="event-id" label="Event to edit">
@@ -494,7 +499,10 @@ export function EventCorrectionForm({
             value={eventForm.reason}
           />
         </FormField>
-        <Button disabled={isSubmitting || !selectedEventId || !hasEventFieldChanges} type="submit">
+        <Button
+          disabled={isSubmitting || !selectedEventId || !hasEventFieldChanges || !hasEventTime}
+          type="submit"
+        >
           Save event correction
         </Button>
       </form>

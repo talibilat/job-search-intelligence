@@ -216,7 +216,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     }
 
     const selectedEvent = events.find((item) => item.id === selectedEventId);
-    if (!eventFormHasChanges(eventForm, selectedEvent)) {
+    if (!eventFormHasChanges(eventForm, selectedEvent) || eventForm.eventAt.trim().length === 0) {
       return;
     }
 
@@ -404,6 +404,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
   const selectedEvent = events.find((event) => event.id === selectedEventId);
   const hasEventFieldChanges = eventFormHasChanges(eventForm, selectedEvent);
+  const hasEventTime = eventForm.eventAt.trim().length > 0;
   const hasStatusChange = statusValue !== application?.current_status;
 
   if (loadState === "loading") {
@@ -492,6 +493,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         <EventCorrectionForm
           eventForm={eventForm}
           hasEventFieldChanges={hasEventFieldChanges}
+          hasEventTime={hasEventTime}
           events={events}
           isSubmitting={isSubmitting}
           onEventFormChange={setEventForm}
