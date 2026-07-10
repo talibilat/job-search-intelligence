@@ -897,6 +897,15 @@ export function DashboardPage() {
           },
         ]
       : [];
+  const sponsorshipImpactRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError && sponsorshipImpact
+      ? [
+          {
+            lift: Number(sponsorshipImpact.response_rate_lift ?? 0) * 100,
+            segment: "Sponsorship impact",
+          },
+        ]
+      : [];
 
   return (
     <main
@@ -1920,31 +1929,34 @@ export function DashboardPage() {
             ) : undefined}
           </ChartPanel>
 
-          <article className="metric-placeholder">
-            <h3 className="metric-placeholder__label">
-              Q-37 sponsorship response impact
-            </h3>
-            <p className="metric-placeholder__value">
-              {diagnosticsError
-                ? "Unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading"
-                : sponsorshipImpact
-                ? formatResponseLift(sponsorshipImpact.response_rate_lift)
-                : "No sponsorship comparison"}
-            </p>
-            <p className="dashboard-card__meta">
-              {diagnosticsError
-                ? "Sponsorship response impact is unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading sponsorship response impact"
-                : sponsorshipImpact
-                ? `${diagnosticSegmentTitle(sponsorshipImpact)} is ${formatResponseLift(
-                    sponsorshipImpact.response_rate_lift,
-                  )}`
-                : "No sponsorship segment can be compared yet"}
-            </p>
-          </article>
+          <ChartPanel
+            description="Q-37 uses deterministic /metrics/diagnostics response-rate lift to chart how the sponsorship segment compares with the filtered baseline."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading sponsorship impact"
+                  : "No sponsorship comparison yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic sponsorship response diagnostics from the local backend."
+                  : "No sponsorship segment can be compared yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Q-37 sponsorship response impact"
+          >
+            {sponsorshipImpactRows.length > 0 ? (
+              <BarChart
+                data={sponsorshipImpactRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="segment" stroke="#c9d8ce" />
+                <YAxis stroke="#c9d8ce" type="number" unit=" pp" />
+                <Tooltip />
+                <Bar dataKey="lift" fill="#f4a6b8" name="Response-rate lift" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <article className="metric-placeholder">
             <h3 className="metric-placeholder__label">

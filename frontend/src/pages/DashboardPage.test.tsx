@@ -939,9 +939,16 @@ describe("DashboardPage", () => {
     expect(
       within(bestRoi).queryByText("Linkedin (Source) has the best interview ROI"),
     ).toBeNull();
-    expect(within(diagnostics).getByText("Q-37 sponsorship response impact")).toBeTruthy();
-    expect(within(diagnostics).getByText("Not offered (Sponsorship) is -26.7 pp vs baseline"))
-      .toBeTruthy();
+    const sponsorshipImpact = await within(diagnostics).findByRole("region", {
+      name: "Q-37 sponsorship response impact",
+    });
+
+    expect(within(sponsorshipImpact).getByRole("img")).toBeTruthy();
+    expect(
+      within(sponsorshipImpact).queryByText(
+        "Not offered (Sponsorship) is -26.7 pp vs baseline",
+      ),
+    ).toBeNull();
     expect(within(diagnostics).getByText("Q-38 selling vs dead-weight skills")).toBeTruthy();
     expect(within(diagnostics).getByText("Python is selling"))
       .toBeTruthy();
