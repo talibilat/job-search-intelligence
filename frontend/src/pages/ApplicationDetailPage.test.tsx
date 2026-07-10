@@ -508,7 +508,7 @@ describe("ApplicationDetailPage", () => {
       ],
       "/applications/app-1/events": [
         [applicationEvent],
-        [applicationEvent],
+        [applicationEvent, secondApplicationEvent],
         [],
       ],
       "/applications/app-1/merge": {
@@ -642,5 +642,32 @@ describe("ApplicationDetailPage", () => {
     expect(await screen.findByText("Split correction saved")).toBeTruthy();
     expect(screen.getByLabelText("Event to edit")).toHaveProperty("value", "event-2");
     expect(screen.getByLabelText("Source email")).toHaveProperty("value", "email-2");
+  });
+
+  it("disables split when every source event is selected", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /event-1/ }));
+    fireEvent.change(screen.getByLabelText("New application company"), {
+      target: { value: "Beta Corp" },
+    });
+    fireEvent.change(screen.getByLabelText("New application role"), {
+      target: { value: "Backend Engineer" },
+    });
+
+    expect(
+      screen.getByText(
+        "Leave at least one event on the source application. Move only the events that belong to the new application.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Split selected events" })).toHaveProperty(
+      "disabled",
+      true,
+    );
   });
 });

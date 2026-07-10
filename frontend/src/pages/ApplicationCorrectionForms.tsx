@@ -494,6 +494,9 @@ export function SplitCorrectionForm({
   role,
   selectedEventIds,
 }: SplitCorrectionFormProps) {
+  const allSourceEventsSelected =
+    events.length > 0 && selectedEventIds.length === events.length;
+
   return (
     <article className="application-detail-card">
       <div className="pipeline-panel__stage-heading">
@@ -531,6 +534,11 @@ export function SplitCorrectionForm({
             <p>No events are available to split.</p>
           )}
         </fieldset>
+        {allSourceEventsSelected ? (
+          <p>
+            Leave at least one event on the source application. Move only the events that belong to the new application.
+          </p>
+        ) : null}
         <FormField htmlFor="split-company" label="New application company">
           <TextInput
             id="split-company"
@@ -558,6 +566,7 @@ export function SplitCorrectionForm({
           disabled={
             isSubmitting ||
             selectedEventIds.length === 0 ||
+            allSourceEventsSelected ||
             company.trim().length === 0 ||
             role.trim().length === 0
           }
