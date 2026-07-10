@@ -2349,12 +2349,23 @@ export type classificationRunClassificationRunPostResponse200 = {
   status: 200;
 };
 
+export type classificationRunClassificationRunPostResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type classificationRunClassificationRunPostResponseSuccess =
   classificationRunClassificationRunPostResponse200 & {
     headers: Headers;
   };
+export type classificationRunClassificationRunPostResponseError =
+  classificationRunClassificationRunPostResponse422 & {
+    headers: Headers;
+  };
+
 export type classificationRunClassificationRunPostResponse =
-  classificationRunClassificationRunPostResponseSuccess;
+  | classificationRunClassificationRunPostResponseSuccess
+  | classificationRunClassificationRunPostResponseError;
 
 export const getClassificationRunClassificationRunPostUrl = () => {
   return `/classification/run`;

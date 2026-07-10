@@ -10,7 +10,7 @@ from app.api.dependencies import (
     get_readonly_email_repository,
     get_structured_extraction_service,
 )
-from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail
+from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.db.repositories import EmailRepository
 from app.models import (
@@ -101,6 +101,7 @@ async def classification_reprocessing_plan(
 @router.post(
     "/run",
     response_model=ClassificationRunResponse,
+    responses={422: {"model": ApiErrorResponse}},
     summary="Run Classification Batch",
     description=(
         "Classifies retained email candidates through the configured LLM provider, "
