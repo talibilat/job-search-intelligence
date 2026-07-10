@@ -1462,6 +1462,44 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the sponsorship response impact chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+    const sponsorshipImpact = await within(diagnostics).findByRole("region", {
+      name: "Q-37 sponsorship response impact",
+    });
+    const infoControl = within(sponsorshipImpact).getByRole("button", {
+      name: "About Q-37 sponsorship response impact",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(sponsorshipImpact).getByText("How this chart works")).toBeTruthy();
+    expect(within(sponsorshipImpact).getByText("GET /metrics/diagnostics")).toBeTruthy();
+    expect(
+      within(sponsorshipImpact).getByText("applications and application_events"),
+    ).toBeTruthy();
+    expect(
+      within(sponsorshipImpact).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(sponsorshipImpact).getByText(
+        "If sponsorship impact values are zero or missing, check whether aggregated applications have populated sponsorship fields and response events for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(

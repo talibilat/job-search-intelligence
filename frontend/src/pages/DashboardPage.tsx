@@ -2049,6 +2049,16 @@ export function DashboardPage() {
                   : "No sponsorship segment can be compared yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Compares deterministic response rates for sponsorship segments against the filtered baseline and charts the response-rate lift from local SQLite. No LLM produces this diagnostic value.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with sponsorship fields and response events.",
+              missingData:
+                "If sponsorship impact values are zero or missing, check whether aggregated applications have populated sponsorship fields and response events for the active filters.",
+            }}
             title="Q-37 sponsorship response impact"
           >
             {sponsorshipImpactRows.length > 0 ? (
