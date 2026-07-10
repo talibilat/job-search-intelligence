@@ -2572,6 +2572,23 @@ describe("App", () => {
     ).toBeNull();
   });
 
+  it("shows a public-safe application unavailable state for malformed application detail URLs", () => {
+    renderAtPath("/applications/%E0%A4%A");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Application unavailable",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText("Application detail unavailable")).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Job Search" })
+        .getAttribute("aria-current"),
+    ).toBeNull();
+  });
+
   it("keeps the dashboard chart-focused and moves the Q-09 status table out", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),

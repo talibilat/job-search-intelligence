@@ -1,4 +1,5 @@
 import { ApplicationDetailPage } from "./pages/ApplicationDetailPage";
+import { Alert } from "./components/ui";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FeatureStatusDashboard } from "./pages/FeatureStatusDashboard";
 import { Insights } from "./pages/Insights";
@@ -88,9 +89,34 @@ function JobSearchPage() {
   );
 }
 
+function ApplicationRouteUnavailablePage() {
+  return (
+    <main aria-labelledby="application-detail-title" className="app-shell application-detail-shell">
+      <section className="dashboard-hero" aria-labelledby="application-detail-title">
+        <p className="eyebrow">Application detail</p>
+        <h1 id="application-detail-title">Application unavailable</h1>
+        <Alert title="Application detail unavailable" tone="danger">
+          <p>The application link is malformed. Open a saved application from Feature Status or Insights.</p>
+        </Alert>
+      </section>
+    </main>
+  );
+}
+
+function safeDecodeRouteSegment(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 function App() {
   const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
   const applicationDetailMatch = /^\/applications\/([^/]+)$/.exec(routePath);
+  const applicationId = applicationDetailMatch
+    ? safeDecodeRouteSegment(applicationDetailMatch[1])
+    : null;
   const currentPath = applicationDetailMatch
     ? null
     : routePaths.has(routePath)
@@ -116,8 +142,10 @@ function App() {
           ))}
         </div>
       </nav>
-      {applicationDetailMatch ? (
-        <ApplicationDetailPage applicationId={decodeURIComponent(applicationDetailMatch[1])} />
+      {applicationDetailMatch && applicationId ? (
+        <ApplicationDetailPage applicationId={applicationId} />
+      ) : applicationDetailMatch ? (
+        <ApplicationRouteUnavailablePage />
       ) : currentPath === "/setup" ? (
         <SetupPage />
       ) : currentPath === "/dashboard" ? (
