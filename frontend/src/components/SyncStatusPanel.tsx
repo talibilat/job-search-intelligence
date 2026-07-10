@@ -303,6 +303,8 @@ function buildSyncOptions({
   sinceDate: string;
 }) {
   const errors: SyncLimitErrors = {};
+  const trimmedBeforeDate = beforeDate.trim();
+  const trimmedSinceDate = sinceDate.trim();
   const maxMessagesError = validatePositiveInteger(
     maxMessages,
     "Email count",
@@ -318,8 +320,8 @@ function buildSyncOptions({
     "Max pages",
     syncLimitMaximums.maxPages,
   );
-  const sinceDateError = validateDateInput(sinceDate, "Since date");
-  const beforeDateError = validateDateInput(beforeDate, "Before date");
+  const sinceDateError = validateDateInput(trimmedSinceDate, "Since date");
+  const beforeDateError = validateDateInput(trimmedBeforeDate, "Before date");
 
   if (maxMessagesError) {
     errors.maxMessages = maxMessagesError;
@@ -336,7 +338,13 @@ function buildSyncOptions({
   if (beforeDateError) {
     errors.beforeDate = beforeDateError;
   }
-  if (!sinceDateError && !beforeDateError && sinceDate && beforeDate && sinceDate >= beforeDate) {
+  if (
+    !sinceDateError &&
+    !beforeDateError &&
+    trimmedSinceDate &&
+    trimmedBeforeDate &&
+    trimmedSinceDate >= trimmedBeforeDate
+  ) {
     errors.beforeDate = "Before date must be after since date.";
   }
 
@@ -347,11 +355,11 @@ function buildSyncOptions({
   return {
     errors,
     options: {
-      before_date: beforeDate || null,
+      before_date: trimmedBeforeDate || null,
       max_age_days: optionalPositiveInteger(maxAgeDays),
       max_messages: optionalPositiveInteger(maxMessages),
       max_pages: optionalPositiveInteger(maxPages),
-      since_date: sinceDate || null,
+      since_date: trimmedSinceDate || null,
     } satisfies EmailSyncOptions,
   };
 }

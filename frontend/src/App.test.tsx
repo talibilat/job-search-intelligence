@@ -2088,6 +2088,90 @@ describe("App", () => {
     );
   });
 
+  it("trims sync date limits before posting to the API", async () => {
+    let postedOptions: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const pathWithSearch = url.startsWith("http")
+        ? new URL(url).pathname + new URL(url).search
+        : url;
+      const path = pathWithSearch.split("?")[0];
+
+      if (path === "/sync") {
+        expect(init?.method).toBe("POST");
+        if (typeof init?.body !== "string") {
+          throw new Error("Expected sync request body to be JSON text.");
+        }
+        postedOptions = JSON.parse(init.body) as Record<string, unknown>;
+        return Promise.resolve(
+          new Response(JSON.stringify(idleSyncStatusResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/sync/recent-emails") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/setup/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(setupStatusFetchResponse());
+      }
+
+      if (path !== "/sync/status") {
+        throw new Error(`Unexpected fetch request: ${path}`);
+      }
+
+      expect(init?.method).toBe("GET");
+      return Promise.resolve(
+        new Response(JSON.stringify(idleSyncStatusResponse()), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/features");
+
+    const sinceDateInput = await screen.findByLabelText("Since date");
+    Object.defineProperty(sinceDateInput, "value", {
+      configurable: true,
+      value: " 2026-07-01 ",
+    });
+    fireEvent.input(sinceDateInput);
+    const beforeDateInput = await screen.findByLabelText("Before date");
+    Object.defineProperty(beforeDateInput, "value", {
+      configurable: true,
+      value: " 2026-08-01 ",
+    });
+    fireEvent.input(beforeDateInput);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+
+    await waitFor(() => {
+      expect(postedOptions).toEqual(
+        expect.objectContaining({
+          before_date: "2026-08-01",
+          since_date: "2026-07-01",
+        }),
+      );
+    });
+  });
+
   it("shows public sync status API errors instead of idle progress", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url =
