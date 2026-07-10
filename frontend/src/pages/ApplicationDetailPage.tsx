@@ -14,6 +14,7 @@ import {
   type ApplicationStatus as ApplicationStatusValue,
 } from "../api";
 import { Alert } from "../components/ui";
+import { isSafeApplicationRouteId } from "../lib/applicationRoutes";
 import {
   ApplicationSummary,
   EventCorrectionForm,
@@ -157,6 +158,12 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     async function loadApplication() {
       setLoadState("loading");
       setErrorMessage(null);
+
+      if (!isSafeApplicationRouteId(applicationId)) {
+        setErrorMessage("Application detail link is malformed or unsupported.");
+        setLoadState("error");
+        return;
+      }
 
       const [applicationResponse, eventsResponse] = await Promise.all([
         getApplicationDetailApplicationsIdGet(applicationId),

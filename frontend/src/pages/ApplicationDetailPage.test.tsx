@@ -138,6 +138,22 @@ afterEach(() => {
 });
 
 describe("ApplicationDetailPage", () => {
+  it("does not build generated API paths for unsafe application IDs", async () => {
+    const fetchMock = mockFetchImplementation(() => {
+      throw new Error("Application detail should not fetch unsafe IDs");
+    });
+
+    render(<ApplicationDetailPage applicationId="app/1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Application unavailable",
+    });
+
+    expect(screen.getByText("Application detail link is malformed or unsupported.")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("explains the application event timeline data source", async () => {
     mockFetchResponses({
       "/applications/app-1": applicationRecord,
