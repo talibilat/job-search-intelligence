@@ -1719,38 +1719,6 @@ export function DashboardPage() {
               ) : undefined}
             </ChartPanel>
           </div>
-          <ol className="dashboard-breakdown-ranks">
-            {timeseriesPoints.length > 0 ? (
-              timeseriesPoints.map((point) => (
-                <li key={point.period_start}>
-                  <div>
-                    <span className="dashboard-breakdown-rank__label">
-                      {formatTrendDate(point.period_start)}
-                    </span>
-                    <span>
-                      {countLabel(point.application_count, "application")}
-                    </span>
-                  </div>
-                  <p>
-                    {`${countLabel(point.application_count, "application")} on ${formatTrendDate(point.period_start)}`}
-                  </p>
-                </li>
-              ))
-            ) : (
-              <li>
-                <div>
-                  <span className="dashboard-breakdown-rank__label">
-                    {timeseriesLoadState === "loading" ? "Loading" : "No rows"}
-                  </span>
-                  <span>
-                    {timeseriesLoadState === "loading"
-                      ? "Fetching trend"
-                      : "No application volume"}
-                  </span>
-                </div>
-              </li>
-            )}
-          </ol>
         </div>
       </section>
 

@@ -1108,7 +1108,7 @@ describe("DashboardPage", () => {
     );
   });
 
-  it("renders Q-20 application volume trend from deterministic timeseries metrics", async () => {
+  it("renders Q-20 application volume trend as a chart-only surface from deterministic timeseries metrics", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
@@ -1119,8 +1119,13 @@ describe("DashboardPage", () => {
     });
 
     expect(within(trend).getByText("Application volume trend")).toBeTruthy();
-    expect(within(trend).getByText("2 applications on Jul 1, 2026")).toBeTruthy();
-    expect(within(trend).getByText("5 applications on Jul 8, 2026")).toBeTruthy();
+    expect(within(trend).getByRole("img")).toBeTruthy();
+    expect(
+      within(trend).queryByText("2 applications on Jul 1, 2026"),
+    ).toBeNull();
+    expect(
+      within(trend).queryByText("5 applications on Jul 8, 2026"),
+    ).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/timeseries",
       expect.objectContaining({ method: "GET" }),
@@ -1137,7 +1142,10 @@ describe("DashboardPage", () => {
       name: "Application volume trend",
     });
 
-    expect(within(trend).getByText("1 application on Jul 8, 2026")).toBeTruthy();
+    expect(within(trend).getByRole("img")).toBeTruthy();
+    expect(
+      within(trend).queryByText("1 application on Jul 8, 2026"),
+    ).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/timeseries?status=rejected",
       expect.objectContaining({ method: "GET" }),
