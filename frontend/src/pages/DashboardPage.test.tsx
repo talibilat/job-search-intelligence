@@ -955,9 +955,16 @@ describe("DashboardPage", () => {
 
     expect(within(skillSignals).getByRole("img")).toBeTruthy();
     expect(within(skillSignals).queryByText("Python is selling")).toBeNull();
-    expect(within(diagnostics).getByText("Q-39 adjacent role suggestions")).toBeTruthy();
-    expect(within(diagnostics).getByText("Software engineer is your strongest adjacent role signal"))
-      .toBeTruthy();
+    const adjacentRoles = await within(diagnostics).findByRole("region", {
+      name: "Q-39 adjacent role suggestions",
+    });
+
+    expect(within(adjacentRoles).getByRole("img")).toBeTruthy();
+    expect(
+      within(adjacentRoles).queryByText(
+        "Software engineer is your strongest adjacent role signal",
+      ),
+    ).toBeNull();
     expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
     expect(within(diagnostics).getAllByText("Linkedin (Source)").length).toBeGreaterThan(
       0,

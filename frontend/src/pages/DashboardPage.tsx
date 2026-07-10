@@ -866,7 +866,6 @@ export function DashboardPage() {
   const sponsorshipImpact = diagnostics?.sponsorship_response_impact;
   const sellingSkill = diagnostics?.selling_skill_segments[0];
   const deadWeightSkill = diagnostics?.dead_weight_skill_segments[0];
-  const adjacentRoleSuggestion = diagnostics?.adjacent_role_suggestions[0];
   const diagnosticBaselineRows =
     diagnosticsLoadState === "loaded" &&
     !diagnosticsError &&
@@ -926,6 +925,13 @@ export function DashboardPage() {
               ]
             : []),
         ]
+      : [];
+  const adjacentRoleRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError
+      ? (diagnostics?.adjacent_role_suggestions ?? []).map((segment) => ({
+          rate: Number(segment.interview_rate ?? 0) * 100,
+          role: titleize(segment.value),
+        }))
       : [];
 
   return (
@@ -2008,31 +2014,34 @@ export function DashboardPage() {
             ) : undefined}
           </ChartPanel>
 
-          <article className="metric-placeholder">
-            <h3 className="metric-placeholder__label">
-              Q-39 adjacent role suggestions
-            </h3>
-            <p className="metric-placeholder__value">
-              {diagnosticsError
-                ? "Unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading"
-                : adjacentRoleSuggestion
-                ? titleize(adjacentRoleSuggestion.value)
-                : "No role suggestion"}
-            </p>
-            <p className="dashboard-card__meta">
-              {diagnosticsError
-                ? "Adjacent role suggestions are unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading role conversion signals"
-                : adjacentRoleSuggestion
-                ? `${titleize(
-                    adjacentRoleSuggestion.value,
-                  )} is your strongest adjacent role signal`
-                : "No role has interview or offer evidence yet"}
-            </p>
-          </article>
+          <ChartPanel
+            description="Q-39 uses deterministic /metrics/diagnostics adjacent-role conversion data to chart roles with interview evidence that may be worth exploring."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading adjacent role signals"
+                  : "No adjacent role signal yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic adjacent-role diagnostics from the local backend."
+                  : "No adjacent role has interview evidence yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Q-39 adjacent role suggestions"
+          >
+            {adjacentRoleRows.length > 0 ? (
+              <BarChart
+                data={adjacentRoleRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="role" stroke="#c9d8ce" />
+                <YAxis allowDecimals={false} stroke="#c9d8ce" type="number" unit="%" />
+                <Tooltip />
+                <Bar dataKey="rate" fill="#d0b3ff" name="Interview rate" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
         </div>
 
         <article className="metric-placeholder">
