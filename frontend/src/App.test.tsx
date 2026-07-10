@@ -2191,7 +2191,19 @@ describe("App", () => {
         "2 job-search candidate emails are waiting for classification.",
       ),
     ).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Job Search page" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Job Search page" })).toBeNull();
+    const pipelineAlert = screen
+      .getByText(
+        "These zeros mean the pipeline has not finished, not that you applied to zero jobs",
+      )
+      .closest(".ui-alert");
+
+    expect(pipelineAlert).toBeTruthy();
+    expect(
+      within(pipelineAlert as HTMLElement)
+        .getByRole("link", { name: "Feature Status" })
+        .getAttribute("href"),
+    ).toBe("/features");
   });
 
   it("marks zero applications as a real zero when the pipeline is up to date", async () => {

@@ -947,7 +947,7 @@ export function DashboardPage() {
                       : "sync"
                   } step. `
                 : ""}
-              Go to the <a href="/">Job Search page</a> to run the next step.
+              Go to <a href="/features">Feature Status</a> to run the next step.
             </p>
           </Alert>
         )

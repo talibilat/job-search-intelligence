@@ -29,7 +29,11 @@ const baseApplication = {
   work_mode: "remote",
 };
 
-function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) {
+function mockApplicationResponses(options: {
+  diagnosticsStatus?: number;
+  summaryApplicationCount?: number;
+  pipelineStatus?: unknown;
+} = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url =
       typeof input === "string"
@@ -70,8 +74,17 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             ],
           },
           rejected_applications: 1,
-          total_applications: 5,
+          total_applications: options.summaryApplicationCount ?? 5,
         }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+      );
+    }
+
+    if (url === "/pipeline/status" && options.pipelineStatus) {
+      return Promise.resolve(
+        new Response(JSON.stringify(options.pipelineStatus), {
           headers: { "Content-Type": "application/json" },
           status: 200,
         }),
@@ -814,6 +827,54 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Metrics overview")).toBeNull();
     expect(screen.queryByText("Total applications")).toBeNull();
     expect(screen.queryByLabelText("Response rate metric")).toBeNull();
+  });
+
+  it("points incomplete-pipeline dashboard zeros to Feature Status instead of the removed Job Search page", async () => {
+    mockApplicationResponses({
+      summaryApplicationCount: 0,
+      pipelineStatus: {
+        connection: {
+          account_id: "gmail@example.com",
+          connected: true,
+          display_email: "gmail@example.com",
+          provider: "gmail",
+          reauth_required: false,
+        },
+        counts: {
+          classified_count: 0,
+          raw_email_count: 12,
+          retained_body_count: 12,
+          total_filter_candidates: 12,
+          total_filter_rejected: 0,
+          unclassified_retained_count: 12,
+          application_count: 0,
+        },
+        last_error: null,
+        next_action: "run_classification",
+        next_action_reason: "Retained emails are waiting for classification.",
+        sync: {
+          backfill_status: "completed",
+          last_completed_at: "2026-07-10T00:00:00Z",
+          last_run_status: "completed",
+          mode: "full_backfill",
+        },
+      },
+    });
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByText(
+      "These zeros mean the pipeline has not finished, not that you applied to zero jobs",
+    );
+
+    expect(screen.queryByText(/Job Search page/i)).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Feature Status" }).getAttribute("href"),
+    ).toBe("/features");
+    expect(
+      screen.getByText(/12 synced emails are waiting on the classification step/i),
+    ).toBeTruthy();
   });
 
   it("explains the foundational counts chart through an accessible info control", async () => {
