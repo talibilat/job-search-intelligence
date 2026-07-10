@@ -286,14 +286,6 @@ function formatResponseLift(lift: number | null | undefined) {
   return `${sign}${percentagePointFormatter.format(lift * 100)} pp vs baseline`;
 }
 
-function formatSuccessLift(lift: number | null | undefined) {
-  if (lift == null) {
-    return "No success baseline";
-  }
-  const sign = lift > 0 ? "+" : "";
-  return `${sign}${percentagePointFormatter.format(lift * 100)} pp success lift`;
-}
-
 function formatNegativeLift(lift: number | null | undefined) {
   if (lift == null) {
     return "No negative baseline";
@@ -308,13 +300,6 @@ function diagnosticSegmentTitle(segment: DiagnosticSegmentComparison) {
 
 function diagnosticSegmentEvidence(segment: DiagnosticSegmentComparison) {
   return `${countLabel(segment.response_count, "response")} from ${countLabel(
-    segment.application_count,
-    "application",
-  )}`;
-}
-
-function diagnosticSuccessEvidence(segment: DiagnosticSegmentComparison) {
-  return `${countLabel(segment.success_count, "successful application")} from ${countLabel(
     segment.application_count,
     "application",
   )}`;
@@ -886,6 +871,13 @@ export function DashboardPage() {
     diagnosticsLoadState === "loaded" && !diagnosticsError
       ? (diagnostics?.strongest_response_segments ?? []).map((segment) => ({
           lift: Number(segment.response_rate_lift ?? 0) * 100,
+          segment: diagnosticSegmentTitle(segment),
+        }))
+      : [];
+  const successfulApplicationTraitRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError
+      ? (diagnostics?.successful_application_segments ?? []).map((segment) => ({
+          lift: Number(segment.success_rate_lift ?? 0) * 100,
           segment: diagnosticSegmentTitle(segment),
         }))
       : [];
@@ -1717,54 +1709,34 @@ export function DashboardPage() {
             ) : undefined}
           </ChartPanel>
 
-          <article>
-            <h3>Q-32 successful application traits</h3>
-            <p className="dashboard-card__meta">
-              {diagnosticsError
-                ? "Successful-trait diagnostics are unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading successful application baseline"
-                : diagnostics
-                ? `${formatNullableRate(
-                    diagnostics.baseline_success_rate,
-                  )} baseline success rate`
-                : "Loading deterministic success baseline"}
-            </p>
-            <ol className="dashboard-breakdown-ranks">
-              {diagnostics?.successful_application_segments.length ? (
-                diagnostics.successful_application_segments.map((segment) => (
-                  <li key={`success-${segment.dimension}-${segment.value}`}>
-                    <div>
-                      <span className="dashboard-breakdown-rank__label">
-                        {diagnosticSegmentTitle(segment)}
-                      </span>
-                      <span>{formatSuccessLift(segment.success_rate_lift)}</span>
-                    </div>
-                    <p>{diagnosticSuccessEvidence(segment)}</p>
-                  </li>
-                ))
-              ) : (
-                <li>
-                  <div>
-                    <span className="dashboard-breakdown-rank__label">
-                      {diagnosticsError
-                        ? "Unavailable"
-                        : diagnosticsLoadState === "loading"
-                          ? "Loading"
-                          : "No successful traits"}
-                    </span>
-                    <span>
-                      {diagnosticsError
-                        ? "Diagnostic request failed"
-                        : diagnosticsLoadState === "loading"
-                        ? "Fetching diagnostics"
-                        : "No positive success lift"}
-                    </span>
-                  </div>
-                </li>
-              )}
-            </ol>
-          </article>
+          <ChartPanel
+            description="Q-32 successful application traits use deterministic /metrics/diagnostics success-rate lift to chart segments above the filtered success baseline."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading successful application traits"
+                  : "No successful application traits yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic success-lift diagnostics from the local backend."
+                  : "No segment is above the filtered success baseline yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Q-32 successful application traits"
+          >
+            {successfulApplicationTraitRows.length > 0 ? (
+              <BarChart
+                data={successfulApplicationTraitRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="segment" stroke="#c9d8ce" />
+                <YAxis stroke="#c9d8ce" type="number" unit=" pp" />
+                <Tooltip />
+                <Bar dataKey="lift" fill="#b8e2af" name="Success-rate lift" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <article>
             <h3>Weakest response signals</h3>

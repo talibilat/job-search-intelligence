@@ -912,9 +912,21 @@ describe("DashboardPage", () => {
     expect(within(strongestResponseSignals).getByRole("img")).toBeTruthy();
     expect(within(strongestResponseSignals).queryByText("2 responses from 2 applications"))
       .toBeNull();
-    expect(within(diagnostics).getByText("Q-32 successful application traits")).toBeTruthy();
-    expect(within(diagnostics).getByText("40% baseline success rate")).toBeTruthy();
-    expect(within(diagnostics).getByText("+60 pp success lift")).toBeTruthy();
+    const successfulTraits = await within(diagnostics).findByRole("region", {
+      name: "Q-32 successful application traits",
+    });
+
+    expect(within(successfulTraits).getByRole("img")).toBeTruthy();
+    expect(
+      within(successfulTraits).getByText(
+        "Q-32 successful application traits use deterministic /metrics/diagnostics success-rate lift to chart segments above the filtered success baseline.",
+      ),
+    ).toBeTruthy();
+    expect(within(successfulTraits).queryByText("40% baseline success rate")).toBeNull();
+    expect(within(successfulTraits).queryByText("+60 pp success lift")).toBeNull();
+    expect(
+      within(successfulTraits).queryByText("2 successful applications from 2 applications"),
+    ).toBeNull();
     expect(within(diagnostics).getByText("Q-33 rejected or ghosted traits")).toBeTruthy();
     expect(within(diagnostics).getByText("40% baseline negative rate")).toBeTruthy();
     expect(within(diagnostics).getByText("+26.7 pp negative lift")).toBeTruthy();
