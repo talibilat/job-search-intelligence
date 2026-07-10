@@ -1250,6 +1250,16 @@ export function DashboardPage() {
             : "No applications have enough timeline history for a personal ghost-threshold distribution yet. Run sync, classification, and aggregation from Feature Status first.",
         }}
         height={300}
+        info={{
+          dataSource: "GET /metrics/summary",
+          dataTable: "applications and application_events",
+          howItWorks:
+            "Buckets applications by silence age from deterministic local application timelines to show when unanswered applications typically become ghosted. No LLM produces these values.",
+          howToGenerate:
+            "Run sync, classification, and aggregation from Feature Status so application timelines include applied events, response events, and ghost inference evidence.",
+          missingData:
+            "If silence-age buckets are zero or missing, check whether applications have applied events, later response events, and enough elapsed time for ghost inference after aggregation.",
+        }}
         title="Personal ghost threshold"
       >
         {silenceAgeBuckets.length > 0 ? (

@@ -948,6 +948,41 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the personal ghost threshold chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const ghostThreshold = await screen.findByRole("region", {
+      name: "Personal ghost threshold",
+    });
+    const infoControl = within(ghostThreshold).getByRole("button", {
+      name: "About Personal ghost threshold",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(ghostThreshold).getByText("How this chart works")).toBeTruthy();
+    expect(within(ghostThreshold).getByText("GET /metrics/summary")).toBeTruthy();
+    expect(
+      within(ghostThreshold).getByText("applications and application_events"),
+    ).toBeTruthy();
+    expect(
+      within(ghostThreshold).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(ghostThreshold).getByText(
+        "If silence-age buckets are zero or missing, check whether applications have applied events, later response events, and enough elapsed time for ghost inference after aggregation.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
