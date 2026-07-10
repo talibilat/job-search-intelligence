@@ -1450,6 +1450,16 @@ export function DashboardPage() {
                 : "No applications have role breakdown data yet. Run sync, classification, and aggregation from Feature Status first.",
           }}
           height={280}
+          info={{
+            dataSource: "GET /metrics/breakdown?dimension=role",
+            dataTable: "applications and application_events",
+            howItWorks:
+              "Ranks role titles by deterministic interview conversion from local application counts and interview events. No LLM produces these conversion rates.",
+            howToGenerate:
+              "Run sync, classification, and aggregation from Feature Status so retained job-search emails become applications with role titles and interview timeline events.",
+            missingData:
+              "If role conversion rows are zero or missing, check whether aggregated applications have role titles and interview events for the active filters.",
+          }}
           title="Role interview conversion"
         >
           {roleConversionRows.length > 0 ? (
