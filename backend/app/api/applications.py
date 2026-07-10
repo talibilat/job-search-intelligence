@@ -170,7 +170,7 @@ async def run_ghost_inference(
 @router.get(
     "/{id}",
     response_model=ApplicationRecord,
-    responses={404: {"model": ApiErrorResponse}},
+    responses={404: {"model": ApiErrorResponse}, 422: {"model": ApiErrorResponse}},
     summary="Get Application Detail",
     description="Returns one canonical application row from the local SQLite source of truth.",
 )

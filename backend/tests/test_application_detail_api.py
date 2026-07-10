@@ -328,8 +328,10 @@ def test_get_application_detail_endpoint_is_documented_in_openapi() -> None:
     operation = response.json()["paths"]["/applications/{id}"]["get"]
     success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     not_found_schema = operation["responses"]["404"]["content"]["application/json"]["schema"]
+    validation_schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert success_schema["$ref"] == "#/components/schemas/ApplicationRecord"
     assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
+    assert validation_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
 def test_application_events_endpoint_is_documented_in_openapi() -> None:

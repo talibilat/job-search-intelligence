@@ -1889,7 +1889,7 @@ export type getApplicationDetailApplicationsIdGetResponse404 = {
 };
 
 export type getApplicationDetailApplicationsIdGetResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 
