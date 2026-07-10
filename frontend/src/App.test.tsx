@@ -2271,7 +2271,9 @@ describe("App", () => {
 
     expect(screen.getAllByText("Completed features").length).toBeGreaterThan(0);
     expect(screen.getByText("First-run setup shell")).toBeTruthy();
-    expect(screen.getByText("Dashboard route shell")).toBeTruthy();
+    expect(screen.getByText("Dashboard chart workspace")).toBeTruthy();
+    expect(screen.queryByText(/summary metric cards/i)).toBeNull();
+    expect(screen.queryByText(/Unimplemented metric values remain Pending/i)).toBeNull();
     expect(screen.getByText("Insights cached narrative view")).toBeTruthy();
     expect(screen.getByText("Chat unavailable marker")).toBeTruthy();
     expect(screen.queryByText("Chat route shell")).toBeNull();

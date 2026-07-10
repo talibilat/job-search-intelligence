@@ -73,6 +73,25 @@ export const featureStatusLabels: Record<FeatureStatus, string> = {
   planned: "Planned",
 };
 
+const dashboardMetricEndpoints = [
+  "GET /metrics/summary",
+  "GET /metrics/rates",
+  "GET /metrics/funnel",
+  "GET /metrics/breakdown",
+  "GET /metrics/timeseries",
+  "GET /metrics/response-rate-trend",
+  "GET /metrics/diagnostics",
+] as const;
+
+const dashboardMetricLoadStates = [
+  "Metrics summary load state",
+  "Metrics rates load state",
+  "Metrics funnel load state",
+  "Metrics breakdown load state",
+  "Metrics trend load state",
+  "Metrics diagnostics load state",
+] as const;
+
 export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
   {
     area: "frontend",
@@ -155,56 +174,48 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     components: ["DashboardPage", "ChartPanel"],
     connectedModules: [
       "Metrics summary API",
-      "GET /metrics/rates",
-      "GET /metrics/funnel",
-      "Future metric widgets",
+      ...dashboardMetricEndpoints.slice(1),
     ],
     completedDate: "2026-07-05",
-    dependencies: [
-      "GET /metrics/summary",
-      "GET /metrics/rates",
-      "GET /metrics/funnel",
-    ],
+    dependencies: dashboardMetricEndpoints,
     description:
-      "Deterministic dashboard route with summary metric cards, Q-11 response rate, Q-18 rejection timing, Q-19 ghost threshold, and placeholders for remaining dashboard metrics.",
-    endpoints: ["GET /metrics/summary", "GET /metrics/rates", "GET /metrics/funnel"],
+      "Deterministic chart-only dashboard route with overview, funnel, trends, segmentation, and diagnostics charts powered by metrics APIs and local SQLite application data.",
+    endpoints: dashboardMetricEndpoints,
     files: [
       "frontend/src/pages/DashboardPage.tsx",
       "frontend/src/components/charts/ChartPanel.tsx",
     ],
     howToUse: {
       expectedBehaviour:
-        "The dashboard renders deterministic summary metric cards and Q-11 from deterministic metrics APIs while keeping later metrics marked pending.",
+        "The dashboard renders only deterministic Recharts chart panels. Empty chart states point users back to the missing setup, sync, classification, or aggregation stage instead of showing setup controls or placeholder metrics.",
       expectedSuccessResult:
-        "QA can confirm summary metric cards and the response-rate percentage reconcile to deterministic backend data without fabricated counts.",
+        "QA can confirm every visible dashboard surface is a chart backed by deterministic metrics APIs and no LLM-generated or fabricated counts appear.",
       navigationPath: "Primary navigation -> Dashboard",
       prerequisites: ["Frontend dev server"],
       qaValidationPoints: [
-        "The Total applications card shows a loaded count or an unavailable state.",
-        "Distinct companies card shows a loaded count or an unavailable state.",
-        "The Interview invitations card shows a loaded count or an unavailable state.",
-        "Response rate card shows deterministic numerator, denominator, and percentage.",
-        "Average time to rejection card shows deterministic duration math.",
-        "Personal ghost threshold shows deterministic threshold and silence-age distribution.",
-        "Unimplemented metric cards still say Pending.",
-        "Chart empty state explains metrics are not available yet.",
+        "Overview charts load from GET /metrics/summary and GET /metrics/rates.",
+        "The funnel chart loads from GET /metrics/funnel.",
+        "Trend charts load from GET /metrics/timeseries and GET /metrics/response-rate-trend.",
+        "Segmentation charts load from GET /metrics/breakdown.",
+        "Diagnostics charts load from GET /metrics/diagnostics.",
+        "Chart empty states explain the missing upstream pipeline stage.",
+        "Dashboard pages do not show setup controls, sync controls, feature inventory, or placeholder metric cards.",
         "No LLM-generated dashboard counts appear.",
       ],
       steps: [
         "Open /dashboard.",
-        "Review the Q-01 Total applications card.",
-        "Review the Q-03 distinct companies card.",
-        "Review the Q-07 interview invitations card.",
-        "Confirm the response-rate card loads from GET /metrics/rates.",
-        "Confirm the average time-to-rejection card loads from GET /metrics/summary.",
-        "Confirm the personal ghost-threshold section loads from GET /metrics/summary.",
-        "Confirm the chart foundation empty state is visible.",
+        "Confirm the overview charts load from GET /metrics/summary and GET /metrics/rates.",
+        "Confirm the application funnel chart loads from GET /metrics/funnel.",
+        "Confirm the selected breakdown chart loads from GET /metrics/breakdown.",
+        "Confirm the trend charts load from timeseries metrics endpoints.",
+        "Confirm the diagnostic comparison charts load from GET /metrics/diagnostics.",
+        "Confirm empty charts explain whether setup, sync, classification, or aggregation is missing.",
       ],
     },
     id: "frontend-dashboard-shell",
     implementationStatus:
-      "Implemented as a Phase 3 dashboard slice with deterministic summary metrics and no fabricated counts.",
-    name: "Dashboard route shell",
+      "Implemented as the current chart-only dashboard workspace for deterministic metrics slices; broader roadmap coverage remains governed by the PRD question tiers.",
+    name: "Dashboard chart workspace",
     relationship: [
       { label: "Dashboard", type: "screen" },
       { label: "DashboardPage", type: "component" },
@@ -220,25 +231,19 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     routes: ["/dashboard"],
     screens: ["Dashboard"],
     sharedUi: ["ChartPanel"],
-    stateConnections: [
-      "Metrics summary load state",
-      "Metrics rates load state",
-      "Future route query filters",
-    ],
+    stateConnections: [...dashboardMetricLoadStates, "Route query filters"],
     status: "completed",
     testing: {
       canTestNow: true,
       entryPoint: "/dashboard",
       exampleInputs: ["No application data required"],
       expectedOutputs: [
-        "Dashboard shell renders",
-        "Total applications card renders a deterministic count or unavailable state",
-        "Distinct companies card renders a deterministic count or unavailable state",
-        "Interview invitations card renders a deterministic count or unavailable state",
-        "Response-rate metric renders",
-        "Average time-to-rejection metric renders",
-        "Personal ghost-threshold metric renders",
-        "Unimplemented metric values remain Pending",
+        "Dashboard chart workspace renders",
+        "Overview charts render deterministic values or actionable empty states",
+        "Application funnel chart renders deterministic values or an actionable empty state",
+        "Segmentation charts render deterministic values or actionable empty states",
+        "Trend charts render deterministic values or actionable empty states",
+        "Diagnostics charts render deterministic values or actionable empty states",
       ],
       requiredSetup: ["Frontend dev server"],
     },
