@@ -169,6 +169,35 @@ describe("ApplicationDetailPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the status correction data source", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Acme Corp - Software Engineer",
+    });
+
+    const infoButton = screen.getByRole("button", {
+      name: "About Status correction",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("PATCH /applications/{application_id}/status")).toBeTruthy();
+    expect(screen.getByText("applications, application_corrections")).toBeTruthy();
+    expect(screen.getByText(/writes an audited status_edit correction/)).toBeTruthy();
+    expect(
+      screen.getByText(/If the status looks wrong, inspect the event timeline/),
+    ).toBeTruthy();
+  });
+
   it("loads application detail and saves a manual status correction", async () => {
     const rejectedApplication = {
       ...applicationRecord,

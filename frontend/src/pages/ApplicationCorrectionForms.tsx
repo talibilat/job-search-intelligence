@@ -185,9 +185,22 @@ export function StatusCorrectionForm({
 }: StatusCorrectionFormProps) {
   return (
     <article className="application-detail-card">
-      <div>
-        <p className="eyebrow">Status</p>
-        <h2>Edit current status</h2>
+      <div className="pipeline-panel__stage-heading">
+        <div>
+          <p className="eyebrow">Status</p>
+          <h2>Edit current status</h2>
+        </div>
+        <ApplicationSurfaceInfoButton
+          info={{
+            dataSource: "PATCH /applications/{application_id}/status",
+            dataTable: "applications, application_corrections",
+            howItWorks:
+              "Updates the current status on the local application row, locks it from automatic overwrite, and writes an audited status_edit correction in SQLite.",
+            missingData:
+              "If the status looks wrong, inspect the event timeline first. Use this correction only when aggregation missed or misread local evidence, then add a reason so the audit trail explains the change.",
+          }}
+          label="Status correction"
+        />
       </div>
       <form className="application-detail-form" onSubmit={onSubmit}>
         <FormField htmlFor="status-value" label="Correct status">
