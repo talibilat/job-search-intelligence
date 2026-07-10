@@ -1776,6 +1776,16 @@ export function DashboardPage() {
                   : "No segment is above the filtered response baseline yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Compares deterministic segment response rates against the filtered baseline and charts the strongest positive response-rate lift from local SQLite. No LLM produces these diagnostic values.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with response evidence and segmentation fields.",
+              missingData:
+                "If strongest response signals are zero or missing, check whether aggregated applications have populated segmentation fields and response events for the active filters.",
+            }}
             title="Strongest response signals"
           >
             {strongestResponseSignalRows.length > 0 ? (

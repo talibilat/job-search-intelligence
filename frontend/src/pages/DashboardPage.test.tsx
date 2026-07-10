@@ -1194,6 +1194,44 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the strongest response signals chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+    const strongestSignals = await within(diagnostics).findByRole("region", {
+      name: "Strongest response signals",
+    });
+    const infoControl = within(strongestSignals).getByRole("button", {
+      name: "About Strongest response signals",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(strongestSignals).getByText("How this chart works")).toBeTruthy();
+    expect(within(strongestSignals).getByText("GET /metrics/diagnostics")).toBeTruthy();
+    expect(
+      within(strongestSignals).getByText("applications and application_events"),
+    ).toBeTruthy();
+    expect(
+      within(strongestSignals).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(strongestSignals).getByText(
+        "If strongest response signals are zero or missing, check whether aggregated applications have populated segmentation fields and response events for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
