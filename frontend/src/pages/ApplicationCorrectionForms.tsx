@@ -65,6 +65,7 @@ interface EventCorrectionFormProps {
   eventForm: EventEditFormState;
   hasEventFieldChanges: boolean;
   hasEventTime: boolean;
+  hasSourceEmailForEventType: boolean;
   events: ApplicationEventRecord[];
   isSubmitting: boolean;
   onEventFormChange: (form: EventEditFormState) => void;
@@ -390,6 +391,7 @@ export function EventCorrectionForm({
   eventForm,
   hasEventFieldChanges,
   hasEventTime,
+  hasSourceEmailForEventType,
   events,
   isSubmitting,
   onEventFormChange,
@@ -430,6 +432,9 @@ export function EventCorrectionForm({
       ) : null}
       {selectedEventId && !hasEventTime ? (
         <p>Enter an event time before saving an event correction.</p>
+      ) : null}
+      {selectedEventId && !hasSourceEmailForEventType ? (
+        <p>Keep a source email unless the event is a ghost inference with no source message.</p>
       ) : null}
       <form className="application-detail-form" onSubmit={onSubmit}>
         <FormField htmlFor="event-id" label="Event to edit">
@@ -500,7 +505,13 @@ export function EventCorrectionForm({
           />
         </FormField>
         <Button
-          disabled={isSubmitting || !selectedEventId || !hasEventFieldChanges || !hasEventTime}
+          disabled={
+            isSubmitting ||
+            !selectedEventId ||
+            !hasEventFieldChanges ||
+            !hasEventTime ||
+            !hasSourceEmailForEventType
+          }
           type="submit"
         >
           Save event correction
