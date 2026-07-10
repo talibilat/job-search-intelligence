@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models._json import parse_json_column
 from app.models.application import (
@@ -36,6 +36,8 @@ class InsightRecord(BaseModel):
 
 
 class InsightRegenerateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     type: InsightType
     max_evidence_items: int = Field(default=100, ge=1)
 

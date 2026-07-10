@@ -202,6 +202,38 @@ def test_post_insights_regenerate_forces_generation_and_persists_result(
     assert stored.content == f"Regenerated rejection theme. [{CITATION_ID}]"
 
 
+def test_post_insights_regenerate_rejects_unexpected_fields(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_rejected_application_fixture(connection)
+
+    provider = FakeLLMProvider(
+        (
+            LLMGenerationResponse(
+                content=f"Regenerated rejection theme. [{CITATION_ID}]",
+                model="llama3.1",
+                finish_reason=LLMFinishReason.STOP,
+            ),
+        ),
+    )
+    client = create_test_client(database_path, provider=provider)
+
+    response = client.post(
+        "/insights/regenerate",
+        json={
+            "type": "why_rejected",
+            "max_evidence_items": 10,
+            "ignore_evidence_limits": True,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert provider.requests == []
+
+
 def test_insights_endpoints_are_documented_in_openapi() -> None:
     client = TestClient(create_app())
 

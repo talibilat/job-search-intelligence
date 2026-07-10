@@ -195,6 +195,7 @@
         "type": "object"
       },
       "ApplicationEventEditRequest": {
+        "additionalProperties": false,
         "properties": {
           "email_id": {
             "anyOf": [
@@ -375,6 +376,7 @@
         "type": "string"
       },
       "ApplicationMergeRequest": {
+        "additionalProperties": false,
         "properties": {
           "reason": {
             "anyOf": [
@@ -905,6 +907,7 @@
         "type": "string"
       },
       "ApplicationStatusEditRequest": {
+        "additionalProperties": false,
         "properties": {
           "current_status": {
             "$ref": "#/components/schemas/ApplicationStatus"
@@ -2092,6 +2095,7 @@
         "type": "object"
       },
       "InsightRegenerateRequest": {
+        "additionalProperties": false,
         "properties": {
           "max_evidence_items": {
             "default": 100,
@@ -3298,6 +3302,7 @@
         "type": "object"
       },
       "ProviderConfigUpdateRequest": {
+        "additionalProperties": false,
         "description": "Partial in-process update for non-secret Phase 0 provider config.",
         "properties": {
           "azure_openai_api_version": {
@@ -4104,6 +4109,7 @@
         "type": "object"
       },
       "WipeDataRequest": {
+        "additionalProperties": false,
         "properties": {
           "confirmation": {
             "const": "wipe-local-data",
