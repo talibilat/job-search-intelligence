@@ -23,6 +23,7 @@ interface ApplicationSummaryProps {
 }
 
 interface StatusCorrectionFormProps {
+  hasStatusChange: boolean;
   isSubmitting: boolean;
   onReasonChange: (value: string) => void;
   onStatusChange: (value: ApplicationStatusValue) => void;
@@ -179,6 +180,7 @@ function ApplicationSurfaceInfoButton({
 }
 
 export function StatusCorrectionForm({
+  hasStatusChange,
   isSubmitting,
   onReasonChange,
   onStatusChange,
@@ -227,7 +229,10 @@ export function StatusCorrectionForm({
             value={reason}
           />
         </FormField>
-        <Button disabled={isSubmitting} type="submit">
+        {!hasStatusChange ? (
+          <p>Choose a different status before saving a status correction.</p>
+        ) : null}
+        <Button disabled={isSubmitting || !hasStatusChange} type="submit">
           Save status correction
         </Button>
       </form>

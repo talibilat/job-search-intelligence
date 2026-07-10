@@ -169,6 +169,11 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
   async function handleStatusSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (application === null || statusValue === application.current_status) {
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -392,6 +397,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
   const selectedEvent = events.find((event) => event.id === selectedEventId);
   const hasEventFieldChanges = eventFormHasChanges(eventForm, selectedEvent);
+  const hasStatusChange = statusValue !== application?.current_status;
 
   if (loadState === "loading") {
     return (
@@ -441,6 +447,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
       <section className="application-detail-grid" aria-label="Correction tools">
         <StatusCorrectionForm
+          hasStatusChange={hasStatusChange}
           isSubmitting={isSubmitting}
           onReasonChange={setStatusReason}
           onStatusChange={setStatusValue}

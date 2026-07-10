@@ -464,6 +464,29 @@ describe("ApplicationDetailPage", () => {
     expect(await screen.findByText("Status: Rejected")).toBeTruthy();
   });
 
+  it("disables status correction until the selected status changes", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Correct status");
+
+    expect(
+      screen.getByText("Choose a different status before saving a status correction."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save status correction" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Save status correction" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/status")).toBeNull();
+  });
+
   it("shows a public-safe error and releases the submit button when a correction request fails", async () => {
     mockFetchImplementation((input: RequestInfo | URL) => {
       const url =
