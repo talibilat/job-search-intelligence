@@ -659,6 +659,14 @@ export function SyncStatusPanel() {
             >
               <SyncMetric
                 label="Stored in raw_emails"
+                info={{
+                  dataSource: "GET /sync/status",
+                  dataTable: "raw_emails",
+                  howItWorks:
+                    "Counts local raw_emails rows currently stored after Gmail metadata is reconciled into the local SQLite database.",
+                  missingData:
+                    "Run Sync now after connecting Gmail. If this is lower than Provider messages, the current run has not finished reconciling Gmail metadata into local raw_emails rows yet.",
+                }}
                 value={formatCount(status?.raw_email_count, "raw emails")}
               />
               <SyncMetric

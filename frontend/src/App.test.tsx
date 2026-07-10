@@ -693,6 +693,39 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains the Stored in raw_emails sync metric through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const storedRawEmailsMetric = (
+      await screen.findByText("Stored in raw_emails")
+    ).closest("article");
+    expect(storedRawEmailsMetric).toBeTruthy();
+
+    const infoButton = within(storedRawEmailsMetric!).getByRole("button", {
+      name: "About Stored in raw_emails",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(storedRawEmailsMetric!).getByText("Data source: GET /sync/status"),
+    ).toBeTruthy();
+    expect(within(storedRawEmailsMetric!).getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      within(storedRawEmailsMetric!).getByText(
+        "Run Sync now after connecting Gmail. If this is lower than Provider messages, the current run has not finished reconciling Gmail metadata into local raw_emails rows yet.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("explains the Pages processed sync metric through an accessible info control", async () => {
     mockFetchResponses({
       "/pipeline/status": pipelineStatusResponse(),
