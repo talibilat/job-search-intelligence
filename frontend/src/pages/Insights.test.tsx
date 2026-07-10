@@ -242,4 +242,45 @@ describe("Insights", () => {
     fireEvent.click(rejectionThemesInfo);
     expect(rejectionThemesInfo.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("disables regeneration when cached insights fail to load", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const path = url.startsWith("http") ? new URL(url).pathname : url;
+
+      if (path === "/insights") {
+        return Promise.resolve(new Response("{}", { status: 503 }));
+      }
+
+      throw new Error(`Unhandled fetch request: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Insights />);
+
+    expect(
+      await screen.findByText(
+        "Insights are unavailable. Start the local backend and try again.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Regeneration is disabled until cached insights load from the local backend.",
+      ),
+    ).toBeTruthy();
+
+    const regenerateButton = screen.getByRole("button", {
+      name: "Regenerate Rejection themes",
+    });
+    expect(regenerateButton).toHaveProperty("disabled", true);
+
+    fireEvent.click(regenerateButton);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -224,6 +224,10 @@ export function Insights() {
   }, []);
 
   async function handleRegenerate(config: InsightDisplayConfig) {
+    if (loadState !== "ready") {
+      return;
+    }
+
     setRegeneratingType(config.type);
     setErrorMessage(null);
 
@@ -280,6 +284,12 @@ export function Insights() {
 
       <section className="insights-board" aria-label="Cached narrative insights">
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
+        {loadState === "error" ? (
+          <p className="insights-panel__empty">
+            Regeneration is disabled until cached insights load from the local
+            backend.
+          </p>
+        ) : null}
         {loadState === "loading" ? (
           <p className="insights-panel__empty">Loading cached insights.</p>
         ) : null}
@@ -290,6 +300,8 @@ export function Insights() {
               );
               const isRegenerating = regeneratingType === config.type;
               const cost = costByInsightType[config.type];
+              const regenerationDisabled =
+                regeneratingType !== null || loadState !== "ready";
 
               return (
                 <article className="insight-card" key={config.type}>
@@ -328,7 +340,7 @@ export function Insights() {
 
                   <div className="insight-card__actions">
                     <Button
-                      disabled={regeneratingType !== null}
+                      disabled={regenerationDisabled}
                       onClick={() => void handleRegenerate(config)}
                       type="button"
                     >
