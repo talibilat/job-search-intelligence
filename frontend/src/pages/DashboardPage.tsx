@@ -162,6 +162,15 @@ function validateFirstSeenFilter(value: string, label: string) {
     : `${label} must be an ISO datetime with timezone, such as 2026-07-01T00:00:00Z.`;
 }
 
+function firstSeenFilterText(value: string | null) {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed.length === 0) {
+    return "";
+  }
+
+  return validateFirstSeenFilter(trimmed, "First seen") === null ? trimmed : "";
+}
+
 function validateDashboardFilters(filters: DashboardFilters) {
   const errors: DashboardFilterErrors = {};
   const firstSeenFrom = Date.parse(filters.firstSeenFrom.trim());
@@ -217,10 +226,16 @@ function validateDashboardFilters(filters: DashboardFilters) {
 
 function filtersFromSearch(search: string): DashboardFilters {
   const params = new URLSearchParams(search);
+  const firstSeenFrom = firstSeenFilterText(params.get("first_seen_from"));
+  const firstSeenTo = firstSeenFilterText(params.get("first_seen_to"));
+  const hasInvalidFirstSeenRange =
+    firstSeenFrom.length > 0 &&
+    firstSeenTo.length > 0 &&
+    Date.parse(firstSeenFrom) > Date.parse(firstSeenTo);
 
   return {
-    firstSeenFrom: params.get("first_seen_from") ?? "",
-    firstSeenTo: params.get("first_seen_to") ?? "",
+    firstSeenFrom: hasInvalidFirstSeenRange ? "" : firstSeenFrom,
+    firstSeenTo: hasInvalidFirstSeenRange ? "" : firstSeenTo,
     role: params.get("role") ?? "",
     salaryMax: numericFilterText(params.get("salary_max")),
     salaryMin: numericFilterText(params.get("salary_min")),

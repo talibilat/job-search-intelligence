@@ -1700,6 +1700,49 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("canonicalizes invalid first-seen query filters before loading metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard?first_seen_from=tomorrow");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    expect(window.location.search).toBe("");
+    expect(screen.getByLabelText("First seen from")).toHaveProperty("value", "");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/metrics/funnel?first_seen_from=tomorrow",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("canonicalizes invalid first-seen range query filters before loading metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState(
+      {},
+      "",
+      "/dashboard?first_seen_from=2026-08-01T00:00:00Z&first_seen_to=2026-07-01T00:00:00Z",
+    );
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    expect(window.location.search).toBe("");
+    expect(screen.getByLabelText("First seen from")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("First seen to")).toHaveProperty("value", "");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/metrics/funnel?first_seen_from=2026-08-01T00%3A00%3A00Z&first_seen_to=2026-07-01T00%3A00%3A00Z",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("blocks invalid salary filter submissions with actionable guidance", async () => {
     mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
