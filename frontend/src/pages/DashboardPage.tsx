@@ -1694,62 +1694,42 @@ export function DashboardPage() {
         />
       </section>
 
-      <section
-        aria-labelledby="dashboard-funnel-title"
-        className="dashboard-card dashboard-funnel-card"
+      {funnelError ? (
+        <Alert title="Application funnel unavailable" tone="danger">
+          <p>{funnelError}</p>
+        </Alert>
+      ) : null}
+      <ChartPanel
+        description="Q-16 funnel stages come from deterministic /metrics/funnel rows over local applications and application_events, then reload with the active dashboard filters."
+        emptyState={{
+          title:
+            funnelLoadState === "loading"
+              ? "Loading application funnel"
+              : "No funnel rows yet",
+          description:
+            funnelLoadState === "loading"
+              ? "Loading deterministic funnel stages from the local backend."
+              : "No applications exist for the funnel yet. Run sync, classification, and aggregation from Feature Status first.",
+        }}
+        height={300}
+        title="Application funnel"
       >
-        <div>
-          <p className="eyebrow">Q-16</p>
-          <h2 id="dashboard-funnel-title">Application funnel</h2>
-          <p className="dashboard-card__meta">
-            Funnel stages come from deterministic application and event evidence
-            and reload with the active dashboard filters.
-          </p>
-        </div>
-        {funnelError ? (
-          <Alert title="Application funnel unavailable" tone="danger">
-            <p>{funnelError}</p>
-          </Alert>
-        ) : null}
-        <ol className="dashboard-funnel-list">
-          {funnelStages.length > 0 ? (
-            funnelStages.map((stage) => {
-              const appliedCount = funnelStages[0]?.count ?? 0;
-              const width = appliedCount > 0 ? Math.max((stage.count / appliedCount) * 100, 4) : 0;
-
-              return (
-                <li className="dashboard-funnel-stage" key={stage.stage}>
-                  <div className="dashboard-funnel-stage__header">
-                    <span>{titleize(stage.stage)}</span>
-                    <strong>{countLabel(stage.count, "application")}</strong>
-                  </div>
-                  <div
-                    aria-hidden="true"
-                    className="dashboard-funnel-stage__bar"
-                  >
-                    <span style={{ width: `${width}%` }} />
-                  </div>
-                  {stage.stage === "final" ? (
-                    <p className="dashboard-card__meta">
-                      Final-round evidence is not represented yet, so this stage is
-                      intentionally zero.
-                    </p>
-                  ) : null}
-                </li>
-              );
-            })
-          ) : (
-            <li className="dashboard-funnel-stage">
-              <div className="dashboard-funnel-stage__header">
-                <span>{funnelLoadState === "loading" ? "Loading" : "No funnel rows"}</span>
-                <strong>
-                  {funnelLoadState === "loading" ? "Fetching funnel" : "No data"}
-                </strong>
-              </div>
-            </li>
-          )}
-        </ol>
-      </section>
+        {funnelStages.length > 0 ? (
+          <BarChart
+            data={funnelStages.map((stage) => ({
+              applications: stage.count,
+              stage: titleize(stage.stage),
+            }))}
+            margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+          >
+            <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+            <XAxis dataKey="stage" stroke="#c9d8ce" />
+            <YAxis allowDecimals={false} stroke="#c9d8ce" />
+            <Tooltip />
+            <Bar dataKey="applications" fill="#b8e2af" name="Applications" radius={[8, 8, 0, 0]} />
+          </BarChart>
+        ) : undefined}
+      </ChartPanel>
 
       <section
         aria-labelledby="dashboard-breakdown-title"

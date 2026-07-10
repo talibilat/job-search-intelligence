@@ -37,7 +37,7 @@ export function ChartPanel({
       className="chart-panel"
     >
       <div className="chart-panel__header">
-        <p className="eyebrow">Recharts foundation</p>
+        <p className="eyebrow">Deterministic chart</p>
         <h2 id={titleId}>{title}</h2>
         <p className="chart-panel__description" id={descriptionId}>
           {description}

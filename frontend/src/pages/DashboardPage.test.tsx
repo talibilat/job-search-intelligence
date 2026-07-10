@@ -1200,7 +1200,7 @@ describe("DashboardPage", () => {
     );
   });
 
-  it("renders Q-16 funnel stages and reloads them with dashboard filters", async () => {
+  it("renders Q-16 as a deterministic chart and reloads it with dashboard filters", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard?status=rejected&role=platform");
 
@@ -1211,13 +1211,13 @@ describe("DashboardPage", () => {
     });
 
     expect(within(funnel).getByText("Application funnel")).toBeTruthy();
-    expect(within(funnel).getByText("Applied")).toBeTruthy();
-    expect(within(funnel).getByText("Screen")).toBeTruthy();
-    expect(within(funnel).getByText("Interview")).toBeTruthy();
-    expect(within(funnel).getByText("Final")).toBeTruthy();
-    expect(within(funnel).getByText("Offer")).toBeTruthy();
-    expect(within(funnel).getAllByText("1 application").length).toBeGreaterThan(0);
-    expect(within(funnel).getAllByText("0 applications").length).toBeGreaterThan(0);
+    expect(within(funnel).getByText("Deterministic chart")).toBeTruthy();
+    expect(
+      within(funnel).getByText(
+        "Q-16 funnel stages come from deterministic /metrics/funnel rows over local applications and application_events, then reload with the active dashboard filters.",
+      ),
+    ).toBeTruthy();
+    expect(within(funnel).getByRole("img")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/funnel?role=platform&status=rejected",
       expect.objectContaining({ method: "GET" }),
