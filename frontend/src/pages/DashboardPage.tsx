@@ -114,7 +114,7 @@ function numericFilterText(value: string | null) {
   }
 
   const parsed = Number(trimmed);
-  return Number.isFinite(parsed) && parsed >= 0 ? trimmed : "";
+  return Number.isInteger(parsed) && parsed >= 0 ? trimmed : "";
 }
 
 function validateSalaryFilter(value: string, label: string) {
@@ -124,9 +124,9 @@ function validateSalaryFilter(value: string, label: string) {
   }
 
   const parsed = Number(trimmed);
-  return Number.isFinite(parsed) && parsed >= 0
+  return Number.isInteger(parsed) && parsed >= 0
     ? null
-    : `${label} must be a non-negative number.`;
+    : `${label} must be a non-negative whole number.`;
 }
 
 function hasRealIsoCalendarDate(value: string) {
@@ -251,7 +251,7 @@ function optionalNumber(value: string) {
   }
 
   const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return Number.isInteger(parsed) ? parsed : undefined;
 }
 
 function queryParamsFromFilters(

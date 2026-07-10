@@ -1698,9 +1698,31 @@ describe("DashboardPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
     expect(
-      await screen.findByText("Salary min must be a non-negative number."),
+      await screen.findByText("Salary min must be a non-negative whole number."),
     ).toBeTruthy();
     expect(window.location.search).toBe("");
+  });
+
+  it("blocks decimal salary filter submissions before loading metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    fireEvent.change(screen.getByLabelText("Salary min"), {
+      target: { value: "120000.50" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    expect(
+      await screen.findByText("Salary min must be a non-negative whole number."),
+    ).toBeTruthy();
+    expect(window.location.search).toBe("");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/metrics/funnel?salary_min=120000.5",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("blocks salary range submissions when the minimum is greater than the maximum", async () => {
