@@ -559,6 +559,39 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains the Retained bodies pipeline stage through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const retainedBodiesStage = (await screen.findByText("Retained bodies")).closest(
+      "article",
+    );
+    expect(retainedBodiesStage).toBeTruthy();
+
+    const infoButton = within(retainedBodiesStage!).getByRole("button", {
+      name: "About Retained bodies",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(retainedBodiesStage!).getByText("Data source: GET /pipeline/status"),
+    ).toBeTruthy();
+    expect(within(retainedBodiesStage!).getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      within(retainedBodiesStage!).getByText(
+        "Run Gmail sync after connecting Gmail on Setup. If this count is zero while filter candidates exist, retained body fetching has not completed or the provider could not fetch selected candidate bodies.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({

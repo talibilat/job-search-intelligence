@@ -350,6 +350,14 @@ export function PipelineActivityPanel() {
         />
         <StageCount
           definition="Likely job emails whose body text is kept locally for classification."
+          info={{
+            dataSource: "GET /pipeline/status",
+            dataTable: "raw_emails",
+            howItWorks:
+              "Counts raw email rows whose body_retention_state shows selected job-search candidate bodies are retained locally for classification, while metadata-only rows keep private body text out of this stage.",
+            missingData:
+              "Run Gmail sync after connecting Gmail on Setup. If this count is zero while filter candidates exist, retained body fetching has not completed or the provider could not fetch selected candidate bodies.",
+          }}
           label="Retained bodies"
           value={numberFormatter.format(counts.retained_body_count)}
         />
