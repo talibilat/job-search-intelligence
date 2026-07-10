@@ -1518,6 +1518,16 @@ export function DashboardPage() {
                 : "No applications have company type metadata yet. Run sync, classification, and aggregation from Feature Status first.",
           }}
           height={280}
+          info={{
+            dataSource: "GET /metrics/breakdown?dimension=company_type",
+            dataTable: "applications and application_events",
+            howItWorks:
+              "Groups filtered applications by company type and calculates response conversion from deterministic local application and response-event data. No LLM produces these conversion rates.",
+            howToGenerate:
+              "Run sync, classification, and aggregation from Feature Status so retained job-search emails become applications with company type metadata and response timeline events.",
+            missingData:
+              "If company type rows are zero or missing, check whether aggregated applications have company type metadata for the active filters.",
+          }}
           title="Company type response conversion"
         >
           {companyTypeRows.length > 0 ? (

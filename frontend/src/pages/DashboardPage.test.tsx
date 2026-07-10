@@ -1049,6 +1049,45 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the company type outcomes chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const companyTypes = await screen.findByRole("region", {
+      name: "Company type response conversion",
+    });
+    const infoControl = within(companyTypes).getByRole("button", {
+      name: "About Company type response conversion",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(companyTypes).getByText("How this chart works")).toBeTruthy();
+    expect(
+      within(companyTypes).getByText(
+        "GET /metrics/breakdown?dimension=company_type",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(companyTypes).getByText("applications and application_events"),
+    ).toBeTruthy();
+    expect(
+      within(companyTypes).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(companyTypes).getByText(
+        "If company type rows are zero or missing, check whether aggregated applications have company type metadata for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
