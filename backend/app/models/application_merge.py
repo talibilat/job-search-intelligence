@@ -6,7 +6,7 @@ from app.models.records import ApplicationCorrectionRecord, ApplicationRecord
 
 
 class ApplicationMergeRequest(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     source_application_id: str = Field(min_length=1)
     reason: str | None = None

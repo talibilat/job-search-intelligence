@@ -110,6 +110,30 @@ def test_post_application_merge_rejects_blank_source_after_trimming(tmp_path: Pa
     assert response.status_code == 422
 
 
+def test_post_application_merge_rejects_unexpected_payload_fields(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="app-target")
+        insert_application(connection, application_id="app-source")
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/applications/app-target/merge",
+        json={
+            "source_application_id": "app-source",
+            "delete_target": True,
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_application_merge_openapi_documents_typed_errors() -> None:
     app = create_app()
 
