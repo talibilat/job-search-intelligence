@@ -1575,36 +1575,44 @@ export function DashboardPage() {
           </Alert>
         ) : null}
 
-        <ol className="dashboard-breakdown-ranks">
+        <ChartPanel
+          description="Q-23 interview conversion rates are calculated deterministically from role breakdown rows over local applications and application_events."
+          emptyState={{
+            title:
+              roleConversionLoadState === "loading"
+                ? "Loading title conversions"
+                : "No title conversion rows yet",
+            description:
+              roleConversionLoadState === "loading"
+                ? "Loading deterministic role conversion metrics from the local backend."
+                : "No applications have role breakdown data yet. Run sync, classification, and aggregation from Feature Status first.",
+          }}
+          height={280}
+          title="Role interview conversion"
+        >
           {roleConversionRows.length > 0 ? (
-            roleConversionRows.slice(0, 5).map((row) => (
-              <li key={`${row.dimension}-${row.value}`}>
-                <div>
-                  <span className="dashboard-breakdown-rank__label">
-                    {titleize(row.value)}
-                  </span>
-                  <span>{formatNullableRate(interviewConversionRate(row))} interview rate</span>
-                </div>
-                <p>
-                  {`${row.interview_count} of ${row.application_count} applications reached interview`}
-                </p>
-              </li>
-            ))
-          ) : (
-            <li>
-              <div>
-                <span className="dashboard-breakdown-rank__label">
-                  {roleConversionLoadState === "loading" ? "Loading" : "No rows"}
-                </span>
-                <span>
-                  {roleConversionLoadState === "loading"
-                    ? "Fetching role conversions"
-                    : "No title conversion data"}
-                </span>
-              </div>
-            </li>
-          )}
-        </ol>
+            <BarChart
+              data={roleConversionRows.slice(0, 5).map((row) => ({
+                interviewRate: (interviewConversionRate(row) ?? 0) * 100,
+                role: titleize(row.value),
+              }))}
+              layout="vertical"
+              margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+            >
+              <CartesianGrid horizontal={false} stroke="rgba(255, 250, 240, 0.16)" />
+              <XAxis allowDecimals={false} stroke="#c9d8ce" type="number" unit="%" />
+              <YAxis
+                dataKey="role"
+                stroke="#c9d8ce"
+                tick={{ fontSize: 12 }}
+                type="category"
+                width={124}
+              />
+              <Tooltip />
+              <Bar dataKey="interviewRate" fill="#b8e2af" name="Interview rate" radius={[0, 8, 8, 0]} />
+            </BarChart>
+          ) : undefined}
+        </ChartPanel>
       </section>
 
       <section

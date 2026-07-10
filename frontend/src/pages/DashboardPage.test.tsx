@@ -1172,7 +1172,7 @@ describe("DashboardPage", () => {
     );
   });
 
-  it("renders Q-23 best-converting titles by interview conversion", async () => {
+  it("renders Q-23 best-converting titles as a chart-only surface", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
@@ -1182,9 +1182,12 @@ describe("DashboardPage", () => {
       name: "Best-converting titles",
     });
 
-    expect(within(leaders).getByText("Backend engineer")).toBeTruthy();
-    expect(within(leaders).getByText("50% interview rate")).toBeTruthy();
-    expect(within(leaders).getByText("2 of 4 applications reached interview")).toBeTruthy();
+    expect(within(leaders).getByRole("img")).toBeTruthy();
+    expect(within(leaders).getByText("Role interview conversion")).toBeTruthy();
+    expect(within(leaders).queryByText("No title conversion rows yet")).toBeNull();
+    expect(within(leaders).queryByText("50% interview rate")).toBeNull();
+    expect(within(leaders).queryByText("2 of 4 applications reached interview"))
+      .toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=role",
       expect.objectContaining({ method: "GET" }),
