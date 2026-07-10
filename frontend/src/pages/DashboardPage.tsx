@@ -1169,6 +1169,16 @@ export function DashboardPage() {
                   : "No rate denominators are available yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={260}
+            info={{
+              dataSource: "GET /metrics/rates",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Calculates response, rejection, ghost, interview, and offer rates from deterministic numerators and denominators in local SQLite. No LLM produces these rates.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so application timelines have the events needed for each rate denominator.",
+              missingData:
+                "If rates are zero or missing, check whether applications have response, rejection, interview, or offer events after classification and aggregation.",
+            }}
             title="Outcome rates"
           >
             {outcomeRateRows.length > 0 ? (

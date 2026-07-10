@@ -849,6 +849,39 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the outcome rates chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const rates = await screen.findByRole("region", {
+      name: "Outcome rates",
+    });
+    const infoControl = within(rates).getByRole("button", {
+      name: "About Outcome rates",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(rates).getByText("How this chart works")).toBeTruthy();
+    expect(within(rates).getByText("GET /metrics/rates")).toBeTruthy();
+    expect(within(rates).getByText("applications and application_events")).toBeTruthy();
+    expect(
+      within(rates).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(rates).getByText(
+        "If rates are zero or missing, check whether applications have response, rejection, interview, or offer events after classification and aggregation.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
