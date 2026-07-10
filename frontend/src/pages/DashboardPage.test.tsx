@@ -1685,6 +1685,24 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("blocks invalid salary filter submissions with actionable guidance", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    fireEvent.change(screen.getByLabelText("Salary min"), {
+      target: { value: "one hundred" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    expect(
+      await screen.findByText("Salary min must be a non-negative number."),
+    ).toBeTruthy();
+    expect(window.location.search).toBe("");
+  });
+
   it("renders Q-11 through Q-15 outcome rates as a deterministic chart", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");

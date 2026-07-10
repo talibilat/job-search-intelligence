@@ -63,6 +63,8 @@ interface DashboardFilters {
   workMode: WorkModeValue | "";
 }
 
+type DashboardFilterErrors = Partial<Record<"salaryMax" | "salaryMin", string>>;
+
 const emptyFilters: DashboardFilters = {
   firstSeenFrom: "",
   firstSeenTo: "",
@@ -109,6 +111,33 @@ function numericFilterText(value: string | null) {
 
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) && parsed >= 0 ? trimmed : "";
+}
+
+function validateSalaryFilter(value: string, label: string) {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? null
+    : `${label} must be a non-negative number.`;
+}
+
+function validateDashboardFilters(filters: DashboardFilters) {
+  const errors: DashboardFilterErrors = {};
+  const salaryMinError = validateSalaryFilter(filters.salaryMin, "Salary min");
+  const salaryMaxError = validateSalaryFilter(filters.salaryMax, "Salary max");
+
+  if (salaryMinError) {
+    errors.salaryMin = salaryMinError;
+  }
+  if (salaryMaxError) {
+    errors.salaryMax = salaryMaxError;
+  }
+
+  return errors;
 }
 
 function filtersFromSearch(search: string): DashboardFilters {
@@ -325,6 +354,7 @@ export function DashboardPage() {
   );
   const [appliedFilters, setAppliedFilters] =
     useState<DashboardFilters>(filters);
+  const [filterErrors, setFilterErrors] = useState<DashboardFilterErrors>({});
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(
     null,
   );
@@ -748,6 +778,12 @@ export function DashboardPage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const validationErrors = validateDashboardFilters(filters);
+    setFilterErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
     const nextFilters = canonicalFilters(filters);
     const nextQuery = queryStringFromFilters(nextFilters);
     window.history.pushState({}, "", `${window.location.pathname}${nextQuery}`);
@@ -757,6 +793,7 @@ export function DashboardPage() {
 
   function clearFilters() {
     window.history.pushState({}, "", window.location.pathname);
+    setFilterErrors({});
     setFilters(emptyFilters);
     setAppliedFilters(emptyFilters);
   }
@@ -1088,24 +1125,40 @@ export function DashboardPage() {
                   value={filters.firstSeenTo}
                 />
               </FormField>
-              <FormField htmlFor="dashboard-salary-min" label="Salary min">
+              <FormField
+                error={filterErrors.salaryMin}
+                htmlFor="dashboard-salary-min"
+                label="Salary min"
+              >
                 <TextInput
                   id="dashboard-salary-min"
                   inputMode="numeric"
-                  onChange={(event) =>
-                    setFilters({ ...filters, salaryMin: event.target.value })
-                  }
+                  onChange={(event) => {
+                    setFilters({ ...filters, salaryMin: event.target.value });
+                    setFilterErrors((currentErrors) => ({
+                      ...currentErrors,
+                      salaryMin: undefined,
+                    }));
+                  }}
                   placeholder="120000"
                   value={filters.salaryMin}
                 />
               </FormField>
-              <FormField htmlFor="dashboard-salary-max" label="Salary max">
+              <FormField
+                error={filterErrors.salaryMax}
+                htmlFor="dashboard-salary-max"
+                label="Salary max"
+              >
                 <TextInput
                   id="dashboard-salary-max"
                   inputMode="numeric"
-                  onChange={(event) =>
-                    setFilters({ ...filters, salaryMax: event.target.value })
-                  }
+                  onChange={(event) => {
+                    setFilters({ ...filters, salaryMax: event.target.value });
+                    setFilterErrors((currentErrors) => ({
+                      ...currentErrors,
+                      salaryMax: undefined,
+                    }));
+                  }}
                   placeholder="180000"
                   value={filters.salaryMax}
                 />
