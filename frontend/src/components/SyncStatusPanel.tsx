@@ -695,6 +695,14 @@ export function SyncStatusPanel() {
               />
               <SyncMetric
                 label="Retained body fetch issues"
+                info={{
+                  dataSource: "GET /sync/status",
+                  dataTable: "raw_emails",
+                  howItWorks:
+                    "Counts candidate Gmail messages whose public-safe metadata was stored but whose retained body fetch or text normalization failed during sync.",
+                  missingData:
+                    "If this value is above zero, sync stored public-safe metadata but could not fetch or normalize retained bodies for some candidate messages. Retry Sync now after checking Gmail access; persistent failures mean those messages may need provider-specific investigation without exposing raw email content.",
+                }}
                 value={formatBodyFetchIssueCount(
                   status?.retained_body_failure_count,
                 )}

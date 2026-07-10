@@ -761,6 +761,46 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains the Retained body fetch issues sync metric through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const retainedBodyFetchIssuesMetric = (
+      await screen.findByText("Retained body fetch issues")
+    ).closest("article");
+    expect(retainedBodyFetchIssuesMetric).toBeTruthy();
+
+    const infoButton = within(retainedBodyFetchIssuesMetric!).getByRole(
+      "button",
+      {
+        name: "About Retained body fetch issues",
+      },
+    );
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(retainedBodyFetchIssuesMetric!).getByText(
+        "Data source: GET /sync/status",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(retainedBodyFetchIssuesMetric!).getByText("Table: raw_emails"),
+    ).toBeTruthy();
+    expect(
+      within(retainedBodyFetchIssuesMetric!).getByText(
+        "If this value is above zero, sync stored public-safe metadata but could not fetch or normalize retained bodies for some candidate messages. Retry Sync now after checking Gmail access; persistent failures mean those messages may need provider-specific investigation without exposing raw email content.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({
