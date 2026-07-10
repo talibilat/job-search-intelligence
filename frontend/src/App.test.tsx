@@ -1006,6 +1006,18 @@ describe("App", () => {
     expect(screen.getByText("Connect Gmail read-only")).toBeTruthy();
   });
 
+  it("hides the unfinished chat feature from primary navigation", () => {
+    renderAtPath("/");
+
+    const primaryNavigation = screen.getByRole("navigation", {
+      name: "Primary",
+    });
+
+    expect(
+      within(primaryNavigation).queryByRole("link", { name: "Chat" }),
+    ).toBeNull();
+  });
+
   it("starts Gmail OAuth from the setup page and exposes the read-only authorization link", async () => {
     const fetchMock = mockFetchResponses({
       "/setup/status": {

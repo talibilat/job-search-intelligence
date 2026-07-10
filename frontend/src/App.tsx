@@ -13,8 +13,9 @@ const navigationItems = [
   { href: "/setup", label: "Setup" },
   { href: "/features", label: "Feature Status" },
   { href: "/insights", label: "Insights" },
-  { href: "/chat", label: "Chat" },
 ] as const;
+
+const routePaths = new Set(["/", "/dashboard", "/setup", "/features", "/insights", "/chat"]);
 
 function JobSearchPage() {
   return (
@@ -39,9 +40,7 @@ function JobSearchPage() {
 function App() {
   const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
   const applicationDetailMatch = /^\/applications\/([^/]+)$/.exec(routePath);
-  const currentPath = navigationItems.some((item) => item.href === routePath)
-    ? routePath
-    : "/";
+  const currentPath = routePaths.has(routePath) ? routePath : "/";
 
   return (
     <>
