@@ -267,7 +267,9 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   async function handleMergeSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (mergeSourceId.trim() === applicationId) {
+    const trimmedMergeSourceId = mergeSourceId.trim();
+
+    if (trimmedMergeSourceId.length === 0 || trimmedMergeSourceId === applicationId) {
       return;
     }
 
@@ -280,7 +282,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     try {
       response = await mergeApplicationApplicationsApplicationIdMergePost(applicationId, {
         reason: mergeReason.trim() || null,
-        source_application_id: mergeSourceId.trim(),
+        source_application_id: trimmedMergeSourceId,
       });
     } catch {
       setIsSubmitting(false);

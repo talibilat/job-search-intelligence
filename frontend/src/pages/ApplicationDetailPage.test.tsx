@@ -254,6 +254,29 @@ describe("ApplicationDetailPage", () => {
     expect(requestJson(fetchMock, "/applications/app-1/merge")).toBeNull();
   });
 
+  it("disables merge until a source application ID is entered", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Source application ID");
+
+    expect(
+      screen.getByText("Enter the duplicate source application ID before merging."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Merge source application" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Merge source application" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/merge")).toBeNull();
+  });
+
   it("explains the split correction data source", async () => {
     mockFetchResponses({
       "/applications/app-1": applicationRecord,

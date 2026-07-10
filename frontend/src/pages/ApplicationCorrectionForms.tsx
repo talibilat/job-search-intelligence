@@ -290,6 +290,9 @@ export function MergeCorrectionForm({
         {sourceIsTarget ? (
           <p>Choose a different source application. An application cannot be merged into itself.</p>
         ) : null}
+        {trimmedSourceId.length === 0 ? (
+          <p>Enter the duplicate source application ID before merging.</p>
+        ) : null}
         <Button disabled={isSubmitting || trimmedSourceId.length === 0 || sourceIsTarget} type="submit">
           Merge source application
         </Button>
