@@ -927,9 +927,14 @@ describe("DashboardPage", () => {
         "Referral (Source) is the strongest positive correlate",
       ),
     ).toBeNull();
-    expect(within(diagnostics).getByText("Q-35 wasted-effort segments")).toBeTruthy();
-    expect(within(diagnostics).getByText("Linkedin (Source) is below baseline"))
-      .toBeTruthy();
+    const wastedEffort = await within(diagnostics).findByRole("region", {
+      name: "Q-35 wasted-effort segments",
+    });
+
+    expect(within(wastedEffort).getByRole("img")).toBeTruthy();
+    expect(within(wastedEffort).queryByText("Linkedin (Source)")).toBeNull();
+    expect(within(wastedEffort).queryByText("Linkedin (Source) is below baseline"))
+      .toBeNull();
     const bestRoi = await within(diagnostics).findByRole("region", {
       name: "Q-36 best ROI source",
     });

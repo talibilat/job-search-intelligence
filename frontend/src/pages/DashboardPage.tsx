@@ -857,7 +857,6 @@ export function DashboardPage() {
   const silenceAgeBuckets =
     summary?.personal_ghost_threshold?.silence_age_distribution ?? [];
   const strongestResponseCorrelate = diagnostics?.strongest_response_correlate;
-  const wastedEffortSegment = diagnostics?.wasted_effort_segments[0];
   const bestRoiSource = diagnostics?.best_roi_source;
   const sponsorshipImpact = diagnostics?.sponsorship_response_impact;
   const sellingSkill = diagnostics?.selling_skill_segments[0];
@@ -882,6 +881,13 @@ export function DashboardPage() {
             segment: "Strongest correlate",
           },
         ]
+      : [];
+  const wastedEffortRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError
+      ? (diagnostics?.wasted_effort_segments ?? []).map((segment) => ({
+          lift: Number(segment.response_rate_lift ?? 0) * 100,
+          segment: titleize(segment.dimension),
+        }))
       : [];
   const bestRoiSourceRows =
     diagnosticsLoadState === "loaded" && !diagnosticsError && bestRoiSource
@@ -1878,50 +1884,34 @@ export function DashboardPage() {
             ) : undefined}
           </ChartPanel>
 
-          <article>
-            <h3>Q-35 wasted-effort segments</h3>
-            <ol className="dashboard-breakdown-ranks">
-              {diagnostics?.wasted_effort_segments.length ? (
-                diagnostics.wasted_effort_segments.map((segment) => (
-                  <li key={`wasted-${segment.dimension}-${segment.value}`}>
-                    <div>
-                      <span className="dashboard-breakdown-rank__label">
-                        {diagnosticSegmentTitle(segment)}
-                      </span>
-                      <span>{formatResponseLift(segment.response_rate_lift)}</span>
-                    </div>
-                    <p>{diagnosticSegmentEvidence(segment)}</p>
-                  </li>
-                ))
-              ) : (
-                <li>
-                  <div>
-                    <span className="dashboard-breakdown-rank__label">
-                      {diagnosticsError
-                        ? "Unavailable"
-                        : diagnosticsLoadState === "loading"
-                          ? "Loading"
-                          : "No wasted effort"}
-                    </span>
-                    <span>
-                      {diagnosticsError
-                        ? "Diagnostic request failed"
-                        : diagnosticsLoadState === "loading"
-                        ? "Fetching diagnostics"
-                        : "No below-baseline segments"}
-                    </span>
-                  </div>
-                </li>
-              )}
-            </ol>
-            <p className="dashboard-card__meta">
-              {wastedEffortSegment
-                ? `${diagnosticSegmentTitle(wastedEffortSegment)} is below baseline`
-                : diagnosticsLoadState === "loading"
-                ? "Loading wasted-effort comparison"
-                : "No segment is currently below the filtered response baseline"}
-            </p>
-          </article>
+          <ChartPanel
+            description="Q-35 uses deterministic /metrics/diagnostics response-rate lift to chart segments that are below the filtered response baseline."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading wasted-effort segments"
+                  : "No wasted-effort segment yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic wasted-effort diagnostics from the local backend."
+                  : "No segment is below the filtered response baseline yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Q-35 wasted-effort segments"
+          >
+            {wastedEffortRows.length > 0 ? (
+              <BarChart
+                data={wastedEffortRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="segment" stroke="#c9d8ce" />
+                <YAxis stroke="#c9d8ce" type="number" unit=" pp" />
+                <Tooltip />
+                <Bar dataKey="lift" fill="#f4a6b8" name="Response-rate lift" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <ChartPanel
             description="Q-36 uses deterministic /metrics/diagnostics interview-rate data to chart the source with the strongest interview ROI."
