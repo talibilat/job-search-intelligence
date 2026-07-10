@@ -124,7 +124,11 @@ function pluralizeCount(
   return `${numberFormatter.format(value)} ${value === 1 ? singular : plural}`;
 }
 
-export function PipelineActivityPanel() {
+export function PipelineActivityPanel({
+  onClassificationSuccess,
+}: {
+  onClassificationSuccess?: () => void;
+}) {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isClassifying, setIsClassifying] = useState(false);
@@ -218,6 +222,7 @@ export function PipelineActivityPanel() {
       const response = await classificationRunClassificationRunPost();
       if (response.status === 200) {
         setClassificationMessage(classificationResultSummary(response.data));
+        onClassificationSuccess?.();
       } else {
         setClassificationError(
           "Classification could not run. Check the configured LLM provider on the Setup page.",

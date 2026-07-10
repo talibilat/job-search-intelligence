@@ -45,7 +45,26 @@ function mockApplicationResponses(options: {
     if (url.startsWith("/metrics/summary")) {
       return Promise.resolve(
         new Response(JSON.stringify({
-          application_windows: [],
+          application_windows: [
+            {
+              application_count: 2,
+              end_at: "2026-07-10T00:00:00Z",
+              start_at: "2026-07-03T00:00:00Z",
+              window: "week",
+            },
+            {
+              application_count: 4,
+              end_at: "2026-07-10T00:00:00Z",
+              start_at: "2026-06-10T00:00:00Z",
+              window: "month",
+            },
+            {
+              application_count: 5,
+              end_at: "2026-07-10T00:00:00Z",
+              start_at: "2025-07-10T00:00:00Z",
+              window: "year",
+            },
+          ],
           average_time_to_first_response: {
             application_count: 2,
             average_hours: 36,
@@ -120,6 +139,23 @@ function mockApplicationResponses(options: {
               numerator: 1,
               rate: 1,
             },
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    }
+
+    if (url === "/metrics/response-silence") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            human_response_count: 3,
+            question_id: "Q-04",
+            silent_count: 2,
+            total_applications: 5,
           }),
           {
             headers: { "Content-Type": "application/json" },
@@ -827,6 +863,27 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Metrics overview")).toBeNull();
     expect(screen.queryByText("Total applications")).toBeNull();
     expect(screen.queryByLabelText("Response rate metric")).toBeNull();
+  });
+
+  it("renders Q-02 application windows and Q-04 response silence as deterministic chart panels", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const windows = await screen.findByRole("region", {
+      name: "Application windows",
+    });
+    const silence = await screen.findByRole("region", {
+      name: "Response versus silence",
+    });
+
+    expect(within(windows).getByRole("img")).toBeTruthy();
+    expect(within(silence).getByRole("img")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/response-silence",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("points incomplete-pipeline dashboard zeros to Feature Status instead of the removed Job Search page", async () => {

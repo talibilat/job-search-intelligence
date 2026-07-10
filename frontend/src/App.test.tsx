@@ -367,6 +367,23 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
         );
       }
 
+      if (path === "/metrics/response-silence") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              human_response_count: 0,
+              question_id: "Q-04",
+              silent_count: 0,
+              total_applications: 0,
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
+        );
+      }
+
       if (path === "/metrics/diagnostics") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsDiagnosticsResponse()), {
@@ -595,6 +612,98 @@ describe("App", () => {
 
     expect(companyCell.closest("a")).toBeNull();
     expect(screen.queryByRole("link", { name: "Unsafe Co" })).toBeNull();
+  });
+
+  it("refreshes feature status applications after a successful classification run", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications": [
+        { body: [], status: 200 },
+        {
+          body: [
+            applicationRecord({
+              company: "Newly Classified Co",
+              current_status: "applied",
+              id: "app-new",
+              role_title: "Frontend Engineer",
+            }),
+          ],
+          status: 200,
+        },
+      ],
+      "/classification/estimate": {
+        cost_estimate_available: true,
+        currency: "USD",
+        estimated_completion_tokens: 600,
+        estimated_cost_usd: 0.42,
+        estimated_prompt_tokens: 3_600,
+        estimated_total_tokens: 4_200,
+        llm_provider: "azure_openai",
+        model: "gpt-4.1-mini",
+        prompt_version: "classification-v1",
+        token_estimate_method: "retained_body_length_plus_overhead",
+      },
+      "/classification/reprocessing-plan": {
+        blocked_by_missing_target_model_count: 0,
+        classification_mode: "hybrid",
+        email_provider: "gmail",
+        llm_provider: "azure_openai",
+        reprocess_count: 1,
+        retained_candidate_count: 1,
+        selection_policy: "unclassified_or_stale_model_or_prompt",
+        should_reprocess: true,
+        stale_model_count: 0,
+        stale_prompt_version_count: 0,
+        target_model: "gpt-4.1-mini",
+        target_model_configured: true,
+        target_prompt_version: "classification-v1",
+        unclassified_count: 1,
+        up_to_date_count: 0,
+      },
+      "/classification/run": {
+        accepted_count: 1,
+        applications_upserted: 1,
+        classified_count: 1,
+        events_upserted: 1,
+        malformed_count: 0,
+        manual_conflict_count: 0,
+        skipped_not_job_related_count: 0,
+      },
+      "/pipeline/status": pipelineStatusResponse({
+        next_action: "run_classification",
+        next_action_reason:
+          "1 job-search candidate email is waiting for classification.",
+        unclassified_retained_count: 1,
+      }),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    await screen.findByText(
+      "No application records exist yet. Run sync and classification to populate deterministic application statuses.",
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Run classification" }),
+    );
+
+    const statusTable = await screen.findByRole("table", {
+      name: "Application current statuses",
+    });
+    expect(within(statusTable).getByText("Newly Classified Co")).toBeTruthy();
+    expect(within(statusTable).getByText("Applied")).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.filter(([input]) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        const path = url.startsWith("http") ? new URL(url).pathname : url;
+        return path === "/applications";
+      }).length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it("shows classification estimate and reprocessing readiness in the runnable feature section", async () => {
@@ -3089,6 +3198,12 @@ describe("App", () => {
     expect(screen.queryByText(/Unimplemented metric values remain Pending/i)).toBeNull();
     expect(screen.getByText("Insights cached narrative view")).toBeTruthy();
     expect(screen.getByText("Chat unavailable marker")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "QA can confirm chat is absent from primary navigation and direct /chat renders the unavailable Phase 5 page instead of presenting a broken shell.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Direct \/chat falls back to the landing page/i)).toBeNull();
     expect(screen.queryByText("Chat route shell")).toBeNull();
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();

@@ -20,6 +20,7 @@ import {
   getMetricsDiagnosticsMetricsDiagnosticsGet,
   getMetricsFunnelMetricsFunnelGet,
   getMetricsRatesMetricsRatesGet,
+  getResponseSilenceMetricMetricsResponseSilenceGet,
   getMetricsResponseRateTrendMetricsResponseRateTrendGet,
   getMetricsSummaryMetricsSummaryGet,
   getMetricsTimeseriesMetricsTimeseriesGet,
@@ -38,6 +39,7 @@ import {
   type MetricsBreakdownDimension as MetricsBreakdownDimensionValue,
   type MetricsDiagnosticsResponse,
   type MetricsSummaryResponse,
+  type ResponseSilenceMetric,
   type SilenceAgeBucketMetric,
   type SponsorshipStatus as SponsorshipStatusValue,
   type WorkMode as WorkModeValue,
@@ -48,6 +50,7 @@ import { Alert, Button, FormField, TextInput } from "../components/ui";
 type BreakdownLoadState = "loading" | "loaded" | "error";
 type DiagnosticsLoadState = "loading" | "loaded" | "error";
 type FunnelLoadState = "loading" | "loaded" | "error";
+type ResponseSilenceLoadState = "loading" | "loaded" | "error";
 type ResponseRateLoadState = "loading" | "loaded" | "error";
 type TimeseriesLoadState = "loading" | "loaded" | "error";
 
@@ -402,10 +405,24 @@ function diagnosticSegmentTitle(segment: DiagnosticSegmentComparison) {
   return `${titleize(segment.value)} (${titleize(segment.dimension)})`;
 }
 
+function applicationWindowLabel(window: string) {
+  return window === "week"
+    ? "This week"
+    : window === "month"
+      ? "This month"
+      : window === "year"
+        ? "This year"
+        : "Custom window";
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [responseRate, setResponseRate] = useState<MetricRate | null>(null);
+  const [responseSilence, setResponseSilence] =
+    useState<ResponseSilenceMetric | null>(null);
+  const [responseSilenceLoadState, setResponseSilenceLoadState] =
+    useState<ResponseSilenceLoadState>("loading");
   const [rejectionRate, setRejectionRate] = useState<MetricRate | null>(null);
   const [ghostRate, setGhostRate] = useState<MetricRate | null>(null);
   const [applicationToInterviewRate, setApplicationToInterviewRate] =
@@ -847,6 +864,41 @@ export function DashboardPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    async function loadResponseSilence() {
+      setResponseSilenceLoadState("loading");
+      setResponseSilence(null);
+
+      const response = await getResponseSilenceMetricMetricsResponseSilenceGet();
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (response.status !== 200) {
+        setResponseSilence(null);
+        setResponseSilenceLoadState("error");
+        return;
+      }
+
+      setResponseSilence(response.data);
+      setResponseSilenceLoadState("loaded");
+    }
+
+    void loadResponseSilence().catch(() => {
+      if (!isCancelled) {
+        setResponseSilence(null);
+        setResponseSilenceLoadState("error");
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
     async function loadResponseRate() {
       try {
         const response = await getMetricsRatesMetricsRatesGet(
@@ -911,6 +963,24 @@ export function DashboardPage() {
         { count: summary.ghosted_applications ?? 0, metric: "Ghosts" },
       ]
     : [];
+  const applicationWindowRows =
+    (summary?.application_windows ?? []).map((window) => ({
+      applications: window.application_count,
+      window: applicationWindowLabel(window.window),
+    }));
+  const responseSilenceRows =
+    responseSilenceLoadState === "loaded" && responseSilence
+      ? [
+          {
+            applications: responseSilence.human_response_count,
+            metric: "Human response",
+          },
+          {
+            applications: responseSilence.silent_count,
+            metric: "Total silence",
+          },
+        ]
+      : [];
   const outcomeRateRows =
     responseRateLoadState === "loaded"
       ? [
@@ -1059,7 +1129,7 @@ export function DashboardPage() {
         <p className="eyebrow">Phase 3 deterministic dashboard</p>
         <h1 id="dashboard-page-title">Dashboard</h1>
         <p className="hero-copy">
-          Q-01, Q-03, Q-07, Q-08, Q-11, Q-12, Q-13, Q-14, and
+          Q-01, Q-02, Q-03, Q-04, Q-07, Q-08, Q-11, Q-12, Q-13, Q-14, and
           Q-15, Q-16, Q-17, Q-18, Q-19, Q-20, Q-21, and Tier 3 breakdowns now render from deterministic application and metrics
           endpoints, while remaining dashboard questions stay clearly marked as
           pending.
@@ -1318,6 +1388,82 @@ export function DashboardPage() {
                 <YAxis allowDecimals={false} stroke="#c9d8ce" />
                 <Tooltip />
                 <Bar dataKey="count" fill="#b8e2af" name="Count" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
+
+          <ChartPanel
+            description="Q-02 application windows come from deterministic /metrics/summary application_windows rows over local applications."
+            emptyState={{
+              title: isLoadingSummary
+                ? "Loading application windows"
+                : "No application windows yet",
+              description: isLoadingSummary
+                ? "Loading deterministic application-window counts from the local backend."
+                : "No application-window counts are available yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={260}
+            info={{
+              dataSource: "GET /metrics/summary",
+              dataTable: "applications",
+              howItWorks:
+                "Counts applications in the standard week, month, and year windows deterministically from local SQLite. No LLM produces these values.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become timestamped application records.",
+              missingData:
+                "If windows are zero or missing, check whether applications have first_seen_at timestamps after aggregation.",
+            }}
+            title="Application windows"
+          >
+            {applicationWindowRows.length > 0 ? (
+              <BarChart
+                data={applicationWindowRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="window" stroke="#c9d8ce" />
+                <YAxis allowDecimals={false} stroke="#c9d8ce" />
+                <Tooltip />
+                <Bar dataKey="applications" fill="#9ed8ff" name="Applications" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
+
+          <ChartPanel
+            description="Q-04 response-versus-silence counts come from deterministic /metrics/response-silence over local application timelines."
+            emptyState={{
+              title:
+                responseSilenceLoadState === "loading"
+                  ? "Loading response versus silence"
+                  : "No response-silence data yet",
+              description:
+                responseSilenceLoadState === "loading"
+                  ? "Loading deterministic response-versus-silence counts from the local backend."
+                  : "No response-silence counts are available yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={260}
+            info={{
+              dataSource: "GET /metrics/response-silence",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Counts applications with response-like timeline evidence against applications with no response evidence using deterministic local SQLite reads.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so application timelines include applied and response events.",
+              missingData:
+                "If values are zero or missing, check whether aggregation has created response, interview, assessment, offer, rejection, or ghost evidence.",
+            }}
+            title="Response versus silence"
+          >
+            {responseSilenceRows.length > 0 ? (
+              <BarChart
+                data={responseSilenceRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="metric" stroke="#c9d8ce" />
+                <YAxis allowDecimals={false} stroke="#c9d8ce" />
+                <Tooltip />
+                <Bar dataKey="applications" fill="#ffb86c" name="Applications" radius={[8, 8, 0, 0]} />
               </BarChart>
             ) : undefined}
           </ChartPanel>

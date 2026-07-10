@@ -326,7 +326,7 @@ interface ApplicationStatusSurfaceState {
   loading: boolean;
 }
 
-function ApplicationStatusSurface() {
+function ApplicationStatusSurface({ refreshToken }: { refreshToken: number }) {
   const [state, setState] = useState<ApplicationStatusSurfaceState>({
     applications: [],
     error: null,
@@ -372,7 +372,7 @@ function ApplicationStatusSurface() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refreshToken]);
 
   const liveApplications = state.applications.filter((application) =>
     liveApplicationStatuses.has(application.current_status),
@@ -1015,6 +1015,7 @@ function FeatureAreaView({
 }
 
 export function FeatureStatusDashboard() {
+  const [applicationRefreshToken, setApplicationRefreshToken] = useState(0);
   const [initialState] = useState(initialFeatureQueryState);
   const [keyword, setKeyword] = useState(initialState.keyword);
   const [status, setStatus] = useState<FeatureStatusFilter>(
@@ -1119,11 +1120,15 @@ export function FeatureStatusDashboard() {
             review pipeline counts, and preview public-safe synced email metadata.
           </p>
         </div>
-        <PipelineActivityPanel />
+        <PipelineActivityPanel
+          onClassificationSuccess={() => {
+            setApplicationRefreshToken((token) => token + 1);
+          }}
+        />
         <SyncStatusPanel />
       </section>
 
-      <ApplicationStatusSurface />
+      <ApplicationStatusSurface refreshToken={applicationRefreshToken} />
 
       <section
         aria-labelledby="feature-glossary-title"

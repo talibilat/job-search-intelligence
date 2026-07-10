@@ -345,9 +345,9 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     files: [],
     howToUse: {
       expectedBehaviour:
-        "Feature Status documents that chat is not runnable yet; no product route, composer, backend request, or provider call is exposed.",
+        "Feature Status documents that chat is not runnable yet; chat is hidden from primary navigation and direct /chat shows the unavailable Phase 5 page.",
       expectedSuccessResult:
-        "QA can confirm chat is absent from primary navigation and direct /chat falls back to the landing page instead of presenting a broken shell.",
+        "QA can confirm chat is absent from primary navigation and direct /chat renders the unavailable Phase 5 page instead of presenting a broken shell.",
       navigationPath: "Feature Status -> Advanced developer inventory",
       prerequisites: ["Frontend dev server", "Feature Status page"],
       qaValidationPoints: [
@@ -358,7 +358,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       steps: [
         "Open Feature Status and expand the advanced developer inventory.",
         "Confirm Chat is listed as unavailable Phase 5 work rather than a runnable page.",
-        "Open /chat and confirm the landing page renders instead of a chat composer.",
+        "Open /chat and confirm the unavailable Phase 5 page renders instead of a chat composer.",
       ],
     },
     id: "frontend-chat-unavailable",
@@ -385,7 +385,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       exampleInputs: ["Direct /chat navigation", "Primary navigation"],
       expectedOutputs: [
         "Chat is absent from primary navigation",
-        "Direct /chat falls back to the landing page",
+        "Direct /chat renders the unavailable Phase 5 page",
         "No chat response is generated from product UI",
       ],
       requiredSetup: ["Frontend dev server", "Feature Status page"],
