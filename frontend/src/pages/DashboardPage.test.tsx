@@ -1088,6 +1088,39 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the application volume trend chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const volumeTrend = await screen.findByRole("region", {
+      name: "Daily application count",
+    });
+    const infoControl = within(volumeTrend).getByRole("button", {
+      name: "About Daily application count",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(volumeTrend).getByText("How this chart works")).toBeTruthy();
+    expect(within(volumeTrend).getByText("GET /metrics/timeseries")).toBeTruthy();
+    expect(within(volumeTrend).getByText("applications")).toBeTruthy();
+    expect(
+      within(volumeTrend).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(volumeTrend).getByText(
+        "If application-volume points are zero or missing, check whether aggregation has created application rows with first_seen_at dates for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(

@@ -1591,6 +1591,16 @@ export function DashboardPage() {
                     : "No applications exist for the volume trend yet.",
               }}
               height={260}
+              info={{
+                dataSource: "GET /metrics/timeseries",
+                dataTable: "applications",
+                howItWorks:
+                  "Groups filtered local applications by first_seen_at date and counts application volume deterministically from SQLite. No LLM produces these trend points.",
+                howToGenerate:
+                  "Run sync, classification, and aggregation from Feature Status so retained job-search emails become canonical application rows with first_seen_at dates.",
+                missingData:
+                  "If application-volume points are zero or missing, check whether aggregation has created application rows with first_seen_at dates for the active filters.",
+              }}
               title="Daily application count"
             >
               {timeseriesPoints.length > 0 ? (
