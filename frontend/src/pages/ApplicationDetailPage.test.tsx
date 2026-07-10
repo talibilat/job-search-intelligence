@@ -396,6 +396,29 @@ describe("ApplicationDetailPage", () => {
     );
   });
 
+  it("disables event correction until at least one event field changes", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Event to edit");
+
+    expect(
+      screen.getByText("Change at least one event field before saving an event correction."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save event correction" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save event correction" }));
+
+    expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toBeNull();
+  });
+
   it("loads application detail and saves a manual status correction", async () => {
     const rejectedApplication = {
       ...applicationRecord,

@@ -58,6 +58,22 @@ function sortEvents(events: ApplicationEventRecord[]) {
   return [...events].sort((left, right) => left.event_at.localeCompare(right.event_at));
 }
 
+function eventFormHasChanges(
+  eventForm: EventEditFormState,
+  event: ApplicationEventRecord | undefined,
+) {
+  if (!event) {
+    return false;
+  }
+
+  return (
+    eventForm.emailId.trim() !== (event.email_id ?? "") ||
+    eventForm.eventAt !== event.event_at ||
+    eventForm.eventType !== event.event_type ||
+    eventForm.extractNote.trim() !== (event.extract_note ?? "")
+  );
+}
+
 export function ApplicationDetailPage({ applicationId }: ApplicationDetailPageProps) {
   const [application, setApplication] = useState<ApplicationRecord | null>(null);
   const [events, setEvents] = useState<ApplicationEventRecord[]>([]);
@@ -191,6 +207,11 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
     if (!selectedEventId) {
       setErrorMessage("Select an event before saving an event correction.");
+      return;
+    }
+
+    const selectedEvent = events.find((item) => item.id === selectedEventId);
+    if (!eventFormHasChanges(eventForm, selectedEvent)) {
       return;
     }
 
@@ -359,6 +380,9 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     );
   }
 
+  const selectedEvent = events.find((event) => event.id === selectedEventId);
+  const hasEventFieldChanges = eventFormHasChanges(eventForm, selectedEvent);
+
   if (loadState === "loading") {
     return (
       <main aria-labelledby="application-detail-title" className="app-shell application-detail-shell">
@@ -443,6 +467,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
         <EventCorrectionForm
           eventForm={eventForm}
+          hasEventFieldChanges={hasEventFieldChanges}
           events={events}
           isSubmitting={isSubmitting}
           onEventFormChange={setEventForm}
