@@ -106,13 +106,17 @@ function ApplicationRouteUnavailablePage() {
 function safeDecodeRouteSegment(value: string) {
   try {
     const decodedValue = decodeURIComponent(value);
+    const trimmedValue = decodedValue.trim();
     const hasControlCharacter = Array.from(decodedValue).some((character) => {
       const characterCode = character.charCodeAt(0);
 
       return characterCode <= 0x1f || characterCode === 0x7f;
     });
 
-    return hasControlCharacter || /[%\\/?#]/.test(decodedValue)
+    return trimmedValue.length === 0 ||
+      trimmedValue !== decodedValue ||
+      hasControlCharacter ||
+      /[%\\/?#]/.test(decodedValue)
       ? null
       : decodedValue;
   } catch {
