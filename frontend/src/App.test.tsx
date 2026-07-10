@@ -2603,6 +2603,20 @@ describe("App", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("does not send encoded query delimiter application route segments to backend paths", () => {
+    const fetchMock = mockFetchResponses({});
+
+    renderAtPath("/applications/app%3Fdebug");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Application unavailable",
+      }),
+    ).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("keeps the dashboard chart-focused and moves the Q-09 status table out", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),

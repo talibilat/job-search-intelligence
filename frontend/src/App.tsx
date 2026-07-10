@@ -107,7 +107,7 @@ function safeDecodeRouteSegment(value: string) {
   try {
     const decodedValue = decodeURIComponent(value);
 
-    return decodedValue.includes("/") ? null : decodedValue;
+    return /[/?#]/.test(decodedValue) ? null : decodedValue;
   } catch {
     return null;
   }
