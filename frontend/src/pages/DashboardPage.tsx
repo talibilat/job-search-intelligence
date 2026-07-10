@@ -114,7 +114,7 @@ function numericFilterText(value: string | null) {
   }
 
   const parsed = Number(trimmed);
-  return Number.isInteger(parsed) && parsed >= 0 ? trimmed : "";
+  return Number.isInteger(parsed) && parsed >= 0 ? String(parsed) : "";
 }
 
 function validateSalaryFilter(value: string, label: string) {

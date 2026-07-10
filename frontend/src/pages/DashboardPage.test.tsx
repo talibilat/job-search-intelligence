@@ -1685,6 +1685,21 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("canonicalizes exponent salary query filters before loading metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard?salary_min=1e3");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    expect(window.location.search).toBe("?salary_min=1000");
+    expect(screen.getByLabelText("Salary min")).toHaveProperty("value", "1000");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel?salary_min=1000",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("blocks invalid salary filter submissions with actionable guidance", async () => {
     mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
