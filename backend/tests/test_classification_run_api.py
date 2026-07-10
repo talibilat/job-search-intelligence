@@ -196,6 +196,39 @@ def test_post_classification_run_rejects_unexpected_body_before_llm_work(
         assert run_count[0] == 0
 
 
+def test_post_classification_run_rejects_unexpected_body_before_service_resolution(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_classification_tables(database_path)
+
+    def fail_service_resolution() -> StructuredExtractionService:
+        raise AssertionError("classification service should not be resolved")
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        classification_mode=ClassificationMode.LOCAL,
+        llm_provider=LLMProviderName.OLLAMA,
+        ollama_chat_model="llama3.1",
+        classification_prompt_version="v2",
+        classification_batch_size=10,
+    )
+    app.dependency_overrides[get_structured_extraction_service] = fail_service_resolution
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.post(
+        "/classification/run",
+        json={"override_model": "secret-hosted-model"},
+    )
+
+    assert response.status_code == 422
+    data = response.json()
+    assert data["error"]["code"] == "validation_error"
+    assert "secret-hosted-model" not in response.text
+
+
 def _make_fake_service(database_path: Path) -> StructuredExtractionService:
     connection = sqlite3.connect(database_path, check_same_thread=False)
     return StructuredExtractionService(

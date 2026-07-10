@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 
+import {
+  listApplicationsApplicationsGet,
+  type ApplicationRecord,
+  type ApplicationStatus,
+} from "../api";
 import { PipelineActivityPanel } from "../components/PipelineActivityPanel";
 import { SyncStatusPanel } from "../components/SyncStatusPanel";
 import { FormField, InfoDisclosure, Tabs, TextInput } from "../components/ui";
@@ -238,6 +243,32 @@ const worksTodayLabels: Record<UserFacingFeature["worksToday"], string> = {
   yes: "Works today",
 };
 
+const liveApplicationStatuses = new Set<ApplicationStatus>([
+  "applied",
+  "in_review",
+  "assessment",
+  "interview",
+]);
+
+function applicationStatusLabel(status: ApplicationStatus) {
+  return status
+    .split("_")
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function formatApplicationDate(value: string) {
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(date);
+}
+
 function FeatureGuideInfo({
   feature,
   info,
@@ -268,6 +299,156 @@ function FeatureGuideInfo({
         </div>
       </dl>
     </InfoDisclosure>
+  );
+}
+
+interface ApplicationStatusSurfaceState {
+  applications: ApplicationRecord[];
+  error: string | null;
+  loading: boolean;
+}
+
+function ApplicationStatusSurface() {
+  const [state, setState] = useState<ApplicationStatusSurfaceState>({
+    applications: [],
+    error: null,
+    loading: true,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadApplications() {
+      try {
+        const response = await listApplicationsApplicationsGet();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (response.status === 200) {
+          setState({ applications: response.data, error: null, loading: false });
+          return;
+        }
+
+        setState({
+          applications: [],
+          error: "Application records could not be loaded from GET /applications.",
+          loading: false,
+        });
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setState({
+          applications: [],
+          error: "Application records could not be loaded from GET /applications.",
+          loading: false,
+        });
+      }
+    }
+
+    void loadApplications();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const liveApplications = state.applications.filter((application) =>
+    liveApplicationStatuses.has(application.current_status),
+  );
+
+  return (
+    <section
+      aria-labelledby="feature-applications-title"
+      className="status-card feature-applications"
+    >
+      <div className="feature-applications__header">
+        <div>
+          <p className="eyebrow">Application records</p>
+          <h2 id="feature-applications-title">Current and live applications</h2>
+        </div>
+        <FeatureGuideInfo
+          feature="Feature Status applications"
+          info={{
+            dataSource: "GET /applications",
+            dataTable: "applications",
+            howItWorks:
+              "Loads deterministic application rows from the local SQLite applications table and filters active statuses on the client for the live queue.",
+            missingData:
+              "If no rows appear, connect Gmail, run sync, and run classification so aggregation can build application timelines.",
+          }}
+        />
+      </div>
+      <p>
+        Answers Q-09 with one current-status row per application and Q-10 with
+        the subset still awaiting a reply.
+      </p>
+
+      {state.loading ? <p>Loading application records...</p> : null}
+      {state.error ? <p className="feature-applications__error">{state.error}</p> : null}
+
+      {!state.loading && !state.error && state.applications.length === 0 ? (
+        <p className="feature-empty-state">
+          No application records exist yet. Run sync and classification to populate
+          deterministic application statuses.
+        </p>
+      ) : null}
+
+      {!state.loading && !state.error && state.applications.length > 0 ? (
+        <div className="feature-applications__grid">
+          <div className="feature-applications__table-wrap">
+            <table aria-label="Application current statuses">
+              <thead>
+                <tr>
+                  <th scope="col">Company</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Last activity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.applications.map((application) => (
+                  <tr key={application.id}>
+                    <td>
+                      <a href={`/applications/${application.id}`}>
+                        {application.company}
+                      </a>
+                    </td>
+                    <td>{application.role_title}</td>
+                    <td>{applicationStatusLabel(application.current_status)}</td>
+                    <td>{formatApplicationDate(application.last_activity_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <section
+            aria-labelledby="live-applications-title"
+            className="feature-applications__live"
+          >
+            <p className="eyebrow">Q-10 live queue</p>
+            <h3 id="live-applications-title">Live applications awaiting response</h3>
+            {liveApplications.length > 0 ? (
+              <ul>
+                {liveApplications.map((application) => (
+                  <li key={application.id}>
+                    <a href={`/applications/${application.id}`}>{application.company}</a>
+                    <span>{application.role_title}</span>
+                    <strong>{applicationStatusLabel(application.current_status)}</strong>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No applications are currently in live statuses.</p>
+            )}
+          </section>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -923,6 +1104,8 @@ export function FeatureStatusDashboard() {
         <PipelineActivityPanel />
         <SyncStatusPanel />
       </section>
+
+      <ApplicationStatusSurface />
 
       <section
         aria-labelledby="feature-glossary-title"

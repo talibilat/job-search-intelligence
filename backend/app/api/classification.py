@@ -110,8 +110,11 @@ async def classification_reprocessing_plan(
     ),
 )
 async def classification_run(
-    request: Request,
     settings: Annotated[AppSettings, Depends(get_settings)],
+    _validated_request_body: Annotated[
+        None,
+        Depends(_validate_classification_run_request_body),
+    ],
     classification_service: Annotated[
         StructuredExtractionService,
         Depends(get_structured_extraction_service),
@@ -121,7 +124,6 @@ async def classification_run(
         Depends(get_aggregation_service),
     ],
 ) -> ClassificationRunResponse:
-    await _validate_classification_run_request_body(request)
     result = await classification_service.run_batch()
     aggregation_result = aggregation_service.run(list(result.accepted_results))
     return ClassificationRunResponse(

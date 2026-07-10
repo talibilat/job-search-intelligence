@@ -10,6 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type {
+  ApplicationRecord,
   MetricsBreakdownResponse,
   MetricsDiagnosticsResponse,
   MetricsFunnelResponse,
@@ -154,6 +155,32 @@ function setupStatusFetchResponse(overrides: Partial<SetupStatusResponse> = {}) 
     headers: { "Content-Type": "application/json" },
     status: 200,
   });
+}
+
+function applicationRecord(
+  overrides: Partial<ApplicationRecord> = {},
+): ApplicationRecord {
+  return {
+    company: "Acme",
+    created_at: "2026-07-01T12:00:00Z",
+    currency: null,
+    current_status: "applied",
+    first_seen_at: "2026-07-01T12:00:00Z",
+    id: "app-1",
+    last_activity_at: "2026-07-03T12:00:00Z",
+    location: "Remote",
+    manual_lock: false,
+    role_title: "Platform Engineer",
+    salary_max: null,
+    salary_min: null,
+    seniority: "senior",
+    source: "linkedin",
+    sponsorship: "unknown",
+    tech_stack: [],
+    updated_at: "2026-07-03T12:00:00Z",
+    work_mode: "remote",
+    ...overrides,
+  };
 }
 
 function metricsRatesResponse(
@@ -353,6 +380,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
         return Promise.resolve(setupStatusFetchResponse());
       }
 
+      if (path === "/applications") {
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
       throw new Error(`Unhandled fetch request: ${path}`);
     }
 
@@ -484,6 +520,51 @@ describe("App", () => {
         "No synced email metadata is stored yet. Run a sync to fill this list.",
       ),
     ).toBeTruthy();
+  });
+
+  it("answers current and live application questions on the feature status page", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications": {
+        body: [
+          applicationRecord({
+            company: "Acme",
+            current_status: "interview",
+            id: "app-1",
+            role_title: "Platform Engineer",
+          }),
+          applicationRecord({
+            company: "Globex",
+            current_status: "rejected",
+            id: "app-2",
+            role_title: "Backend Engineer",
+          }),
+        ],
+        status: 200,
+      },
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const statusTable = await screen.findByRole("table", {
+      name: "Application current statuses",
+    });
+    expect(within(statusTable).getByText("Acme")).toBeTruthy();
+    expect(within(statusTable).getByText("Interview")).toBeTruthy();
+    expect(within(statusTable).getByText("Globex")).toBeTruthy();
+    expect(within(statusTable).getByText("Rejected")).toBeTruthy();
+
+    const liveApplications = screen.getByRole("region", {
+      name: "Live applications awaiting response",
+    });
+    expect(within(liveApplications).getByText("Acme")).toBeTruthy();
+    expect(within(liveApplications).queryByText("Globex")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/applications",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("shows classification estimate and reprocessing readiness in the runnable feature section", async () => {
