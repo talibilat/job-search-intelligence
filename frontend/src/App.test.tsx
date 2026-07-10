@@ -627,6 +627,39 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains the Applications pipeline stage through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const applicationsStage = (await screen.findByText("Applications")).closest(
+      "article",
+    );
+    expect(applicationsStage).toBeTruthy();
+
+    const infoButton = within(applicationsStage!).getByRole("button", {
+      name: "About Applications",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(applicationsStage!).getByText("Data source: GET /pipeline/status"),
+    ).toBeTruthy();
+    expect(within(applicationsStage!).getByText("Table: applications, application_events")).toBeTruthy();
+    expect(
+      within(applicationsStage!).getByText(
+        "Run classification after sync has retained candidate bodies. If applications are zero while classified job-related emails exist, aggregation has not created application timeline records yet or classified emails did not contain application evidence.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({

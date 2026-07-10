@@ -376,6 +376,14 @@ export function PipelineActivityPanel() {
         />
         <StageCount
           definition="Job applications reconstructed from classified email, with timeline events."
+          info={{
+            dataSource: "GET /pipeline/status",
+            dataTable: "applications, application_events",
+            howItWorks:
+              "Counts reconstructed application records and their deterministic timeline events created by aggregation after accepted job-related classifications are stored.",
+            missingData:
+              "Run classification after sync has retained candidate bodies. If applications are zero while classified job-related emails exist, aggregation has not created application timeline records yet or classified emails did not contain application evidence.",
+          }}
           label="Applications"
           value={`${numberFormatter.format(counts.application_count)} (${numberFormatter.format(counts.application_event_count)} events)`}
         />
