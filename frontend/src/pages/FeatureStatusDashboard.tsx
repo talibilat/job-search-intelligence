@@ -52,7 +52,7 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   },
   {
     howToRun:
-      'Job Search page: press "Sync now". Optional limits (email count, dates, pages) bound each run.',
+      'Feature Status runnable sync pipeline: press "Sync now". Optional limits (email count, dates, pages) bound each run.',
     info: {
       dataSource: "POST /sync and GET /sync/status",
       dataTable: "raw_emails",
@@ -69,7 +69,7 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   },
   {
     howToRun:
-      "Runs automatically during every sync; outcomes appear on each email row in the Job Search page preview.",
+      "Runs automatically during every sync; outcomes appear in the recent synced email metadata preview on Feature Status.",
     info: {
       dataSource: "GET /pipeline/status and GET /sync/recent-emails",
       dataTable: "email_filter_decisions and raw_emails",
@@ -86,7 +86,7 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   },
   {
     howToRun:
-      'Job Search page: press "Run classification" when candidates are waiting. Requires a configured LLM provider (Ollama or Azure OpenAI).',
+      'Feature Status runnable sync pipeline: press "Run classification" when candidates are waiting. Requires a configured LLM provider (Ollama or Azure OpenAI).',
     info: {
       dataSource: "GET /classification/estimate, GET /classification/reprocessing-plan, and POST /classification/run",
       dataTable: "email_classifications, classification_runs, applications, and application_events",

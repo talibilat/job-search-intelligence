@@ -989,6 +989,22 @@ describe("App", () => {
     expect(syncInfoButton.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("points runnable feature guide steps to Feature Status instead of stale Job Search copy", () => {
+    renderAtPath("/features");
+
+    expect(
+      screen.getByText(
+        'Feature Status runnable sync pipeline: press "Sync now". Optional limits (email count, dates, pages) bound each run.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Feature Status runnable sync pipeline: press "Run classification" when candidates are waiting. Requires a configured LLM provider (Ollama or Azure OpenAI).',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Job Search page/)).toBeNull();
+  });
+
   it("explains the Raw emails pipeline stage through an accessible info control", async () => {
     mockFetchResponses({
       "/pipeline/status": pipelineStatusResponse(),
