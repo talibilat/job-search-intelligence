@@ -2533,6 +2533,45 @@ describe("App", () => {
     expect(screen.queryByRole("textbox", { name: /message/i })).toBeNull();
   });
 
+  it("does not mark the landing page as current on application detail routes", async () => {
+    mockFetchResponses({
+      "/applications/app-1": {
+        company: "Acme Corp",
+        created_at: "2026-07-01T09:00:00Z",
+        currency: null,
+        current_status: "applied",
+        first_seen_at: "2026-07-01T09:00:00Z",
+        id: "app-1",
+        last_activity_at: "2026-07-01T09:00:00Z",
+        location: null,
+        manual_lock: false,
+        role_title: "Software Engineer",
+        salary_max: null,
+        salary_min: null,
+        seniority: null,
+        source: "other",
+        sponsorship: "unknown",
+        tech_stack: [],
+        updated_at: "2026-07-01T09:00:00Z",
+        work_mode: null,
+      },
+      "/applications/app-1/events": { body: [], status: 200 },
+    });
+
+    renderAtPath("/applications/app-1");
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /Acme Corp - Software Engineer/i,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Job Search" })
+        .getAttribute("aria-current"),
+    ).toBeNull();
+  });
+
   it("keeps the dashboard chart-focused and moves the Q-09 status table out", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),

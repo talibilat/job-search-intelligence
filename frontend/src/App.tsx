@@ -91,7 +91,11 @@ function JobSearchPage() {
 function App() {
   const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
   const applicationDetailMatch = /^\/applications\/([^/]+)$/.exec(routePath);
-  const currentPath = routePaths.has(routePath) ? routePath : "/";
+  const currentPath = applicationDetailMatch
+    ? null
+    : routePaths.has(routePath)
+      ? routePath
+      : "/";
 
   return (
     <>
