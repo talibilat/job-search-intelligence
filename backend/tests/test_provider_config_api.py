@@ -299,6 +299,26 @@ def test_provider_config_update_reports_missing_provider_settings(
     }
 
 
+def test_provider_config_update_rejects_unknown_secret_like_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_jobtracker_env(monkeypatch)
+    client = TestClient(create_test_app(AppSettings(_env_file=None)))
+
+    response = client.put(
+        "/config/providers",
+        json={
+            "llm_provider": "ollama",
+            "classification_mode": "local",
+            "azure_openai_api_key": "super-secret-api-key",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert "super-secret-api-key" not in response.text
+
+
 def test_provider_config_update_returns_typed_error_for_settings_validation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

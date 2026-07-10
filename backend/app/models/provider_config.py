@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import ClassificationMode, EmailProviderName, LLMProviderName
 from app.providers import ProviderRequirementEnforcement
@@ -80,6 +80,8 @@ class ProviderConfigResponse(BaseModel):
 
 class ProviderConfigUpdateRequest(BaseModel):
     """Partial in-process update for non-secret Phase 0 provider config."""
+
+    model_config = ConfigDict(extra="forbid")
 
     email_provider: EmailProviderName | None = None
     llm_provider: LLMProviderName | None = None
