@@ -701,7 +701,7 @@ describe("ApplicationDetailPage", () => {
   });
 
   it("disables split when every source event is selected", async () => {
-    mockFetchResponses({
+    const fetchMock = mockFetchResponses({
       "/applications/app-1": applicationRecord,
       "/applications/app-1/events": [[applicationEvent]],
     });
@@ -725,5 +725,9 @@ describe("ApplicationDetailPage", () => {
       "disabled",
       true,
     );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Split selected events" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/split")).toBeNull();
   });
 });
