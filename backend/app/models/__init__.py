@@ -14,6 +14,7 @@ from .classification import (
     ClassificationPromptOutput,
     ClassificationReprocessingPlan,
     ClassificationReprocessingStats,
+    ClassificationRunApiRequest,
     ClassificationRunResponse,
 )
 from .company_profile import CompanyProfileRecord, CompanyProfileSource, CompanyType
@@ -177,6 +178,7 @@ __all__ = [
     "ChatMessageRole",
     "ChatHistoryResponse",
     "ClassificationRunRecord",
+    "ClassificationRunApiRequest",
     "CorrectionConflictType",
     "ClassificationCandidateStats",
     "ClassificationPreRunEstimate",

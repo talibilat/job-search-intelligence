@@ -160,6 +160,42 @@ def test_post_classification_run_returns_error_on_llm_failure(tmp_path: Path) ->
     assert data["malformed_count"] == 1
 
 
+def test_post_classification_run_rejects_unexpected_body_before_llm_work(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_classification_tables(database_path)
+
+    service = _make_fake_service(database_path)
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        classification_mode=ClassificationMode.LOCAL,
+        llm_provider=LLMProviderName.OLLAMA,
+        ollama_chat_model="llama3.1",
+        classification_prompt_version="v2",
+        classification_batch_size=10,
+    )
+    app.dependency_overrides[get_structured_extraction_service] = lambda: service
+    client = TestClient(app)
+
+    response = client.post(
+        "/classification/run",
+        json={"override_model": "secret-hosted-model"},
+    )
+
+    assert response.status_code == 422
+    data = response.json()
+    assert data["error"]["code"] == "validation_error"
+    assert "secret-hosted-model" not in response.text
+
+    with sqlite3.connect(database_path) as connection:
+        run_count = connection.execute("SELECT COUNT(*) FROM classification_runs").fetchone()
+        assert run_count is not None
+        assert run_count[0] == 0
+
+
 def _make_fake_service(database_path: Path) -> StructuredExtractionService:
     connection = sqlite3.connect(database_path, check_same_thread=False)
     return StructuredExtractionService(

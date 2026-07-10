@@ -114,6 +114,12 @@ class ClassificationRunRecord(BaseModel):
         return self
 
 
+class ClassificationRunApiRequest(BaseModel):
+    """Empty request body accepted by the classification run endpoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ClassificationPromptOutput(BaseModel):
     """Structured LLM output expected from the classification prompt."""
 

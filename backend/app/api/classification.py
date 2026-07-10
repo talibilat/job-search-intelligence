@@ -2,18 +2,21 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from pydantic import ValidationError
 
 from app.api.dependencies import (
     get_aggregation_service,
     get_readonly_email_repository,
     get_structured_extraction_service,
 )
+from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail
 from app.config import AppSettings, get_settings
 from app.db.repositories import EmailRepository
 from app.models import (
     ClassificationPreRunEstimate,
     ClassificationReprocessingPlan,
+    ClassificationRunApiRequest,
     ClassificationRunResponse,
 )
 from app.services.aggregation import AggregationService
@@ -22,6 +25,33 @@ from app.services.classification_reprocessing import build_classification_reproc
 from app.services.structured_extraction import StructuredExtractionService
 
 router = APIRouter(prefix="/classification", tags=["classification"])
+
+
+def _validation_details(error: ValidationError) -> list[ApiErrorDetail]:
+    return [
+        ApiErrorDetail(
+            field=".".join(str(part) for part in validation_error.get("loc", ())),
+            message=str(validation_error.get("msg", "Invalid classification run request.")),
+            type=str(validation_error.get("type", "value_error")),
+        )
+        for validation_error in error.errors()
+    ]
+
+
+async def _validate_classification_run_request_body(request: Request) -> None:
+    raw_body = await request.body()
+    if not raw_body.strip():
+        return
+
+    try:
+        ClassificationRunApiRequest.model_validate_json(raw_body)
+    except ValidationError as error:
+        raise ApiError(
+            status_code=422,
+            code=ApiErrorCode.VALIDATION_ERROR,
+            message="Classification run request validation failed.",
+            details=_validation_details(error),
+        ) from error
 
 
 @router.get(
@@ -79,6 +109,7 @@ async def classification_reprocessing_plan(
     ),
 )
 async def classification_run(
+    request: Request,
     settings: Annotated[AppSettings, Depends(get_settings)],
     classification_service: Annotated[
         StructuredExtractionService,
@@ -89,6 +120,7 @@ async def classification_run(
         Depends(get_aggregation_service),
     ],
 ) -> ClassificationRunResponse:
+    await _validate_classification_run_request_body(request)
     result = await classification_service.run_batch()
     aggregation_result = aggregation_service.run(list(result.accepted_results))
     return ClassificationRunResponse(
