@@ -1700,6 +1700,30 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("canonicalizes invalid salary range query filters before loading metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState(
+      {},
+      "",
+      "/dashboard?salary_min=200000&salary_max=100000",
+    );
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    expect(window.location.search).toBe("");
+    expect(screen.getByLabelText("Salary min")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("Salary max")).toHaveProperty("value", "");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/metrics/funnel?salary_max=100000&salary_min=200000",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("canonicalizes invalid first-seen query filters before loading metrics", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard?first_seen_from=tomorrow");

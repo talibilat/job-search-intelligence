@@ -228,17 +228,23 @@ function filtersFromSearch(search: string): DashboardFilters {
   const params = new URLSearchParams(search);
   const firstSeenFrom = firstSeenFilterText(params.get("first_seen_from"));
   const firstSeenTo = firstSeenFilterText(params.get("first_seen_to"));
+  const salaryMax = numericFilterText(params.get("salary_max"));
+  const salaryMin = numericFilterText(params.get("salary_min"));
   const hasInvalidFirstSeenRange =
     firstSeenFrom.length > 0 &&
     firstSeenTo.length > 0 &&
     Date.parse(firstSeenFrom) > Date.parse(firstSeenTo);
+  const hasInvalidSalaryRange =
+    salaryMin.length > 0 &&
+    salaryMax.length > 0 &&
+    Number(salaryMin) > Number(salaryMax);
 
   return {
     firstSeenFrom: hasInvalidFirstSeenRange ? "" : firstSeenFrom,
     firstSeenTo: hasInvalidFirstSeenRange ? "" : firstSeenTo,
     role: params.get("role")?.trim() ?? "",
-    salaryMax: numericFilterText(params.get("salary_max")),
-    salaryMin: numericFilterText(params.get("salary_min")),
+    salaryMax: hasInvalidSalaryRange ? "" : salaryMax,
+    salaryMin: hasInvalidSalaryRange ? "" : salaryMin,
     source: filterValue(params, "source", sourceOptions),
     sponsorship: filterValue(params, "sponsorship", sponsorshipOptions),
     status: filterValue(params, "status", statusOptions),
