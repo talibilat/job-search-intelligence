@@ -1911,6 +1911,79 @@ h3 {
   font-weight: 900;
 }
 
+.email-preview__title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.email-preview__info {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.email-preview__info-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #9ba98f;
+  border-radius: 999px;
+  background: #edf6eb;
+  color: #203f2c;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.email-preview__info-button:hover,
+.email-preview__info-button:focus-visible,
+.email-preview__info-button[aria-expanded="true"] {
+  border-color: #203f2c;
+  background: #203f2c;
+  color: #fffaf0;
+}
+
+.email-preview__info-panel {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  width: min(320px, 78vw);
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid #c6bca8;
+  border-radius: 16px;
+  background: #fffaf0;
+  box-shadow: 0 18px 40px rgba(16, 36, 23, 0.18);
+  color: #203f2c;
+}
+
+.email-preview__info-panel p,
+.email-preview__info-panel dd {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.email-preview__info-panel dl {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.email-preview__info-panel dt {
+  color: #6b5f49;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.email-preview__info-panel dd {
+  margin-left: 0;
+  color: #203f2c;
+  font-size: 0.84rem;
+}
+
 .email-preview__header p:not(.eyebrow),
 .email-preview__empty,
 .email-preview__order-note {

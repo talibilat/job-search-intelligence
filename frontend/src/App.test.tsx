@@ -1455,6 +1455,36 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains recent synced email metadata through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    expect(
+      await screen.findByText("Newest synced mailbox messages"),
+    ).toBeTruthy();
+
+    const infoButton = screen.getByRole("button", {
+      name: "About synced email metadata",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Data source: GET /sync/recent-emails")).toBeTruthy();
+    expect(screen.getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Run Sync now after connecting Gmail. If this list is empty while sync counts are non-zero, the backend has not stored public-safe raw email metadata yet or the selected ordering has no rows to show.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("shows running progress immediately while the sync start request is pending", async () => {
     let syncRequestStarted = false;
     let resolveSyncRequest: (response: Response) => void = () => {
