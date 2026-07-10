@@ -1815,6 +1815,16 @@ export function DashboardPage() {
                   : "No segment is above the filtered success baseline yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Compares deterministic segment success rates against the filtered success baseline and charts positive success-rate lift from local SQLite. No LLM produces these diagnostic values.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with interview or offer outcomes and segmentation fields.",
+              missingData:
+                "If successful application traits are zero or missing, check whether aggregated applications have interview or offer outcomes plus populated segmentation fields for the active filters.",
+            }}
             title="Q-32 successful application traits"
           >
             {successfulApplicationTraitRows.length > 0 ? (

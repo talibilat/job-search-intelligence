@@ -1232,6 +1232,44 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the successful application traits chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+    const successfulTraits = await within(diagnostics).findByRole("region", {
+      name: "Q-32 successful application traits",
+    });
+    const infoControl = within(successfulTraits).getByRole("button", {
+      name: "About Q-32 successful application traits",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(successfulTraits).getByText("How this chart works")).toBeTruthy();
+    expect(within(successfulTraits).getByText("GET /metrics/diagnostics")).toBeTruthy();
+    expect(
+      within(successfulTraits).getByText("applications and application_events"),
+    ).toBeTruthy();
+    expect(
+      within(successfulTraits).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(successfulTraits).getByText(
+        "If successful application traits are zero or missing, check whether aggregated applications have interview or offer outcomes plus populated segmentation fields for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
