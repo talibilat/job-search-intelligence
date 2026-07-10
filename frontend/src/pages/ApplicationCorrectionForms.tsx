@@ -242,9 +242,22 @@ export function MergeCorrectionForm({
 }: MergeCorrectionFormProps) {
   return (
     <article className="application-detail-card">
-      <div>
-        <p className="eyebrow">Merge</p>
-        <h2>Merge duplicate application</h2>
+      <div className="pipeline-panel__stage-heading">
+        <div>
+          <p className="eyebrow">Merge</p>
+          <h2>Merge duplicate application</h2>
+        </div>
+        <ApplicationSurfaceInfoButton
+          info={{
+            dataSource: "POST /applications/{application_id}/merge",
+            dataTable: "applications, application_events, application_corrections",
+            howItWorks:
+              "Moves events from a duplicate source application into this target application, recalculates the target summary, deletes the duplicate row, and writes an audited merge correction in SQLite.",
+            missingData:
+              "If the source application ID is missing, open the Applications feature list first and confirm sync, classification, and aggregation created both duplicate rows before merging. Add a reason so the audit trail explains why the rows belonged together.",
+          }}
+          label="Merge correction"
+        />
       </div>
       <form className="application-detail-form" onSubmit={onSubmit}>
         <FormField htmlFor="merge-source-id" label="Source application ID">

@@ -198,6 +198,33 @@ describe("ApplicationDetailPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the merge correction data source", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Acme Corp - Software Engineer",
+    });
+
+    const infoButton = screen.getByRole("button", {
+      name: "About Merge correction",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("POST /applications/{application_id}/merge")).toBeTruthy();
+    expect(screen.getByText("applications, application_events, application_corrections")).toBeTruthy();
+    expect(screen.getByText(/Moves events from a duplicate source application/)).toBeTruthy();
+    expect(screen.getByText(/If the source application ID is missing/)).toBeTruthy();
+  });
+
   it("explains the event correction data source", async () => {
     mockFetchResponses({
       "/applications/app-1": applicationRecord,
