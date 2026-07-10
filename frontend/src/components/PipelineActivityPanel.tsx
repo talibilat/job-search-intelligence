@@ -416,9 +416,25 @@ export function PipelineActivityPanel() {
               </p>
             </article>
             <article>
-              <p>
+              <p className="pipeline-panel__readiness-value">
                 {`${numberFormatter.format(classificationPlan.reprocess_count)} need classification`}
               </p>
+              <div className="pipeline-panel__stage-heading">
+                <p className="pipeline-panel__readiness-label">
+                  Classification work waiting
+                </p>
+                <StageCountInfo
+                  info={{
+                    dataSource: "GET /classification/reprocessing-plan",
+                    dataTable: "email_classifications",
+                    howItWorks:
+                      "Counts retained candidates that are unclassified or stale for the currently configured model or prompt before a classification run starts.",
+                    missingData:
+                      "Run classification from this page. If the value is zero, all retained candidates are already classified for the target model and prompt, or sync has not retained candidate bodies yet.",
+                  }}
+                  label="Classification work waiting"
+                />
+              </div>
               <p>
                 {pluralizeCount(
                   classificationPlan.unclassified_count,
