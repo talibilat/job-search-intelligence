@@ -105,7 +105,9 @@ function ApplicationRouteUnavailablePage() {
 
 function safeDecodeRouteSegment(value: string) {
   try {
-    return decodeURIComponent(value);
+    const decodedValue = decodeURIComponent(value);
+
+    return decodedValue.includes("/") ? null : decodedValue;
   } catch {
     return null;
   }

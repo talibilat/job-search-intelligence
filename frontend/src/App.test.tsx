@@ -2589,6 +2589,20 @@ describe("App", () => {
     ).toBeNull();
   });
 
+  it("does not send encoded slash application route segments to backend paths", () => {
+    const fetchMock = mockFetchResponses({});
+
+    renderAtPath("/applications/%2F");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Application unavailable",
+      }),
+    ).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("keeps the dashboard chart-focused and moves the Q-09 status table out", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),
