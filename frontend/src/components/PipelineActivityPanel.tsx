@@ -449,12 +449,28 @@ export function PipelineActivityPanel() {
               </p>
             </article>
             <article>
-              <p>
+              <p className="pipeline-panel__readiness-value">
                 {pluralizeCount(
                   classificationPlan.stale_model_count,
                   "stale model",
                 )}
               </p>
+              <div className="pipeline-panel__stage-heading">
+                <p className="pipeline-panel__readiness-label">
+                  Classification freshness
+                </p>
+                <StageCountInfo
+                  info={{
+                    dataSource: "GET /classification/reprocessing-plan",
+                    dataTable: "email_classifications",
+                    howItWorks:
+                      "Compares retained candidates against the configured target model and prompt so stale rows can be reclassified while current rows are skipped.",
+                    missingData:
+                      "Run classification from this page when stale model or stale prompt counts are non-zero. If every candidate is up to date, this card should show skipped candidates instead of queued work.",
+                  }}
+                  label="Classification freshness"
+                />
+              </div>
               <p>
                 {pluralizeCount(
                   classificationPlan.up_to_date_count,
