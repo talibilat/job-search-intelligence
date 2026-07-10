@@ -3091,4 +3091,25 @@ describe("App", () => {
     expect(queryParams.has("testable")).toBe(false);
     expect(queryParams.get("scope")).toBe("POST /sync");
   });
+
+  it("canonicalizes padded feature status enum query filters", () => {
+    renderAtPath(
+      "/features?tab=%20backend%20&status=%20completed%20&testable=%20yes%20",
+    );
+
+    expect(
+      screen.getByRole("tab", { name: "Backend", selected: true }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText<HTMLSelectElement>("Status").value).toBe(
+      "completed",
+    );
+    expect(screen.getByLabelText<HTMLSelectElement>("Testable").value).toBe(
+      "yes",
+    );
+
+    const queryParams = new URLSearchParams(window.location.search);
+    expect(queryParams.get("tab")).toBe("backend");
+    expect(queryParams.get("status")).toBe("completed");
+    expect(queryParams.get("testable")).toBe("yes");
+  });
 });

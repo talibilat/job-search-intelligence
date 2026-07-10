@@ -297,7 +297,7 @@ function queryEnumValue<TValue extends string>(
   allowedValues: ReadonlySet<string>,
   defaultValue: TValue,
 ) {
-  const value = searchParams.get(key);
+  const value = searchParams.get(key)?.trim();
 
   return value && allowedValues.has(value) ? (value as TValue) : defaultValue;
 }
