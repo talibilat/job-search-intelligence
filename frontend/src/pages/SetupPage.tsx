@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   gmailAuthUrlAuthGmailGet,
+  setupSubmitSetupPost,
   setupStatusSetupStatusGet,
   type ClassificationMode,
   type EmailAuthorizationStartResult,
@@ -91,7 +92,11 @@ export function SetupPage() {
   const [selectedClassificationMode, setSelectedClassificationMode] =
     useState<ClassificationMode | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+  const [isSavingSetup, setIsSavingSetup] = useState(false);
   const [isStartingAuth, setIsStartingAuth] = useState(false);
+  const [setupSaveError, setSetupSaveError] = useState<string | null>(null);
+  const [setupSaveMessage, setSetupSaveMessage] = useState<string | null>(null);
+  const [setupStatusError, setSetupStatusError] = useState<string | null>(null);
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null);
   const gmailCardRef = useRef<HTMLElement | null>(null);
 
@@ -104,11 +109,12 @@ export function SetupPage() {
         const response = await setupStatusSetupStatusGet();
         if (!ignore) {
           setSetupStatus(response.data);
+          setSetupStatusError(null);
         }
       } catch {
         if (!ignore) {
-          setGmailAuthError(
-            "Setup status is unavailable. Start the local backend before connecting Gmail.",
+          setSetupStatusError(
+            "Setup status is unavailable. Start the local backend before saving setup choices or connecting Gmail.",
           );
         }
       } finally {
@@ -138,6 +144,44 @@ export function SetupPage() {
       : isStartingAuth
         ? "Preparing Gmail OAuth"
         : "Start Gmail OAuth";
+
+  async function handleSaveSetupChoices() {
+    if (!setupStatus) {
+      return;
+    }
+
+    setIsSavingSetup(true);
+    setSetupSaveError(null);
+    setSetupSaveMessage(null);
+
+    try {
+      const response = await setupSubmitSetupPost({
+        classification_mode: activeClassificationMode,
+        email_provider: setupStatus.email_provider,
+        llm_provider: setupStatus.llm_provider,
+      });
+
+      if (response.status !== 200) {
+        setSetupSaveError(
+          apiErrorMessage(
+            response.data,
+            "Setup choices could not be saved. Check the provider selection and try again.",
+          ),
+        );
+        return;
+      }
+
+      setSetupStatus(response.data);
+      setSelectedClassificationMode(response.data.classification_mode);
+      setSetupSaveMessage("Setup choices saved");
+    } catch {
+      setSetupSaveError(
+        "Setup choices could not be saved. Check that the local backend is running.",
+      );
+    } finally {
+      setIsSavingSetup(false);
+    }
+  }
 
   async function handleStartGmailAuth() {
     setIsStartingAuth(true);
@@ -179,9 +223,16 @@ export function SetupPage() {
           authorization boundaries before the app reaches a ready state.
         </p>
         <div className="setup-actions" aria-label="Setup actions">
-          <Button disabled>Save setup choices</Button>
           <Button
-            disabled={isCheckingStatus || gmailConnected || isStartingAuth}
+            disabled={isCheckingStatus || !setupStatus || isSavingSetup}
+            onClick={() => {
+              void handleSaveSetupChoices();
+            }}
+          >
+            {isSavingSetup ? "Saving setup choices" : "Save setup choices"}
+          </Button>
+          <Button
+            disabled={isCheckingStatus || !setupStatus || gmailConnected || isStartingAuth}
             onClick={() => {
               void handleStartGmailAuth();
             }}
@@ -190,6 +241,21 @@ export function SetupPage() {
             {authButtonLabel}
           </Button>
         </div>
+        {setupStatusError ? (
+          <Alert title="Setup status unavailable" tone="danger">
+            <p>{setupStatusError}</p>
+          </Alert>
+        ) : null}
+        {setupSaveMessage ? (
+          <Alert role="status" title={setupSaveMessage} tone="success">
+            <p>The non-secret setup choices were accepted by the local backend.</p>
+          </Alert>
+        ) : null}
+        {setupSaveError ? (
+          <Alert title="Setup choices failed" tone="danger">
+            <p>{setupSaveError}</p>
+          </Alert>
+        ) : null}
       </section>
 
       <section className="setup-layout" aria-labelledby="setup-checklist-title">

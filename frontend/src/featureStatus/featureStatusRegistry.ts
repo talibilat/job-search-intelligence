@@ -101,19 +101,19 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     ],
     blockers: [],
     components: ["SetupPage", "Button", "Alert", "FormField", "TextInput"],
-    connectedModules: ["Setup status API", "Gmail OAuth start API"],
+    connectedModules: ["Setup status API", "Setup submit API", "Gmail OAuth start API"],
     completedDate: "2026-07-05",
-    dependencies: ["GET /setup/status", "GET /auth/gmail"],
+    dependencies: ["GET /setup/status", "POST /setup", "GET /auth/gmail"],
     description:
       "Local-first first-run setup shell that guides provider choice, classification mode selection, and Gmail read-only OAuth start.",
-    endpoints: ["GET /setup/status", "GET /auth/gmail"],
+    endpoints: ["GET /setup/status", "POST /setup", "GET /auth/gmail"],
     files: [
       "frontend/src/pages/SetupPage.tsx",
       "frontend/src/setupWizardCopy.ts",
     ],
     howToUse: {
       expectedBehaviour:
-        "The page loads provider defaults, recommends a classification mode, and exposes a Google authorization link when OAuth starts.",
+        "The page loads provider defaults, saves non-secret setup choices, recommends a classification mode, and exposes a Google authorization link when OAuth starts.",
       expectedSuccessResult:
         "The Gmail section reports connected after the callback status says Gmail is connected.",
       navigationPath: "Primary navigation -> Setup",
@@ -125,11 +125,12 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
         "The requested Gmail scope is gmail.readonly.",
         "No client secret or token appears in the UI.",
         "Recommended classification mode matches the selected LLM provider.",
+        "Saving setup choices posts only non-secret provider and classification settings.",
       ],
       steps: [
         "Open /setup.",
         "Review the provider and classification mode cards.",
-        "Select the recommended classification mode if it is not already selected.",
+        "Select and save the desired classification mode.",
         "Press Start Gmail OAuth and verify the Continue to Google link appears.",
       ],
     },
@@ -141,6 +142,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "Setup", type: "screen" },
       { label: "SetupPage", type: "component" },
       { label: "GET /setup/status", type: "api" },
+      { label: "POST /setup", type: "api" },
       { label: "setup router", type: "controller" },
       { label: "SetupStatusService", type: "service" },
       { label: "Runtime settings", type: "runtime_config" },
@@ -159,6 +161,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       exampleInputs: ["LLM provider: Ollama", "Classification mode: local"],
       expectedOutputs: [
         "Setup checklist renders",
+        "Setup choices save through POST /setup",
         "Gmail OAuth link exposes gmail.readonly scope",
       ],
       requiredSetup: ["Mock or running backend setup endpoints"],

@@ -2453,6 +2453,69 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("shows a setup-status disabled reason when setup choices cannot load", async () => {
+    const fetchMock = vi.fn(() => Promise.reject(new TypeError("backend unavailable")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/setup");
+
+    expect(await screen.findByText("Setup status unavailable")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Setup status is unavailable. Start the local backend before saving setup choices or connecting Gmail.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save setup choices" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.queryByText("Gmail auth failed")).toBeNull();
+  });
+
+  it("submits the selected setup classification mode", async () => {
+    const fetchMock = mockFetchResponses({
+      "/setup/status": {
+        classification_mode: "local",
+        email_provider: "gmail",
+        gmail_connected: false,
+        llm_configured: false,
+        llm_provider: "ollama",
+        recommended_classification_mode: "local",
+        setup_complete: false,
+      },
+      "/setup": {
+        classification_mode: "hybrid",
+        email_provider: "gmail",
+        gmail_connected: false,
+        llm_configured: false,
+        llm_provider: "ollama",
+        recommended_classification_mode: "local",
+        setup_complete: false,
+        status: "accepted",
+      },
+    });
+
+    renderAtPath("/setup");
+
+    fireEvent.click(await screen.findByRole("radio", { name: /hybrid/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Save setup choices" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/setup",
+        expect.objectContaining({
+          body: JSON.stringify({
+            classification_mode: "hybrid",
+            email_provider: "gmail",
+            llm_provider: "ollama",
+          }),
+          method: "POST",
+        }),
+      );
+    });
+    expect(await screen.findByText("Setup choices saved")).toBeTruthy();
+  });
+
   it("does not expose the unfinished chat shell at the chat route", () => {
     window.history.pushState({}, "", "/chat");
 
@@ -2773,11 +2836,10 @@ describe("App", () => {
     expect(frontendApiIntegrations?.textContent).toContain(
       "POST /insights/regenerate",
     );
-    expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
+    expect(frontendApiIntegrations?.textContent).toContain("POST /setup");
     expect(frontendApiIntegrations?.textContent).not.toContain(
       "Future GET /metrics/summary",
     );
-    expect(frontendApiIntegrations?.textContent).not.toContain("POST /setup");
     expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
 
     fireEvent.change(screen.getByLabelText("Search features"), {
