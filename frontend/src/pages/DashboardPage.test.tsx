@@ -1500,6 +1500,43 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the skill signals chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+    const skillSignals = await within(diagnostics).findByRole("region", {
+      name: "Q-38 selling vs dead-weight skills",
+    });
+    const infoControl = within(skillSignals).getByRole("button", {
+      name: "About Q-38 selling vs dead-weight skills",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(skillSignals).getByText("How this chart works")).toBeTruthy();
+    expect(within(skillSignals).getByText("GET /metrics/diagnostics")).toBeTruthy();
+    expect(within(skillSignals).getByText("applications and application_events"))
+      .toBeTruthy();
+    expect(
+      within(skillSignals).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(skillSignals).getByText(
+        "If skill signal values are zero or missing, check whether aggregated applications have populated tech stack fields and interview events for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(

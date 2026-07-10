@@ -2088,6 +2088,16 @@ export function DashboardPage() {
                   : "No skill has interview evidence yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Compares deterministic interview rates for selling and dead-weight skill segments from local SQLite application timelines. No LLM produces this diagnostic value.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with tech stack fields and interview events.",
+              missingData:
+                "If skill signal values are zero or missing, check whether aggregated applications have populated tech stack fields and interview events for the active filters.",
+            }}
             title="Q-38 selling vs dead-weight skills"
           >
             {skillSignalRows.length > 0 ? (
