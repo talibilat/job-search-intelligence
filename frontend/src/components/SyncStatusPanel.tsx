@@ -675,6 +675,14 @@ export function SyncStatusPanel() {
               />
               <SyncMetric
                 label="Pages processed"
+                info={{
+                  dataSource: "GET /sync/status",
+                  dataTable: "email_backfill_state",
+                  howItWorks:
+                    "Counts completed Gmail provider pages recorded during full historical backfill so the sync can resume safely without exposing provider page tokens.",
+                  missingData:
+                    "Run Sync now after connecting Gmail. If this stays zero, the sync has not completed a Gmail provider page yet or the run is using incremental sync with no new messages.",
+                }}
                 value={formatCount(status?.page_count, "pages")}
               />
               <SyncMetric

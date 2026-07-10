@@ -693,6 +693,41 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains the Pages processed sync metric through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const pagesProcessedMetric = (
+      await screen.findByText("Pages processed")
+    ).closest("article");
+    expect(pagesProcessedMetric).toBeTruthy();
+
+    const infoButton = within(pagesProcessedMetric!).getByRole("button", {
+      name: "About Pages processed",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(pagesProcessedMetric!).getByText("Data source: GET /sync/status"),
+    ).toBeTruthy();
+    expect(
+      within(pagesProcessedMetric!).getByText("Table: email_backfill_state"),
+    ).toBeTruthy();
+    expect(
+      within(pagesProcessedMetric!).getByText(
+        "Run Sync now after connecting Gmail. If this stays zero, the sync has not completed a Gmail provider page yet or the run is using incremental sync with no new messages.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({
