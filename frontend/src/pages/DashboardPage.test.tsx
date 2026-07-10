@@ -916,9 +916,17 @@ describe("DashboardPage", () => {
     expect(within(diagnostics).getByText("Q-33 rejected or ghosted traits")).toBeTruthy();
     expect(within(diagnostics).getByText("40% baseline negative rate")).toBeTruthy();
     expect(within(diagnostics).getByText("+26.7 pp negative lift")).toBeTruthy();
-    expect(within(diagnostics).getByText("Q-34 strongest response correlate")).toBeTruthy();
-    expect(within(diagnostics).getByText("Referral (Source) is the strongest positive correlate"))
-      .toBeTruthy();
+    const strongestCorrelate = await within(diagnostics).findByRole("region", {
+      name: "Q-34 strongest response correlate",
+    });
+
+    expect(within(strongestCorrelate).getByRole("img")).toBeTruthy();
+    expect(within(strongestCorrelate).queryByText("Referral (Source)")).toBeNull();
+    expect(
+      within(strongestCorrelate).queryByText(
+        "Referral (Source) is the strongest positive correlate",
+      ),
+    ).toBeNull();
     expect(within(diagnostics).getByText("Q-35 wasted-effort segments")).toBeTruthy();
     expect(within(diagnostics).getByText("Linkedin (Source) is below baseline"))
       .toBeTruthy();

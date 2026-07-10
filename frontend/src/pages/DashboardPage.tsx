@@ -879,6 +879,15 @@ export function DashboardPage() {
           },
         ]
       : [];
+  const strongestResponseCorrelateRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError && strongestResponseCorrelate
+      ? [
+          {
+            lift: Number(strongestResponseCorrelate.response_rate_lift ?? 0) * 100,
+            segment: "Strongest correlate",
+          },
+        ]
+      : [];
 
   return (
     <main
@@ -1799,31 +1808,34 @@ export function DashboardPage() {
             </ol>
           </article>
 
-          <article className="metric-placeholder">
-            <h3 className="metric-placeholder__label">
-              Q-34 strongest response correlate
-            </h3>
-            <p className="metric-placeholder__value">
-              {diagnosticsError
-                ? "Unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading"
-                : strongestResponseCorrelate
-                ? diagnosticSegmentTitle(strongestResponseCorrelate)
-                : "No correlate"}
-            </p>
-            <p className="dashboard-card__meta">
-              {diagnosticsError
-                ? "Strongest response correlate is unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading deterministic response correlate"
-                : strongestResponseCorrelate
-                ? `${diagnosticSegmentTitle(
-                    strongestResponseCorrelate,
-                  )} is the strongest positive correlate`
-                : "No segment is above the filtered response baseline"}
-            </p>
-          </article>
+          <ChartPanel
+            description="Q-34 uses deterministic /metrics/diagnostics response-rate lift to chart the strongest segment above the filtered baseline."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading strongest correlate"
+                  : "No strongest response correlate yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic response-lift diagnostics from the local backend."
+                  : "No segment is above the filtered response baseline yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Q-34 strongest response correlate"
+          >
+            {strongestResponseCorrelateRows.length > 0 ? (
+              <BarChart
+                data={strongestResponseCorrelateRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="segment" stroke="#c9d8ce" />
+                <YAxis stroke="#c9d8ce" type="number" unit=" pp" />
+                <Tooltip />
+                <Bar dataKey="lift" fill="#9ed8ff" name="Response-rate lift" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <article>
             <h3>Q-35 wasted-effort segments</h3>
