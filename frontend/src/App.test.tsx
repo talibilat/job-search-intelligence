@@ -660,6 +660,39 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains the Provider messages sync metric through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const providerMessagesMetric = (
+      await screen.findByText("Provider messages")
+    ).closest("article");
+    expect(providerMessagesMetric).toBeTruthy();
+
+    const infoButton = within(providerMessagesMetric!).getByRole("button", {
+      name: "About Provider messages",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(providerMessagesMetric!).getByText("Data source: GET /sync/status"),
+    ).toBeTruthy();
+    expect(within(providerMessagesMetric!).getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      within(providerMessagesMetric!).getByText(
+        "Run Sync now after connecting Gmail. If this stays zero, no Gmail provider page has returned message metadata for this run yet.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({

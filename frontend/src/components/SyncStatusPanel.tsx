@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   syncNowSyncPost,
@@ -18,6 +18,13 @@ type SyncLimitField =
   | "maxPages"
   | "sinceDate";
 type SyncLimitErrors = Partial<Record<SyncLimitField, string>>;
+
+interface SyncMetricInfo {
+  dataSource: string;
+  dataTable: string;
+  howItWorks: string;
+  missingData: string;
+}
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
@@ -126,12 +133,97 @@ function providerLabel(status: EmailSyncStatus) {
   return "Provider pending";
 }
 
-function SyncMetric({ label, value }: { label: string; value: string }) {
+function SyncMetric({
+  info,
+  label,
+  value,
+}: {
+  info?: SyncMetricInfo;
+  label: string;
+  value: string;
+}) {
   return (
     <article className="sync-panel__metric">
       <p className="sync-panel__metric-value">{value}</p>
-      <p className="sync-panel__metric-label">{label}</p>
+      <div className="sync-panel__metric-heading">
+        <p className="sync-panel__metric-label">{label}</p>
+        {info ? <SyncMetricInfoButton info={info} label={label} /> : null}
+      </div>
     </article>
+  );
+}
+
+function SyncMetricInfoButton({
+  info,
+  label,
+}: {
+  info: SyncMetricInfo;
+  label: string;
+}) {
+  const infoId = useId();
+  const [isInfoPinned, setIsInfoPinned] = useState(false);
+  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
+  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
+  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
+
+  return (
+    <div className="sync-panel__metric-info">
+      <button
+        aria-controls={infoId}
+        aria-expanded={isInfoOpen}
+        aria-label={`About ${label}`}
+        className="sync-panel__metric-info-button"
+        onBlur={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        onClick={() => {
+          if (isInfoOpen) {
+            setIsInfoPinned(false);
+            setIsInfoPreviewed(false);
+            setIsInfoDismissed(true);
+            return;
+          }
+
+          setIsInfoPinned(true);
+          setIsInfoDismissed(false);
+        }}
+        onFocus={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseEnter={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseLeave={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        type="button"
+      >
+        i
+      </button>
+      {isInfoOpen ? (
+        <div className="sync-panel__metric-info-panel" id={infoId}>
+          <p>{info.howItWorks}</p>
+          <dl>
+            <div>
+              <dt>Data source</dt>
+              <dd>Data source: {info.dataSource}</dd>
+            </div>
+            <div>
+              <dt>Table</dt>
+              <dd>Table: {info.dataTable}</dd>
+            </div>
+            <div>
+              <dt>If values are zero or missing</dt>
+              <dd>{info.missingData}</dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -571,6 +663,14 @@ export function SyncStatusPanel() {
               />
               <SyncMetric
                 label="Provider messages"
+                info={{
+                  dataSource: "GET /sync/status",
+                  dataTable: "raw_emails",
+                  howItWorks:
+                    "Counts provider message metadata returned by Gmail during the current sync run before those messages are reconciled into local raw_emails rows.",
+                  missingData:
+                    "Run Sync now after connecting Gmail. If this stays zero, no Gmail provider page has returned message metadata for this run yet.",
+                }}
                 value={formatCount(status?.message_count, "messages")}
               />
               <SyncMetric

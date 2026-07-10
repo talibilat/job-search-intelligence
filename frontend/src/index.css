@@ -374,6 +374,82 @@ h3 {
   font-weight: 800;
 }
 
+.sync-panel__metric-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sync-panel__metric-info {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.sync-panel__metric-info-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #9ba98f;
+  border-radius: 999px;
+  background: #edf6eb;
+  color: #203f2c;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sync-panel__metric-info-button:hover,
+.sync-panel__metric-info-button:focus-visible,
+.sync-panel__metric-info-button[aria-expanded="true"] {
+  border-color: #203f2c;
+  background: #203f2c;
+  color: #fffaf0;
+}
+
+.sync-panel__metric-info-panel {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  width: min(320px, 78vw);
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid #c6bca8;
+  border-radius: 16px;
+  background: #fffaf0;
+  box-shadow: 0 18px 40px rgba(16, 36, 23, 0.18);
+  color: #203f2c;
+}
+
+.sync-panel__metric-info-panel p,
+.sync-panel__metric-info-panel dd {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.sync-panel__metric-info-panel dl {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.sync-panel__metric-info-panel dt {
+  color: #6b5f49;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sync-panel__metric-info-panel dd {
+  margin-left: 0;
+  color: #203f2c;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .sync-panel__meta-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
