@@ -1638,6 +1638,7 @@ h3 {
 }
 
 .pipeline-panel__stage {
+  position: relative;
   display: grid;
   gap: 6px;
   min-width: 0;
@@ -1646,6 +1647,14 @@ h3 {
   border-radius: 18px;
   background: #fffdf7;
   overflow-wrap: anywhere;
+}
+
+.pipeline-panel__stage-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
 .pipeline-panel__stage-value {
@@ -1660,6 +1669,72 @@ h3 {
   margin-bottom: 0;
   font-size: 0.84rem;
   font-weight: 800;
+}
+
+.pipeline-panel__stage-info {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: start;
+}
+
+.pipeline-panel__stage-info-button {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #d8d0bf;
+  border-radius: 999px;
+  background: #f7f0df;
+  color: #203f2c;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.pipeline-panel__stage-info-button:hover,
+.pipeline-panel__stage-info-button:focus-visible,
+.pipeline-panel__stage-info-button[aria-expanded="true"] {
+  border-color: #203f2c;
+  background: #203f2c;
+  color: #fffaf0;
+}
+
+.pipeline-panel__stage-info-panel {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  top: 34px;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 48px));
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #d8d0bf;
+  border-radius: 16px;
+  background: #fffaf0;
+  box-shadow: 0 18px 40px rgb(32 63 44 / 18%);
+}
+
+.pipeline-panel__stage-info-panel dl {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.pipeline-panel__stage-info-panel dt {
+  color: #203f2c;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pipeline-panel__stage-info-panel dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: #2c3a30;
 }
 
 .pipeline-panel__stage-definition {

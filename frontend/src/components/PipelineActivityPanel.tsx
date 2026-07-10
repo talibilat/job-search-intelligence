@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   classificationRunClassificationRunPost,
@@ -14,6 +14,13 @@ const pipelinePollIntervalMs = 10000;
 interface NextActionCopy {
   title: string;
   tone: "danger" | "info" | "success" | "warning";
+}
+
+interface StageInfo {
+  dataSource: string;
+  dataTable: string;
+  howItWorks: string;
+  missingData: string;
 }
 
 const nextActionCopy: Record<PipelineStatus["next_action"], NextActionCopy> = {
@@ -34,19 +41,92 @@ const nextActionCopy: Record<PipelineStatus["next_action"], NextActionCopy> = {
 
 function StageCount({
   definition,
+  info,
   label,
   value,
 }: {
   definition: string;
+  info?: StageInfo;
   label: string;
   value: string;
 }) {
   return (
     <article className="pipeline-panel__stage">
       <p className="pipeline-panel__stage-value">{value}</p>
-      <p className="pipeline-panel__stage-label">{label}</p>
+      <div className="pipeline-panel__stage-heading">
+        <p className="pipeline-panel__stage-label">{label}</p>
+        {info ? <StageCountInfo info={info} label={label} /> : null}
+      </div>
       <p className="pipeline-panel__stage-definition">{definition}</p>
     </article>
+  );
+}
+
+function StageCountInfo({ info, label }: { info: StageInfo; label: string }) {
+  const infoId = useId();
+  const [isInfoPinned, setIsInfoPinned] = useState(false);
+  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
+  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
+  const isInfoOpen = isInfoPinned || (isInfoPreviewed && !isInfoDismissed);
+
+  return (
+    <div className="pipeline-panel__stage-info">
+      <button
+        aria-controls={infoId}
+        aria-expanded={isInfoOpen}
+        aria-label={`About ${label}`}
+        className="pipeline-panel__stage-info-button"
+        onBlur={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        onClick={() => {
+          if (isInfoOpen) {
+            setIsInfoPinned(false);
+            setIsInfoPreviewed(false);
+            setIsInfoDismissed(true);
+            return;
+          }
+
+          setIsInfoPinned(true);
+          setIsInfoDismissed(false);
+        }}
+        onFocus={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseEnter={() => {
+          setIsInfoPreviewed(true);
+          setIsInfoDismissed(false);
+        }}
+        onMouseLeave={() => {
+          setIsInfoPreviewed(false);
+          setIsInfoDismissed(false);
+        }}
+        type="button"
+      >
+        i
+      </button>
+      {isInfoOpen ? (
+        <div className="pipeline-panel__stage-info-panel" id={infoId}>
+          <p>{info.howItWorks}</p>
+          <dl>
+            <div>
+              <dt>Data source</dt>
+              <dd>Data source: {info.dataSource}</dd>
+            </div>
+            <div>
+              <dt>Table</dt>
+              <dd>Table: {info.dataTable}</dd>
+            </div>
+            <div>
+              <dt>If values are zero or missing</dt>
+              <dd>{info.missingData}</dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -244,6 +324,14 @@ export function PipelineActivityPanel() {
       <div className="pipeline-panel__stages" aria-label="Pipeline stage counts">
         <StageCount
           definition="Gmail metadata rows stored locally (no body text by default)."
+          info={{
+            dataSource: "GET /pipeline/status",
+            dataTable: "raw_emails",
+            howItWorks:
+              "Counts Gmail metadata rows stored in local SQLite after sync, without exposing provider cursors, secrets, or private email body text.",
+            missingData:
+              "Run Gmail sync from this page after connecting Gmail on Setup. If the count is zero, the mailbox metadata backfill has not stored any rows yet.",
+          }}
           label="Raw emails"
           value={numberFormatter.format(counts.raw_email_count)}
         />

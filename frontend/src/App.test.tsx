@@ -495,6 +495,37 @@ describe("App", () => {
     expect(syncInfoButton.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("explains the Raw emails pipeline stage through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const rawEmailsStage = (await screen.findByText("Raw emails")).closest(
+      "article",
+    );
+    expect(rawEmailsStage).toBeTruthy();
+
+    const infoButton = within(rawEmailsStage!).getByRole("button", {
+      name: "About Raw emails",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(within(rawEmailsStage!).getByText("Data source: GET /pipeline/status")).toBeTruthy();
+    expect(within(rawEmailsStage!).getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      within(rawEmailsStage!).getByText(
+        "Run Gmail sync from this page after connecting Gmail on Setup. If the count is zero, the mailbox metadata backfill has not stored any rows yet.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({
