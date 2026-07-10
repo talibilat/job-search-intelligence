@@ -1045,7 +1045,7 @@ describe("DashboardPage", () => {
     expect(within(metric).getByText("2")).toBeTruthy();
   });
 
-  it("renders source breakdown chart summary and table from deterministic metrics", async () => {
+  it("renders source breakdown as a chart-focused metric surface without a detail table", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
@@ -1063,10 +1063,10 @@ describe("DashboardPage", () => {
     expect(within(breakdown).getByText(/66.7% response rate/)).toBeTruthy();
     expect(within(breakdown).getByText(/1 offer/)).toBeTruthy();
     expect(
-      within(breakdown).getByRole("table", {
+      within(breakdown).queryByRole("table", {
         name: "Source metric breakdown",
       }),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=source",
       expect.objectContaining({ method: "GET" }),
@@ -1083,10 +1083,10 @@ describe("DashboardPage", () => {
     expect(within(techBreakdown).getAllByText("Python").length).toBeGreaterThan(0);
     expect(within(techBreakdown).getByText(/75% response rate/)).toBeTruthy();
     expect(
-      within(techBreakdown).getByRole("table", {
+      within(techBreakdown).queryByRole("table", {
         name: "Tech metric breakdown",
       }),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=tech",
       expect.objectContaining({ method: "GET" }),

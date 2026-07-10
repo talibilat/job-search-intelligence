@@ -46,13 +46,7 @@ import {
   type WorkMode as WorkModeValue,
 } from "../api";
 import { ChartPanel } from "../components/charts";
-import {
-  Alert,
-  Button,
-  DataTable,
-  FormField,
-  TextInput,
-} from "../components/ui";
+import { Alert, Button, FormField, TextInput } from "../components/ui";
 
 type BreakdownLoadState = "loading" | "loaded" | "error";
 type DiagnosticsLoadState = "loading" | "loaded" | "error";
@@ -351,36 +345,6 @@ function formatTrendDate(value: string) {
     year: "numeric",
   }).format(new Date(value));
 }
-
-const breakdownColumns = [
-  {
-    key: "value",
-    header: "Group",
-    render: (row: MetricBreakdownRow) => titleize(row.value),
-  },
-  { key: "application_count", header: "Applications", align: "right" },
-  { key: "response_count", header: "Responses", align: "right" },
-  {
-    key: "response_rate",
-    header: "Response rate",
-    align: "right",
-    render: (row: MetricBreakdownRow) => formatNullableRate(row.response_rate),
-  },
-  { key: "interview_count", header: "Interviews", align: "right" },
-  {
-    key: "interview_rate",
-    header: "Interview rate",
-    align: "right",
-    render: (row: MetricBreakdownRow) => formatNullableRate(row.interview_rate),
-  },
-  { key: "offer_count", header: "Offers", align: "right" },
-  {
-    key: "offer_rate",
-    header: "Offer rate",
-    align: "right",
-    render: (row: MetricBreakdownRow) => formatNullableRate(row.offer_rate),
-  },
-] as const;
 
 function countLabel(count: number, singular: string) {
   return `${numberFormatter.format(count)} ${singular}${count === 1 ? "" : "s"}`;
@@ -1591,18 +1555,6 @@ export function DashboardPage() {
             )}
           </ol>
         </div>
-
-        <DataTable
-          caption={`${titleize(breakdownDimension)} metric breakdown`}
-          columns={breakdownColumns}
-          emptyMessage={
-            breakdownLoadState === "loaded"
-              ? "No breakdown rows to show."
-              : "No breakdown rows loaded yet."
-          }
-          rowKey={(row) => `${row.dimension}-${row.value}`}
-          rows={breakdownRows}
-        />
       </section>
 
       <section
