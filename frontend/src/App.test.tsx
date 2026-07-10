@@ -17,6 +17,7 @@ import type {
   MetricsResponseRateTrendResponse,
   MetricsSummaryResponse,
   MetricsTimeseriesResponse,
+  SetupStatusResponse,
 } from "./api";
 
 function renderAtPath(pathname: string) {
@@ -129,6 +130,30 @@ function idleSyncStatusResponse(): MockObjectResponseBody {
     state: "idle",
     target_message_count: null,
   };
+}
+
+function setupStatusResponse(
+  overrides: Partial<SetupStatusResponse> = {},
+): MockObjectResponseBody {
+  const response: SetupStatusResponse = {
+    classification_mode: "hybrid",
+    email_provider: "gmail",
+    gmail_connected: true,
+    llm_configured: false,
+    llm_provider: "ollama",
+    recommended_classification_mode: "local",
+    setup_complete: true,
+    ...overrides,
+  };
+
+  return response as unknown as MockObjectResponseBody;
+}
+
+function setupStatusFetchResponse(overrides: Partial<SetupStatusResponse> = {}) {
+  return new Response(JSON.stringify(setupStatusResponse(overrides)), {
+    headers: { "Content-Type": "application/json" },
+    status: 200,
+  });
 }
 
 function metricsRatesResponse(
@@ -322,6 +347,10 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
             status: 200,
           }),
         );
+      }
+
+      if (path === "/setup/status") {
+        return Promise.resolve(setupStatusFetchResponse());
       }
 
       throw new Error(`Unhandled fetch request: ${path}`);
@@ -1403,6 +1432,8 @@ describe("App", () => {
                 started_at: "2026-07-05T09:15:00Z",
                 state: "succeeded",
               }
+            : path === "/setup/status"
+              ? setupStatusResponse()
             : path === "/sync/recent-emails"
               ? []
             : null;
@@ -1497,6 +1528,11 @@ describe("App", () => {
         );
       }
 
+      if (pathname === "/setup/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(setupStatusFetchResponse());
+      }
+
       if (pathname === "/sync/recent-emails") {
         expect(init?.method).toBe("GET");
         expect(path).toContain("limit=50");
@@ -1588,6 +1624,41 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("shows actionable sync metadata fallbacks before the first Gmail run", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse({
+        account_display: null,
+        gmail_connected: false,
+        next_action: "connect_gmail",
+        next_action_reason: "Connect Gmail read-only before syncing.",
+      }),
+      "/setup/status": setupStatusResponse({
+        gmail_connected: false,
+        setup_complete: false,
+      }),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    expect(await screen.findByText("No sync run yet")).toBeTruthy();
+    expect(screen.getByText("Run sync to measure progress")).toBeTruthy();
+    expect(screen.getByText("Connect Gmail on Setup")).toBeTruthy();
+    expect(screen.getByText("Connect Gmail, then run sync to set mode")).toBeTruthy();
+    expect(screen.getByText("Connect Gmail to choose an account")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Sync unavailable" }),
+    ).toHaveProperty("disabled", true);
+    expect(
+      screen.getByRole("link", { name: "Open Setup" }).getAttribute("href"),
+    ).toBe("/setup");
+    expect(screen.queryByText("Progress pending")).toBeNull();
+    expect(screen.queryByText("Provider pending")).toBeNull();
+    expect(screen.queryByText("Mode pending")).toBeNull();
+    expect(screen.queryByText("Account pending")).toBeNull();
+  });
+
   it("shows running progress immediately while the sync start request is pending", async () => {
     let syncRequestStarted = false;
     let resolveSyncRequest: (response: Response) => void = () => {
@@ -1621,6 +1692,11 @@ describe("App", () => {
             status: 200,
           }),
         );
+      }
+
+      if (path === "/setup/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(setupStatusFetchResponse());
       }
 
       if (path !== "/sync/status") {
@@ -1698,6 +1774,11 @@ describe("App", () => {
         );
       }
 
+      if (path === "/setup/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(setupStatusFetchResponse());
+      }
+
       if (path !== "/sync/status") {
         throw new Error(`Unexpected fetch request: ${path}`);
       }
@@ -1764,6 +1845,11 @@ describe("App", () => {
             status: 200,
           }),
         );
+      }
+
+      if (path === "/setup/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(setupStatusFetchResponse());
       }
 
       expect(path).toBe("/sync/status");
@@ -1839,6 +1925,11 @@ describe("App", () => {
             status: 200,
           }),
         );
+      }
+
+      if (path === "/setup/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(setupStatusFetchResponse());
       }
 
       expect(path).toBe("/sync/status");

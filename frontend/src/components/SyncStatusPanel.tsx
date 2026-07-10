@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 
 import {
+  setupStatusSetupStatusGet,
   syncNowSyncPost,
   syncStatusSyncStatusGet,
   type EmailSyncOptions,
@@ -101,16 +102,16 @@ function formatBodyFetchIssueCount(value: number | undefined) {
     : `${formattedValue} body fetch issues`;
 }
 
-function formatSyncMode(status: EmailSyncStatus) {
-  if (status.mode === "full_backfill") {
+function formatSyncMode(status: EmailSyncStatus | null) {
+  if (status?.mode === "full_backfill") {
     return "Full backfill";
   }
 
-  if (status.mode === "incremental") {
+  if (status?.mode === "incremental") {
     return "Incremental";
   }
 
-  return "Mode pending";
+  return "Connect Gmail, then run sync to set mode";
 }
 
 function formatTimestamp(status: EmailSyncStatus) {
@@ -125,12 +126,12 @@ function formatTimestamp(status: EmailSyncStatus) {
   return "No last run recorded";
 }
 
-function providerLabel(status: EmailSyncStatus) {
-  if (status.provider === "gmail") {
+function providerLabel(status: EmailSyncStatus | null) {
+  if (status?.provider === "gmail") {
     return "Gmail";
   }
 
-  return "Provider pending";
+  return "Connect Gmail on Setup";
 }
 
 function SyncMetric({
@@ -315,7 +316,7 @@ function progressLabel(status: EmailSyncStatus | null) {
     return "Sync complete";
   }
 
-  return "Progress pending";
+  return "Run sync to measure progress";
 }
 
 function optimisticRunningStatus(
@@ -343,8 +344,10 @@ function optimisticRunningStatus(
 export function SyncStatusPanel() {
   const [status, setStatus] = useState<EmailSyncStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+  const [isLoadingSetupStatus, setIsLoadingSetupStatus] = useState(true);
   const [isStartingSync, setIsStartingSync] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
   const [maxMessages, setMaxMessages] = useState("");
   const [sinceDate, setSinceDate] = useState("");
   const [beforeDate, setBeforeDate] = useState("");
@@ -352,6 +355,34 @@ export function SyncStatusPanel() {
   const [maxPages, setMaxPages] = useState("");
   const [syncLimitErrors, setSyncLimitErrors] = useState<SyncLimitErrors>({});
   const [emailRefreshToken, setEmailRefreshToken] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSetupStatus() {
+      setIsLoadingSetupStatus(true);
+      try {
+        const response = await setupStatusSetupStatusGet();
+        if (!ignore && response.status === 200) {
+          setGmailConnected(response.data.gmail_connected);
+        }
+      } catch {
+        if (!ignore) {
+          setGmailConnected(null);
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoadingSetupStatus(false);
+        }
+      }
+    }
+
+    void loadSetupStatus();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -444,6 +475,10 @@ export function SyncStatusPanel() {
   }, [isStartingSync, status?.state]);
 
   async function handleSyncNow() {
+    if (gmailConnected !== true) {
+      return;
+    }
+
     const { errors, options } = buildSyncOptions({
       beforeDate,
       maxAgeDays,
@@ -487,13 +522,22 @@ export function SyncStatusPanel() {
   const copy = stateCopy[currentState];
   const showSyncDetails = status !== null || errorMessage === null;
   const syncButtonDisabled =
-    isLoadingStatus || isStartingSync || currentState === "running";
+    gmailConnected !== true ||
+    isLoadingStatus ||
+    isStartingSync ||
+    currentState === "running";
   const syncButtonLabel =
-    currentState === "running"
-      ? "Sync running"
-      : isStartingSync
-        ? "Starting sync"
-        : "Sync now";
+    isLoadingSetupStatus
+      ? "Checking Gmail setup"
+      : gmailConnected === false
+      ? "Sync unavailable"
+      : gmailConnected === null
+        ? "Setup status unavailable"
+        : currentState === "running"
+          ? "Sync running"
+          : isStartingSync
+            ? "Starting sync"
+            : "Sync now";
   const progressValue = Math.round((status?.progress ?? 0) * 100);
   const showIndeterminateProgress =
     currentState === "running" &&
@@ -619,6 +663,17 @@ export function SyncStatusPanel() {
           >
             {syncButtonLabel}
           </Button>
+          {gmailConnected === false ? (
+            <p className="sync-panel__action-note">
+              <a href="/setup">Open Setup</a> and connect Gmail read-only before
+              running sync.
+            </p>
+          ) : gmailConnected === null && !isLoadingSetupStatus ? (
+            <p className="sync-panel__action-note">
+              Setup status is unavailable. Start the local backend, then reload
+              Feature Status before syncing.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -711,9 +766,9 @@ export function SyncStatusPanel() {
 
             <div className="sync-panel__meta-grid">
               <p>{formatTimestamp(status ?? { state: "idle" })}</p>
-              <p>{providerLabel(status ?? { state: "idle" })}</p>
-              <p>{formatSyncMode(status ?? { state: "idle" })}</p>
-              <p>{status?.account_id ?? "Account pending"}</p>
+              <p>{providerLabel(status)}</p>
+              <p>{formatSyncMode(status)}</p>
+              <p>{status?.account_id ?? "Connect Gmail to choose an account"}</p>
             </div>
 
             {status?.recovered_from_expired_cursor ? (
