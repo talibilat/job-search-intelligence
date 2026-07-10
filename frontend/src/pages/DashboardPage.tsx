@@ -1211,6 +1211,16 @@ export function DashboardPage() {
                 : "No applications have response or rejection timing evidence yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={260}
+            info={{
+              dataSource: "GET /metrics/summary",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Calculates average hours from application timestamps to first response and rejection events using deterministic local timeline data. No LLM produces these timing values.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so application timelines include applied, response, and rejection events with timestamps.",
+              missingData:
+                "If timing values are zero or missing, check whether application timelines contain response or rejection events with timestamps after aggregation.",
+            }}
             title="Response timing"
           >
             {responseTimingRows.length > 0 ? (

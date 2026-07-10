@@ -882,6 +882,39 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the response timing chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const timing = await screen.findByRole("region", {
+      name: "Response timing",
+    });
+    const infoControl = within(timing).getByRole("button", {
+      name: "About Response timing",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(timing).getByText("How this chart works")).toBeTruthy();
+    expect(within(timing).getByText("GET /metrics/summary")).toBeTruthy();
+    expect(within(timing).getByText("applications and application_events")).toBeTruthy();
+    expect(
+      within(timing).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(timing).getByText(
+        "If timing values are zero or missing, check whether application timelines contain response or rejection events with timestamps after aggregation.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
