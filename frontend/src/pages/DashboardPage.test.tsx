@@ -972,38 +972,38 @@ describe("DashboardPage", () => {
     expect(
       within(diagnostics).getAllByText("-26.7 pp vs baseline").length,
     ).toBeGreaterThan(0);
-    expect(within(diagnostics).getByText("Correlation summary")).toBeTruthy();
-    expect(within(diagnostics).getByText("How to read these diagnostics")).toBeTruthy();
+    expect(within(diagnostics).queryByText("Correlation summary")).toBeNull();
+    expect(within(diagnostics).queryByText("How to read these diagnostics")).toBeNull();
     expect(
-      within(diagnostics).getByText(
+      within(diagnostics).queryByText(
         "Response-rate lift is the segment response rate minus the filtered baseline response rate.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(
-      within(diagnostics).getByText(
+      within(diagnostics).queryByText(
         "These are directional comparisons, not proof that a segment caused an outcome.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(
-      within(diagnostics).getByText(
+      within(diagnostics).queryByText(
         "Filtered baseline response rate is the response rate for every application currently included by the dashboard filters.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(
-      within(diagnostics).getByText(
+      within(diagnostics).queryByText(
         "A response means the application has response evidence in application_events, including interviews, offers, or other human replies.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(
-      within(diagnostics).getByText(
+      within(diagnostics).queryByText(
         "Strongest and weakest signals are segments ranked by positive or negative lift, not recommendations by themselves.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(
-      within(diagnostics).getByText(
+      within(diagnostics).queryByText(
         "Rankings use only local applications and application_events currently included by the dashboard filters.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/diagnostics",
       expect.objectContaining({ method: "GET" }),

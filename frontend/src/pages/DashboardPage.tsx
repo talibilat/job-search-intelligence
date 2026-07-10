@@ -856,10 +856,6 @@ export function DashboardPage() {
     : [];
   const silenceAgeBuckets =
     summary?.personal_ghost_threshold?.silence_age_distribution ?? [];
-  const strongestDiagnostic = diagnostics?.strongest_response_segments[0];
-  const weakestDiagnostic = diagnostics?.weakest_response_segments[0];
-  const successfulDiagnostic = diagnostics?.successful_application_segments[0];
-  const negativeDiagnostic = diagnostics?.negative_outcome_segments[0];
   const strongestResponseCorrelate = diagnostics?.strongest_response_correlate;
   const wastedEffortSegment = diagnostics?.wasted_effort_segments[0];
   const bestRoiSource = diagnostics?.best_roi_source;
@@ -2044,71 +2040,6 @@ export function DashboardPage() {
           </ChartPanel>
         </div>
 
-        <article className="metric-placeholder">
-          <h3 className="metric-placeholder__label">Correlation summary</h3>
-          <p className="dashboard-card__meta">
-            {diagnosticsLoadState === "loading"
-              ? "Loading deterministic diagnostic comparisons."
-              : diagnosticsError
-                ? "Diagnostic comparison summary is unavailable."
-                : `${
-                    strongestDiagnostic
-                      ? `${diagnosticSegmentTitle(strongestDiagnostic)} is ${formatResponseLift(
-                          strongestDiagnostic.response_rate_lift,
-                        )}.`
-                      : "No positive response-rate lift is available yet."
-                  } ${
-                    weakestDiagnostic
-                      ? `${diagnosticSegmentTitle(weakestDiagnostic)} is ${formatResponseLift(
-                          weakestDiagnostic.response_rate_lift,
-                        )}.`
-                      : "No negative response-rate lift is available yet."
-                  } ${
-                    successfulDiagnostic
-                      ? `${diagnosticSegmentTitle(successfulDiagnostic)} is ${formatSuccessLift(
-                          successfulDiagnostic.success_rate_lift,
-                        )}.`
-                      : "No successful application trait lift is available yet."
-                  } ${
-                    negativeDiagnostic
-                      ? `${diagnosticSegmentTitle(negativeDiagnostic)} is ${formatNegativeLift(
-                          negativeDiagnostic.negative_rate_lift,
-                        )}.`
-                      : "No rejected or ghosted trait lift is available yet."
-                  }`}
-          </p>
-        </article>
-
-        {diagnostics && diagnosticsLoadState === "loaded" && !diagnosticsError ? (
-          <article className="metric-placeholder">
-            <h3 className="metric-placeholder__label">How to read these diagnostics</h3>
-            <p className="dashboard-card__meta">
-              Response-rate lift is the segment response rate minus the filtered
-              baseline response rate.
-            </p>
-            <p className="dashboard-card__meta">
-              Filtered baseline response rate is the response rate for every
-              application currently included by the dashboard filters.
-            </p>
-            <p className="dashboard-card__meta">
-              A response means the application has response evidence in
-              application_events, including interviews, offers, or other human
-              replies.
-            </p>
-            <p className="dashboard-card__meta">
-              Strongest and weakest signals are segments ranked by positive or
-              negative lift, not recommendations by themselves.
-            </p>
-            <p className="dashboard-card__meta">
-              Rankings use only local applications and application_events currently
-              included by the dashboard filters.
-            </p>
-            <p className="dashboard-card__meta">
-              These are directional comparisons, not proof that a segment caused an
-              outcome.
-            </p>
-          </article>
-        ) : null}
       </section>
 
     </main>
