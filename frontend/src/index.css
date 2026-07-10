@@ -1749,6 +1749,24 @@ h3 {
   font-size: 0.82rem;
 }
 
+.pipeline-panel__readiness-value {
+  margin-bottom: 0;
+  color: #102417;
+  font-weight: 900;
+}
+
+.pipeline-panel__readiness-label {
+  margin-bottom: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.pipeline-panel__readiness-definition {
+  margin-bottom: 0;
+  color: #4e5e53;
+  font-size: 0.82rem;
+}
+
 .pipeline-panel__stages {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1802,6 +1820,9 @@ h3 {
   place-items: center;
   width: 26px;
   height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
   border: 1px solid #d8d0bf;
   border-radius: 999px;
   background: #f7f0df;

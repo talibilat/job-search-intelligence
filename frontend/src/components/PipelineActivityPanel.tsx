@@ -75,7 +75,7 @@ function StageCountInfo({ info, label }: { info: StageInfo; label: string }) {
 
   return (
     <div className="pipeline-panel__stage-info">
-      <button
+      <Button
         aria-controls={infoId}
         aria-expanded={isInfoOpen}
         aria-label={`About ${label}`}
@@ -107,10 +107,10 @@ function StageCountInfo({ info, label }: { info: StageInfo; label: string }) {
           setIsInfoPreviewed(false);
           setIsInfoDismissed(false);
         }}
-        type="button"
+        variant="ghost"
       >
         i
-      </button>
+      </Button>
       {isInfoOpen ? (
         <div className="pipeline-panel__stage-info-panel" id={infoId}>
           <p>{info.howItWorks}</p>
@@ -389,13 +389,31 @@ export function PipelineActivityPanel() {
         {classificationEstimate && classificationPlan ? (
           <div className="pipeline-panel__readiness-grid">
             <article>
-              <p>
+              <p className="pipeline-panel__readiness-value">
                 {pluralizeCount(
                   classificationPlan.retained_candidate_count,
                   "retained candidate",
                 )}
               </p>
-              <p>Retained bodies eligible for the configured classifier.</p>
+              <div className="pipeline-panel__stage-heading">
+                <p className="pipeline-panel__readiness-label">
+                  Retained classification candidates
+                </p>
+                <StageCountInfo
+                  info={{
+                    dataSource: "GET /classification/reprocessing-plan",
+                    dataTable: "raw_emails",
+                    howItWorks:
+                      "Counts retained Gmail candidate bodies that are eligible for the configured classifier before any LLM call runs.",
+                    missingData:
+                      "Run Gmail sync from this page after connecting Gmail on Setup. If retained candidates are zero, sync has not retained any job-search email bodies for classification yet.",
+                  }}
+                  label="Retained classification candidates"
+                />
+              </div>
+              <p className="pipeline-panel__readiness-definition">
+                Retained bodies eligible for the configured classifier.
+              </p>
             </article>
             <article>
               <p>
