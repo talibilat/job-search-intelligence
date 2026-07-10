@@ -1945,6 +1945,21 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("canonicalizes whitespace-padded source query filters before loading metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard?source=%20linkedin%20");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    expect(window.location.search).toBe("?source=linkedin");
+    expect(screen.getByLabelText("Source")).toHaveProperty("value", "linkedin");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel?source=linkedin",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("renders Q-11 through Q-15 outcome rates as a deterministic chart", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");

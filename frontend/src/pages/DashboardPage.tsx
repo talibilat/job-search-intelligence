@@ -101,7 +101,7 @@ function filterValue<TValue extends string>(
   key: string,
   allowedValues: readonly TValue[],
 ) {
-  const value = params.get(key);
+  const value = params.get(key)?.trim();
   return value && allowedValues.includes(value as TValue)
     ? (value as TValue)
     : "";
