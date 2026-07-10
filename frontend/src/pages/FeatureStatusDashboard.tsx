@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { PipelineActivityPanel } from "../components/PipelineActivityPanel";
+import { SyncStatusPanel } from "../components/SyncStatusPanel";
 import { FormField, Tabs, TextInput } from "../components/ui";
 import {
   featureStatusLabels,
@@ -764,6 +766,22 @@ export function FeatureStatusDashboard() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section
+        aria-labelledby="runnable-sync-pipeline-title"
+        className="feature-runnable-section"
+      >
+        <div>
+          <p className="eyebrow">Runnable feature</p>
+          <h2 id="runnable-sync-pipeline-title">Runnable sync pipeline</h2>
+          <p>
+            Use this section to inspect Gmail connection readiness, run manual sync,
+            review pipeline counts, and preview public-safe synced email metadata.
+          </p>
+        </div>
+        <PipelineActivityPanel />
+        <SyncStatusPanel />
       </section>
 
       <section

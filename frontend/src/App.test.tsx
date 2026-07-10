@@ -396,7 +396,31 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
-  it("renders the consolidated Job Search page with pipeline activity and next action", async () => {
+  it("renders a clean landing page that explains the local inbox-to-dashboard flow", () => {
+    renderAtPath("/");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Your job search, from inbox to insight.",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText("Connects to Gmail locally")).toBeTruthy();
+    expect(screen.getByText("Syncs safe metadata first")).toBeTruthy();
+    expect(screen.getByText("Filters and classifies job email")).toBeTruthy();
+    expect(screen.getByText("Reconstructs applications and timelines")).toBeTruthy();
+    expect(screen.getByText("Charts deterministic metrics")).toBeTruthy();
+    expect(screen.getByText("Generates grounded insights only when supported"))
+      .toBeTruthy();
+    expect(screen.getByRole("link", { name: "Run features" })).toHaveProperty(
+      "href",
+      `${window.location.origin}/features`,
+    );
+    expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
+    expect(screen.queryByText("Raw emails")).toBeNull();
+  });
+
+  it("renders the runnable sync pipeline section on the feature status page", async () => {
     mockFetchResponses({
       "/pipeline/status": pipelineStatusResponse({
         next_action: "run_classification",
@@ -408,13 +432,10 @@ describe("App", () => {
       "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
     });
 
-    renderAtPath("/");
+    renderAtPath("/features");
 
     expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: "Your job search, from inbox to insight.",
-      }),
+      screen.getByRole("region", { name: "Runnable sync pipeline" }),
     ).toBeTruthy();
 
     expect(
@@ -550,7 +571,7 @@ describe("App", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderAtPath("/");
+    renderAtPath("/features");
 
     expect(await screen.findByText("Last sync succeeded")).toBeTruthy();
     expect(screen.getByText("1,240 raw emails")).toBeTruthy();
@@ -655,7 +676,7 @@ describe("App", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderAtPath("/");
+    renderAtPath("/features");
 
     expect(
       await screen.findByText("Newest synced mailbox messages"),
@@ -748,7 +769,7 @@ describe("App", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderAtPath("/");
+    renderAtPath("/features");
 
     expect(await screen.findByText("Last sync failed")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
@@ -824,7 +845,7 @@ describe("App", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderAtPath("/");
+    renderAtPath("/features");
 
     const emailCountInput = await screen.findByLabelText("Email count");
     fireEvent.change(emailCountInput, { target: { value: "0" } });
@@ -883,7 +904,7 @@ describe("App", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderAtPath("/");
+    renderAtPath("/features");
 
     expect(
       await screen.findByText("Reconnect Gmail before syncing."),
@@ -949,7 +970,7 @@ describe("App", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderAtPath("/");
+    renderAtPath("/features");
 
     await act(async () => {
       await Promise.resolve();

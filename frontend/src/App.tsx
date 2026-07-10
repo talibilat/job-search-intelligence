@@ -1,5 +1,3 @@
-import { PipelineActivityPanel } from "./components/PipelineActivityPanel";
-import { SyncStatusPanel } from "./components/SyncStatusPanel";
 import { ApplicationDetailPage } from "./pages/ApplicationDetailPage";
 import Chat from "./pages/Chat";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -17,6 +15,39 @@ const navigationItems = [
 
 const routePaths = new Set(["/", "/dashboard", "/setup", "/features", "/insights", "/chat"]);
 
+const productFlowSteps = [
+  {
+    description:
+      "Uses your own Gmail OAuth client with the read-only scope. Tokens stay behind the local secret store.",
+    title: "Connects to Gmail locally",
+  },
+  {
+    description:
+      "Stores broad Gmail metadata first, then keeps body text only for likely job-search candidates.",
+    title: "Syncs safe metadata first",
+  },
+  {
+    description:
+      "Runs deterministic filter signals before model classification so only retained candidates enter extraction.",
+    title: "Filters and classifies job email",
+  },
+  {
+    description:
+      "Groups many email events into one application record with a deterministic status timeline.",
+    title: "Reconstructs applications and timelines",
+  },
+  {
+    description:
+      "Reads the applications table and event timeline through metrics endpoints. LLMs never produce dashboard counts.",
+    title: "Charts deterministic metrics",
+  },
+  {
+    description:
+      "Narrative insights are cached and grounded in cited local evidence only after enough data exists.",
+    title: "Generates grounded insights only when supported",
+  },
+] as const;
+
 function JobSearchPage() {
   return (
     <main className="app-shell">
@@ -25,14 +56,35 @@ function JobSearchPage() {
         <h1 id="page-title">Your job search, from inbox to insight.</h1>
         <p className="hero-copy">
           Connect Gmail, sync your mail history, classify job-search email, and
-          watch the deterministic dashboard fill in. Everything on this page
-          runs locally.
+          watch deterministic dashboard charts fill in from the reconstructed
+          applications table. Your app data stays in local SQLite, and private
+          email body text is retained only when the pipeline needs it.
         </p>
       </section>
 
-      <PipelineActivityPanel />
+      <section className="landing-flow" aria-labelledby="landing-flow-title">
+        <div>
+          <p className="eyebrow">How it works</p>
+          <h2 id="landing-flow-title">A private pipeline from Gmail to charts</h2>
+        </div>
+        <ol className="landing-flow__list">
+          {productFlowSteps.map((step) => (
+            <li key={step.title}>
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
 
-      <SyncStatusPanel />
+      <section className="landing-actions" aria-label="Next actions">
+        <a className="landing-actions__primary" href="/features">
+          Run features
+        </a>
+        <a className="landing-actions__secondary" href="/dashboard">
+          View dashboard charts
+        </a>
+      </section>
     </main>
   );
 }
