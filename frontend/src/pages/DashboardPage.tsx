@@ -1633,36 +1633,44 @@ export function DashboardPage() {
           </Alert>
         ) : null}
 
-        <ol className="dashboard-breakdown-ranks">
+        <ChartPanel
+          description="Q-24 response conversion by company type is calculated deterministically from company_type breakdown rows over local applications and application_events."
+          emptyState={{
+            title:
+              companyTypeLoadState === "loading"
+                ? "Loading company types"
+                : "No company type rows yet",
+            description:
+              companyTypeLoadState === "loading"
+                ? "Loading deterministic company type outcomes from the local backend."
+                : "No applications have company type metadata yet. Run sync, classification, and aggregation from Feature Status first.",
+          }}
+          height={280}
+          title="Company type response conversion"
+        >
           {companyTypeRows.length > 0 ? (
-            companyTypeRows.slice(0, 5).map((row) => (
-              <li key={`${row.dimension}-${row.value}`}>
-                <div>
-                  <span className="dashboard-breakdown-rank__label">
-                    {titleize(row.value)}
-                  </span>
-                  <span>{countLabel(row.application_count, "application")}</span>
-                </div>
-                <p>
-                  <span>{countLabel(row.response_count, "response")}</span>, <span>{countLabel(row.interview_count, "interview")}</span>, <span>{countLabel(row.offer_count, "offer")}</span>
-                </p>
-              </li>
-            ))
-          ) : (
-            <li>
-              <div>
-                <span className="dashboard-breakdown-rank__label">
-                  {companyTypeLoadState === "loading" ? "Loading" : "No rows"}
-                </span>
-                <span>
-                  {companyTypeLoadState === "loading"
-                    ? "Fetching company types"
-                    : "No company type data"}
-                </span>
-              </div>
-            </li>
-          )}
-        </ol>
+            <BarChart
+              data={companyTypeRows.slice(0, 5).map((row) => ({
+                companyType: titleize(row.value),
+                responseRate: (row.response_rate ?? 0) * 100,
+              }))}
+              layout="vertical"
+              margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+            >
+              <CartesianGrid horizontal={false} stroke="rgba(255, 250, 240, 0.16)" />
+              <XAxis allowDecimals={false} stroke="#c9d8ce" type="number" unit="%" />
+              <YAxis
+                dataKey="companyType"
+                stroke="#c9d8ce"
+                tick={{ fontSize: 12 }}
+                type="category"
+                width={124}
+              />
+              <Tooltip />
+              <Bar dataKey="responseRate" fill="#b8e2af" name="Response rate" radius={[0, 8, 8, 0]} />
+            </BarChart>
+          ) : undefined}
+        </ChartPanel>
       </section>
 
       <section

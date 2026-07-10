@@ -1194,7 +1194,7 @@ describe("DashboardPage", () => {
     );
   });
 
-  it("renders Q-24 company type outcomes", async () => {
+  it("renders Q-24 company type outcomes as a chart-only surface", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
@@ -1204,9 +1204,10 @@ describe("DashboardPage", () => {
       name: "Company type outcomes",
     });
 
-    expect(within(companyTypes).getByText("Startup")).toBeTruthy();
-    expect(within(companyTypes).getByText("2 responses")).toBeTruthy();
-    expect(within(companyTypes).getByText("1 interview")).toBeTruthy();
+    expect(within(companyTypes).getByRole("img")).toBeTruthy();
+    expect(within(companyTypes).getByText("Company type response conversion")).toBeTruthy();
+    expect(within(companyTypes).queryByText("2 responses")).toBeNull();
+    expect(within(companyTypes).queryByText("1 interview")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=company_type",
       expect.objectContaining({ method: "GET" }),
