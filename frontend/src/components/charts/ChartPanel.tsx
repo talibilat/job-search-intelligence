@@ -37,7 +37,9 @@ export function ChartPanel({
   const titleId = `${chartId}-title`;
   const descriptionId = `${chartId}-description`;
   const infoId = `${chartId}-info`;
-  const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isInfoPinned, setIsInfoPinned] = useState(false);
+  const [isInfoPreviewed, setIsInfoPreviewed] = useState(false);
+  const isInfoOpen = isInfoPinned || isInfoPreviewed;
   const surfaceStyle = {
     "--chart-min-height": `${height}px`,
   } as CSSProperties;
@@ -60,7 +62,11 @@ export function ChartPanel({
               aria-expanded={isInfoOpen}
               aria-label={`About ${title}`}
               className="chart-panel__info-button"
-              onClick={() => setIsInfoOpen((current) => !current)}
+              onBlur={() => setIsInfoPreviewed(false)}
+              onClick={() => setIsInfoPinned((current) => !current)}
+              onFocus={() => setIsInfoPreviewed(true)}
+              onMouseEnter={() => setIsInfoPreviewed(true)}
+              onMouseLeave={() => setIsInfoPreviewed(false)}
               type="button"
             >
               i

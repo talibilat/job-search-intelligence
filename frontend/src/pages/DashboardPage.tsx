@@ -1664,6 +1664,16 @@ export function DashboardPage() {
                     : "No applications exist for the response-rate trend yet.",
               }}
               height={260}
+              info={{
+                dataSource: "GET /metrics/response-rate-trend",
+                dataTable: "applications and application_events",
+                howItWorks:
+                  "Groups filtered local applications by first_seen_at date and calculates each period's response rate from deterministic response-event evidence. No LLM produces these trend points.",
+                howToGenerate:
+                  "Run sync, classification, and aggregation from Feature Status so retained job-search emails become canonical applications with response timeline events.",
+                missingData:
+                  "If response-rate points are zero or missing, check whether aggregated applications have response events for the active filters.",
+              }}
               title="Daily response rate"
             >
               {responseRateTrendPoints.length > 0 ? (

@@ -1121,6 +1121,41 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the response rate trend chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const responseTrend = await screen.findByRole("region", {
+      name: "Daily response rate",
+    });
+    const infoControl = within(responseTrend).getByRole("button", {
+      name: "About Daily response rate",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(responseTrend).getByText("How this chart works")).toBeTruthy();
+    expect(within(responseTrend).getByText("GET /metrics/response-rate-trend")).toBeTruthy();
+    expect(
+      within(responseTrend).getByText("applications and application_events"),
+    ).toBeTruthy();
+    expect(
+      within(responseTrend).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(responseTrend).getByText(
+        "If response-rate points are zero or missing, check whether aggregated applications have response events for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
