@@ -249,6 +249,8 @@ function filtersFromSearch(search: string): DashboardFilters {
 function canonicalFilters(filters: DashboardFilters): DashboardFilters {
   return {
     ...filters,
+    firstSeenFrom: filters.firstSeenFrom.trim(),
+    firstSeenTo: filters.firstSeenTo.trim(),
     salaryMax: numericFilterText(filters.salaryMax),
     salaryMin: numericFilterText(filters.salaryMin),
   };

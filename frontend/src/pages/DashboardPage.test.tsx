@@ -1885,6 +1885,31 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("canonicalizes whitespace-padded first-seen filter submissions before loading metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    fireEvent.change(screen.getByLabelText("First seen from"), {
+      target: { value: " 2026-07-01T00:00:00Z " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    expect(window.location.search).toBe(
+      "?first_seen_from=2026-07-01T00%3A00%3A00Z",
+    );
+    expect(screen.getByLabelText("First seen from")).toHaveProperty(
+      "value",
+      "2026-07-01T00:00:00Z",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel?first_seen_from=2026-07-01T00%3A00%3A00Z",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("renders Q-11 through Q-15 outcome rates as a deterministic chart", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
