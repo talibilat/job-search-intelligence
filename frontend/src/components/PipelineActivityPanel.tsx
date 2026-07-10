@@ -297,6 +297,12 @@ export function PipelineActivityPanel() {
 
   const actionCopy = nextActionCopy[status.next_action];
   const counts = status.counts;
+  const classificationBlockedReason =
+    classificationPlan &&
+    (!classificationPlan.target_model_configured ||
+      classificationPlan.blocked_by_missing_target_model_count > 0)
+      ? "Classification is blocked because no target LLM model is configured. Open Setup to choose Azure OpenAI or Ollama before running classification."
+      : null;
   const backfillLabel =
     status.backfill_state === "completed"
       ? "Backfill complete"
@@ -345,14 +351,19 @@ export function PipelineActivityPanel() {
       <Alert role="status" title={actionCopy.title} tone={actionCopy.tone}>
         <p>{status.next_action_reason}</p>
         {status.next_action === "run_classification" ? (
-          <Button
-            disabled={isClassifying}
-            onClick={() => {
-              void handleRunClassification();
-            }}
-          >
-            {isClassifying ? "Classifying" : "Run classification"}
-          </Button>
+          <>
+            {classificationBlockedReason ? (
+              <p>{classificationBlockedReason}</p>
+            ) : null}
+            <Button
+              disabled={isClassifying || Boolean(classificationBlockedReason)}
+              onClick={() => {
+                void handleRunClassification();
+              }}
+            >
+              {isClassifying ? "Classifying" : "Run classification"}
+            </Button>
+          </>
         ) : null}
         {status.next_action === "review_dashboard" ? (
           <p>
