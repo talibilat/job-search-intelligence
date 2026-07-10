@@ -1730,6 +1730,33 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("blocks first-seen date range submissions when the start is after the end", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    fireEvent.change(screen.getByLabelText("First seen from"), {
+      target: { value: "2026-08-01T00:00:00Z" },
+    });
+    fireEvent.change(screen.getByLabelText("First seen to"), {
+      target: { value: "2026-07-01T00:00:00Z" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    expect(
+      await screen.findByText(
+        "First seen from must be less than or equal to first seen to.",
+      ),
+    ).toBeTruthy();
+    expect(window.location.search).toBe("");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/metrics/funnel?first_seen_from=2026-08-01T00%3A00%3A00Z&first_seen_to=2026-07-01T00%3A00%3A00Z",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("renders Q-11 through Q-15 outcome rates as a deterministic chart", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");

@@ -63,7 +63,9 @@ interface DashboardFilters {
   workMode: WorkModeValue | "";
 }
 
-type DashboardFilterErrors = Partial<Record<"salaryMax" | "salaryMin", string>>;
+type DashboardFilterErrors = Partial<
+  Record<"firstSeenFrom" | "firstSeenTo" | "salaryMax" | "salaryMin", string>
+>;
 
 const emptyFilters: DashboardFilters = {
   firstSeenFrom: "",
@@ -127,11 +129,23 @@ function validateSalaryFilter(value: string, label: string) {
 
 function validateDashboardFilters(filters: DashboardFilters) {
   const errors: DashboardFilterErrors = {};
+  const firstSeenFrom = Date.parse(filters.firstSeenFrom.trim());
+  const firstSeenTo = Date.parse(filters.firstSeenTo.trim());
   const salaryMinError = validateSalaryFilter(filters.salaryMin, "Salary min");
   const salaryMaxError = validateSalaryFilter(filters.salaryMax, "Salary max");
   const salaryMin = Number(filters.salaryMin.trim());
   const salaryMax = Number(filters.salaryMax.trim());
 
+  if (
+    filters.firstSeenFrom.trim().length > 0 &&
+    filters.firstSeenTo.trim().length > 0 &&
+    Number.isFinite(firstSeenFrom) &&
+    Number.isFinite(firstSeenTo) &&
+    firstSeenFrom > firstSeenTo
+  ) {
+    errors.firstSeenFrom =
+      "First seen from must be less than or equal to first seen to.";
+  }
   if (salaryMinError) {
     errors.salaryMin = salaryMinError;
   }
@@ -1108,30 +1122,40 @@ export function DashboardPage() {
                 </select>
               </FormField>
               <FormField
+                error={filterErrors.firstSeenFrom}
                 htmlFor="dashboard-first-seen-from"
                 label="First seen from"
               >
                 <TextInput
                   id="dashboard-first-seen-from"
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setFilters({
                       ...filters,
                       firstSeenFrom: event.target.value,
-                    })
-                  }
+                    });
+                    setFilterErrors((currentErrors) => ({
+                      ...currentErrors,
+                      firstSeenFrom: undefined,
+                    }));
+                  }}
                   placeholder="2026-07-01T00:00:00Z"
                   value={filters.firstSeenFrom}
                 />
               </FormField>
               <FormField
+                error={filterErrors.firstSeenTo}
                 htmlFor="dashboard-first-seen-to"
                 label="First seen to"
               >
                 <TextInput
                   id="dashboard-first-seen-to"
-                  onChange={(event) =>
-                    setFilters({ ...filters, firstSeenTo: event.target.value })
-                  }
+                  onChange={(event) => {
+                    setFilters({ ...filters, firstSeenTo: event.target.value });
+                    setFilterErrors((currentErrors) => ({
+                      ...currentErrors,
+                      firstSeenTo: undefined,
+                    }));
+                  }}
                   placeholder="2026-07-31T23:59:59Z"
                   value={filters.firstSeenTo}
                 />
