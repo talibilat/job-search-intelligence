@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from pydantic import ValidationError
 
-from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail
+from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.models import (
     LLMProviderHealthCheckApiRequest,
@@ -80,7 +80,11 @@ def get_provider_config(
     return build_provider_config_response(settings, registry)
 
 
-@router.put("/providers", response_model=ProviderConfigResponse)
+@router.put(
+    "/providers",
+    response_model=ProviderConfigResponse,
+    responses={400: {"model": ApiErrorResponse}, 422: {"model": ApiErrorResponse}},
+)
 def update_provider_config(
     request: ProviderConfigUpdateRequest,
     settings: Annotated[AppSettings, Depends(get_settings)],

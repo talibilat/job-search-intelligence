@@ -2440,8 +2440,13 @@ export type updateProviderConfigConfigProvidersPutResponse200 = {
   status: 200;
 };
 
+export type updateProviderConfigConfigProvidersPutResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
 export type updateProviderConfigConfigProvidersPutResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 
@@ -2449,10 +2454,12 @@ export type updateProviderConfigConfigProvidersPutResponseSuccess =
   updateProviderConfigConfigProvidersPutResponse200 & {
     headers: Headers;
   };
-export type updateProviderConfigConfigProvidersPutResponseError =
-  updateProviderConfigConfigProvidersPutResponse422 & {
-    headers: Headers;
-  };
+export type updateProviderConfigConfigProvidersPutResponseError = (
+  | updateProviderConfigConfigProvidersPutResponse400
+  | updateProviderConfigConfigProvidersPutResponse422
+) & {
+  headers: Headers;
+};
 
 export type updateProviderConfigConfigProvidersPutResponse =
   | updateProviderConfigConfigProvidersPutResponseSuccess
