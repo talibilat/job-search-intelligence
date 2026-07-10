@@ -1703,6 +1703,33 @@ describe("DashboardPage", () => {
     expect(window.location.search).toBe("");
   });
 
+  it("blocks salary range submissions when the minimum is greater than the maximum", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    fireEvent.change(screen.getByLabelText("Salary min"), {
+      target: { value: "200000" },
+    });
+    fireEvent.change(screen.getByLabelText("Salary max"), {
+      target: { value: "100000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    expect(
+      await screen.findByText(
+        "Salary min must be less than or equal to salary max.",
+      ),
+    ).toBeTruthy();
+    expect(window.location.search).toBe("");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/metrics/funnel?salary_max=100000&salary_min=200000",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("renders Q-11 through Q-15 outcome rates as a deterministic chart", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");

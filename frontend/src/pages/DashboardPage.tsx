@@ -129,12 +129,23 @@ function validateDashboardFilters(filters: DashboardFilters) {
   const errors: DashboardFilterErrors = {};
   const salaryMinError = validateSalaryFilter(filters.salaryMin, "Salary min");
   const salaryMaxError = validateSalaryFilter(filters.salaryMax, "Salary max");
+  const salaryMin = Number(filters.salaryMin.trim());
+  const salaryMax = Number(filters.salaryMax.trim());
 
   if (salaryMinError) {
     errors.salaryMin = salaryMinError;
   }
   if (salaryMaxError) {
     errors.salaryMax = salaryMaxError;
+  }
+  if (
+    !salaryMinError &&
+    !salaryMaxError &&
+    filters.salaryMin.trim().length > 0 &&
+    filters.salaryMax.trim().length > 0 &&
+    salaryMin > salaryMax
+  ) {
+    errors.salaryMin = "Salary min must be less than or equal to salary max.";
   }
 
   return errors;
