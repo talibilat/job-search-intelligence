@@ -675,15 +675,6 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
       );
     }
 
-    if (url === "/applications") {
-      return Promise.resolve(
-        new Response(JSON.stringify([baseApplication]), {
-          headers: { "Content-Type": "application/json" },
-          status: 200,
-        }),
-      );
-    }
-
     if (url === "/applications?status=rejected") {
       return Promise.resolve(
         new Response(
@@ -721,20 +712,6 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             status: 200,
           },
         ),
-      );
-    }
-
-    if (
-      url === "/applications?status=applied" ||
-      url === "/applications?status=in_review" ||
-      url === "/applications?status=assessment" ||
-      url === "/applications?status=interview"
-    ) {
-      return Promise.resolve(
-        new Response(JSON.stringify([]), {
-          headers: { "Content-Type": "application/json" },
-          status: 200,
-        }),
       );
     }
 
@@ -782,6 +759,32 @@ describe("DashboardPage", () => {
     await screen.findByRole("region", { name: "Application funnel" });
     expect(screen.getByLabelText("Status")).toHaveProperty("value", "");
     expect(window.location.search).toBe("");
+  });
+
+  it("keeps live application lists out of the chart dashboard", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+
+    expect(
+      screen.queryByRole("region", {
+        name: "Live applications awaiting response",
+      }),
+    ).toBeNull();
+    expect(
+      fetchMock.mock.calls.some(([input]) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        return url.startsWith("/applications?status=");
+      }),
+    ).toBe(false);
   });
 
   it("hydrates composed filters from the URL and clears them", async () => {

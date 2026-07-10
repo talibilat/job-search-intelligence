@@ -936,10 +936,6 @@ h3 {
   letter-spacing: -0.06em;
 }
 
-.dashboard-live-applications {
-  gap: 24px;
-}
-
 .dashboard-funnel-card {
   overflow: hidden;
 }
@@ -1074,87 +1070,6 @@ h3 {
 .dashboard-breakdown-rank__label {
   color: #102417;
   font-size: 1.05rem;
-}
-
-.dashboard-live-applications__header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  min-width: 0;
-}
-
-.dashboard-live-applications__header > div {
-  display: grid;
-  gap: 12px;
-  min-width: min(100%, 360px);
-}
-
-.dashboard-live-count {
-  width: fit-content;
-  max-width: 100%;
-  margin-bottom: 0;
-  padding: 12px 16px;
-  border-radius: 999px;
-  background: #203f2c;
-  color: #fffaf0;
-  font-weight: 900;
-  overflow-wrap: anywhere;
-}
-
-.dashboard-live-list {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.dashboard-live-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px 18px;
-  min-width: 0;
-  padding: 18px;
-  border: 1px solid #d8d0bf;
-  border-radius: 20px;
-  background: #edf6eb;
-}
-
-.dashboard-live-card__company {
-  color: #102417;
-  font-size: 1.08rem;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  overflow-wrap: anywhere;
-}
-
-.dashboard-live-card__role,
-.dashboard-live-card__meta,
-.dashboard-live-empty {
-  margin-bottom: 0;
-  color: #4e5e53;
-}
-
-.dashboard-live-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 0;
-}
-
-.dashboard-live-card__meta span {
-  min-width: 0;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #fffdf7;
-  color: #203f2c;
-  font-size: 0.84rem;
-  font-weight: 800;
-  overflow-wrap: anywhere;
 }
 
 .dashboard-filter-form,
@@ -1672,7 +1587,6 @@ h3 {
   .dashboard-layout,
   .dashboard-breakdown-header,
   .dashboard-breakdown-layout,
-  .dashboard-live-card,
   .application-detail-grid,
   .filter-placeholder-list,
   .dashboard-filter-grid,
@@ -1694,8 +1608,7 @@ h3 {
   .feature-section__header,
   .feature-card__header,
   .insight-card__header,
-  .sync-panel__recent-email-header,
-  .dashboard-live-card__meta {
+  .sync-panel__recent-email-header {
     align-items: flex-start;
     flex-direction: column;
   }
