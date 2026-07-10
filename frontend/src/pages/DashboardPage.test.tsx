@@ -1026,7 +1026,7 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
-  it("renders Q-19 personal ghost threshold and silence age distribution", async () => {
+  it("renders Q-19 personal ghost threshold as a chart-only surface", async () => {
     mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
@@ -1036,13 +1036,19 @@ describe("DashboardPage", () => {
       name: "Personal ghost threshold",
     });
 
-    expect(within(metric).getByText("20 days")).toBeTruthy();
-    expect(within(metric).getByText("Inferred from 2 response timings")).toBeTruthy();
-    expect(within(metric).getByText("3 silent applications in distribution")).toBeTruthy();
-    expect(within(metric).getByText("8 to 14 days")).toBeTruthy();
-    expect(within(metric).getByText("1")).toBeTruthy();
-    expect(within(metric).getByText("15 to 30 days")).toBeTruthy();
-    expect(within(metric).getByText("2")).toBeTruthy();
+    expect(
+      within(metric).getByRole("img", { name: "Personal ghost threshold" }),
+    ).toBeTruthy();
+    expect(within(metric).getByText("Personal ghost threshold")).toBeTruthy();
+    expect(
+      within(metric).getByText(
+        "Q-19 silence-age buckets come from deterministic /metrics/summary personal_ghost_threshold data over local application timelines, then reload with the active dashboard filters.",
+      ),
+    ).toBeTruthy();
+    expect(within(metric).queryByText("Effective dead after")).toBeNull();
+    expect(within(metric).queryByText("Silent applications")).toBeNull();
+    expect(within(metric).queryByText("Inferred from 2 response timings")).toBeNull();
+    expect(within(metric).queryByText("3 silent applications in distribution")).toBeNull();
   });
 
   it("renders source breakdown as a chart-focused metric surface without a detail table", async () => {
