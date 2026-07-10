@@ -68,7 +68,7 @@ function eventFormHasChanges(
 
   return (
     eventForm.emailId.trim() !== (event.email_id ?? "") ||
-    eventForm.eventAt !== event.event_at ||
+    eventForm.eventAt.trim() !== event.event_at ||
     eventForm.eventType !== event.event_type ||
     eventForm.extractNote.trim() !== (event.extract_note ?? "")
   );
@@ -276,7 +276,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         selectedEventId,
         {
           email_id: eventForm.emailId.trim() || null,
-          event_at: eventForm.eventAt,
+          event_at: eventForm.eventAt.trim(),
           event_type: eventForm.eventType,
           extract_note: eventForm.extractNote.trim() || null,
           reason: eventForm.reason.trim() || null,

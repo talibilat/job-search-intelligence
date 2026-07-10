@@ -542,6 +542,32 @@ describe("ApplicationDetailPage", () => {
     expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toBeNull();
   });
 
+  it("disables event correction when only event time whitespace changes", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Event to edit");
+    fireEvent.change(screen.getByLabelText("Event time"), {
+      target: { value: ` ${applicationEvent.event_at} ` },
+    });
+
+    expect(
+      screen.getByText("Change at least one event field before saving an event correction."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save event correction" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Save event correction" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toBeNull();
+  });
+
   it("disables event correction when a non-inferred event would lose its source email", async () => {
     const fetchMock = mockFetchResponses({
       "/applications/app-1": applicationRecord,
