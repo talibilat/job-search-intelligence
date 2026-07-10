@@ -984,13 +984,20 @@ describe("DashboardPage", () => {
         "Software engineer is your strongest adjacent role signal",
       ),
     ).toBeNull();
-    expect(within(diagnostics).getByText("Weakest response signals")).toBeTruthy();
-    expect(within(diagnostics).getAllByText("Linkedin (Source)").length).toBeGreaterThan(
-      0,
-    );
+    const weakestResponseSignals = await within(diagnostics).findByRole("region", {
+      name: "Weakest response signals",
+    });
+
+    expect(within(weakestResponseSignals).getByRole("img")).toBeTruthy();
     expect(
-      within(diagnostics).getAllByText("-26.7 pp vs baseline").length,
-    ).toBeGreaterThan(0);
+      within(weakestResponseSignals).getByText(
+        "Weakest response signals use deterministic /metrics/diagnostics response-rate lift to chart segments below the filtered response baseline.",
+      ),
+    ).toBeTruthy();
+    expect(within(weakestResponseSignals).queryByText("Linkedin (Source)")).toBeNull();
+    expect(
+      within(weakestResponseSignals).queryByText("-26.7 pp vs baseline"),
+    ).toBeNull();
     expect(within(diagnostics).queryByText("Correlation summary")).toBeNull();
     expect(within(diagnostics).queryByText("How to read these diagnostics")).toBeNull();
     expect(

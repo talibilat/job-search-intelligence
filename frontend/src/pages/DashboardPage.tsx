@@ -278,14 +278,6 @@ function sortedFunnelStages(stages: MetricFunnelStage[]) {
   );
 }
 
-function formatResponseLift(lift: number | null | undefined) {
-  if (lift == null) {
-    return "No baseline";
-  }
-  const sign = lift > 0 ? "+" : "";
-  return `${sign}${percentagePointFormatter.format(lift * 100)} pp vs baseline`;
-}
-
 function formatNegativeLift(lift: number | null | undefined) {
   if (lift == null) {
     return "No negative baseline";
@@ -296,13 +288,6 @@ function formatNegativeLift(lift: number | null | undefined) {
 
 function diagnosticSegmentTitle(segment: DiagnosticSegmentComparison) {
   return `${titleize(segment.value)} (${titleize(segment.dimension)})`;
-}
-
-function diagnosticSegmentEvidence(segment: DiagnosticSegmentComparison) {
-  return `${countLabel(segment.response_count, "response")} from ${countLabel(
-    segment.application_count,
-    "application",
-  )}`;
 }
 
 function diagnosticNegativeEvidence(segment: DiagnosticSegmentComparison) {
@@ -870,6 +855,13 @@ export function DashboardPage() {
   const strongestResponseSignalRows =
     diagnosticsLoadState === "loaded" && !diagnosticsError
       ? (diagnostics?.strongest_response_segments ?? []).map((segment) => ({
+          lift: Number(segment.response_rate_lift ?? 0) * 100,
+          segment: diagnosticSegmentTitle(segment),
+        }))
+      : [];
+  const weakestResponseSignalRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError
+      ? (diagnostics?.weakest_response_segments ?? []).map((segment) => ({
           lift: Number(segment.response_rate_lift ?? 0) * 100,
           segment: diagnosticSegmentTitle(segment),
         }))
@@ -1738,43 +1730,34 @@ export function DashboardPage() {
             ) : undefined}
           </ChartPanel>
 
-          <article>
-            <h3>Weakest response signals</h3>
-            <ol className="dashboard-breakdown-ranks">
-              {diagnostics?.weakest_response_segments.length ? (
-                diagnostics.weakest_response_segments.map((segment) => (
-                  <li key={`weak-${segment.dimension}-${segment.value}`}>
-                    <div>
-                      <span className="dashboard-breakdown-rank__label">
-                        {diagnosticSegmentTitle(segment)}
-                      </span>
-                      <span>{formatResponseLift(segment.response_rate_lift)}</span>
-                    </div>
-                    <p>{diagnosticSegmentEvidence(segment)}</p>
-                  </li>
-                ))
-              ) : (
-                <li>
-                  <div>
-                    <span className="dashboard-breakdown-rank__label">
-                      {diagnosticsError
-                        ? "Unavailable"
-                        : diagnosticsLoadState === "loading"
-                          ? "Loading"
-                          : "No losers"}
-                    </span>
-                    <span>
-                      {diagnosticsError
-                        ? "Diagnostic request failed"
-                        : diagnosticsLoadState === "loading"
-                        ? "Fetching diagnostics"
-                        : "No negative lift"}
-                    </span>
-                  </div>
-                </li>
-              )}
-            </ol>
-          </article>
+          <ChartPanel
+            description="Weakest response signals use deterministic /metrics/diagnostics response-rate lift to chart segments below the filtered response baseline."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading weakest response signals"
+                  : "No weakest response signals yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic response-lift diagnostics from the local backend."
+                  : "No segment is below the filtered response baseline yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Weakest response signals"
+          >
+            {weakestResponseSignalRows.length > 0 ? (
+              <BarChart
+                data={weakestResponseSignalRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="segment" stroke="#c9d8ce" />
+                <YAxis stroke="#c9d8ce" type="number" unit=" pp" />
+                <Tooltip />
+                <Bar dataKey="lift" fill="#ffb86c" name="Response-rate lift" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <article>
             <h3>Q-33 rejected or ghosted traits</h3>
