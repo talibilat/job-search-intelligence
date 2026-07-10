@@ -5,6 +5,12 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class GhostInferenceRunApiRequest(BaseModel):
+    """Empty request contract for the no-payload ghost-inference run endpoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class GhostInferenceRunResponse(BaseModel):
     """Public result for one ghost-inference run."""
 

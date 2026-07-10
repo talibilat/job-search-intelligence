@@ -27,7 +27,7 @@ from .correction import (
     ApplicationSplitSourceApplication,
 )
 from .diagnostics import DiagnosticSegmentComparison, MetricsDiagnosticsResponse
-from .ghost_inference import GhostInferenceRunResponse
+from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
 from .health import HealthResponse
 from .insight import (
     InsightListResponse,
@@ -134,6 +134,7 @@ __all__ = [
     "DiagnosticSegmentComparison",
     "EmailProviderConfigResponse",
     "GhostInferenceRunResponse",
+    "GhostInferenceRunApiRequest",
     "HealthResponse",
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",

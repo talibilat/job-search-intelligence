@@ -73,6 +73,57 @@ def test_post_ghost_inference_marks_silent_applications_idempotently(
     assert ghost_events == [(None, "ghost_inferred", "2026-06-15T09:00:00+00:00")]
 
 
+def test_post_ghost_inference_rejects_unexpected_payload_fields(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(connection, email_id="email-applied")
+        insert_application(
+            connection,
+            application_id="app-silent",
+            current_status="applied",
+            first_seen_at="2026-05-01T09:00:00+00:00",
+            last_activity_at="2026-05-01T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="event-applied",
+            application_id="app-silent",
+            email_id="email-applied",
+            event_type="applied",
+            event_at="2026-05-01T09:00:00+00:00",
+        )
+
+    client = create_test_client(database_path, ghost_threshold_days=45)
+
+    response = client.post(
+        "/applications/ghost-inference",
+        json={"force_ghost_all": True, "api_key": "super-secret-api-key"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert "super-secret-api-key" not in response.text
+
+    with sqlite3.connect(database_path) as connection:
+        application_rows = connection.execute(
+            "SELECT current_status FROM applications WHERE id = ?",
+            ("app-silent",),
+        ).fetchall()
+        ghost_event_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM application_events
+            WHERE application_id = ? AND event_type = 'ghost_inferred'
+            """,
+            ("app-silent",),
+        ).fetchone()[0]
+
+    assert application_rows == [("applied",)]
+    assert ghost_event_count == 0
+
+
 def test_post_ghost_inference_surfaces_manual_lock_conflict(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:

@@ -1454,12 +1454,23 @@ export type runGhostInferenceApplicationsGhostInferencePostResponse200 = {
   status: 200;
 };
 
+export type runGhostInferenceApplicationsGhostInferencePostResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type runGhostInferenceApplicationsGhostInferencePostResponseSuccess =
   runGhostInferenceApplicationsGhostInferencePostResponse200 & {
     headers: Headers;
   };
+export type runGhostInferenceApplicationsGhostInferencePostResponseError =
+  runGhostInferenceApplicationsGhostInferencePostResponse422 & {
+    headers: Headers;
+  };
+
 export type runGhostInferenceApplicationsGhostInferencePostResponse =
-  runGhostInferenceApplicationsGhostInferencePostResponseSuccess;
+  | runGhostInferenceApplicationsGhostInferencePostResponseSuccess
+  | runGhostInferenceApplicationsGhostInferencePostResponseError;
 
 export const getRunGhostInferenceApplicationsGhostInferencePostUrl = () => {
   return `/applications/ghost-inference`;

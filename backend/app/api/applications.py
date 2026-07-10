@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from pydantic import ValidationError
 
 from app.api.dependencies import (
     get_application_correction_conflict_service,
@@ -29,6 +30,7 @@ from app.models import (
     ApplicationSplitResponse,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
+    GhostInferenceRunApiRequest,
     GhostInferenceRunResponse,
 )
 from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
@@ -62,6 +64,33 @@ from app.services.manual_merge import (
 )
 
 router = APIRouter(prefix="/applications", tags=["applications"])
+
+
+def _validation_details(error: ValidationError) -> list[ApiErrorDetail]:
+    return [
+        ApiErrorDetail(
+            field=".".join(str(part) for part in validation_error.get("loc", ())),
+            message=str(validation_error.get("msg", "Invalid application request.")),
+            type=str(validation_error.get("type", "value_error")),
+        )
+        for validation_error in error.errors()
+    ]
+
+
+async def _validate_ghost_inference_request_body(request: Request) -> None:
+    raw_body = await request.body()
+    if not raw_body.strip():
+        return
+
+    try:
+        GhostInferenceRunApiRequest.model_validate_json(raw_body)
+    except ValidationError as error:
+        raise ApiError(
+            status_code=422,
+            code=ApiErrorCode.VALIDATION_ERROR,
+            message="Ghost inference request validation failed.",
+            details=_validation_details(error),
+        ) from error
 
 
 @router.get(
@@ -120,18 +149,21 @@ def list_applications(
 @router.post(
     "/ghost-inference",
     response_model=GhostInferenceRunResponse,
+    responses={422: {"model": ApiErrorResponse}},
     summary="Run Ghost Inference",
     description=(
         "Marks applied applications as ghosted when their event timeline has no "
         "response after the configured silence threshold."
     ),
 )
-def run_ghost_inference(
+async def run_ghost_inference(
+    request: Request,
     service: Annotated[
         GhostInferenceService,
         Depends(get_ghost_inference_service),
     ],
 ) -> GhostInferenceRunResponse:
+    await _validate_ghost_inference_request_body(request)
     return service.run()
 
 
