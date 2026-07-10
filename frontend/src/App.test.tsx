@@ -551,6 +551,7 @@ describe("App", () => {
     const statusTable = await screen.findByRole("table", {
       name: "Application current statuses",
     });
+    expect(statusTable.classList.contains("ui-table")).toBe(true);
     expect(within(statusTable).getByText("Acme")).toBeTruthy();
     expect(within(statusTable).getByText("Interview")).toBeTruthy();
     expect(within(statusTable).getByText("Globex")).toBeTruthy();

@@ -157,13 +157,15 @@ def list_applications(
     ),
 )
 async def run_ghost_inference(
-    request: Request,
+    _validated_body: Annotated[
+        None,
+        Depends(_validate_ghost_inference_request_body),
+    ],
     service: Annotated[
         GhostInferenceService,
         Depends(get_ghost_inference_service),
     ],
 ) -> GhostInferenceRunResponse:
-    await _validate_ghost_inference_request_body(request)
     return service.run()
 
 

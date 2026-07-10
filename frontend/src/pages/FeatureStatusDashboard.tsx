@@ -7,7 +7,14 @@ import {
 } from "../api";
 import { PipelineActivityPanel } from "../components/PipelineActivityPanel";
 import { SyncStatusPanel } from "../components/SyncStatusPanel";
-import { FormField, InfoDisclosure, Tabs, TextInput } from "../components/ui";
+import {
+  DataTable,
+  FormField,
+  InfoDisclosure,
+  Tabs,
+  TextInput,
+  type DataTableColumn,
+} from "../components/ui";
 import {
   featureStatusLabels,
   featureStatusRegistry,
@@ -370,6 +377,24 @@ function ApplicationStatusSurface() {
   const liveApplications = state.applications.filter((application) =>
     liveApplicationStatuses.has(application.current_status),
   );
+  const applicationStatusColumns = [
+    {
+      header: "Company",
+      key: "company",
+      render: (application) => <ApplicationCompanyLink application={application} />,
+    },
+    { header: "Role", key: "role_title" },
+    {
+      header: "Status",
+      key: "current_status",
+      render: (application) => applicationStatusLabel(application.current_status),
+    },
+    {
+      header: "Last activity",
+      key: "last_activity_at",
+      render: (application) => formatApplicationDate(application.last_activity_at),
+    },
+  ] satisfies readonly DataTableColumn<ApplicationRecord>[];
 
   return (
     <section
@@ -411,28 +436,12 @@ function ApplicationStatusSurface() {
       {!state.loading && !state.error && state.applications.length > 0 ? (
         <div className="feature-applications__grid">
           <div className="feature-applications__table-wrap">
-            <table aria-label="Application current statuses">
-              <thead>
-                <tr>
-                  <th scope="col">Company</th>
-                  <th scope="col">Role</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Last activity</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.applications.map((application) => (
-                  <tr key={application.id}>
-                    <td>
-                      <ApplicationCompanyLink application={application} />
-                    </td>
-                    <td>{application.role_title}</td>
-                    <td>{applicationStatusLabel(application.current_status)}</td>
-                    <td>{formatApplicationDate(application.last_activity_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              caption="Application current statuses"
+              columns={applicationStatusColumns}
+              rowKey={(application) => application.id}
+              rows={state.applications}
+            />
           </div>
 
           <section

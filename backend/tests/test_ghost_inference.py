@@ -6,6 +6,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from app.api.dependencies import get_ghost_inference_service
 from app.config import AppSettings, get_settings
 from app.main import create_app
 from app.pipeline.aggregate import make_event_id
@@ -122,6 +123,32 @@ def test_post_ghost_inference_rejects_unexpected_payload_fields(
 
     assert application_rows == [("applied",)]
     assert ghost_event_count == 0
+
+
+def test_post_ghost_inference_validates_body_before_resolving_service(
+    tmp_path: Path,
+) -> None:
+    settings = AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'jobtracker.sqlite3'}",
+        sync_on_open=False,
+    )
+    app = create_app(settings=settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    def fail_if_service_resolves() -> None:
+        raise AssertionError("Ghost inference service should not resolve for invalid payloads")
+
+    app.dependency_overrides[get_ghost_inference_service] = fail_if_service_resolves
+    client = TestClient(app)
+
+    response = client.post(
+        "/applications/ghost-inference",
+        json={"force_ghost_all": True},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
 
 
 def test_post_ghost_inference_surfaces_manual_lock_conflict(tmp_path: Path) -> None:
