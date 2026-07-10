@@ -1425,80 +1425,46 @@ export function DashboardPage() {
           </Alert>
         ) : null}
 
-        <div className="dashboard-breakdown-layout">
-          <div className="dashboard-breakdown-chart-card">
-            <ChartPanel
-              description={`Application counts grouped by ${titleize(
-                breakdownDimension,
-              ).toLowerCase()}. Response, interview, and offer conversion rates are listed in the ranked summary and table.`}
-              emptyState={{
-                title:
-                  breakdownLoadState === "loading"
-                    ? "Loading breakdown"
-                    : "No breakdown rows yet",
-                description:
-                  breakdownLoadState === "loading"
-                    ? "Loading deterministic grouped metrics from the local backend."
-                    : "No applications exist for this breakdown dimension yet.",
-              }}
-              height={260}
-              title={`${titleize(breakdownDimension)} applications`}
+        <ChartPanel
+          description={`Application counts grouped by ${titleize(
+            breakdownDimension,
+          ).toLowerCase()} from deterministic /metrics/breakdown data.`}
+          emptyState={{
+            title:
+              breakdownLoadState === "loading"
+                ? "Loading breakdown"
+                : "No breakdown rows yet",
+            description:
+              breakdownLoadState === "loading"
+                ? "Loading deterministic grouped metrics from the local backend."
+                : "No applications exist for this breakdown dimension yet.",
+          }}
+          height={260}
+          title={`${titleize(breakdownDimension)} applications`}
+        >
+          {breakdownRows.length > 0 ? (
+            <BarChart
+              data={breakdownRows.map((row) => ({
+                applications: row.application_count,
+                group: titleize(row.value),
+              }))}
+              layout="vertical"
+              margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
             >
-              {breakdownRows.length > 0 ? (
-                <BarChart
-                  data={breakdownRows.map((row) => ({
-                    applications: row.application_count,
-                    group: titleize(row.value),
-                  }))}
-                  layout="vertical"
-                  margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
-                >
-                  <CartesianGrid horizontal={false} stroke="rgba(255, 250, 240, 0.16)" />
-                  <XAxis allowDecimals={false} stroke="#c9d8ce" type="number" />
-                  <YAxis
-                    dataKey="group"
-                    stroke="#c9d8ce"
-                    tick={{ fontSize: 12 }}
-                    type="category"
-                    width={96}
-                  />
-                  <Tooltip />
-                  <Bar dataKey="applications" fill="#b8e2af" radius={[0, 8, 8, 0]} />
-                </BarChart>
-              ) : undefined}
-            </ChartPanel>
-          </div>
-          <ol className="dashboard-breakdown-ranks">
-            {breakdownRows.length > 0 ? (
-              breakdownRows.slice(0, 4).map((row) => (
-                <li key={`${row.dimension}-${row.value}`}>
-                  <div>
-                    <span className="dashboard-breakdown-rank__label">
-                      {titleize(row.value)}
-                    </span>
-                    <span>{countLabel(row.application_count, "application")}</span>
-                  </div>
-                  <p>
-                    {countLabel(row.response_count, "response")} ({formatNullableRate(row.response_rate)} response rate), {countLabel(row.interview_count, "interview")} ({formatNullableRate(row.interview_rate)} interview rate), {countLabel(row.offer_count, "offer")} ({formatNullableRate(row.offer_rate)} offer rate)
-                  </p>
-                </li>
-              ))
-            ) : (
-              <li>
-                <div>
-                  <span className="dashboard-breakdown-rank__label">
-                    {breakdownLoadState === "loading" ? "Loading" : "No rows"}
-                  </span>
-                  <span>
-                    {breakdownLoadState === "loading"
-                      ? "Fetching breakdowns"
-                      : "No grouped metrics"}
-                  </span>
-                </div>
-              </li>
-            )}
-          </ol>
-        </div>
+              <CartesianGrid horizontal={false} stroke="rgba(255, 250, 240, 0.16)" />
+              <XAxis allowDecimals={false} stroke="#c9d8ce" type="number" />
+              <YAxis
+                dataKey="group"
+                stroke="#c9d8ce"
+                tick={{ fontSize: 12 }}
+                type="category"
+                width={96}
+              />
+              <Tooltip />
+              <Bar dataKey="applications" fill="#b8e2af" radius={[0, 8, 8, 0]} />
+            </BarChart>
+          ) : undefined}
+        </ChartPanel>
       </section>
 
       <section

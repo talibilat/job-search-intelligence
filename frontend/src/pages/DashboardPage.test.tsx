@@ -1051,7 +1051,7 @@ describe("DashboardPage", () => {
     expect(within(metric).queryByText("3 silent applications in distribution")).toBeNull();
   });
 
-  it("renders source breakdown as a chart-focused metric surface without a detail table", async () => {
+  it("renders source breakdown as a chart-only metric surface", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
@@ -1062,12 +1062,13 @@ describe("DashboardPage", () => {
     });
 
     expect(within(breakdown).getByText("Source breakdown")).toBeTruthy();
-    expect(within(breakdown).getAllByText("Linkedin").length).toBeGreaterThan(0);
-    expect(within(breakdown).getAllByText("Company site").length).toBeGreaterThan(0);
-    expect(within(breakdown).getByText("3 applications")).toBeTruthy();
-    expect(within(breakdown).getByText(/2 responses/)).toBeTruthy();
-    expect(within(breakdown).getByText(/66.7% response rate/)).toBeTruthy();
-    expect(within(breakdown).getByText(/1 offer/)).toBeTruthy();
+    expect(within(breakdown).getByRole("img", { name: "Source applications" }))
+      .toBeTruthy();
+    expect(within(breakdown).queryByText("3 applications")).toBeNull();
+    expect(within(breakdown).queryByText(/2 responses/)).toBeNull();
+    expect(within(breakdown).queryByText(/66.7% response rate/)).toBeNull();
+    expect(within(breakdown).queryByText(/1 offer/)).toBeNull();
+    expect(within(breakdown).queryByRole("list")).toBeNull();
     expect(
       within(breakdown).queryByRole("table", {
         name: "Source metric breakdown",
@@ -1086,8 +1087,9 @@ describe("DashboardPage", () => {
       name: "Tech breakdown",
     });
 
-    expect(within(techBreakdown).getAllByText("Python").length).toBeGreaterThan(0);
-    expect(within(techBreakdown).getByText(/75% response rate/)).toBeTruthy();
+    expect(within(techBreakdown).getByRole("img", { name: "Tech applications" }))
+      .toBeTruthy();
+    expect(within(techBreakdown).queryByText(/75% response rate/)).toBeNull();
     expect(
       within(techBreakdown).queryByRole("table", {
         name: "Tech metric breakdown",
@@ -1106,8 +1108,9 @@ describe("DashboardPage", () => {
       name: "Salary breakdown",
     });
 
-    expect(within(salaryBreakdown).getAllByText("100k 149k").length).toBeGreaterThan(0);
-    expect(within(salaryBreakdown).getByText(/100% response rate/)).toBeTruthy();
+    expect(within(salaryBreakdown).getByRole("img", { name: "Salary applications" }))
+      .toBeTruthy();
+    expect(within(salaryBreakdown).queryByText(/100% response rate/)).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/breakdown?dimension=salary",
       expect.objectContaining({ method: "GET" }),
