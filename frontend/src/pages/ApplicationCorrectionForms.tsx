@@ -67,6 +67,7 @@ interface EventCorrectionFormProps {
   hasEventFieldChanges: boolean;
   hasEventTime: boolean;
   hasEventTimeZone: boolean;
+  hasSafeSelectedEventId: boolean;
   hasValidEventTime: boolean;
   hasValidSourceEmailForEventType: boolean;
   events: ApplicationEventRecord[];
@@ -396,6 +397,7 @@ export function EventCorrectionForm({
   hasEventFieldChanges,
   hasEventTime,
   hasEventTimeZone,
+  hasSafeSelectedEventId,
   hasValidEventTime,
   hasValidSourceEmailForEventType,
   events,
@@ -450,6 +452,9 @@ export function EventCorrectionForm({
       ) : null}
       {selectedEventId && !ghostInferenceHasSourceEmail && !hasValidSourceEmailForEventType ? (
         <p>Keep a source email unless the event is a ghost inference with no source message.</p>
+      ) : null}
+      {selectedEventId && !hasSafeSelectedEventId ? (
+        <p>This timeline event ID is malformed or unsupported.</p>
       ) : null}
       <form className="application-detail-form" onSubmit={onSubmit}>
         <FormField htmlFor="event-id" label="Event to edit">
@@ -527,6 +532,7 @@ export function EventCorrectionForm({
             !hasEventTime ||
             !hasEventTimeZone ||
             !hasValidEventTime ||
+            !hasSafeSelectedEventId ||
             !hasValidSourceEmailForEventType
           }
           type="submit"

@@ -1,4 +1,4 @@
-export function isSafeApplicationRouteId(value: string) {
+export function isSafeGeneratedApiPathSegment(value: string) {
   const trimmedValue = value.trim();
   const hasControlCharacter = Array.from(value).some((character) => {
     const characterCode = character.charCodeAt(0);
@@ -12,6 +12,10 @@ export function isSafeApplicationRouteId(value: string) {
     !hasControlCharacter &&
     !/[%\\/?#]/.test(value)
   );
+}
+
+export function isSafeApplicationRouteId(value: string) {
+  return isSafeGeneratedApiPathSegment(value);
 }
 
 export function safeDecodeApplicationRouteSegment(value: string) {

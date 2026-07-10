@@ -654,6 +654,36 @@ describe("ApplicationDetailPage", () => {
     expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toBeNull();
   });
 
+  it("does not build generated event correction paths for unsafe event IDs", async () => {
+    const unsafeEvent = {
+      ...applicationEvent,
+      id: "event/1",
+    };
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[unsafeEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Event to edit");
+    fireEvent.change(screen.getByLabelText("Event note"), {
+      target: { value: "Corrected note." },
+    });
+
+    expect(
+      screen.getByText("This timeline event ID is malformed or unsupported."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save event correction" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Save event correction" }).closest("form")!);
+
+    expect(fetchMock.mock.calls.some(([input]) => input === "/applications/app-1/events/event/1")).toBe(false);
+  });
+
   it("loads application detail and saves a manual status correction", async () => {
     const rejectedApplication = {
       ...applicationRecord,

@@ -14,7 +14,10 @@ import {
   type ApplicationStatus as ApplicationStatusValue,
 } from "../api";
 import { Alert } from "../components/ui";
-import { isSafeApplicationRouteId } from "../lib/applicationRoutes";
+import {
+  isSafeApplicationRouteId,
+  isSafeGeneratedApiPathSegment,
+} from "../lib/applicationRoutes";
 import {
   ApplicationSummary,
   EventCorrectionForm,
@@ -284,7 +287,8 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
       eventForm.eventAt.trim().length === 0 ||
       !eventTimeHasTimezoneOffset(eventForm.eventAt) ||
       !isIsoDatetime(eventForm.eventAt) ||
-      !eventFormHasValidSourceEmailForEventType(eventForm)
+      !eventFormHasValidSourceEmailForEventType(eventForm) ||
+      !isSafeGeneratedApiPathSegment(selectedEventId)
     ) {
       return;
     }
@@ -481,6 +485,8 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   const hasValidEventTime = !hasEventTime || isIsoDatetime(eventForm.eventAt);
   const hasValidSourceEmailForEventType = eventFormHasValidSourceEmailForEventType(eventForm);
   const ghostInferenceHasSourceEmail = eventFormGhostInferenceHasSourceEmail(eventForm);
+  const hasSafeSelectedEventId =
+    !selectedEventId || isSafeGeneratedApiPathSegment(selectedEventId);
   const hasStatusChange = statusValue !== application?.current_status;
 
   if (loadState === "loading") {
@@ -573,6 +579,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
           hasEventTimeZone={hasEventTimeZone}
           hasValidEventTime={hasValidEventTime}
           ghostInferenceHasSourceEmail={ghostInferenceHasSourceEmail}
+          hasSafeSelectedEventId={hasSafeSelectedEventId}
           hasValidSourceEmailForEventType={hasValidSourceEmailForEventType}
           events={events}
           isSubmitting={isSubmitting}
