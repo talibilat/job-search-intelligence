@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.application import ApplicationRecord, ApplicationStatus
 from app.models.correction import ApplicationCorrectionRecord
@@ -13,6 +13,8 @@ _EVENT_EDIT_FIELDS = frozenset({"event_type", "event_at", "email_id", "extract_n
 
 
 class ApplicationStatusEditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     current_status: ApplicationStatus
     reason: str | None = None
 
@@ -23,6 +25,8 @@ class ApplicationStatusEditResponse(BaseModel):
 
 
 class ApplicationEventEditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     event_type: ApplicationEventType | None = None
     event_at: datetime | None = None
     email_id: str | None = None
