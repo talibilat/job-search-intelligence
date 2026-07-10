@@ -1932,6 +1932,16 @@ export function DashboardPage() {
                   : "No segment is above the filtered response baseline yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Compares deterministic segment response rates against the filtered baseline and charts the highest response-rate lift from local SQLite. No LLM produces this diagnostic value.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with response events and segmentation fields.",
+              missingData:
+                "If the strongest response correlate is zero or missing, check whether aggregated applications have populated segmentation fields and response events for the active filters.",
+            }}
             title="Q-34 strongest response correlate"
           >
             {strongestResponseCorrelateRows.length > 0 ? (
