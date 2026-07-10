@@ -1706,6 +1706,49 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.pipeline-panel__classification-readiness {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #d8d0bf;
+  border-radius: 18px;
+  background: #fffaf0;
+}
+
+.pipeline-panel__classification-readiness h3,
+.pipeline-panel__classification-readiness p {
+  margin-bottom: 0;
+}
+
+.pipeline-panel__readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.pipeline-panel__readiness-grid article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e7dcc6;
+  border-radius: 14px;
+  background: #fffdf7;
+  overflow-wrap: anywhere;
+}
+
+.pipeline-panel__readiness-grid article p:first-child {
+  color: #102417;
+  font-weight: 900;
+}
+
+.pipeline-panel__readiness-grid article p:last-child {
+  color: #4e5e53;
+  font-size: 0.82rem;
+}
+
 .pipeline-panel__stages {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

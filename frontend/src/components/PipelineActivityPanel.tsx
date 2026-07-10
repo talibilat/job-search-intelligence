@@ -1,8 +1,12 @@
 import { useEffect, useId, useState } from "react";
 
 import {
+  classificationEstimateClassificationEstimateGet,
+  classificationReprocessingPlanClassificationReprocessingPlanGet,
   classificationRunClassificationRunPost,
   pipelineStatusPipelineStatusGet,
+  type ClassificationPreRunEstimate,
+  type ClassificationReprocessingPlan,
   type ClassificationRunResponse,
   type PipelineStatus,
 } from "../api";
@@ -144,6 +148,22 @@ function classificationResultSummary(result: ClassificationRunResponse) {
   );
 }
 
+function formatEstimatedCost(estimate: ClassificationPreRunEstimate) {
+  if (!estimate.cost_estimate_available || estimate.estimated_cost_usd == null) {
+    return "Cost estimate unavailable";
+  }
+
+  return `Estimated cost $${estimate.estimated_cost_usd.toFixed(2)} ${estimate.currency ?? "USD"}`;
+}
+
+function pluralizeCount(
+  value: number,
+  singular: string,
+  plural = `${singular}s`,
+) {
+  return `${numberFormatter.format(value)} ${value === 1 ? singular : plural}`;
+}
+
 export function PipelineActivityPanel() {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -154,6 +174,12 @@ export function PipelineActivityPanel() {
   const [classificationError, setClassificationError] = useState<
     string | null
   >(null);
+  const [classificationEstimate, setClassificationEstimate] =
+    useState<ClassificationPreRunEstimate | null>(null);
+  const [classificationPlan, setClassificationPlan] =
+    useState<ClassificationReprocessingPlan | null>(null);
+  const [classificationReadinessError, setClassificationReadinessError] =
+    useState<string | null>(null);
 
   const [refreshToken, setRefreshToken] = useState(0);
 
@@ -183,9 +209,40 @@ export function PipelineActivityPanel() {
       }
     }
 
+    async function loadClassificationReadiness() {
+      try {
+        const [estimateResponse, planResponse] = await Promise.all([
+          classificationEstimateClassificationEstimateGet(),
+          classificationReprocessingPlanClassificationReprocessingPlanGet(),
+        ]);
+        if (ignore) {
+          return;
+        }
+
+        if (estimateResponse.status === 200 && planResponse.status === 200) {
+          setClassificationEstimate(estimateResponse.data);
+          setClassificationPlan(planResponse.data);
+          setClassificationReadinessError(null);
+          return;
+        }
+
+        setClassificationReadinessError(
+          "Classification readiness is unavailable. Start the local backend and configure an LLM provider to see estimates.",
+        );
+      } catch {
+        if (!ignore) {
+          setClassificationReadinessError(
+            "Classification readiness is unavailable. Start the local backend and configure an LLM provider to see estimates.",
+          );
+        }
+      }
+    }
+
     void loadStatus();
+    void loadClassificationReadiness();
     const intervalId = window.setInterval(() => {
       void loadStatus();
+      void loadClassificationReadiness();
     }, pipelinePollIntervalMs);
     return () => {
       ignore = true;
@@ -320,6 +377,78 @@ export function PipelineActivityPanel() {
           <p>{status.last_error}</p>
         </Alert>
       ) : null}
+
+      <section
+        aria-label="Classification readiness"
+        className="pipeline-panel__classification-readiness"
+      >
+        <div>
+          <p className="eyebrow">Classification</p>
+          <h3>Classification readiness</h3>
+        </div>
+        {classificationEstimate && classificationPlan ? (
+          <div className="pipeline-panel__readiness-grid">
+            <article>
+              <p>
+                {pluralizeCount(
+                  classificationPlan.retained_candidate_count,
+                  "retained candidate",
+                )}
+              </p>
+              <p>Retained bodies eligible for the configured classifier.</p>
+            </article>
+            <article>
+              <p>
+                {`${numberFormatter.format(classificationPlan.reprocess_count)} need classification`}
+              </p>
+              <p>
+                {pluralizeCount(
+                  classificationPlan.unclassified_count,
+                  "unclassified candidate",
+                )}{" "}
+                and{" "}
+                {pluralizeCount(
+                  classificationPlan.stale_prompt_version_count,
+                  "stale prompt",
+                )}
+                .
+              </p>
+            </article>
+            <article>
+              <p>
+                {pluralizeCount(
+                  classificationPlan.stale_model_count,
+                  "stale model",
+                )}
+              </p>
+              <p>
+                {pluralizeCount(
+                  classificationPlan.up_to_date_count,
+                  "up-to-date candidate",
+                )}{" "}
+                will be skipped.
+              </p>
+            </article>
+            <article>
+              <p>
+                {`${numberFormatter.format(classificationEstimate.estimated_total_tokens)} estimated tokens`}
+              </p>
+              <p>{formatEstimatedCost(classificationEstimate)}</p>
+            </article>
+          </div>
+        ) : classificationReadinessError ? (
+          <Alert title="Classification readiness unavailable" tone="warning">
+            <p>{classificationReadinessError}</p>
+          </Alert>
+        ) : (
+          <p>Loading classification estimate and reprocessing status.</p>
+        )}
+        {classificationEstimate ? (
+          <p className="pipeline-panel__note">
+            {`Model ${classificationEstimate.model}, prompt ${classificationEstimate.prompt_version}`}
+          </p>
+        ) : null}
+      </section>
 
       <div className="pipeline-panel__stages" aria-label="Pipeline stage counts">
         <StageCount

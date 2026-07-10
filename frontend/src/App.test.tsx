@@ -457,6 +457,65 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("shows classification estimate and reprocessing readiness in the runnable feature section", async () => {
+    mockFetchResponses({
+      "/classification/estimate": {
+        candidate_count: 3,
+        classification_mode: "hybrid",
+        cost_estimate_available: true,
+        currency: "USD",
+        estimated_completion_tokens: 1_200,
+        estimated_cost_usd: 0.42,
+        estimated_prompt_tokens: 3_000,
+        estimated_total_tokens: 4_200,
+        llm_provider: "azure_openai",
+        model: "gpt-4.1-mini",
+        prompt_version: "classification-v1",
+        token_estimate_method: "retained_body_length_plus_overhead",
+      },
+      "/classification/reprocessing-plan": {
+        blocked_by_missing_target_model_count: 0,
+        classification_mode: "hybrid",
+        email_provider: "gmail",
+        llm_provider: "azure_openai",
+        reprocess_count: 2,
+        retained_candidate_count: 3,
+        selection_policy: "unclassified_or_stale_model_or_prompt",
+        should_reprocess: true,
+        stale_model_count: 1,
+        stale_prompt_version_count: 0,
+        target_model: "gpt-4.1-mini",
+        target_model_configured: true,
+        target_prompt_version: "classification-v1",
+        unclassified_count: 1,
+        up_to_date_count: 1,
+      },
+      "/pipeline/status": pipelineStatusResponse({
+        next_action: "run_classification",
+        next_action_reason:
+          "2 job-search candidate emails are waiting for classification.",
+        unclassified_retained_count: 2,
+      }),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const readiness = await screen.findByRole("region", {
+      name: "Classification readiness",
+    });
+
+    expect(within(readiness).getByText("3 retained candidates")).toBeTruthy();
+    expect(within(readiness).getByText("2 need classification")).toBeTruthy();
+    expect(within(readiness).getByText("1 stale model")).toBeTruthy();
+    expect(within(readiness).getByText("4,200 estimated tokens")).toBeTruthy();
+    expect(within(readiness).getByText("Estimated cost $0.42 USD")).toBeTruthy();
+    expect(
+      within(readiness).getByText("Model gpt-4.1-mini, prompt classification-v1"),
+    ).toBeTruthy();
+  });
+
   it("explains runnable feature guide entries through accessible info controls", () => {
     renderAtPath("/features");
 
