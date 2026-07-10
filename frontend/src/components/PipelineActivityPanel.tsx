@@ -337,6 +337,14 @@ export function PipelineActivityPanel() {
         />
         <StageCount
           definition="Heuristic job-search filter decisions: kept vs skipped."
+          info={{
+            dataSource: "GET /pipeline/status",
+            dataTable: "email_filter_decisions",
+            howItWorks:
+              "Counts public-safe heuristic audit decisions created during sync: candidate messages kept for later stages and rejected messages skipped before classification.",
+            missingData:
+              "Run Gmail sync after connecting Gmail on Setup. If both kept and skipped are zero, the broad job-search filter has not evaluated any synced metadata yet.",
+          }}
           label="Filter decisions"
           value={`${numberFormatter.format(counts.filter_candidate_count)} kept / ${numberFormatter.format(counts.filter_rejected_count)} skipped`}
         />

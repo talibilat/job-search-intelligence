@@ -526,6 +526,39 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains the Filter decisions pipeline stage through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const filterStage = (await screen.findByText("Filter decisions")).closest(
+      "article",
+    );
+    expect(filterStage).toBeTruthy();
+
+    const infoButton = within(filterStage!).getByRole("button", {
+      name: "About Filter decisions",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(filterStage!).getByText("Data source: GET /pipeline/status"),
+    ).toBeTruthy();
+    expect(within(filterStage!).getByText("Table: email_filter_decisions")).toBeTruthy();
+    expect(
+      within(filterStage!).getByText(
+        "Run Gmail sync after connecting Gmail on Setup. If both kept and skipped are zero, the broad job-search filter has not evaluated any synced metadata yet.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({
