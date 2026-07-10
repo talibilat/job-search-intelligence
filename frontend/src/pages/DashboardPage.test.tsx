@@ -1757,6 +1757,30 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("blocks malformed first-seen date submissions with actionable guidance", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    fireEvent.change(screen.getByLabelText("First seen from"), {
+      target: { value: "tomorrow afternoon" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    expect(
+      await screen.findByText(
+        "First seen from must be an ISO datetime with timezone, such as 2026-07-01T00:00:00Z.",
+      ),
+    ).toBeTruthy();
+    expect(window.location.search).toBe("");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/metrics/funnel?first_seen_from=tomorrow+afternoon",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("renders Q-11 through Q-15 outcome rates as a deterministic chart", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");

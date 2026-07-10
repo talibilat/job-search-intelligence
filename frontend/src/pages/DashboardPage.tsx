@@ -67,6 +67,8 @@ type DashboardFilterErrors = Partial<
   Record<"firstSeenFrom" | "firstSeenTo" | "salaryMax" | "salaryMin", string>
 >;
 
+type FirstSeenFilterKey = "firstSeenFrom" | "firstSeenTo";
+
 const emptyFilters: DashboardFilters = {
   firstSeenFrom: "",
   firstSeenTo: "",
@@ -127,16 +129,43 @@ function validateSalaryFilter(value: string, label: string) {
     : `${label} must be a non-negative number.`;
 }
 
+function validateFirstSeenFilter(value: string, label: string) {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/u.test(trimmed);
+  return hasTimezone && Number.isFinite(Date.parse(trimmed))
+    ? null
+    : `${label} must be an ISO datetime with timezone, such as 2026-07-01T00:00:00Z.`;
+}
+
 function validateDashboardFilters(filters: DashboardFilters) {
   const errors: DashboardFilterErrors = {};
   const firstSeenFrom = Date.parse(filters.firstSeenFrom.trim());
   const firstSeenTo = Date.parse(filters.firstSeenTo.trim());
+  const firstSeenErrors: Record<FirstSeenFilterKey, string | null> = {
+    firstSeenFrom: validateFirstSeenFilter(
+      filters.firstSeenFrom,
+      "First seen from",
+    ),
+    firstSeenTo: validateFirstSeenFilter(filters.firstSeenTo, "First seen to"),
+  };
   const salaryMinError = validateSalaryFilter(filters.salaryMin, "Salary min");
   const salaryMaxError = validateSalaryFilter(filters.salaryMax, "Salary max");
   const salaryMin = Number(filters.salaryMin.trim());
   const salaryMax = Number(filters.salaryMax.trim());
 
+  if (firstSeenErrors.firstSeenFrom) {
+    errors.firstSeenFrom = firstSeenErrors.firstSeenFrom;
+  }
+  if (firstSeenErrors.firstSeenTo) {
+    errors.firstSeenTo = firstSeenErrors.firstSeenTo;
+  }
   if (
+    !firstSeenErrors.firstSeenFrom &&
+    !firstSeenErrors.firstSeenTo &&
     filters.firstSeenFrom.trim().length > 0 &&
     filters.firstSeenTo.trim().length > 0 &&
     Number.isFinite(firstSeenFrom) &&
