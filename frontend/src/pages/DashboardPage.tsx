@@ -236,7 +236,7 @@ function filtersFromSearch(search: string): DashboardFilters {
   return {
     firstSeenFrom: hasInvalidFirstSeenRange ? "" : firstSeenFrom,
     firstSeenTo: hasInvalidFirstSeenRange ? "" : firstSeenTo,
-    role: params.get("role") ?? "",
+    role: params.get("role")?.trim() ?? "",
     salaryMax: numericFilterText(params.get("salary_max")),
     salaryMin: numericFilterText(params.get("salary_min")),
     source: filterValue(params, "source", sourceOptions),
