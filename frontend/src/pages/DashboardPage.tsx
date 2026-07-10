@@ -2010,6 +2010,16 @@ export function DashboardPage() {
                   : "No source has interview evidence yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Compares deterministic interview rates by application source and charts the source with the strongest interview conversion from local SQLite. No LLM produces this diagnostic value.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with source fields and interview events.",
+              missingData:
+                "If best ROI source values are zero or missing, check whether aggregated applications have populated source fields and interview events for the active filters.",
+            }}
             title="Q-36 best ROI source"
           >
             {bestRoiSourceRows.length > 0 ? (

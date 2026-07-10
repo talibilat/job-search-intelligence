@@ -1424,6 +1424,44 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the best ROI source chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+    const bestRoiSource = await within(diagnostics).findByRole("region", {
+      name: "Q-36 best ROI source",
+    });
+    const infoControl = within(bestRoiSource).getByRole("button", {
+      name: "About Q-36 best ROI source",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(bestRoiSource).getByText("How this chart works")).toBeTruthy();
+    expect(within(bestRoiSource).getByText("GET /metrics/diagnostics")).toBeTruthy();
+    expect(
+      within(bestRoiSource).getByText("applications and application_events"),
+    ).toBeTruthy();
+    expect(
+      within(bestRoiSource).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(bestRoiSource).getByText(
+        "If best ROI source values are zero or missing, check whether aggregated applications have populated source fields and interview events for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
