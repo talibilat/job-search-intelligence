@@ -983,6 +983,39 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the selected breakdown chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const breakdown = await screen.findByRole("region", {
+      name: "Source applications",
+    });
+    const infoControl = within(breakdown).getByRole("button", {
+      name: "About Source applications",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(breakdown).getByText("How this chart works")).toBeTruthy();
+    expect(within(breakdown).getByText("GET /metrics/breakdown?dimension=source")).toBeTruthy();
+    expect(within(breakdown).getByText("applications and application_events")).toBeTruthy();
+    expect(
+      within(breakdown).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(breakdown).getByText(
+        "If breakdown rows are zero or missing, check whether aggregated applications have the selected segmentation field populated for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(

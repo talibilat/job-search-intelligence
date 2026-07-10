@@ -1381,6 +1381,17 @@ export function DashboardPage() {
                 : "No applications exist for this breakdown dimension yet.",
           }}
           height={260}
+          info={{
+            dataSource: `GET /metrics/breakdown?dimension=${breakdownDimension}`,
+            dataTable: "applications and application_events",
+            howItWorks: `Groups filtered applications by ${titleize(
+              breakdownDimension,
+            ).toLowerCase()} and counts each local application deterministically from SQLite. No LLM produces these breakdown values.`,
+            howToGenerate:
+              "Run sync, classification, and aggregation from Feature Status so retained job-search emails become applications with segmentation fields.",
+            missingData:
+              "If breakdown rows are zero or missing, check whether aggregated applications have the selected segmentation field populated for the active filters.",
+          }}
           title={`${titleize(breakdownDimension)} applications`}
         >
           {breakdownRows.length > 0 ? (
