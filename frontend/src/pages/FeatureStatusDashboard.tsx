@@ -957,7 +957,7 @@ export function FeatureStatusDashboard() {
         <FormField htmlFor="feature-search" label="Search features">
           <TextInput
             id="feature-search"
-            onChange={(event) => setKeyword(event.target.value)}
+            onChange={(event) => setKeyword(event.target.value.trim())}
             placeholder="Search by feature, module, API, screen, or component"
             value={keyword}
           />
@@ -997,7 +997,7 @@ export function FeatureStatusDashboard() {
         >
           <TextInput
             id="feature-scope"
-            onChange={(event) => setScope(event.target.value)}
+            onChange={(event) => setScope(event.target.value.trim())}
             placeholder="Filter by /setup, SyncStatusPanel, GET /sync/status"
             value={scope}
           />

@@ -3112,4 +3112,31 @@ describe("App", () => {
     expect(queryParams.get("status")).toBe("completed");
     expect(queryParams.get("testable")).toBe("yes");
   });
+
+  it("canonicalizes padded feature status text filter edits", () => {
+    renderAtPath("/features");
+
+    fireEvent.change(screen.getByLabelText("Search features"), {
+      target: { value: "  sync  " },
+    });
+    fireEvent.change(
+      screen.getByLabelText("Module, API, screen, or component"),
+      {
+        target: { value: "  POST /sync  " },
+      },
+    );
+
+    expect(screen.getByLabelText<HTMLInputElement>("Search features").value).toBe(
+      "sync",
+    );
+    expect(
+      screen.getByLabelText<HTMLInputElement>(
+        "Module, API, screen, or component",
+      ).value,
+    ).toBe("POST /sync");
+
+    const queryParams = new URLSearchParams(window.location.search);
+    expect(queryParams.get("search")).toBe("sync");
+    expect(queryParams.get("scope")).toBe("POST /sync");
+  });
 });
