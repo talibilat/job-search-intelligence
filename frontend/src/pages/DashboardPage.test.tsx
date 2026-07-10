@@ -1308,6 +1308,46 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the rejected or ghosted traits chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+    const rejectedOrGhostedTraits = await within(diagnostics).findByRole("region", {
+      name: "Q-33 rejected or ghosted traits",
+    });
+    const infoControl = within(rejectedOrGhostedTraits).getByRole("button", {
+      name: "About Q-33 rejected or ghosted traits",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(rejectedOrGhostedTraits).getByText("How this chart works")).toBeTruthy();
+    expect(within(rejectedOrGhostedTraits).getByText("GET /metrics/diagnostics")).toBeTruthy();
+    expect(
+      within(rejectedOrGhostedTraits).getByText(
+        "applications and application_events",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(rejectedOrGhostedTraits).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(rejectedOrGhostedTraits).getByText(
+        "If rejected or ghosted trait values are zero or missing, check whether aggregated applications have rejected or ghosted outcomes plus populated segmentation fields for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
