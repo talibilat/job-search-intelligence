@@ -129,6 +129,25 @@ function validateSalaryFilter(value: string, label: string) {
     : `${label} must be a non-negative number.`;
 }
 
+function hasRealIsoCalendarDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T/u.exec(value);
+  if (!match) {
+    return false;
+  }
+
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    utcDate.getUTCFullYear() === year &&
+    utcDate.getUTCMonth() === month - 1 &&
+    utcDate.getUTCDate() === day
+  );
+}
+
 function validateFirstSeenFilter(value: string, label: string) {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
@@ -136,7 +155,9 @@ function validateFirstSeenFilter(value: string, label: string) {
   }
 
   const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/u.test(trimmed);
-  return hasTimezone && Number.isFinite(Date.parse(trimmed))
+  return hasTimezone &&
+    hasRealIsoCalendarDate(trimmed) &&
+    Number.isFinite(Date.parse(trimmed))
     ? null
     : `${label} must be an ISO datetime with timezone, such as 2026-07-01T00:00:00Z.`;
 }
