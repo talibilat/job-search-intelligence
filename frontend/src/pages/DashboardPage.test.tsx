@@ -1910,6 +1910,26 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("canonicalizes whitespace-padded role filter submissions before loading metrics", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Application funnel" });
+    fireEvent.change(screen.getByLabelText("Role"), {
+      target: { value: " platform " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    expect(window.location.search).toBe("?role=platform");
+    expect(screen.getByLabelText("Role")).toHaveProperty("value", "platform");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/funnel?role=platform",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("renders Q-11 through Q-15 outcome rates as a deterministic chart", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");

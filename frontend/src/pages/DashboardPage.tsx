@@ -251,6 +251,7 @@ function canonicalFilters(filters: DashboardFilters): DashboardFilters {
     ...filters,
     firstSeenFrom: filters.firstSeenFrom.trim(),
     firstSeenTo: filters.firstSeenTo.trim(),
+    role: filters.role.trim(),
     salaryMax: numericFilterText(filters.salaryMax),
     salaryMin: numericFilterText(filters.salaryMin),
   };
