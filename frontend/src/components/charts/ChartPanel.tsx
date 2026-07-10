@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { ResponsiveContainer } from "recharts";
 
 interface ChartEmptyStateProps {
@@ -14,6 +14,15 @@ interface ChartPanelProps {
   children?: ReactElement;
   emptyState?: ChartEmptyStateProps;
   height?: number;
+  info?: ChartPanelInfo;
+}
+
+interface ChartPanelInfo {
+  dataSource: string;
+  dataTable: string;
+  howToGenerate: string;
+  howItWorks: string;
+  missingData: string;
 }
 
 export function ChartPanel({
@@ -22,10 +31,13 @@ export function ChartPanel({
   children,
   emptyState,
   height = 280,
+  info,
 }: ChartPanelProps) {
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descriptionId = `${chartId}-description`;
+  const infoId = `${chartId}-info`;
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const surfaceStyle = {
     "--chart-min-height": `${height}px`,
   } as CSSProperties;
@@ -37,11 +49,54 @@ export function ChartPanel({
       className="chart-panel"
     >
       <div className="chart-panel__header">
-        <p className="eyebrow">Deterministic chart</p>
-        <h2 id={titleId}>{title}</h2>
+        <div className="chart-panel__heading-row">
+          <div>
+            <p className="eyebrow">Deterministic chart</p>
+            <h2 id={titleId}>{title}</h2>
+          </div>
+          {info ? (
+            <button
+              aria-controls={infoId}
+              aria-expanded={isInfoOpen}
+              aria-label={`About ${title}`}
+              className="chart-panel__info-button"
+              onClick={() => setIsInfoOpen((current) => !current)}
+              type="button"
+            >
+              i
+            </button>
+          ) : null}
+        </div>
         <p className="chart-panel__description" id={descriptionId}>
           {description}
         </p>
+        {info && isInfoOpen ? (
+          <div className="chart-panel__info" id={infoId}>
+            <h3>How this chart works</h3>
+            <dl>
+              <div>
+                <dt>What it does</dt>
+                <dd>{info.howItWorks}</dd>
+              </div>
+              <div>
+                <dt>Endpoint</dt>
+                <dd>{info.dataSource}</dd>
+              </div>
+              <div>
+                <dt>Table</dt>
+                <dd>{info.dataTable}</dd>
+              </div>
+              <div>
+                <dt>How to get data</dt>
+                <dd>{info.howToGenerate}</dd>
+              </div>
+              <div>
+                <dt>If values are zero or missing</dt>
+                <dd>{info.missingData}</dd>
+              </div>
+            </dl>
+          </div>
+        ) : null}
       </div>
 
       <div className="chart-panel__surface" style={surfaceStyle}>

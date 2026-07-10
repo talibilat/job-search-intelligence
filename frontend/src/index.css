@@ -689,6 +689,84 @@ h3 {
   max-width: 720px;
 }
 
+.chart-panel__heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.chart-panel__heading-row > div {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.chart-panel__info-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgb(255 250 240 / 32%);
+  border-radius: 999px;
+  background: rgb(255 250 240 / 10%);
+  color: #fffaf0;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.chart-panel__info-button:hover,
+.chart-panel__info-button:focus-visible,
+.chart-panel__info-button[aria-expanded="true"] {
+  border-color: #b8e2af;
+  background: #b8e2af;
+  color: #102417;
+}
+
+.chart-panel__info {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgb(255 250 240 / 18%);
+  border-radius: 18px;
+  background: rgb(255 250 240 / 8%);
+}
+
+.chart-panel__info h3 {
+  color: #fffaf0;
+  font-size: 1rem;
+}
+
+.chart-panel__info dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+}
+
+.chart-panel__info div {
+  min-width: 0;
+}
+
+.chart-panel__info dt {
+  color: #b8e2af;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chart-panel__info dd {
+  margin: 3px 0 0;
+  color: #f8f2e7;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
 .chart-panel__description {
   max-width: 650px;
   margin-bottom: 0;

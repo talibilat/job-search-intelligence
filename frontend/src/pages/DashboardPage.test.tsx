@@ -816,6 +816,39 @@ describe("DashboardPage", () => {
     expect(screen.queryByLabelText("Response rate metric")).toBeNull();
   });
 
+  it("explains the foundational counts chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const counts = await screen.findByRole("region", {
+      name: "Foundational counts",
+    });
+    const infoControl = within(counts).getByRole("button", {
+      name: "About Foundational counts",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(counts).getByText("How this chart works")).toBeTruthy();
+    expect(within(counts).getByText("GET /metrics/summary")).toBeTruthy();
+    expect(within(counts).getByText("applications")).toBeTruthy();
+    expect(
+      within(counts).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(counts).getByText(
+        "If values are zero or missing, inspect Feature Status for the next missing pipeline stage: Gmail connection, sync, classification, or aggregation.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(

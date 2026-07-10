@@ -1130,6 +1130,16 @@ export function DashboardPage() {
                 : "No summary counts are available yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={260}
+            info={{
+              dataSource: "GET /metrics/summary",
+              dataTable: "applications",
+              howItWorks:
+                "Counts reconstructed applications and outcome events deterministically from local SQLite. No LLM produces these values.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application records.",
+              missingData:
+                "If values are zero or missing, inspect Feature Status for the next missing pipeline stage: Gmail connection, sync, classification, or aggregation.",
+            }}
             title="Foundational counts"
           >
             {foundationalCountRows.length > 0 ? (
