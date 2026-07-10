@@ -4,6 +4,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { FeatureStatusDashboard } from "./pages/FeatureStatusDashboard";
 import { Insights } from "./pages/Insights";
 import { SetupPage } from "./pages/SetupPage";
+import { safeDecodeApplicationRouteSegment } from "./lib/applicationRoutes";
 
 const navigationItems = [
   { href: "/", label: "Job Search" },
@@ -109,34 +110,13 @@ function ApplicationRouteUnavailablePage() {
   );
 }
 
-function safeDecodeRouteSegment(value: string) {
-  try {
-    const decodedValue = decodeURIComponent(value);
-    const trimmedValue = decodedValue.trim();
-    const hasControlCharacter = Array.from(decodedValue).some((character) => {
-      const characterCode = character.charCodeAt(0);
-
-      return characterCode <= 0x1f || characterCode === 0x7f;
-    });
-
-    return trimmedValue.length === 0 ||
-      trimmedValue !== decodedValue ||
-      hasControlCharacter ||
-      /[%\\/?#]/.test(decodedValue)
-      ? null
-      : decodedValue;
-  } catch {
-    return null;
-  }
-}
-
 function App() {
   const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
   const isApplicationRoute =
     routePath === "/applications" || routePath.startsWith("/applications/");
   const applicationDetailMatch = /^\/applications\/([^/]+)$/.exec(routePath);
   const applicationId = applicationDetailMatch
-    ? safeDecodeRouteSegment(applicationDetailMatch[1])
+    ? safeDecodeApplicationRouteSegment(applicationDetailMatch[1])
     : null;
   const currentPath = isApplicationRoute
     ? null

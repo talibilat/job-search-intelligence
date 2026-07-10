@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 
 import { InsightType, type InsightRecord } from "../api";
+import { applicationDetailPathForId } from "../lib/applicationRoutes";
 
 export interface InsightDisplayConfig {
   description: string;
@@ -162,7 +163,7 @@ function applicationCitationHref(citationId: string) {
     return null;
   }
 
-  return `/applications/${encodeURIComponent(match[2])}`;
+  return applicationDetailPathForId(match[2]);
 }
 
 export function renderTextWithCitationLinks(content: string) {

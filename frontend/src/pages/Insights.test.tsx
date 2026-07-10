@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Insights } from "./Insights";
+import { renderTextWithCitationLinks } from "./insightDisplay";
 
 const insightTitles = [
   "Rejection themes",
@@ -147,6 +148,25 @@ afterEach(() => {
 });
 
 describe("Insights", () => {
+  it("does not link unsafe application citation IDs", () => {
+    const { container } = render(
+      <p>
+        {renderTextWithCitationLinks(
+          "Review the cited application. [application:app/1|event:event-1|email:email-1]",
+        )}
+      </p>,
+    );
+
+    expect(container.textContent).toContain(
+      "[application:app/1|event:event-1|email:email-1]",
+    );
+    expect(
+      screen.queryByRole("link", {
+        name: "application:app/1|event:event-1|email:email-1",
+      }),
+    ).toBeNull();
+  });
+
   it("renders all cached insight cards with stale state, citations, and per-insight regeneration", async () => {
     const fetchMock = mockFetch();
 
