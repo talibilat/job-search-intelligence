@@ -905,11 +905,13 @@ describe("DashboardPage", () => {
     expect(within(baseline).queryByText("60%")).toBeNull();
     expect(within(baseline).queryByText("3 responses from 5 applications"))
       .toBeNull();
-    expect(within(diagnostics).getByText("Strongest response signals")).toBeTruthy();
-    expect(within(diagnostics).getAllByText("Referral (Source)").length).toBeGreaterThan(
-      0,
-    );
-    expect(within(diagnostics).getByText("+40 pp vs baseline")).toBeTruthy();
+    const strongestResponseSignals = await within(diagnostics).findByRole("region", {
+      name: "Strongest response signals",
+    });
+
+    expect(within(strongestResponseSignals).getByRole("img")).toBeTruthy();
+    expect(within(strongestResponseSignals).queryByText("2 responses from 2 applications"))
+      .toBeNull();
     expect(within(diagnostics).getByText("Q-32 successful application traits")).toBeTruthy();
     expect(within(diagnostics).getByText("40% baseline success rate")).toBeTruthy();
     expect(within(diagnostics).getByText("+60 pp success lift")).toBeTruthy();

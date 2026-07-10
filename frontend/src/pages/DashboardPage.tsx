@@ -882,6 +882,13 @@ export function DashboardPage() {
           },
         ]
       : [];
+  const strongestResponseSignalRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError
+      ? (diagnostics?.strongest_response_segments ?? []).map((segment) => ({
+          lift: Number(segment.response_rate_lift ?? 0) * 100,
+          segment: diagnosticSegmentTitle(segment),
+        }))
+      : [];
   const wastedEffortRows =
     diagnosticsLoadState === "loaded" && !diagnosticsError
       ? (diagnostics?.wasted_effort_segments ?? []).map((segment) => ({
@@ -1681,43 +1688,34 @@ export function DashboardPage() {
             ) : undefined}
           </ChartPanel>
 
-          <article>
-            <h3>Strongest response signals</h3>
-            <ol className="dashboard-breakdown-ranks">
-              {diagnostics?.strongest_response_segments.length ? (
-                diagnostics.strongest_response_segments.map((segment) => (
-                  <li key={`strong-${segment.dimension}-${segment.value}`}>
-                    <div>
-                      <span className="dashboard-breakdown-rank__label">
-                        {diagnosticSegmentTitle(segment)}
-                      </span>
-                      <span>{formatResponseLift(segment.response_rate_lift)}</span>
-                    </div>
-                    <p>{diagnosticSegmentEvidence(segment)}</p>
-                  </li>
-                ))
-              ) : (
-                <li>
-                  <div>
-                    <span className="dashboard-breakdown-rank__label">
-                      {diagnosticsError
-                        ? "Unavailable"
-                        : diagnosticsLoadState === "loading"
-                          ? "Loading"
-                          : "No winners"}
-                    </span>
-                    <span>
-                      {diagnosticsError
-                        ? "Diagnostic request failed"
-                        : diagnosticsLoadState === "loading"
-                        ? "Fetching diagnostics"
-                        : "No positive lift"}
-                    </span>
-                  </div>
-                </li>
-              )}
-            </ol>
-          </article>
+          <ChartPanel
+            description="Strongest response signals use deterministic /metrics/diagnostics response-rate lift to chart segments above the filtered response baseline."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading strongest response signals"
+                  : "No strongest response signals yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic response-lift diagnostics from the local backend."
+                  : "No segment is above the filtered response baseline yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Strongest response signals"
+          >
+            {strongestResponseSignalRows.length > 0 ? (
+              <BarChart
+                data={strongestResponseSignalRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="segment" stroke="#c9d8ce" />
+                <YAxis stroke="#c9d8ce" type="number" unit=" pp" />
+                <Tooltip />
+                <Bar dataKey="lift" fill="#9ed8ff" name="Response-rate lift" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <article>
             <h3>Q-32 successful application traits</h3>
