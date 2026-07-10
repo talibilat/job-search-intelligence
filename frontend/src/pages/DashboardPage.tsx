@@ -1737,6 +1737,16 @@ export function DashboardPage() {
                   : "No applications are available for the diagnostic baseline yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Calculates the filtered baseline response rate from deterministic local application counts and response events. No LLM produces this diagnostic baseline.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with response evidence.",
+              missingData:
+                "If the baseline rate is zero or missing, check whether aggregated applications have response events for the active filters.",
+            }}
             title="Diagnostic baseline response rate"
           >
             {diagnosticBaselineRows.length > 0 ? (

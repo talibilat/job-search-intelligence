@@ -1156,6 +1156,44 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the diagnostic baseline response rate chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+    const baseline = await within(diagnostics).findByRole("region", {
+      name: "Diagnostic baseline response rate",
+    });
+    const infoControl = within(baseline).getByRole("button", {
+      name: "About Diagnostic baseline response rate",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(baseline).getByText("How this chart works")).toBeTruthy();
+    expect(within(baseline).getByText("GET /metrics/diagnostics")).toBeTruthy();
+    expect(
+      within(baseline).getByText("applications and application_events"),
+    ).toBeTruthy();
+    expect(
+      within(baseline).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(baseline).getByText(
+        "If the baseline rate is zero or missing, check whether aggregated applications have response events for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
