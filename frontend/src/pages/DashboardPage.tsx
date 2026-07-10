@@ -906,6 +906,27 @@ export function DashboardPage() {
           },
         ]
       : [];
+  const skillSignalRows =
+    diagnosticsLoadState === "loaded" && !diagnosticsError
+      ? [
+          ...(sellingSkill
+            ? [
+                {
+                  rate: Number(sellingSkill.interview_rate ?? 0) * 100,
+                  segment: "Selling skill",
+                },
+              ]
+            : []),
+          ...(deadWeightSkill
+            ? [
+                {
+                  rate: Number(deadWeightSkill.interview_rate ?? 0) * 100,
+                  segment: "Dead-weight skill",
+                },
+              ]
+            : []),
+        ]
+      : [];
 
   return (
     <main
@@ -1958,32 +1979,34 @@ export function DashboardPage() {
             ) : undefined}
           </ChartPanel>
 
-          <article className="metric-placeholder">
-            <h3 className="metric-placeholder__label">
-              Q-38 selling vs dead-weight skills
-            </h3>
-            <p className="metric-placeholder__value">
-              {diagnosticsError
-                ? "Unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading"
-                : sellingSkill
-                ? titleize(sellingSkill.value)
-                : "No selling skill"}
-            </p>
-            <p className="dashboard-card__meta">
-              {diagnosticsError
-                ? "Skill diagnostics are unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading skill interview conversion"
-                : sellingSkill
-                ? `${titleize(sellingSkill.value)} is selling`
-                : "No skill has interview evidence yet"}
-              {deadWeightSkill
-                ? `; ${titleize(deadWeightSkill.value)} is below response baseline`
-                : ""}
-            </p>
-          </article>
+          <ChartPanel
+            description="Q-38 uses deterministic /metrics/diagnostics interview-rate data to chart the strongest selling and dead-weight skill signals."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading skill signals"
+                  : "No skill conversion signal yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic skill diagnostics from the local backend."
+                  : "No skill has interview evidence yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Q-38 selling vs dead-weight skills"
+          >
+            {skillSignalRows.length > 0 ? (
+              <BarChart
+                data={skillSignalRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="segment" stroke="#c9d8ce" />
+                <YAxis allowDecimals={false} stroke="#c9d8ce" type="number" unit="%" />
+                <Tooltip />
+                <Bar dataKey="rate" fill="#8bd3dd" name="Interview rate" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <article className="metric-placeholder">
             <h3 className="metric-placeholder__label">

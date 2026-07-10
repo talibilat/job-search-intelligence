@@ -949,9 +949,12 @@ describe("DashboardPage", () => {
         "Not offered (Sponsorship) is -26.7 pp vs baseline",
       ),
     ).toBeNull();
-    expect(within(diagnostics).getByText("Q-38 selling vs dead-weight skills")).toBeTruthy();
-    expect(within(diagnostics).getByText("Python is selling"))
-      .toBeTruthy();
+    const skillSignals = await within(diagnostics).findByRole("region", {
+      name: "Q-38 selling vs dead-weight skills",
+    });
+
+    expect(within(skillSignals).getByRole("img")).toBeTruthy();
+    expect(within(skillSignals).queryByText("Python is selling")).toBeNull();
     expect(within(diagnostics).getByText("Q-39 adjacent role suggestions")).toBeTruthy();
     expect(within(diagnostics).getByText("Software engineer is your strongest adjacent role signal"))
       .toBeTruthy();
