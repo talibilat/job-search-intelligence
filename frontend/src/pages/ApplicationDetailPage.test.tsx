@@ -225,6 +225,74 @@ describe("ApplicationDetailPage", () => {
     expect(screen.getByText(/If the source application ID is missing/)).toBeTruthy();
   });
 
+  it("explains the split correction data source", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Acme Corp - Software Engineer",
+    });
+
+    const infoButton = screen.getByRole("button", {
+      name: "About Split correction",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("POST /applications/{application_id}/split")).toBeTruthy();
+    expect(screen.getByText("applications, application_events, application_corrections")).toBeTruthy();
+    expect(screen.getByText(/source application and selectable events come from local Gmail sync/)).toBeTruthy();
+    expect(screen.getByText(/moves selected timeline events into a new manually locked application/)).toBeTruthy();
+    expect(screen.getByText(/If no events are available to split/)).toBeTruthy();
+
+    fireEvent.click(infoButton);
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoButton);
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("explains the reset manual lock data source", async () => {
+    mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Acme Corp - Software Engineer",
+    });
+
+    const infoButton = screen.getByRole("button", {
+      name: "About Manual lock reset",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("POST /applications/{application_id}/reset-lock")).toBeTruthy();
+    expect(screen.getByText("applications, application_corrections")).toBeTruthy();
+    expect(screen.getByText(/allows future aggregation reruns to update/)).toBeTruthy();
+    expect(screen.getByText(/Manual status, event, merge, or split corrections create the lock/)).toBeTruthy();
+    expect(screen.getByText(/If the manual lock is not enabled/)).toBeTruthy();
+
+    fireEvent.click(infoButton);
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoButton);
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("explains the event correction data source", async () => {
     mockFetchResponses({
       "/applications/app-1": applicationRecord,

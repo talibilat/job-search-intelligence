@@ -291,9 +291,22 @@ export function ResetLockForm({
 }: ResetLockFormProps) {
   return (
     <article className="application-detail-card">
-      <div>
-        <p className="eyebrow">Reset</p>
-        <h2>Reset manual lock</h2>
+      <div className="pipeline-panel__stage-heading">
+        <div>
+          <p className="eyebrow">Reset</p>
+          <h2>Reset manual lock</h2>
+        </div>
+        <ApplicationSurfaceInfoButton
+          info={{
+            dataSource: "POST /applications/{application_id}/reset-lock",
+            dataTable: "applications, application_corrections",
+            howItWorks:
+              "Manual status, event, merge, or split corrections create the lock and audit records locally. This allows future aggregation reruns to update a manually locked application again and writes an audited reset_lock correction in SQLite.",
+            missingData:
+              "If the manual lock is not enabled, this action is usually unnecessary. Use it only after reviewing previous corrections and add a reason so the audit trail explains why automatic aggregation can resume.",
+          }}
+          label="Manual lock reset"
+        />
       </div>
       <form className="application-detail-form" onSubmit={onSubmit}>
         <FormField htmlFor="reset-reason" label="Reset reason">
@@ -475,9 +488,22 @@ export function SplitCorrectionForm({
 }: SplitCorrectionFormProps) {
   return (
     <article className="application-detail-card">
-      <div>
-        <p className="eyebrow">Split</p>
-        <h2>Split selected events</h2>
+      <div className="pipeline-panel__stage-heading">
+        <div>
+          <p className="eyebrow">Split</p>
+          <h2>Split selected events</h2>
+        </div>
+        <ApplicationSurfaceInfoButton
+          info={{
+            dataSource: "POST /applications/{application_id}/split",
+            dataTable: "applications, application_events, application_corrections",
+            howItWorks:
+              "The source application and selectable events come from local Gmail sync, classification, and deterministic aggregation. This moves selected timeline events into a new manually locked application, recalculates both application summaries, preserves source segmentation fields, and writes an audited split correction in SQLite.",
+            missingData:
+              "If no events are available to split, run Gmail sync, classification, and aggregation from Feature Status first. If the event belongs elsewhere, confirm the source timeline and enter the new application company and role before saving.",
+          }}
+          label="Split correction"
+        />
       </div>
       <form className="application-detail-form" onSubmit={onSubmit}>
         <fieldset className="application-detail-fieldset">
