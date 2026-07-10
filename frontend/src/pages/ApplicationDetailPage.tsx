@@ -78,6 +78,12 @@ function eventFormHasSourceEmailForEventType(eventForm: EventEditFormState) {
   return eventForm.eventType === "ghost_inferred" || eventForm.emailId.trim().length > 0;
 }
 
+function isIsoDatetime(value: string) {
+  const trimmedValue = value.trim();
+
+  return trimmedValue.includes("T") && !Number.isNaN(Date.parse(trimmedValue));
+}
+
 export function ApplicationDetailPage({ applicationId }: ApplicationDetailPageProps) {
   const [application, setApplication] = useState<ApplicationRecord | null>(null);
   const [events, setEvents] = useState<ApplicationEventRecord[]>([]);
@@ -223,6 +229,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     if (
       !eventFormHasChanges(eventForm, selectedEvent) ||
       eventForm.eventAt.trim().length === 0 ||
+      !isIsoDatetime(eventForm.eventAt) ||
       !eventFormHasSourceEmailForEventType(eventForm)
     ) {
       return;
@@ -413,6 +420,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   const selectedEvent = events.find((event) => event.id === selectedEventId);
   const hasEventFieldChanges = eventFormHasChanges(eventForm, selectedEvent);
   const hasEventTime = eventForm.eventAt.trim().length > 0;
+  const hasValidEventTime = !hasEventTime || isIsoDatetime(eventForm.eventAt);
   const hasSourceEmailForEventType = eventFormHasSourceEmailForEventType(eventForm);
   const hasStatusChange = statusValue !== application?.current_status;
 
@@ -503,6 +511,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
           eventForm={eventForm}
           hasEventFieldChanges={hasEventFieldChanges}
           hasEventTime={hasEventTime}
+          hasValidEventTime={hasValidEventTime}
           hasSourceEmailForEventType={hasSourceEmailForEventType}
           events={events}
           isSubmitting={isSubmitting}

@@ -65,6 +65,7 @@ interface EventCorrectionFormProps {
   eventForm: EventEditFormState;
   hasEventFieldChanges: boolean;
   hasEventTime: boolean;
+  hasValidEventTime: boolean;
   hasSourceEmailForEventType: boolean;
   events: ApplicationEventRecord[];
   isSubmitting: boolean;
@@ -391,6 +392,7 @@ export function EventCorrectionForm({
   eventForm,
   hasEventFieldChanges,
   hasEventTime,
+  hasValidEventTime,
   hasSourceEmailForEventType,
   events,
   isSubmitting,
@@ -432,6 +434,9 @@ export function EventCorrectionForm({
       ) : null}
       {selectedEventId && !hasEventTime ? (
         <p>Enter an event time before saving an event correction.</p>
+      ) : null}
+      {selectedEventId && hasEventTime && !hasValidEventTime ? (
+        <p>Enter an ISO datetime before saving an event correction.</p>
       ) : null}
       {selectedEventId && !hasSourceEmailForEventType ? (
         <p>Keep a source email unless the event is a ghost inference with no source message.</p>
@@ -510,6 +515,7 @@ export function EventCorrectionForm({
             !selectedEventId ||
             !hasEventFieldChanges ||
             !hasEventTime ||
+            !hasValidEventTime ||
             !hasSourceEmailForEventType
           }
           type="submit"
