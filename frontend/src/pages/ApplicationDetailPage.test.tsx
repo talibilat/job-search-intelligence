@@ -679,6 +679,66 @@ describe("ApplicationDetailPage", () => {
     expect(await screen.findByText("Status: Rejected")).toBeTruthy();
   });
 
+  it("prevents duplicate status correction submissions while a save is pending", async () => {
+    const rejectedApplication = {
+      ...applicationRecord,
+      current_status: "rejected",
+      manual_lock: true,
+    };
+    let resolveStatusRequest: (() => void) | undefined;
+    const fetchMock = mockFetchImplementation((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const path = url.startsWith("http") ? new URL(url).pathname : url;
+
+      if (path === "/applications/app-1") {
+        return Promise.resolve(new Response(JSON.stringify(applicationRecord), { status: 200 }));
+      }
+
+      if (path === "/applications/app-1/events") {
+        return Promise.resolve(new Response(JSON.stringify([applicationEvent]), { status: 200 }));
+      }
+
+      if (path === "/applications/app-1/status") {
+        return new Promise<Response>((resolve) => {
+          resolveStatusRequest = () => {
+            resolve(
+              new Response(
+                JSON.stringify({
+                  application: rejectedApplication,
+                  correction: correctionRecord("status_edit"),
+                }),
+                { status: 200 },
+              ),
+            );
+          };
+        });
+      }
+
+      throw new Error(`Unhandled fetch request: ${path}`);
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Correct status");
+    fireEvent.change(screen.getByLabelText("Correct status"), {
+      target: { value: "rejected" },
+    });
+
+    const statusForm = screen.getByRole("button", { name: "Save status correction" }).closest("form")!;
+    fireEvent.submit(statusForm);
+    fireEvent.submit(statusForm);
+
+    expect(fetchMock.mock.calls.filter(([input]) => input === "/applications/app-1/status")).toHaveLength(1);
+
+    resolveStatusRequest?.();
+    expect(await screen.findByText("Status correction saved")).toBeTruthy();
+  });
+
   it("disables status correction until the selected status changes", async () => {
     const fetchMock = mockFetchResponses({
       "/applications/app-1": applicationRecord,

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import {
   editApplicationEventApplicationsApplicationIdEventsEventIdPatch,
@@ -132,6 +132,24 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   const [splitRole, setSplitRole] = useState("");
   const [splitReason, setSplitReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
+
+  function beginCorrectionSubmit() {
+    if (submitInFlightRef.current) {
+      return false;
+    }
+
+    submitInFlightRef.current = true;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    return true;
+  }
+
+  function endCorrectionSubmit() {
+    submitInFlightRef.current = false;
+    setIsSubmitting(false);
+  }
 
   useEffect(() => {
     let isCancelled = false;
@@ -212,9 +230,9 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    if (!beginCorrectionSubmit()) {
+      return;
+    }
 
     let response: Awaited<ReturnType<typeof editApplicationStatusApplicationsApplicationIdStatusPatch>>;
 
@@ -227,12 +245,12 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         },
       );
     } catch {
-      setIsSubmitting(false);
+      endCorrectionSubmit();
       setErrorMessage("Status correction failed.");
       return;
     }
 
-    setIsSubmitting(false);
+    endCorrectionSubmit();
 
     if (response.status !== 200) {
       setErrorMessage(publicError(response.data, "Status correction failed."));
@@ -264,9 +282,9 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    if (!beginCorrectionSubmit()) {
+      return;
+    }
 
     let response: Awaited<ReturnType<typeof editApplicationEventApplicationsApplicationIdEventsEventIdPatch>>;
 
@@ -283,12 +301,12 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         },
       );
     } catch {
-      setIsSubmitting(false);
+      endCorrectionSubmit();
       setErrorMessage("Event correction failed.");
       return;
     }
 
-    setIsSubmitting(false);
+    endCorrectionSubmit();
 
     if (response.status !== 200) {
       setErrorMessage(publicError(response.data, "Event correction failed."));
@@ -317,9 +335,9 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    if (!beginCorrectionSubmit()) {
+      return;
+    }
 
     let response: Awaited<ReturnType<typeof mergeApplicationApplicationsApplicationIdMergePost>>;
 
@@ -329,12 +347,12 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         source_application_id: trimmedMergeSourceId,
       });
     } catch {
-      setIsSubmitting(false);
+      endCorrectionSubmit();
       setErrorMessage("Merge correction failed.");
       return;
     }
 
-    setIsSubmitting(false);
+    endCorrectionSubmit();
 
     if (response.status !== 200) {
       setErrorMessage(publicError(response.data, "Merge correction failed."));
@@ -355,9 +373,9 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    if (!beginCorrectionSubmit()) {
+      return;
+    }
 
     let response: Awaited<ReturnType<typeof resetApplicationLockApplicationsApplicationIdResetLockPost>>;
 
@@ -366,12 +384,12 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         reason: resetReason.trim() || null,
       });
     } catch {
-      setIsSubmitting(false);
+      endCorrectionSubmit();
       setErrorMessage("Manual lock reset failed.");
       return;
     }
 
-    setIsSubmitting(false);
+    endCorrectionSubmit();
 
     if (response.status !== 200) {
       setErrorMessage(publicError(response.data, "Manual lock reset failed."));
@@ -395,9 +413,9 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    if (!beginCorrectionSubmit()) {
+      return;
+    }
 
     let response: Awaited<ReturnType<typeof splitApplicationApplicationsApplicationIdSplitPost>>;
 
@@ -411,12 +429,12 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
         reason: splitReason.trim() || null,
       });
     } catch {
-      setIsSubmitting(false);
+      endCorrectionSubmit();
       setErrorMessage("Split correction failed.");
       return;
     }
 
-    setIsSubmitting(false);
+    endCorrectionSubmit();
 
     if (response.status !== 200) {
       setErrorMessage(publicError(response.data, "Split correction failed."));
