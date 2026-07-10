@@ -126,11 +126,13 @@ function safeDecodeRouteSegment(value: string) {
 
 function App() {
   const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
+  const isApplicationRoute =
+    routePath === "/applications" || routePath.startsWith("/applications/");
   const applicationDetailMatch = /^\/applications\/([^/]+)$/.exec(routePath);
   const applicationId = applicationDetailMatch
     ? safeDecodeRouteSegment(applicationDetailMatch[1])
     : null;
-  const currentPath = applicationDetailMatch
+  const currentPath = isApplicationRoute
     ? null
     : routePaths.has(routePath)
       ? routePath
@@ -157,7 +159,7 @@ function App() {
       </nav>
       {applicationDetailMatch && applicationId ? (
         <ApplicationDetailPage applicationId={applicationId} />
-      ) : applicationDetailMatch ? (
+      ) : isApplicationRoute ? (
         <ApplicationRouteUnavailablePage />
       ) : currentPath === "/setup" ? (
         <SetupPage />

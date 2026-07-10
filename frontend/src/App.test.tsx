@@ -2673,6 +2673,25 @@ describe("App", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("shows application unavailable for unsupported application subroutes", () => {
+    const fetchMock = mockFetchResponses({});
+
+    renderAtPath("/applications/app-1/events");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Application unavailable",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Job Search" })
+        .getAttribute("aria-current"),
+    ).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("keeps the dashboard chart-focused and moves the Q-09 status table out", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),
