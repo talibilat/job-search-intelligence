@@ -297,12 +297,22 @@ export function PipelineActivityPanel() {
 
   const actionCopy = nextActionCopy[status.next_action];
   const counts = status.counts;
-  const classificationBlockedReason =
+  const classificationReadinessReady = Boolean(
+    classificationEstimate && classificationPlan,
+  );
+  const classificationModelBlockedReason =
     classificationPlan &&
     (!classificationPlan.target_model_configured ||
       classificationPlan.blocked_by_missing_target_model_count > 0)
       ? "Classification is blocked because no target LLM model is configured. Open Setup to choose Azure OpenAI or Ollama before running classification."
       : null;
+  const classificationActionBlockedReason =
+    classificationModelBlockedReason ??
+    (!classificationReadinessReady
+      ? classificationReadinessError
+        ? "Classification cannot run until readiness data loads. Start the local backend and configure an LLM provider to see estimates before running classification."
+        : "Classification readiness is still loading. Wait for the estimate and reprocessing plan before running classification."
+      : null);
   const backfillLabel =
     status.backfill_state === "completed"
       ? "Backfill complete"
@@ -352,11 +362,11 @@ export function PipelineActivityPanel() {
         <p>{status.next_action_reason}</p>
         {status.next_action === "run_classification" ? (
           <>
-            {classificationBlockedReason ? (
-              <p>{classificationBlockedReason}</p>
+            {classificationActionBlockedReason ? (
+              <p>{classificationActionBlockedReason}</p>
             ) : null}
             <Button
-              disabled={isClassifying || Boolean(classificationBlockedReason)}
+              disabled={isClassifying || Boolean(classificationActionBlockedReason)}
               onClick={() => {
                 void handleRunClassification();
               }}

@@ -980,6 +980,65 @@ describe("App", () => {
     expect(requestedPaths).not.toContain("/classification/run");
   });
 
+  it("disables classification runs while readiness is unavailable", async () => {
+    const fetchMock = mockFetchResponses({
+      "/classification/estimate": {
+        body: {
+          error: {
+            code: "classification_estimate_unavailable",
+            details: [],
+            message: "Classification estimate is unavailable.",
+          },
+        },
+        status: 503,
+      },
+      "/classification/reprocessing-plan": {
+        body: {
+          error: {
+            code: "classification_plan_unavailable",
+            details: [],
+            message: "Classification reprocessing plan is unavailable.",
+          },
+        },
+        status: 503,
+      },
+      "/pipeline/status": pipelineStatusResponse({
+        next_action: "run_classification",
+        next_action_reason:
+          "2 job-search candidate emails are waiting for classification.",
+        unclassified_retained_count: 2,
+      }),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    expect(
+      await screen.findByText(
+        "Classification readiness is unavailable. Start the local backend and configure an LLM provider to see estimates.",
+      ),
+    ).toBeTruthy();
+
+    const runButton = screen.getByRole("button", {
+      name: "Run classification",
+    });
+    expect(runButton.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(runButton);
+
+    const requestedPaths = fetchMock.mock.calls.map(([input]) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      return url.startsWith("http") ? new URL(url).pathname : url;
+    });
+    expect(requestedPaths).not.toContain("/classification/run");
+  });
+
   it("explains runnable feature guide entries through accessible info controls", () => {
     renderAtPath("/features");
 
