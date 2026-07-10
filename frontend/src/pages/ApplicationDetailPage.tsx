@@ -299,6 +299,11 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
 
   async function handleResetSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (application?.manual_lock !== true) {
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
     setSuccessMessage(null);

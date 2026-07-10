@@ -323,7 +323,7 @@ describe("ApplicationDetailPage", () => {
   });
 
   it("disables manual lock reset when automatic updates are already allowed", async () => {
-    mockFetchResponses({
+    const fetchMock = mockFetchResponses({
       "/applications/app-1": applicationRecord,
       "/applications/app-1/events": [[applicationEvent]],
     });
@@ -341,6 +341,10 @@ describe("ApplicationDetailPage", () => {
       true,
     );
     expect(screen.getByLabelText("Reset reason")).toHaveProperty("disabled", true);
+
+    fireEvent.submit(screen.getByRole("button", { name: "Reset manual lock" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/reset-lock")).toBeNull();
   });
 
   it("explains the event correction data source", async () => {
