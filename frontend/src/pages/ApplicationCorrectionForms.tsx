@@ -596,6 +596,9 @@ export function SplitCorrectionForm({
             Leave at least one event on the source application. Move only the events that belong to the new application.
           </p>
         ) : null}
+        {events.length > 0 && selectedEventIds.length === 0 ? (
+          <p>Select at least one timeline event before splitting.</p>
+        ) : null}
         {company.trim().length === 0 || role.trim().length === 0 ? (
           <p>Enter the new application company and role before splitting events.</p>
         ) : null}

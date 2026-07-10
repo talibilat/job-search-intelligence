@@ -965,4 +965,33 @@ describe("ApplicationDetailPage", () => {
 
     expect(requestJson(fetchMock, "/applications/app-1/split")).toBeNull();
   });
+
+  it("disables split until at least one event is selected", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent, secondApplicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByRole("checkbox", { name: /event-1/ });
+    fireEvent.change(screen.getByLabelText("New application company"), {
+      target: { value: "Beta Corp" },
+    });
+    fireEvent.change(screen.getByLabelText("New application role"), {
+      target: { value: "Backend Engineer" },
+    });
+
+    expect(
+      screen.getByText("Select at least one timeline event before splitting."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Split selected events" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Split selected events" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/split")).toBeNull();
+  });
 });
