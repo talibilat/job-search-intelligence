@@ -39,8 +39,6 @@ import {
   type MetricsDiagnosticsResponse,
   type MetricsSummaryResponse,
   type SilenceAgeBucketMetric,
-  type TimeToFirstResponseMetric,
-  type TimeToRejectionMetric,
   type SponsorshipStatus as SponsorshipStatusValue,
   type WorkMode as WorkModeValue,
 } from "../api";
@@ -77,8 +75,6 @@ const emptyFilters: DashboardFilters = {
   workMode: "",
 };
 
-const metricPlaceholders: readonly { label: string; note: string }[] = [];
-
 const statusOptions = Object.values(ApplicationStatus);
 const sourceOptions = Object.values(ApplicationSource);
 const sponsorshipOptions = Object.values(SponsorshipStatus);
@@ -90,9 +86,6 @@ const percentageFormatter = new Intl.NumberFormat(undefined, {
   style: "percent",
 });
 const percentagePointFormatter = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 1,
-});
-const durationFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
 
@@ -214,90 +207,6 @@ function publicError(data: unknown, fallback: string) {
   }
 
   return fallback;
-}
-
-function summaryMetricValue(isLoading: boolean, value: number | undefined) {
-  if (isLoading) {
-    return "Loading";
-  }
-  if (value === undefined) {
-    return "Unavailable";
-  }
-  return numberFormatter.format(value);
-}
-
-function formatTimeToFirstResponseValue(
-  isLoading: boolean,
-  metric: TimeToFirstResponseMetric | undefined,
-) {
-  if (isLoading) {
-    return "Loading";
-  }
-  if (metric === undefined) {
-    return "Unavailable";
-  }
-  const averageHours = metric.average_hours;
-  if (averageHours == null) {
-    return "No data";
-  }
-  if (averageHours < 24) {
-    return `${durationFormatter.format(averageHours)} hours`;
-  }
-  return `${durationFormatter.format(averageHours / 24)} days`;
-}
-
-function formatTimeToFirstResponseMeta(
-  isLoading: boolean,
-  metric: TimeToFirstResponseMetric | undefined,
-) {
-  if (isLoading || metric === undefined) {
-    return "Loading deterministic response timing";
-  }
-  if (metric.application_count === 0) {
-    return "No applications have response evidence yet";
-  }
-  const applicationLabel =
-    metric.application_count === 1 ? "application" : "applications";
-  return `Averaged across ${numberFormatter.format(
-    metric.application_count,
-  )} ${applicationLabel} with response evidence`;
-}
-
-function formatTimeToRejectionValue(
-  isLoading: boolean,
-  metric: TimeToRejectionMetric | undefined,
-) {
-  if (isLoading) {
-    return "Loading";
-  }
-  if (metric === undefined) {
-    return "Unavailable";
-  }
-  const averageHours = metric.average_hours;
-  if (averageHours == null) {
-    return "No data";
-  }
-  if (averageHours < 24) {
-    return `${durationFormatter.format(averageHours)} hours`;
-  }
-  return `${durationFormatter.format(averageHours / 24)} days`;
-}
-
-function formatTimeToRejectionMeta(
-  isLoading: boolean,
-  metric: TimeToRejectionMetric | undefined,
-) {
-  if (isLoading || metric === undefined) {
-    return "Loading deterministic rejection timing";
-  }
-  if (metric.application_count === 0) {
-    return "No applications have rejection evidence yet";
-  }
-  const applicationLabel =
-    metric.application_count === 1 ? "rejected application" : "rejected applications";
-  return `Averaged across ${numberFormatter.format(
-    metric.application_count,
-  )} ${applicationLabel}`;
 }
 
 function silenceBucketLabel(bucket: SilenceAgeBucketMetric) {
@@ -909,38 +818,42 @@ export function DashboardPage() {
     setAppliedFilters(emptyFilters);
   }
 
-  const totalApplicationsValue = summaryMetricValue(
-    isLoadingSummary,
-    summary?.total_applications,
-  );
-  const distinctCompanyValue = summaryMetricValue(
-    isLoadingSummary,
-    summary?.distinct_company_count,
-  );
-  const interviewInvitationValue = summaryMetricValue(
-    isLoadingSummary,
-    summary?.interview_invitation_count,
-  );
-  const offersReceivedValue = summaryMetricValue(
-    isLoadingSummary,
-    summary?.offers_received,
-  );
-  const averageFirstResponseValue = formatTimeToFirstResponseValue(
-    isLoadingSummary,
-    summary?.average_time_to_first_response,
-  );
-  const averageFirstResponseMeta = formatTimeToFirstResponseMeta(
-    isLoadingSummary,
-    summary?.average_time_to_first_response,
-  );
-  const averageRejectionValue = formatTimeToRejectionValue(
-    isLoadingSummary,
-    summary?.average_time_to_rejection,
-  );
-  const averageRejectionMeta = formatTimeToRejectionMeta(
-    isLoadingSummary,
-    summary?.average_time_to_rejection,
-  );
+  const foundationalCountRows = summary
+    ? [
+        { count: summary.total_applications ?? 0, metric: "Applications" },
+        { count: summary.distinct_company_count ?? 0, metric: "Companies" },
+        { count: summary.interview_invitation_count ?? 0, metric: "Interviews" },
+        { count: summary.offers_received ?? 0, metric: "Offers" },
+        { count: summary.rejected_applications ?? 0, metric: "Rejections" },
+        { count: summary.ghosted_applications ?? 0, metric: "Ghosts" },
+      ]
+    : [];
+  const outcomeRateRows =
+    responseRateLoadState === "loaded"
+      ? [
+          { metric: "Response", rate: responseRate?.rate },
+          { metric: "Rejection", rate: rejectionRate?.rate },
+          { metric: "Ghost", rate: ghostRate?.rate },
+          { metric: "Application to interview", rate: applicationToInterviewRate?.rate },
+          { metric: "Interview to offer", rate: interviewToOfferRate?.rate },
+        ]
+          .filter((row) => row.rate !== null && row.rate !== undefined)
+          .map((row) => ({ ...row, rate: Number(row.rate) * 100 }))
+      : [];
+  const responseTimingRows = summary
+    ? [
+        {
+          hours: summary.average_time_to_first_response?.average_hours,
+          metric: "First response",
+        },
+        {
+          hours: summary.average_time_to_rejection?.average_hours,
+          metric: "Rejection",
+        },
+      ]
+        .filter((row) => row.hours !== null && row.hours !== undefined)
+        .map((row) => ({ ...row, hours: Number(row.hours) }))
+    : [];
   const silenceAgeBuckets =
     summary?.personal_ghost_threshold?.silence_age_distribution ?? [];
   const strongestDiagnostic = diagnostics?.strongest_response_segments[0];
@@ -1168,154 +1081,93 @@ export function DashboardPage() {
           </form>
         </section>
 
-        <section
-          aria-labelledby="metrics-overview-title"
-          className="dashboard-card"
-        >
-          <div>
-            <p className="eyebrow">Deterministic source of truth</p>
-            <h2 id="metrics-overview-title">Metrics overview</h2>
-          </div>
-          <div className="dashboard-metric-grid">
-            <article className="metric-placeholder">
-              <p className="metric-placeholder__label">Total applications</p>
-              <p className="metric-placeholder__value">
-                {totalApplicationsValue}
-              </p>
-              <p className="dashboard-card__meta">
-                Q-01 reconciled from applications
-              </p>
-            </article>
-            <article className="metric-placeholder">
-              <p className="metric-placeholder__label">Distinct companies</p>
-              <p className="metric-placeholder__value">
-                {distinctCompanyValue}
-              </p>
-              <p className="dashboard-card__meta">
-                Q-03 counted from normalized applications
-              </p>
-            </article>
-            <article className="metric-placeholder">
-              <h3 className="metric-placeholder__label">
-                Interview invitations
-              </h3>
-              <p className="metric-placeholder__value">
-                {interviewInvitationValue}
-              </p>
-              <p className="dashboard-card__meta">
-                Q-07 - Counted from interview_scheduled events
-              </p>
-            </article>
-            <article className="metric-placeholder">
-              <h3 className="metric-placeholder__label">Offers received</h3>
-              <p className="metric-placeholder__value">{offersReceivedValue}</p>
-              <p className="dashboard-card__meta">
-                Q-08 counted from offer events
-              </p>
-            </article>
-            <article
-              aria-label="Average time to first response metric"
-              className="metric-placeholder"
-            >
-              <h3 className="metric-placeholder__label">
-                Avg time to first response
-              </h3>
-              <p className="metric-placeholder__value">
-                {averageFirstResponseValue}
-              </p>
-              <p className="dashboard-card__meta">{averageFirstResponseMeta}</p>
-            </article>
-            <article
-              aria-label="Average time to rejection metric"
-              className="metric-placeholder"
-            >
-              <h3 className="metric-placeholder__label">
-                Avg time to rejection
-              </h3>
-              <p className="metric-placeholder__value">
-                {averageRejectionValue}
-              </p>
-              <p className="dashboard-card__meta">{averageRejectionMeta}</p>
-            </article>
-            <article
-              aria-label="Response rate metric"
-              className="metric-placeholder"
-            >
-              <p className="metric-placeholder__label">Response rate</p>
-              <p className="metric-placeholder__value">
-                {formatRateValue(responseRate, responseRateLoadState)}
-              </p>
-              <p className="dashboard-card__meta">
-                {formatResponseRateMeta(responseRate, responseRateLoadState)}
-              </p>
-            </article>
-            <article
-              aria-label="Rejection rate metric"
-              className="metric-placeholder"
-            >
-              <p className="metric-placeholder__label">Rejection rate</p>
-              <p className="metric-placeholder__value">
-                {formatRateValue(rejectionRate, responseRateLoadState)}
-              </p>
-              <p className="dashboard-card__meta">
-                {formatRejectionRateMeta(rejectionRate, responseRateLoadState)}
-              </p>
-            </article>
-            <article aria-label="Ghost rate metric" className="metric-placeholder">
-              <p className="metric-placeholder__label">Ghost rate</p>
-              <p className="metric-placeholder__value">
-                {formatRateValue(ghostRate, responseRateLoadState)}
-              </p>
-              <p className="dashboard-card__meta">
-                {formatGhostRateMeta(ghostRate, responseRateLoadState)}
-              </p>
-            </article>
-            <article
-              aria-label="Application to interview rate metric"
-              className="metric-placeholder"
-            >
-              <p className="metric-placeholder__label">
-                Application to interview rate
-              </p>
-              <p className="metric-placeholder__value">
-                {formatRateValue(
-                  applicationToInterviewRate,
-                  responseRateLoadState,
-                )}
-              </p>
-              <p className="dashboard-card__meta">
-                {formatApplicationToInterviewRateMeta(
-                  applicationToInterviewRate,
-                  responseRateLoadState,
-                )}
-              </p>
-            </article>
-            <article
-              aria-label="Interview to offer rate metric"
-              className="metric-placeholder"
-            >
-              <p className="metric-placeholder__label">
-                Interview to offer rate
-              </p>
-              <p className="metric-placeholder__value">
-                {formatRateValue(interviewToOfferRate, responseRateLoadState)}
-              </p>
-              <p className="dashboard-card__meta">
-                {formatInterviewToOfferRateMeta(
-                  interviewToOfferRate,
-                  responseRateLoadState,
-                )}
-              </p>
-            </article>
-            {metricPlaceholders.map((metric) => (
-              <article className="metric-placeholder" key={metric.label}>
-                <p className="metric-placeholder__label">{metric.label}</p>
-                <p className="metric-placeholder__value">Pending</p>
-                <p className="dashboard-card__meta">{metric.note}</p>
-              </article>
-            ))}
-          </div>
-        </section>
+        <div className="dashboard-chart-stack">
+          <ChartPanel
+            description="Q-01, Q-03, Q-05, Q-06, Q-07, and Q-08 counts come from deterministic /metrics/summary fields over local applications and application_events."
+            emptyState={{
+              title: isLoadingSummary ? "Loading foundational counts" : "No count data yet",
+              description: isLoadingSummary
+                ? "Loading deterministic summary counts from the local backend."
+                : "No summary counts are available yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={260}
+            title="Foundational counts"
+          >
+            {foundationalCountRows.length > 0 ? (
+              <BarChart
+                data={foundationalCountRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="metric" stroke="#c9d8ce" />
+                <YAxis allowDecimals={false} stroke="#c9d8ce" />
+                <Tooltip />
+                <Bar dataKey="count" fill="#b8e2af" name="Count" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
+
+          <ChartPanel
+            description="Q-11 through Q-15 rates come from deterministic /metrics/rates numerators and denominators over local applications and application_events."
+            emptyState={{
+              title:
+                responseRateLoadState === "loading"
+                  ? "Loading outcome rates"
+                  : "No rate data yet",
+              description:
+                responseRateLoadState === "loading"
+                  ? "Loading deterministic rate metrics from the local backend."
+                  : "No rate denominators are available yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={260}
+            title="Outcome rates"
+          >
+            {outcomeRateRows.length > 0 ? (
+              <BarChart
+                data={outcomeRateRows}
+                layout="vertical"
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid horizontal={false} stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis allowDecimals={false} stroke="#c9d8ce" type="number" unit="%" />
+                <YAxis
+                  dataKey="metric"
+                  stroke="#c9d8ce"
+                  tick={{ fontSize: 12 }}
+                  type="category"
+                  width={132}
+                />
+                <Tooltip />
+                <Bar dataKey="rate" fill="#b8e2af" name="Rate" radius={[0, 8, 8, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
+
+          <ChartPanel
+            description="Q-17 and Q-18 response timing comes from deterministic /metrics/summary average_time_to_first_response and average_time_to_rejection fields."
+            emptyState={{
+              title: isLoadingSummary ? "Loading response timing" : "No timing data yet",
+              description: isLoadingSummary
+                ? "Loading deterministic timing metrics from the local backend."
+                : "No applications have response or rejection timing evidence yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={260}
+            title="Response timing"
+          >
+            {responseTimingRows.length > 0 ? (
+              <BarChart
+                data={responseTimingRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="metric" stroke="#c9d8ce" />
+                <YAxis allowDecimals={false} stroke="#c9d8ce" unit="h" />
+                <Tooltip />
+                <Bar dataKey="hours" fill="#b8e2af" name="Hours" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
+        </div>
       </div>
 
       <ChartPanel
@@ -2171,114 +2023,6 @@ export function DashboardPage() {
   );
 }
 
-function formatRateValue(
-  metric: MetricRate | null,
-  loadState: ResponseRateLoadState,
-) {
-  if (loadState === "error") {
-    return "Unavailable";
-  }
-  if (loadState === "loading" || metric === null) {
-    return "Loading";
-  }
-  if (metric.rate === null) {
-    return "No data";
-  }
-  return percentageFormatter.format(metric.rate);
-}
-
 function formatNullableRate(rate: number | null | undefined) {
   return rate == null ? "No data" : percentageFormatter.format(rate);
-}
-
-function formatResponseRateMeta(
-  metric: MetricRate | null,
-  loadState: ResponseRateLoadState,
-) {
-  if (loadState === "error") {
-    return "Response rate is unavailable from the local backend";
-  }
-  if (loadState === "loading" || metric === null) {
-    return "Loading deterministic numerator and denominator";
-  }
-  if (metric.denominator === 0) {
-    return "0 applications in the denominator";
-  }
-  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
-    metric.denominator,
-  )} applications have response evidence`;
-}
-
-function formatRejectionRateMeta(
-  metric: MetricRate | null,
-  loadState: ResponseRateLoadState,
-) {
-  if (loadState === "error") {
-    return "Rejection rate is unavailable from the local backend";
-  }
-  if (loadState === "loading" || metric === null) {
-    return "Loading deterministic numerator and denominator";
-  }
-  if (metric.denominator === 0) {
-    return "0 applications in the denominator";
-  }
-  const applicationLabel =
-    metric.denominator === 1 ? "application is" : "applications are";
-  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
-    metric.denominator,
-  )} ${applicationLabel} rejected`;
-}
-
-function formatGhostRateMeta(
-  metric: MetricRate | null,
-  loadState: ResponseRateLoadState,
-) {
-  if (loadState === "error") {
-    return "Ghost rate is unavailable from the local backend";
-  }
-  if (loadState === "loading" || metric === null) {
-    return "Loading deterministic numerator and denominator";
-  }
-  if (metric.denominator === 0) {
-    return "0 applications in the denominator";
-  }
-  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
-    metric.denominator,
-  )} applications are ghosted or silent past threshold`;
-}
-
-function formatApplicationToInterviewRateMeta(
-  metric: MetricRate | null,
-  loadState: ResponseRateLoadState,
-) {
-  if (loadState === "error") {
-    return "Application to interview rate is unavailable from the local backend";
-  }
-  if (loadState === "loading" || metric === null) {
-    return "Loading deterministic numerator and denominator";
-  }
-  if (metric.denominator === 0) {
-    return "0 applications in the denominator";
-  }
-  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
-    metric.denominator,
-  )} applications reached interview`;
-}
-
-function formatInterviewToOfferRateMeta(
-  metric: MetricRate | null,
-  loadState: ResponseRateLoadState,
-) {
-  if (loadState === "error") {
-    return "Interview to offer rate is unavailable from the local backend";
-  }
-  if (loadState === "loading" || metric === null) {
-    return "Loading deterministic numerator and denominator";
-  }
-  if (metric.denominator === 0) {
-    return "0 interviewed applications in the denominator";
-  }
-  return `${numberFormatter.format(metric.numerator)} of ${numberFormatter.format(
-    metric.denominator,
-  )} interviewed applications reached offer`;
 }

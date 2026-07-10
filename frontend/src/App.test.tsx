@@ -469,10 +469,15 @@ describe("App", () => {
 
     renderAtPath("/dashboard");
 
-    expect(await screen.findByText("3")).toBeTruthy();
-    expect(screen.getByText("Distinct companies")).toBeTruthy();
+    const counts = await screen.findByRole("region", {
+      name: "Foundational counts",
+    });
+
+    expect(within(counts).getByRole("img")).toBeTruthy();
     expect(
-      screen.getByText("Q-03 counted from normalized applications"),
+      within(counts).getByText(
+        "Q-01, Q-03, Q-05, Q-06, Q-07, and Q-08 counts come from deterministic /metrics/summary fields over local applications and application_events.",
+      ),
     ).toBeTruthy();
   });
 
@@ -492,12 +497,12 @@ describe("App", () => {
 
     renderAtPath("/dashboard");
 
-    const responseRateCard = screen.getByLabelText("Response rate metric");
+    const rates = await screen.findByRole("region", { name: "Outcome rates" });
 
-    expect(await within(responseRateCard).findByText("60%"));
+    expect(within(rates).getByRole("img")).toBeTruthy();
     expect(
-      within(responseRateCard).getByText(
-        "3 of 5 applications have response evidence",
+      within(rates).getByText(
+        "Q-11 through Q-15 rates come from deterministic /metrics/rates numerators and denominators over local applications and application_events.",
       ),
     ).toBeTruthy();
   });
@@ -1175,9 +1180,10 @@ describe("App", () => {
     expect(
       screen.getByRole("region", { name: "Dashboard filters" }),
     ).toBeTruthy();
-    expect(
-      screen.getByRole("region", { name: "Metrics overview" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Foundational counts" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Outcome rates" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Response timing" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Metrics overview" })).toBeNull();
     expect(
       screen.queryByRole("region", {
         name: "Current status of every application",
@@ -1203,7 +1209,7 @@ describe("App", () => {
     );
   });
 
-  it("renders Q-07 interview invitations from the metrics summary", async () => {
+  it("renders Q-07 interview invitations from the metrics summary chart", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({
         total_applications: 12,
@@ -1218,15 +1224,15 @@ describe("App", () => {
 
     renderAtPath("/dashboard");
 
+    const counts = await screen.findByRole("region", {
+      name: "Foundational counts",
+    });
+
+    expect(within(counts).getByRole("img")).toBeTruthy();
     expect(
-      await screen.findByRole("heading", {
-        level: 3,
-        name: "Interview invitations",
-      }),
-    ).toBeTruthy();
-    expect(screen.getByText("3")).toBeTruthy();
-    expect(
-      screen.getByText("Q-07 - Counted from interview_scheduled events"),
+      within(counts).getByText(
+        "Q-01, Q-03, Q-05, Q-06, Q-07, and Q-08 counts come from deterministic /metrics/summary fields over local applications and application_events.",
+      ),
     ).toBeTruthy();
   });
 
@@ -1245,16 +1251,15 @@ describe("App", () => {
 
     renderAtPath("/dashboard");
 
-    const overview = screen.getByRole("region", { name: "Metrics overview" });
+    const counts = await screen.findByRole("region", {
+      name: "Foundational counts",
+    });
+
+    expect(within(counts).getByRole("img")).toBeTruthy();
     expect(
-      await within(overview).findByRole("heading", {
-        level: 3,
-        name: "Offers received",
-      }),
-    ).toBeTruthy();
-    expect(within(overview).getByText("2")).toBeTruthy();
-    expect(
-      within(overview).getByText("Q-08 counted from offer events"),
+      within(counts).getByText(
+        "Q-01, Q-03, Q-05, Q-06, Q-07, and Q-08 counts come from deterministic /metrics/summary fields over local applications and application_events.",
+      ),
     ).toBeTruthy();
   });
 
@@ -1356,19 +1361,15 @@ describe("App", () => {
 
     renderAtPath("/dashboard");
 
-    const totalApplicationsCard = screen
-      .getByText("Total applications")
-      .closest("article");
-
-    await waitFor(() => {
-      expect(totalApplicationsCard?.textContent).toContain("3");
+    const counts = await screen.findByRole("region", {
+      name: "Foundational counts",
     });
-    expect(totalApplicationsCard?.textContent).toContain(
-      "Q-01 reconciled from applications",
-    );
+
+    expect(within(counts).getByRole("img")).toBeTruthy();
+    expect(screen.queryByText("Total applications")).toBeNull();
   });
 
-  it("shows the lifetime applications count as unavailable when summary loading fails", async () => {
+  it("shows the lifetime applications chart as unavailable when summary loading fails", async () => {
     mockFetchResponses({
       "/metrics/summary": {
         body: { error: { code: "internal_error", message: "Failed" } },
@@ -1378,13 +1379,13 @@ describe("App", () => {
 
     renderAtPath("/dashboard");
 
-    const totalApplicationsCard = screen
-      .getByText("Total applications")
-      .closest("article");
-
-    await waitFor(() => {
-      expect(totalApplicationsCard?.textContent).toContain("Unavailable");
+    const counts = await screen.findByRole("region", {
+      name: "Foundational counts",
     });
+
+    expect(
+      within(counts).getByRole("status", { name: "No count data yet" }),
+    ).toBeTruthy();
   });
 
   it("renders the feature status dashboard with searchable frontend feature metadata", () => {

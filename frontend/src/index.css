@@ -863,6 +863,16 @@ h3 {
   min-width: 0;
 }
 
+.dashboard-chart-stack {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.dashboard-chart-stack .chart-panel {
+  margin-top: 0;
+}
+
 .dashboard-filter-panel,
 .dashboard-card {
   display: grid;

@@ -41,6 +41,7 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
     if (url.startsWith("/metrics/summary")) {
       return Promise.resolve(
         new Response(JSON.stringify({
+          application_windows: [],
           average_time_to_first_response: {
             application_count: 2,
             average_hours: 36,
@@ -50,6 +51,11 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
             average_hours: 48,
           },
           distinct_company_count: 1,
+          evaluated_at: "2026-07-10T00:00:00Z",
+          ghost_threshold_days: 30,
+          ghosted_applications: 2,
+          interview_invitation_count: 1,
+          offers_received: 1,
           personal_ghost_threshold: {
             threshold_days: 20,
             threshold_source: "response_percentile",
@@ -63,6 +69,8 @@ function mockApplicationResponses(options: { diagnosticsStatus?: number } = {}) 
               { bucket: "61_plus", min_days: 61, max_days: null, application_count: 0 },
             ],
           },
+          rejected_applications: 1,
+          total_applications: 5,
         }), {
           headers: { "Content-Type": "application/json" },
           status: 200,
@@ -788,6 +796,26 @@ describe("DashboardPage", () => {
     ).toBe(false);
   });
 
+  it("renders the deterministic metrics overview as chart panels instead of value cards", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const counts = await screen.findByRole("region", {
+      name: "Foundational counts",
+    });
+    const rates = await screen.findByRole("region", {
+      name: "Outcome rates",
+    });
+
+    expect(within(counts).getByRole("img")).toBeTruthy();
+    expect(within(rates).getByRole("img")).toBeTruthy();
+    expect(screen.queryByText("Metrics overview")).toBeNull();
+    expect(screen.queryByText("Total applications")).toBeNull();
+    expect(screen.queryByLabelText("Response rate metric")).toBeNull();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
@@ -838,60 +866,26 @@ describe("DashboardPage", () => {
     );
   });
 
-  it("renders Q-12 rejection rate from deterministic metrics", async () => {
-    mockApplicationResponses();
+  it("renders Q-11 through Q-15 outcome rates as a deterministic chart", async () => {
+    const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
     render(<DashboardPage />);
 
-    const metric = await screen.findByLabelText("Rejection rate metric");
+    const rates = await screen.findByRole("region", { name: "Outcome rates" });
 
-    expect(await within(metric).findByText("20%")).toBeTruthy();
+    expect(within(rates).getByRole("img")).toBeTruthy();
     expect(
-      within(metric).getByText("1 of 5 applications are rejected"),
+      within(rates).getByText(
+        "Q-11 through Q-15 rates come from deterministic /metrics/rates numerators and denominators over local applications and application_events.",
+      ),
     ).toBeTruthy();
-  });
-
-  it("renders Q-13 ghost rate from deterministic metrics", async () => {
-    mockApplicationResponses();
-    window.history.pushState({}, "", "/dashboard");
-
-    render(<DashboardPage />);
-
-    const metric = await screen.findByLabelText("Ghost rate metric");
-
-    expect(await within(metric).findByText("40%")).toBeTruthy();
-    expect(
-      within(metric).getByText("2 of 5 applications are ghosted or silent past threshold"),
-    ).toBeTruthy();
-  });
-
-  it("renders Q-14 application to interview rate from deterministic metrics", async () => {
-    mockApplicationResponses();
-    window.history.pushState({}, "", "/dashboard");
-
-    render(<DashboardPage />);
-
-    const metric = await screen.findByLabelText("Application to interview rate metric");
-
-    expect(await within(metric).findByText("20%")).toBeTruthy();
-    expect(
-      within(metric).getByText("1 of 5 applications reached interview"),
-    ).toBeTruthy();
-  });
-
-  it("renders Q-15 interview to offer rate from deterministic metrics", async () => {
-    mockApplicationResponses();
-    window.history.pushState({}, "", "/dashboard");
-
-    render(<DashboardPage />);
-
-    const metric = await screen.findByLabelText("Interview to offer rate metric");
-
-    expect(await within(metric).findByText("100%")).toBeTruthy();
-    expect(
-      within(metric).getByText("1 of 1 interviewed applications reached offer"),
-    ).toBeTruthy();
+    expect(within(rates).queryByLabelText("Rejection rate metric")).toBeNull();
+    expect(within(rates).queryByLabelText("Ghost rate metric")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/rates",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("renders diagnostic comparison widgets from deterministic diagnostics", async () => {
@@ -998,32 +992,28 @@ describe("DashboardPage", () => {
     ).toBeNull();
   });
 
-  it("renders Q-17 average time to first response from deterministic metrics", async () => {
-    mockApplicationResponses();
+  it("renders Q-17 and Q-18 response timing as a deterministic chart", async () => {
+    const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
     render(<DashboardPage />);
 
-    const metric = await screen.findByLabelText("Average time to first response metric");
+    const timing = await screen.findByRole("region", { name: "Response timing" });
 
-    expect(await within(metric).findByText("1.5 days")).toBeTruthy();
+    expect(within(timing).getByRole("img")).toBeTruthy();
     expect(
-      within(metric).getByText("Averaged across 2 applications with response evidence"),
+      within(timing).getByText(
+        "Q-17 and Q-18 response timing comes from deterministic /metrics/summary average_time_to_first_response and average_time_to_rejection fields.",
+      ),
     ).toBeTruthy();
-  });
-
-  it("renders Q-18 average time to rejection from deterministic metrics", async () => {
-    mockApplicationResponses();
-    window.history.pushState({}, "", "/dashboard");
-
-    render(<DashboardPage />);
-
-    const metric = await screen.findByLabelText("Average time to rejection metric");
-
-    expect(await within(metric).findByText("2 days")).toBeTruthy();
-    expect(
-      within(metric).getByText("Averaged across 2 rejected applications"),
-    ).toBeTruthy();
+    expect(within(timing).queryByLabelText("Average time to first response metric"))
+      .toBeNull();
+    expect(within(timing).queryByLabelText("Average time to rejection metric"))
+      .toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/summary",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("renders Q-19 personal ghost threshold as a chart-only surface", async () => {
