@@ -2017,6 +2017,77 @@ describe("App", () => {
     );
   });
 
+  it("blocks malformed sync date limits before posting to the API", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const pathWithSearch = url.startsWith("http")
+        ? new URL(url).pathname + new URL(url).search
+        : url;
+      const path = pathWithSearch.split("?")[0];
+
+      if (path === "/sync") {
+        expect(init?.method).toBe("POST");
+        return Promise.resolve(
+          new Response(JSON.stringify(idleSyncStatusResponse()), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/sync/recent-emails") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/setup/status") {
+        expect(init?.method).toBe("GET");
+        return Promise.resolve(setupStatusFetchResponse());
+      }
+
+      if (path !== "/sync/status") {
+        throw new Error(`Unexpected fetch request: ${path}`);
+      }
+
+      expect(init?.method).toBe("GET");
+      return Promise.resolve(
+        new Response(JSON.stringify(idleSyncStatusResponse()), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/features");
+
+    const sinceDateInput = await screen.findByLabelText("Since date");
+    Object.defineProperty(sinceDateInput, "value", {
+      configurable: true,
+      value: "2026-02-30",
+    });
+    fireEvent.input(sinceDateInput);
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+
+    expect(
+      await screen.findByText("Since date must be a valid calendar date."),
+    ).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/sync",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("shows public sync status API errors instead of idle progress", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url =

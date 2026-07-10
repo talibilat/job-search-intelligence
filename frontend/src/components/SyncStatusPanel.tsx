@@ -263,6 +263,32 @@ function validatePositiveInteger(value: string, label: string, maximum: number) 
   return null;
 }
 
+function validateDateInput(value: string, label: string) {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmedValue);
+  if (!match) {
+    return `${label} must be a valid calendar date.`;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsedDate.getUTCFullYear() !== year ||
+    parsedDate.getUTCMonth() !== month - 1 ||
+    parsedDate.getUTCDate() !== day
+  ) {
+    return `${label} must be a valid calendar date.`;
+  }
+
+  return null;
+}
+
 function buildSyncOptions({
   beforeDate,
   maxAgeDays,
@@ -292,6 +318,8 @@ function buildSyncOptions({
     "Max pages",
     syncLimitMaximums.maxPages,
   );
+  const sinceDateError = validateDateInput(sinceDate, "Since date");
+  const beforeDateError = validateDateInput(beforeDate, "Before date");
 
   if (maxMessagesError) {
     errors.maxMessages = maxMessagesError;
@@ -302,7 +330,13 @@ function buildSyncOptions({
   if (maxPagesError) {
     errors.maxPages = maxPagesError;
   }
-  if (sinceDate && beforeDate && sinceDate >= beforeDate) {
+  if (sinceDateError) {
+    errors.sinceDate = sinceDateError;
+  }
+  if (beforeDateError) {
+    errors.beforeDate = beforeDateError;
+  }
+  if (!sinceDateError && !beforeDateError && sinceDate && beforeDate && sinceDate >= beforeDate) {
     errors.beforeDate = "Before date must be after since date.";
   }
 
@@ -598,6 +632,7 @@ export function SyncStatusPanel() {
             />
           </FormField>
           <FormField
+            error={syncLimitErrors.sinceDate}
             hint="Only list messages on or after this date."
             htmlFor="sync-since-date"
             label="Since date"
@@ -607,6 +642,7 @@ export function SyncStatusPanel() {
                 setSinceDate(event.target.value);
                 setSyncLimitErrors((currentErrors) => ({
                   ...currentErrors,
+                  sinceDate: undefined,
                   beforeDate: undefined,
                 }));
               }}
