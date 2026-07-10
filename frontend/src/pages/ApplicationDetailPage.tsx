@@ -86,8 +86,22 @@ function eventFormGhostInferenceHasSourceEmail(eventForm: EventEditFormState) {
 
 function isIsoDatetime(value: string) {
   const trimmedValue = value.trim();
+  const dateParts = /^(\d{4})-(\d{2})-(\d{2})T/.exec(trimmedValue);
 
-  return trimmedValue.includes("T") && !Number.isNaN(Date.parse(trimmedValue));
+  if (!dateParts || Number.isNaN(Date.parse(trimmedValue))) {
+    return false;
+  }
+
+  const [, year, month, day] = dateParts;
+  const calendarDate = new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(day)),
+  );
+
+  return (
+    calendarDate.getUTCFullYear() === Number(year) &&
+    calendarDate.getUTCMonth() === Number(month) - 1 &&
+    calendarDate.getUTCDate() === Number(day)
+  );
 }
 
 export function ApplicationDetailPage({ applicationId }: ApplicationDetailPageProps) {

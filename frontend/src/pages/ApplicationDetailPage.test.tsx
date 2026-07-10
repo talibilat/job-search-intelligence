@@ -494,6 +494,30 @@ describe("ApplicationDetailPage", () => {
     expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toBeNull();
   });
 
+  it("disables event correction when the event time is an impossible calendar date", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Event to edit");
+    fireEvent.change(screen.getByLabelText("Event time"), {
+      target: { value: "2026-02-30T09:00:00Z" },
+    });
+
+    expect(screen.getByText("Enter an ISO datetime before saving an event correction.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save event correction" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Save event correction" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toBeNull();
+  });
+
   it("disables event correction when a non-inferred event would lose its source email", async () => {
     const fetchMock = mockFetchResponses({
       "/applications/app-1": applicationRecord,
