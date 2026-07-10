@@ -867,6 +867,18 @@ export function DashboardPage() {
   const sellingSkill = diagnostics?.selling_skill_segments[0];
   const deadWeightSkill = diagnostics?.dead_weight_skill_segments[0];
   const adjacentRoleSuggestion = diagnostics?.adjacent_role_suggestions[0];
+  const diagnosticBaselineRows =
+    diagnosticsLoadState === "loaded" &&
+    !diagnosticsError &&
+    diagnostics?.baseline_response_rate !== null &&
+    diagnostics?.baseline_response_rate !== undefined
+      ? [
+          {
+            metric: "Baseline response",
+            rate: diagnostics.baseline_response_rate * 100,
+          },
+        ]
+      : [];
 
   return (
     <main
@@ -1584,26 +1596,34 @@ export function DashboardPage() {
         ) : null}
 
         <div className="dashboard-breakdown-layout">
-          <article className="metric-placeholder">
-            <p className="metric-placeholder__label">Baseline response rate</p>
-            <p className="metric-placeholder__value">
-              {diagnosticsError
-                ? "Unavailable"
-                : diagnosticsLoadState === "loading"
-                ? "Loading"
-                : formatNullableRate(diagnostics?.baseline_response_rate ?? null)}
-            </p>
-            <p className="dashboard-card__meta">
-              {diagnosticsError
-                ? "Diagnostic baseline is unavailable"
-                : diagnostics
-                ? `${countLabel(
-                    diagnostics.baseline_response_count,
-                    "response",
-                  )} from ${countLabel(diagnostics.total_applications, "application")}`
-                : "Loading deterministic baseline"}
-            </p>
-          </article>
+          <ChartPanel
+            description="Filtered baseline response rate comes from deterministic /metrics/diagnostics response counts over the currently included local applications."
+            emptyState={{
+              title:
+                diagnosticsLoadState === "loading"
+                  ? "Loading diagnostic baseline"
+                  : "No diagnostic baseline yet",
+              description:
+                diagnosticsLoadState === "loading"
+                  ? "Loading deterministic diagnostic baseline from the local backend."
+                  : "No applications are available for the diagnostic baseline yet. Run sync, classification, and aggregation from Feature Status first.",
+            }}
+            height={220}
+            title="Diagnostic baseline response rate"
+          >
+            {diagnosticBaselineRows.length > 0 ? (
+              <BarChart
+                data={diagnosticBaselineRows}
+                margin={{ bottom: 8, left: 12, right: 24, top: 8 }}
+              >
+                <CartesianGrid stroke="rgba(255, 250, 240, 0.16)" />
+                <XAxis dataKey="metric" stroke="#c9d8ce" />
+                <YAxis allowDecimals={false} stroke="#c9d8ce" type="number" unit="%" />
+                <Tooltip />
+                <Bar dataKey="rate" fill="#b8e2af" name="Response rate" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            ) : undefined}
+          </ChartPanel>
 
           <article>
             <h3>Strongest response signals</h3>

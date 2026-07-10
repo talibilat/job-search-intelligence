@@ -897,9 +897,14 @@ describe("DashboardPage", () => {
     const diagnostics = await screen.findByRole("region", {
       name: "Diagnostic comparisons",
     });
+    const baseline = await within(diagnostics).findByRole("region", {
+      name: "Diagnostic baseline response rate",
+    });
 
-    expect(within(diagnostics).getByText("Baseline response rate")).toBeTruthy();
-    expect(within(diagnostics).getByText("60%")).toBeTruthy();
+    expect(within(baseline).getByRole("img")).toBeTruthy();
+    expect(within(baseline).queryByText("60%")).toBeNull();
+    expect(within(baseline).queryByText("3 responses from 5 applications"))
+      .toBeNull();
     expect(within(diagnostics).getByText("Strongest response signals")).toBeTruthy();
     expect(within(diagnostics).getAllByText("Referral (Source)").length).toBeGreaterThan(
       0,
