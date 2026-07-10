@@ -530,6 +530,40 @@ describe("ApplicationDetailPage", () => {
     expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toBeNull();
   });
 
+  it("disables event correction when a ghost inference keeps a source email", async () => {
+    const fetchMock = mockFetchResponses({
+      "/applications/app-1": applicationRecord,
+      "/applications/app-1/events": [[applicationEvent]],
+      "/applications/app-1/events/event-1": {
+        application: applicationRecord,
+        correction: correctionRecord("event_edit"),
+        event: {
+          ...applicationEvent,
+          event_type: "ghost_inferred",
+        },
+      },
+    });
+
+    render(<ApplicationDetailPage applicationId="app-1" />);
+
+    await screen.findByLabelText("Event to edit");
+    fireEvent.change(screen.getByLabelText("Event type"), {
+      target: { value: "ghost_inferred" },
+    });
+
+    expect(
+      screen.getByText("Clear the source email before saving a ghost-inferred event."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save event correction" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.submit(screen.getByRole("button", { name: "Save event correction" }).closest("form")!);
+
+    expect(requestJson(fetchMock, "/applications/app-1/events/event-1")).toBeNull();
+  });
+
   it("loads application detail and saves a manual status correction", async () => {
     const rejectedApplication = {
       ...applicationRecord,

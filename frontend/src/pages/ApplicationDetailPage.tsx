@@ -74,8 +74,14 @@ function eventFormHasChanges(
   );
 }
 
-function eventFormHasSourceEmailForEventType(eventForm: EventEditFormState) {
-  return eventForm.eventType === "ghost_inferred" || eventForm.emailId.trim().length > 0;
+function eventFormHasValidSourceEmailForEventType(eventForm: EventEditFormState) {
+  const hasSourceEmail = eventForm.emailId.trim().length > 0;
+
+  return eventForm.eventType === "ghost_inferred" ? !hasSourceEmail : hasSourceEmail;
+}
+
+function eventFormGhostInferenceHasSourceEmail(eventForm: EventEditFormState) {
+  return eventForm.eventType === "ghost_inferred" && eventForm.emailId.trim().length > 0;
 }
 
 function isIsoDatetime(value: string) {
@@ -230,7 +236,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
       !eventFormHasChanges(eventForm, selectedEvent) ||
       eventForm.eventAt.trim().length === 0 ||
       !isIsoDatetime(eventForm.eventAt) ||
-      !eventFormHasSourceEmailForEventType(eventForm)
+      !eventFormHasValidSourceEmailForEventType(eventForm)
     ) {
       return;
     }
@@ -421,7 +427,8 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   const hasEventFieldChanges = eventFormHasChanges(eventForm, selectedEvent);
   const hasEventTime = eventForm.eventAt.trim().length > 0;
   const hasValidEventTime = !hasEventTime || isIsoDatetime(eventForm.eventAt);
-  const hasSourceEmailForEventType = eventFormHasSourceEmailForEventType(eventForm);
+  const hasValidSourceEmailForEventType = eventFormHasValidSourceEmailForEventType(eventForm);
+  const ghostInferenceHasSourceEmail = eventFormGhostInferenceHasSourceEmail(eventForm);
   const hasStatusChange = statusValue !== application?.current_status;
 
   if (loadState === "loading") {
@@ -512,7 +519,8 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
           hasEventFieldChanges={hasEventFieldChanges}
           hasEventTime={hasEventTime}
           hasValidEventTime={hasValidEventTime}
-          hasSourceEmailForEventType={hasSourceEmailForEventType}
+          ghostInferenceHasSourceEmail={ghostInferenceHasSourceEmail}
+          hasValidSourceEmailForEventType={hasValidSourceEmailForEventType}
           events={events}
           isSubmitting={isSubmitting}
           onEventFormChange={setEventForm}

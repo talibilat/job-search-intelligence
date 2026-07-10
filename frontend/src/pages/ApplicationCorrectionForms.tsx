@@ -63,10 +63,11 @@ interface ApplicationSurfaceInfo {
 
 interface EventCorrectionFormProps {
   eventForm: EventEditFormState;
+  ghostInferenceHasSourceEmail: boolean;
   hasEventFieldChanges: boolean;
   hasEventTime: boolean;
   hasValidEventTime: boolean;
-  hasSourceEmailForEventType: boolean;
+  hasValidSourceEmailForEventType: boolean;
   events: ApplicationEventRecord[];
   isSubmitting: boolean;
   onEventFormChange: (form: EventEditFormState) => void;
@@ -390,10 +391,11 @@ export function TimelineTable({ events }: TimelineTableProps) {
 
 export function EventCorrectionForm({
   eventForm,
+  ghostInferenceHasSourceEmail,
   hasEventFieldChanges,
   hasEventTime,
   hasValidEventTime,
-  hasSourceEmailForEventType,
+  hasValidSourceEmailForEventType,
   events,
   isSubmitting,
   onEventFormChange,
@@ -438,7 +440,10 @@ export function EventCorrectionForm({
       {selectedEventId && hasEventTime && !hasValidEventTime ? (
         <p>Enter an ISO datetime before saving an event correction.</p>
       ) : null}
-      {selectedEventId && !hasSourceEmailForEventType ? (
+      {selectedEventId && ghostInferenceHasSourceEmail ? (
+        <p>Clear the source email before saving a ghost-inferred event.</p>
+      ) : null}
+      {selectedEventId && !ghostInferenceHasSourceEmail && !hasValidSourceEmailForEventType ? (
         <p>Keep a source email unless the event is a ghost inference with no source message.</p>
       ) : null}
       <form className="application-detail-form" onSubmit={onSubmit}>
@@ -516,7 +521,7 @@ export function EventCorrectionForm({
             !hasEventFieldChanges ||
             !hasEventTime ||
             !hasValidEventTime ||
-            !hasSourceEmailForEventType
+            !hasValidSourceEmailForEventType
           }
           type="submit"
         >
