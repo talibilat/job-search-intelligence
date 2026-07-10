@@ -483,6 +483,22 @@ export function PipelineActivityPanel() {
               <p>
                 {`${numberFormatter.format(classificationEstimate.estimated_total_tokens)} estimated tokens`}
               </p>
+              <div className="pipeline-panel__stage-heading">
+                <p className="pipeline-panel__readiness-label">
+                  Classification cost estimate
+                </p>
+                <StageCountInfo
+                  info={{
+                    dataSource: "GET /classification/estimate",
+                    dataTable: "raw_emails",
+                    howItWorks:
+                      "Estimates prompt and completion tokens from retained candidate body length and configured model pricing before any LLM classification call runs.",
+                    missingData:
+                      "Run Gmail sync to retain candidate bodies, then review this estimate before running classification. If tokens or cost are missing, configure a target LLM provider on Setup or use local Ollama where hosted cost is zero.",
+                  }}
+                  label="Classification cost estimate"
+                />
+              </div>
               <p>{formatEstimatedCost(classificationEstimate)}</p>
             </article>
           </div>
