@@ -1971,6 +1971,16 @@ export function DashboardPage() {
                   : "No segment is below the filtered response baseline yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Compares deterministic segment response rates against the filtered baseline and charts the segments with negative response-rate lift from local SQLite. No LLM produces this diagnostic value.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with response events and segmentation fields.",
+              missingData:
+                "If wasted-effort segment values are zero or missing, check whether aggregated applications have populated segmentation fields and response events for the active filters.",
+            }}
             title="Q-35 wasted-effort segments"
           >
             {wastedEffortRows.length > 0 ? (
