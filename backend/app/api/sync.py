@@ -196,6 +196,7 @@ def get_email_sync_runtime(
         401: {"model": ApiErrorResponse},
         403: {"model": ApiErrorResponse},
         409: {"model": ApiErrorResponse},
+        422: {"model": ApiErrorResponse},
         429: {"model": ApiErrorResponse},
         502: {"model": ApiErrorResponse},
         503: {"model": ApiErrorResponse},

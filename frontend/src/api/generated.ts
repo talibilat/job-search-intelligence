@@ -3404,7 +3404,7 @@ export type syncNowSyncPostResponse409 = {
 };
 
 export type syncNowSyncPostResponse422 = {
-  data: HTTPValidationError;
+  data: ApiErrorResponse;
   status: 422;
 };
 

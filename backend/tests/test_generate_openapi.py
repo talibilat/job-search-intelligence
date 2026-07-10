@@ -35,6 +35,17 @@ def test_ghost_inference_openapi_advertises_validation_errors() -> None:
     }
 
 
+def test_sync_openapi_advertises_validation_errors() -> None:
+    generator = import_generate_openapi()
+
+    schema = generator.generate_openapi_schema()
+
+    responses = schema["paths"]["/sync"]["post"]["responses"]
+    assert responses["422"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ApiErrorResponse"
+    }
+
+
 def test_write_openapi_schema_writes_deterministic_json(tmp_path: Path) -> None:
     generator = import_generate_openapi()
     output_path = tmp_path / "nested" / "openapi.json"
