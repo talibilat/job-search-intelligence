@@ -12,6 +12,11 @@ import { Alert, Button, FormField, TextInput } from "./ui";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const syncStatusPollIntervalMs = 5000;
+const syncLimitMaximums = {
+  maxAgeDays: 3650,
+  maxMessages: 100_000,
+  maxPages: 10_000,
+} as const;
 type SyncLimitField =
   | "beforeDate"
   | "maxAgeDays"
@@ -238,7 +243,7 @@ function optionalPositiveInteger(value: string) {
   return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
 }
 
-function validatePositiveInteger(value: string, label: string) {
+function validatePositiveInteger(value: string, label: string, maximum: number) {
   const trimmedValue = value.trim();
   if (!trimmedValue) {
     return null;
@@ -250,6 +255,9 @@ function validatePositiveInteger(value: string, label: string) {
   }
   if (!Number.isInteger(parsedValue)) {
     return `${label} must be a whole number.`;
+  }
+  if (parsedValue > maximum) {
+    return `${label} must be ${numberFormatter.format(maximum)} or less.`;
   }
 
   return null;
@@ -269,9 +277,21 @@ function buildSyncOptions({
   sinceDate: string;
 }) {
   const errors: SyncLimitErrors = {};
-  const maxMessagesError = validatePositiveInteger(maxMessages, "Email count");
-  const maxAgeDaysError = validatePositiveInteger(maxAgeDays, "Max age");
-  const maxPagesError = validatePositiveInteger(maxPages, "Max pages");
+  const maxMessagesError = validatePositiveInteger(
+    maxMessages,
+    "Email count",
+    syncLimitMaximums.maxMessages,
+  );
+  const maxAgeDaysError = validatePositiveInteger(
+    maxAgeDays,
+    "Max age",
+    syncLimitMaximums.maxAgeDays,
+  );
+  const maxPagesError = validatePositiveInteger(
+    maxPages,
+    "Max pages",
+    syncLimitMaximums.maxPages,
+  );
 
   if (maxMessagesError) {
     errors.maxMessages = maxMessagesError;
