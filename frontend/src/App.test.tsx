@@ -592,6 +592,41 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("explains the Classified pipeline stage through an accessible info control", async () => {
+    mockFetchResponses({
+      "/pipeline/status": pipelineStatusResponse(),
+      "/sync/status": idleSyncStatusResponse(),
+      "/sync/recent-emails?limit=50&order=sent_at": { body: [], status: 200 },
+    });
+
+    renderAtPath("/features");
+
+    const classifiedStage = (await screen.findByText("Classified")).closest(
+      "article",
+    );
+    expect(classifiedStage).toBeTruthy();
+
+    const infoButton = within(classifiedStage!).getByRole("button", {
+      name: "About Classified",
+    });
+    expect(infoButton.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.focus(infoButton);
+
+    expect(infoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(classifiedStage!).getByText("Data source: GET /pipeline/status"),
+    ).toBeTruthy();
+    expect(
+      within(classifiedStage!).getByText("Table: email_classifications"),
+    ).toBeTruthy();
+    expect(
+      within(classifiedStage!).getByText(
+        "Run classification from this page after sync has retained candidate bodies. If this count is zero while retained bodies exist, the classification run has not completed or the configured LLM provider needs attention on Setup.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the Q-03 distinct company count on the dashboard", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse({

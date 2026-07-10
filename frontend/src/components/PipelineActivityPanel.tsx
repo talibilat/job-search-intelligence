@@ -363,6 +363,14 @@ export function PipelineActivityPanel() {
         />
         <StageCount
           definition="Retained candidates the model has categorized (job-related shown)."
+          info={{
+            dataSource: "GET /pipeline/status",
+            dataTable: "email_classifications",
+            howItWorks:
+              "Counts accepted classification rows produced from retained candidate emails, with the job-related subset shown separately so you can see how much synced evidence reached model classification.",
+            missingData:
+              "Run classification from this page after sync has retained candidate bodies. If this count is zero while retained bodies exist, the classification run has not completed or the configured LLM provider needs attention on Setup.",
+          }}
           label="Classified"
           value={`${numberFormatter.format(counts.classified_email_count)} (${numberFormatter.format(counts.job_related_email_count)} job-related)`}
         />
