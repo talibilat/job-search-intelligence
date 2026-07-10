@@ -2127,6 +2127,16 @@ export function DashboardPage() {
                   : "No adjacent role has interview evidence yet. Run sync, classification, and aggregation from Feature Status first.",
             }}
             height={220}
+            info={{
+              dataSource: "GET /metrics/diagnostics",
+              dataTable: "applications and application_events",
+              howItWorks:
+                "Compares deterministic interview rates for adjacent role-title segments from local SQLite application timelines. No LLM produces this diagnostic value.",
+              howToGenerate:
+                "Run sync, classification, and aggregation from Feature Status so retained job-search emails become application timelines with role titles and interview events.",
+              missingData:
+                "If adjacent role suggestion values are zero or missing, check whether aggregated applications have populated role titles and interview events for the active filters.",
+            }}
             title="Q-39 adjacent role suggestions"
           >
             {adjacentRoleRows.length > 0 ? (

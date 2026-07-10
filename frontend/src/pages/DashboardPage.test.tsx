@@ -1537,6 +1537,43 @@ describe("DashboardPage", () => {
     ).toBeTruthy();
   });
 
+  it("explains the adjacent role suggestions chart through an accessible info control", async () => {
+    mockApplicationResponses();
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<DashboardPage />);
+
+    const diagnostics = await screen.findByRole("region", {
+      name: "Diagnostic comparisons",
+    });
+    const adjacentRoles = await within(diagnostics).findByRole("region", {
+      name: "Q-39 adjacent role suggestions",
+    });
+    const infoControl = within(adjacentRoles).getByRole("button", {
+      name: "About Q-39 adjacent role suggestions",
+    });
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(infoControl);
+
+    expect(infoControl.getAttribute("aria-expanded")).toBe("true");
+    expect(within(adjacentRoles).getByText("How this chart works")).toBeTruthy();
+    expect(within(adjacentRoles).getByText("GET /metrics/diagnostics")).toBeTruthy();
+    expect(within(adjacentRoles).getByText("applications and application_events"))
+      .toBeTruthy();
+    expect(
+      within(adjacentRoles).getByText(
+        /Run sync, classification, and aggregation from Feature Status/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(adjacentRoles).getByText(
+        "If adjacent role suggestion values are zero or missing, check whether aggregated applications have populated role titles and interview events for the active filters.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("hydrates composed filters from the URL and clears them", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState(
