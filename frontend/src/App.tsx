@@ -106,8 +106,15 @@ function ApplicationRouteUnavailablePage() {
 function safeDecodeRouteSegment(value: string) {
   try {
     const decodedValue = decodeURIComponent(value);
+    const hasControlCharacter = Array.from(decodedValue).some((character) => {
+      const characterCode = character.charCodeAt(0);
 
-    return /[%\\/?#]/.test(decodedValue) ? null : decodedValue;
+      return characterCode <= 0x1f || characterCode === 0x7f;
+    });
+
+    return hasControlCharacter || /[%\\/?#]/.test(decodedValue)
+      ? null
+      : decodedValue;
   } catch {
     return null;
   }
