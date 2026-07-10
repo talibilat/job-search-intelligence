@@ -57,7 +57,6 @@ import {
   TextInput,
 } from "../components/ui";
 
-type LoadState = "loading" | "loaded" | "error";
 type BreakdownLoadState = "loading" | "loaded" | "error";
 type DiagnosticsLoadState = "loading" | "loaded" | "error";
 type FunnelLoadState = "loading" | "loaded" | "error";
@@ -369,18 +368,6 @@ function liveApplicationsCountLabel(
   return count === 1 ? "1 live application" : `${count} live applications`;
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    timeZone: "UTC",
-    timeZoneName: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
 function formatTrendDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
@@ -423,41 +410,6 @@ function sortedUniqueApplications(applications: ApplicationRecord[]) {
     return left.id.localeCompare(right.id);
   });
 }
-
-const applicationStatusColumns = [
-  {
-    key: "company",
-    header: "Company",
-    render: (row: ApplicationRecord) => (
-      <a href={`/applications/${encodeURIComponent(row.id)}`}>{row.company}</a>
-    ),
-  },
-  { key: "role_title", header: "Role" },
-  {
-    key: "current_status",
-    header: "Status",
-    render: (row: ApplicationRecord) => (
-      <span className={`status-badge status-badge--${row.current_status}`}>
-        {titleize(row.current_status)}
-      </span>
-    ),
-  },
-  {
-    key: "first_seen_at",
-    header: "First seen",
-    render: (row: ApplicationRecord) => formatDateTime(row.first_seen_at),
-  },
-  {
-    key: "last_activity_at",
-    header: "Last activity",
-    render: (row: ApplicationRecord) => formatDateTime(row.last_activity_at),
-  },
-  {
-    key: "source",
-    header: "Source",
-    render: (row: ApplicationRecord) => titleize(row.source),
-  },
-] as const;
 
 const breakdownColumns = [
   {
@@ -649,9 +601,6 @@ export function DashboardPage() {
   );
   const [appliedFilters, setAppliedFilters] =
     useState<DashboardFilters>(filters);
-  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
-  const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(
     null,
   );
@@ -798,50 +747,6 @@ export function DashboardPage() {
       isCancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    async function loadApplications() {
-      setLoadState("loading");
-      setErrorMessage(null);
-      setApplications([]);
-
-      const response = await listApplicationsApplicationsGet(
-        queryParamsFromFilters(appliedFilters),
-      );
-
-      if (isCancelled) {
-        return;
-      }
-
-      if (response.status !== 200) {
-        setApplications([]);
-        setErrorMessage(
-          publicError(response.data, "Application statuses are unavailable."),
-        );
-        setLoadState("error");
-        return;
-      }
-
-      setApplications(response.data);
-      setLoadState("loaded");
-    }
-
-    void loadApplications().catch(() => {
-      if (!isCancelled) {
-        setApplications([]);
-        setErrorMessage(
-          "Application statuses are unavailable. Start the local backend to load Q-09.",
-        );
-        setLoadState("error");
-      }
-    });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [appliedFilters]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1177,9 +1082,6 @@ export function DashboardPage() {
     setAppliedFilters(emptyFilters);
   }
 
-  const shownStatusCount = new Set(
-    applications.map((application) => application.current_status),
-  ).size;
   const totalApplicationsValue = summaryMetricValue(
     isLoadingSummary,
     summary?.total_applications,
@@ -1515,22 +1417,10 @@ export function DashboardPage() {
               <p className="dashboard-card__meta">{averageRejectionMeta}</p>
             </article>
             <article className="metric-placeholder">
-              <p className="metric-placeholder__label">Applications shown</p>
-              <p className="metric-placeholder__value">{applications.length}</p>
-              <p className="dashboard-card__meta">Returned by /applications</p>
-            </article>
-            <article className="metric-placeholder">
-              <p className="metric-placeholder__label">Statuses in view</p>
-              <p className="metric-placeholder__value">{shownStatusCount}</p>
-              <p className="dashboard-card__meta">
-                Derived from current_status
-              </p>
-            </article>
-            <article className="metric-placeholder">
               <p className="metric-placeholder__label">Answer</p>
               <p className="metric-placeholder__value">Q-09</p>
               <p className="dashboard-card__meta">
-                Per-application status table
+                Application statuses moved to Feature Status
               </p>
             </article>
             <article
@@ -1663,35 +1553,6 @@ export function DashboardPage() {
             ),
           )}
         </ol>
-      </section>
-
-      <section
-        className="dashboard-card status-table-card"
-        aria-labelledby="status-table-title"
-      >
-        <div>
-          <p className="eyebrow">Applications table</p>
-          <h2 id="status-table-title">Current status of every application</h2>
-        </div>
-        {loadState === "loading" ? (
-          <p className="dashboard-card__meta">Loading applications...</p>
-        ) : null}
-        {errorMessage ? (
-          <Alert title="Application statuses unavailable" tone="danger">
-            <p>{errorMessage}</p>
-          </Alert>
-        ) : null}
-        <DataTable
-          caption="Application current statuses"
-          columns={applicationStatusColumns}
-          emptyMessage={
-            loadState === "loaded"
-              ? "No applications match these filters."
-              : "No application statuses loaded yet."
-          }
-          rowKey={(row) => row.id}
-          rows={applications}
-        />
       </section>
 
       {funnelError ? (

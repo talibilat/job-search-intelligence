@@ -1165,11 +1165,10 @@ describe("App", () => {
     expect(styles).toContain("padding: 20px");
   });
 
-  it("renders the Q-09 application status table at the dashboard route", async () => {
+  it("keeps the dashboard chart-focused and moves the Q-09 status table out", async () => {
     mockFetchResponses({
       "/metrics/summary": metricsSummaryResponse(),
       "/metrics/rates": metricsRatesResponse(),
-      "/applications": { body: [], status: 200 },
       "/applications?status=applied": { body: [], status: 200 },
       "/applications?status=in_review": { body: [], status: 200 },
       "/applications?status=assessment": { body: [], status: 200 },
@@ -1189,23 +1188,22 @@ describe("App", () => {
       screen.getByRole("region", { name: "Metrics overview" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("region", {
+      screen.queryByRole("region", {
         name: "Current status of every application",
       }),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(
-      await screen.findByRole("table", {
+      screen.queryByRole("table", {
         name: "Application current statuses",
       }),
-    ).toBeTruthy();
-    expect(
-      await screen.findByText("No applications match these filters."),
-    ).toBeTruthy();
+    ).toBeNull();
+    expect(screen.getByText("Application statuses moved to Feature Status"))
+      .toBeTruthy();
 
     const volumeTrend = screen.getByRole("region", {
       name: "Application volume trend",
     });
-    const emptyState = within(volumeTrend).getByRole("status", {
+    const emptyState = await within(volumeTrend).findByRole("status", {
       name: "No application volume yet",
     });
 
@@ -1396,7 +1394,6 @@ describe("App", () => {
       "/applications?status=in_review",
       "/applications?status=assessment",
       "/applications?status=interview",
-      "/applications",
       "/metrics/response-rate-trend",
       "/metrics/funnel",
       "/metrics/breakdown?dimension=source",

@@ -752,41 +752,34 @@ afterEach(() => {
 });
 
 describe("DashboardPage", () => {
-  it("renders Q-09 application statuses and applies the status filter", async () => {
+  it("keeps the dashboard status-table-free and applies the status filter to metrics", async () => {
     const fetchMock = mockApplicationResponses();
     window.history.pushState({}, "", "/dashboard");
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Acme Corp")).toBeTruthy();
-    const table = screen.getByRole("table", {
+    expect(await screen.findByText("Application statuses moved to Feature Status"))
+      .toBeTruthy();
+    expect(screen.queryByRole("table", {
       name: "Application current statuses",
-    });
-    expect(table).toBeTruthy();
-    expect(screen.getByText("Backend Engineer")).toBeTruthy();
-    expect(within(table).getByText("Interview")).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/applications",
-      expect.objectContaining({ method: "GET" }),
-    );
+    })).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Status"), {
       target: { value: "rejected" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
-    expect(await screen.findByText("Globex")).toBeTruthy();
-    expect(within(table).getByText("Rejected")).toBeTruthy();
+    await screen.findByRole("region", { name: "Application funnel" });
     expect(window.location.search).toBe("?status=rejected");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/applications?status=rejected",
+      "/metrics/timeseries?status=rejected",
       expect.objectContaining({ method: "GET" }),
     );
 
     window.history.pushState({}, "", "/dashboard");
     window.dispatchEvent(new Event("popstate"));
 
-    expect(await screen.findByText("Acme Corp")).toBeTruthy();
+    await screen.findByRole("region", { name: "Application funnel" });
     expect(screen.getByLabelText("Status")).toHaveProperty("value", "");
     expect(window.location.search).toBe("");
   });
@@ -801,17 +794,18 @@ describe("DashboardPage", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Globex")).toBeTruthy();
+    expect(await screen.findByText("Application statuses moved to Feature Status"))
+      .toBeTruthy();
     expect(screen.getByLabelText("Status")).toHaveProperty("value", "rejected");
     expect(screen.getByLabelText("Role")).toHaveProperty("value", "platform");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/applications?role=platform&status=rejected",
+      "/metrics/funnel?role=platform&status=rejected",
       expect.objectContaining({ method: "GET" }),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
 
-    expect(await screen.findByText("Acme Corp")).toBeTruthy();
+    await screen.findByRole("region", { name: "Application funnel" });
     expect(screen.getByLabelText("Status")).toHaveProperty("value", "");
     expect(screen.getByLabelText("Role")).toHaveProperty("value", "");
     expect(window.location.search).toBe("");
@@ -827,12 +821,13 @@ describe("DashboardPage", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Acme Corp")).toBeTruthy();
+    expect(await screen.findByText("Application statuses moved to Feature Status"))
+      .toBeTruthy();
     expect(window.location.search).toBe("");
     expect(screen.getByLabelText("Status")).toHaveProperty("value", "");
     expect(screen.getByLabelText("Salary min")).toHaveProperty("value", "");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/applications",
+      "/metrics/funnel",
       expect.objectContaining({ method: "GET" }),
     );
   });
