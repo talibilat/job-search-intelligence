@@ -66,6 +66,7 @@ interface EventCorrectionFormProps {
   ghostInferenceHasSourceEmail: boolean;
   hasEventFieldChanges: boolean;
   hasEventTime: boolean;
+  hasEventTimeZone: boolean;
   hasValidEventTime: boolean;
   hasValidSourceEmailForEventType: boolean;
   events: ApplicationEventRecord[];
@@ -394,6 +395,7 @@ export function EventCorrectionForm({
   ghostInferenceHasSourceEmail,
   hasEventFieldChanges,
   hasEventTime,
+  hasEventTimeZone,
   hasValidEventTime,
   hasValidSourceEmailForEventType,
   events,
@@ -437,7 +439,10 @@ export function EventCorrectionForm({
       {selectedEventId && !hasEventTime ? (
         <p>Enter an event time before saving an event correction.</p>
       ) : null}
-      {selectedEventId && hasEventTime && !hasValidEventTime ? (
+      {selectedEventId && hasEventTime && !hasEventTimeZone ? (
+        <p>Enter an ISO datetime with a timezone before saving an event correction.</p>
+      ) : null}
+      {selectedEventId && hasEventTime && hasEventTimeZone && !hasValidEventTime ? (
         <p>Enter an ISO datetime before saving an event correction.</p>
       ) : null}
       {selectedEventId && ghostInferenceHasSourceEmail ? (
@@ -520,6 +525,7 @@ export function EventCorrectionForm({
             !selectedEventId ||
             !hasEventFieldChanges ||
             !hasEventTime ||
+            !hasEventTimeZone ||
             !hasValidEventTime ||
             !hasValidSourceEmailForEventType
           }

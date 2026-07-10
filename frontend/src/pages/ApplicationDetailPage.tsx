@@ -84,11 +84,19 @@ function eventFormGhostInferenceHasSourceEmail(eventForm: EventEditFormState) {
   return eventForm.eventType === "ghost_inferred" && eventForm.emailId.trim().length > 0;
 }
 
+function eventTimeHasTimezoneOffset(value: string) {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim());
+}
+
+function eventTimeLooksIsoDatetime(value: string) {
+  return /^\d{4}-\d{2}-\d{2}T/.test(value.trim());
+}
+
 function isIsoDatetime(value: string) {
   const trimmedValue = value.trim();
   const dateParts = /^(\d{4})-(\d{2})-(\d{2})T/.exec(trimmedValue);
 
-  if (!dateParts || Number.isNaN(Date.parse(trimmedValue))) {
+  if (!dateParts || !eventTimeHasTimezoneOffset(trimmedValue) || Number.isNaN(Date.parse(trimmedValue))) {
     return false;
   }
 
@@ -249,6 +257,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
     if (
       !eventFormHasChanges(eventForm, selectedEvent) ||
       eventForm.eventAt.trim().length === 0 ||
+      !eventTimeHasTimezoneOffset(eventForm.eventAt) ||
       !isIsoDatetime(eventForm.eventAt) ||
       !eventFormHasValidSourceEmailForEventType(eventForm)
     ) {
@@ -440,6 +449,10 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
   const selectedEvent = events.find((event) => event.id === selectedEventId);
   const hasEventFieldChanges = eventFormHasChanges(eventForm, selectedEvent);
   const hasEventTime = eventForm.eventAt.trim().length > 0;
+  const hasEventTimeZone =
+    !hasEventTime ||
+    !eventTimeLooksIsoDatetime(eventForm.eventAt) ||
+    eventTimeHasTimezoneOffset(eventForm.eventAt);
   const hasValidEventTime = !hasEventTime || isIsoDatetime(eventForm.eventAt);
   const hasValidSourceEmailForEventType = eventFormHasValidSourceEmailForEventType(eventForm);
   const ghostInferenceHasSourceEmail = eventFormGhostInferenceHasSourceEmail(eventForm);
@@ -532,6 +545,7 @@ export function ApplicationDetailPage({ applicationId }: ApplicationDetailPagePr
           eventForm={eventForm}
           hasEventFieldChanges={hasEventFieldChanges}
           hasEventTime={hasEventTime}
+          hasEventTimeZone={hasEventTimeZone}
           hasValidEventTime={hasValidEventTime}
           ghostInferenceHasSourceEmail={ghostInferenceHasSourceEmail}
           hasValidSourceEmailForEventType={hasValidSourceEmailForEventType}
