@@ -27,4 +27,23 @@ describe("publicApiError", () => {
       "Request failed.",
     );
   });
+
+  it("falls back when the standard API message is not a string", () => {
+    expect(
+      publicApiError(
+        {
+          response: {
+            data: {
+              error: {
+                code: "busy",
+                message: { token: "secret" },
+                details: [],
+              },
+            },
+          },
+        },
+        "Request failed.",
+      ),
+    ).toBe("Request failed.");
+  });
 });
