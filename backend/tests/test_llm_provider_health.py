@@ -260,6 +260,7 @@ def test_health_endpoint_resolves_real_azure_adapter_through_normal_di(
 ) -> None:
     settings = AppSettings(
         _env_file=None,
+        sync_on_open=False,
         llm_provider=LLMProviderName.AZURE_OPENAI,
         classification_mode=ClassificationMode.HYBRID,
         azure_openai_endpoint="https://example.openai.azure.com",

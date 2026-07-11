@@ -625,7 +625,10 @@ def test_configured_sync_job_skips_when_gmail_connection_is_not_configured(
     status_store = EmailSyncStatusStore()
     monkeypatch.setattr(sync_api, "get_sync_status_store", lambda: status_store)
 
-    asyncio.run(sync_api.create_configured_sync_job(settings)())
+    async def run_sync_job() -> None:
+        await sync_api.create_configured_sync_job(settings)()
+
+    asyncio.run(run_sync_job())
 
     assert status_store.current_status().state is EmailSyncRunState.IDLE
 
