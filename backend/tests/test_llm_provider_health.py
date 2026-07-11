@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from app.api.dependencies import get_llm_secret_store
 from app.api.provider_config import get_configured_llm_provider
 from app.config import AppSettings, ClassificationMode, LLMProviderName, get_settings
 from app.main import create_app
@@ -21,10 +22,31 @@ from app.providers.llm import (
     LLMProviderTimeoutError,
     LLMProviderUnavailableError,
 )
+from app.providers.llm.azure_openai import AzureOpenAIProvider
+from app.security import SecretRef
 from app.services.llm_health import ensure_configured_llm_provider_available
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, SecretStr, ValidationError
+
+
+class FakeSecretStore:
+    async def get_secret(self, ref: SecretRef) -> SecretStr | None:
+        del ref
+        return SecretStr("api-key")
+
+    async def set_secret(self, ref: SecretRef, value: SecretStr) -> None:
+        del ref, value
+
+    async def delete_secret(self, ref: SecretRef) -> None:
+        del ref
+
+
+async def healthy_azure_check(
+    self: AzureOpenAIProvider,
+    request: LLMProviderHealthCheckRequest,
+) -> LLMProviderHealthCheckResponse:
+    return available_health_response(self.provider_name, request)
 
 
 class FakeLLMHealthProvider:
@@ -231,6 +253,30 @@ def test_llm_provider_health_endpoint_checks_configured_azure_deployments() -> N
             embedding_model="jt-embeddings",
         )
     ]
+
+
+def test_health_endpoint_resolves_real_azure_adapter_through_normal_di(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings(
+        _env_file=None,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        classification_mode=ClassificationMode.HYBRID,
+        azure_openai_endpoint="https://example.openai.azure.com",
+        azure_openai_chat_deployment="jt-chat",
+        azure_openai_embedding_deployment="jt-embeddings",
+    )
+    app = create_app(settings=settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_llm_secret_store] = lambda: FakeSecretStore()
+    monkeypatch.setattr(AzureOpenAIProvider, "health_check", healthy_azure_check)
+
+    with TestClient(app) as client:
+        response = client.post("/config/providers/llm/health")
+
+    assert response.status_code == 200
+    assert response.json()["provider_name"] == "azure_openai"
+    assert "api-key" not in response.text
 
 
 def test_llm_provider_health_endpoint_rejects_missing_selected_provider_settings() -> None:

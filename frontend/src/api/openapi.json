@@ -362,6 +362,117 @@
         "title": "ApplicationEventRecord",
         "type": "object"
       },
+      "ApplicationEventTimelineRecord": {
+        "description": "Application event enriched with source-email metadata for timeline UIs.\n\nExposes only email metadata (subject), never body-derived content.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "classification_classified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification Classified At"
+          },
+          "classification_confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification Confidence"
+          },
+          "email_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Id"
+          },
+          "email_sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Sent At"
+          },
+          "email_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Subject"
+          },
+          "event_at": {
+            "format": "date-time",
+            "title": "Event At",
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/ApplicationEventType"
+          },
+          "extract_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extract Note"
+          },
+          "extracted_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplicationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "email_id",
+          "event_type",
+          "event_at",
+          "extract_note"
+        ],
+        "title": "ApplicationEventTimelineRecord",
+        "type": "object"
+      },
       "ApplicationEventType": {
         "enum": [
           "applied",
@@ -905,6 +1016,32 @@
           "withdrawn"
         ],
         "type": "string"
+      },
+      "ApplicationStatusCountsResponse": {
+        "description": "Deterministic application counts per canonical current status.",
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/ApplicationStatus"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "counts"
+        ],
+        "title": "ApplicationStatusCountsResponse",
+        "type": "object"
       },
       "ApplicationStatusEditRequest": {
         "additionalProperties": false,
@@ -2028,6 +2165,90 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "InsightCitation": {
+        "description": "Public-safe evidence pointer persisted alongside a cached insight.\n\nCarries only application and email metadata so insight cards can render\nclickable evidence chips without re-deriving the generation inputs.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "citation_id": {
+            "title": "Citation Id",
+            "type": "string"
+          },
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "email_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Id"
+          },
+          "email_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Subject"
+          },
+          "event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event At"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplicationEventType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role_title": {
+            "title": "Role Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "citation_id",
+          "application_id",
+          "company",
+          "role_title"
+        ],
+        "title": "InsightCitation",
+        "type": "object"
+      },
       "InsightListResponse": {
         "properties": {
           "insights": {
@@ -2053,6 +2274,13 @@
       },
       "InsightRecord": {
         "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/InsightCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
           "content": {
             "title": "Content",
             "type": "string"
@@ -3441,6 +3669,30 @@
               }
             ],
             "title": "Ollama Embedding Model"
+          },
+          "sync_interval_seconds": {
+            "anyOf": [
+              {
+                "maximum": 86400.0,
+                "minimum": 60.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Interval Seconds"
+          },
+          "sync_on_open": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync On Open"
           }
         },
         "title": "ProviderConfigUpdateRequest",
@@ -3488,11 +3740,21 @@
           "ollama_embedding_model": {
             "title": "Ollama Embedding Model",
             "type": "string"
+          },
+          "sync_interval_seconds": {
+            "title": "Sync Interval Seconds",
+            "type": "integer"
+          },
+          "sync_on_open": {
+            "title": "Sync On Open",
+            "type": "boolean"
           }
         },
         "required": [
           "gmail_client_config_file",
           "gmail_scopes",
+          "sync_on_open",
+          "sync_interval_seconds",
           "azure_openai_endpoint",
           "azure_openai_api_version",
           "azure_openai_chat_deployment",
@@ -3688,6 +3950,71 @@
           "ingested_at"
         ],
         "title": "RawEmailPreviewRecord",
+        "type": "object"
+      },
+      "RecentApplicationEventRecord": {
+        "description": "One cross-application timeline event for the recent-activity feed.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "current_status": {
+            "$ref": "#/components/schemas/ApplicationStatus"
+          },
+          "email_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Id"
+          },
+          "email_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Subject"
+          },
+          "event_at": {
+            "format": "date-time",
+            "title": "Event At",
+            "type": "string"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/ApplicationEventType"
+          },
+          "role_title": {
+            "title": "Role Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "application_id",
+          "company",
+          "role_title",
+          "current_status",
+          "event_type",
+          "event_at"
+        ],
+        "title": "RecentApplicationEventRecord",
         "type": "object"
       },
       "ResponseSilenceMetric": {
@@ -4014,6 +4341,98 @@
           "not_offered",
           "unknown"
         ],
+        "type": "string"
+      },
+      "SyncLocalStats": {
+        "description": "Deterministic totals over locally stored raw-email metadata.",
+        "properties": {
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "total_raw_emails": {
+            "minimum": 0.0,
+            "title": "Total Raw Emails",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_raw_emails"
+        ],
+        "title": "SyncLocalStats",
+        "type": "object"
+      },
+      "SyncScopeEstimate": {
+        "description": "Deterministic local approximation of how much email a sync scope covers.\n\nDerived only from already-synced local metadata; it never calls the provider.",
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/SyncScopeEstimateBasis"
+          },
+          "estimated_message_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Message Count"
+          },
+          "total_local_emails": {
+            "minimum": 0.0,
+            "title": "Total Local Emails",
+            "type": "integer"
+          },
+          "window_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window End"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Start"
+          }
+        },
+        "required": [
+          "basis",
+          "total_local_emails"
+        ],
+        "title": "SyncScopeEstimate",
+        "type": "object"
+      },
+      "SyncScopeEstimateBasis": {
+        "description": "How a pre-sync scope estimate was derived.",
+        "enum": [
+          "local_history",
+          "message_cap",
+          "unknown_incremental"
+        ],
+        "title": "SyncScopeEstimateBasis",
         "type": "string"
       },
       "TimeToFirstResponseMetric": {
@@ -4357,6 +4776,56 @@
         ]
       }
     },
+    "/applications/events/recent": {
+      "get": {
+        "description": "Returns the newest timeline events across all applications for the overview activity feed, with source-email subject metadata only.",
+        "operationId": "list_recent_application_events_applications_events_recent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecentApplicationEventRecord"
+                  },
+                  "title": "Response List Recent Application Events Applications Events Recent Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Recent Application Events",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/applications/ghost-inference": {
       "post": {
         "description": "Marks applied applications as ghosted when their event timeline has no response after the configured silence threshold.",
@@ -4384,6 +4853,28 @@
           }
         },
         "summary": "Run Ghost Inference",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/applications/status-counts": {
+      "get": {
+        "description": "Returns deterministic application counts per canonical current status from the local SQLite source of truth, zero-filled for unused statuses.",
+        "operationId": "get_application_status_counts_applications_status_counts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationStatusCountsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Application Status Counts",
         "tags": [
           "applications"
         ]
@@ -4865,7 +5356,7 @@
     },
     "/applications/{id}/events": {
       "get": {
-        "description": "Returns the canonical event timeline for one application from local SQLite.",
+        "description": "Returns the canonical event timeline for one application from local SQLite, enriched with source-email subject metadata and classification confidence.",
         "operationId": "get_application_events_applications__id__events_get",
         "parameters": [
           {
@@ -4884,7 +5375,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/ApplicationEventRecord"
+                    "$ref": "#/components/schemas/ApplicationEventTimelineRecord"
                   },
                   "title": "Response Get Application Events Applications  Id  Events Get",
                   "type": "array"
@@ -4917,6 +5408,93 @@
         "summary": "List Application Events",
         "tags": [
           "applications"
+        ]
+      }
+    },
+    "/auth/connections": {
+      "get": {
+        "description": "Returns non-secret metadata for every locally stored email connection. Token material never leaves the configured secret store.",
+        "operationId": "list_email_connections_auth_connections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EmailConnection"
+                  },
+                  "title": "Response List Email Connections Auth Connections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Email Connections",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/connections/{provider}/{account_id}": {
+      "delete": {
+        "description": "Removes one stored email connection and deletes its credential from the configured secret store. Provider-side mailbox data is never touched.",
+        "operationId": "disconnect_email_connection_auth_connections__provider___account_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EmailProviderName"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailConnection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disconnect Email Connection",
+        "tags": [
+          "auth"
         ]
       }
     },
@@ -5218,6 +5796,16 @@
               }
             },
             "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Update Provider Config",
@@ -6990,6 +7578,110 @@
         ]
       }
     },
+    "/sync/estimate": {
+      "get": {
+        "description": "Returns a deterministic local approximation of how much email a sync scope covers, using already-synced metadata only. It never calls the email provider.",
+        "operationId": "sync_estimate_sync_estimate_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "max_messages",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Messages"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_age_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3650,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Age Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncScopeEstimate"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Estimate Sync Scope",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
     "/sync/recent-emails": {
       "get": {
         "description": "Return recently stored raw-email metadata without body text.\n\n``order=sent_at`` (default) shows the newest synced mailbox messages;\n``order=ingested_at`` is the diagnostic view of what the latest sync wrote.",
@@ -7042,6 +7734,28 @@
           }
         },
         "summary": "Sync Recent Emails",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
+    "/sync/stats": {
+      "get": {
+        "description": "Returns deterministic totals over locally stored raw-email metadata plus the last manual sync completion time.",
+        "operationId": "sync_stats_sync_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncLocalStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Local Sync Stats",
         "tags": [
           "sync"
         ]

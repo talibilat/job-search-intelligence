@@ -10,6 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type {
+  ApiErrorResponse,
   ApplicationRecord,
   MetricsBreakdownResponse,
   MetricsDiagnosticsResponse,
@@ -26,6 +27,14 @@ function renderAtPath(pathname: string) {
   return render(<App />);
 }
 
+function requestPath(input: RequestInfo | URL): string {
+  return typeof input === "string"
+    ? input
+    : input instanceof URL
+      ? input.href
+      : input.url;
+}
+
 type MockObjectResponseBody = Record<string, unknown>;
 type MockResponseBody = MockObjectResponseBody | unknown[];
 
@@ -37,6 +46,24 @@ type MockResponse =
     };
 
 type MockResponseConfig = MockResponse | MockResponse[];
+
+function apiErrorResponse(
+  code: ApiErrorResponse["error"]["code"],
+  message: string,
+): ApiErrorResponse & MockObjectResponseBody {
+  const response = {
+    error: { code, details: [], message },
+  } satisfies ApiErrorResponse;
+  return response;
+}
+
+const syncFailureCodeByStatus = {
+  401: "email_authorization_required",
+  409: "conflict",
+  429: "email_rate_limited",
+  502: "email_provider_request_failed",
+  503: "email_temporarily_unavailable",
+} as const satisfies Record<number, ApiErrorResponse["error"]["code"]>;
 
 function metricsSummaryResponse(
   overrides: Partial<MetricsSummaryResponse> = {},
@@ -67,7 +94,12 @@ function metricsSummaryResponse(
         { application_count: 0, bucket: "8_14", max_days: 14, min_days: 8 },
         { application_count: 0, bucket: "15_30", max_days: 30, min_days: 15 },
         { application_count: 0, bucket: "31_60", max_days: 60, min_days: 31 },
-        { application_count: 0, bucket: "61_plus", max_days: null, min_days: 61 },
+        {
+          application_count: 0,
+          bucket: "61_plus",
+          max_days: null,
+          min_days: 61,
+        },
       ],
     },
     rejected_applications: 0,
@@ -150,11 +182,70 @@ function setupStatusResponse(
   return response as unknown as MockObjectResponseBody;
 }
 
-function setupStatusFetchResponse(overrides: Partial<SetupStatusResponse> = {}) {
+function setupStatusFetchResponse(
+  overrides: Partial<SetupStatusResponse> = {},
+) {
   return new Response(JSON.stringify(setupStatusResponse(overrides)), {
     headers: { "Content-Type": "application/json" },
     status: 200,
   });
+}
+
+function providerConfigResponse(
+  llmProvider: "azure_openai" | "ollama",
+  overrides: Record<string, unknown> = {},
+): MockObjectResponseBody {
+  return {
+    email_providers: [],
+    llm_providers: [],
+    recommended_classification_mode:
+      llmProvider === "ollama" ? "local" : "hybrid",
+    selection: {
+      classification_mode: llmProvider === "ollama" ? "local" : "hybrid",
+      email_provider: "gmail",
+      llm_provider: llmProvider,
+    },
+    settings: {
+      azure_openai_api_version: "2024-10-21",
+      azure_openai_chat_deployment: "chat",
+      azure_openai_embedding_deployment: "embedding",
+      azure_openai_endpoint: "https://example.openai.azure.com",
+      gmail_client_config_file: "client.json",
+      gmail_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+      ollama_base_url: "http://127.0.0.1:11434",
+      ollama_chat_model: "llama3.1",
+      ollama_embedding_model: "nomic-embed-text",
+      sync_interval_seconds: 1800,
+      sync_on_open: true,
+    },
+    ...overrides,
+  };
+}
+
+function confirmedProviderConfig({
+  classificationMode,
+  intervalSeconds = 1800,
+  llmProvider,
+  recommendedMode,
+}: {
+  classificationMode: "hybrid" | "llm" | "local";
+  intervalSeconds?: number;
+  llmProvider: "azure_openai" | "ollama";
+  recommendedMode: "hybrid" | "llm" | "local";
+}): MockObjectResponseBody {
+  const base = providerConfigResponse(llmProvider);
+  return {
+    ...base,
+    recommended_classification_mode: recommendedMode,
+    selection: {
+      ...(base.selection as Record<string, unknown>),
+      classification_mode: classificationMode,
+    },
+    settings: {
+      ...(base.settings as Record<string, unknown>),
+      sync_interval_seconds: intervalSeconds,
+    },
+  };
 }
 
 function applicationRecord(
@@ -333,19 +424,27 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
 
       if (path === "/metrics/breakdown?dimension=role") {
         return Promise.resolve(
-          new Response(JSON.stringify(metricsBreakdownResponse({ dimension: "role" })), {
-            headers: { "Content-Type": "application/json" },
-            status: 200,
-          }),
+          new Response(
+            JSON.stringify(metricsBreakdownResponse({ dimension: "role" })),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
         );
       }
 
       if (path === "/metrics/breakdown?dimension=company_type") {
         return Promise.resolve(
-          new Response(JSON.stringify(metricsBreakdownResponse({ dimension: "company_type" })), {
-            headers: { "Content-Type": "application/json" },
-            status: 200,
-          }),
+          new Response(
+            JSON.stringify(
+              metricsBreakdownResponse({ dimension: "company_type" }),
+            ),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
         );
       }
 
@@ -440,8 +539,8 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("renders recurring feedback on the insights route", async () => {
-    window.history.pushState({}, "", "/insights");
+  it("renders recurring feedback on the legacy insights route", async () => {
+    window.history.pushState({}, "", "/legacy/insights");
     mockFetchResponses({
       "/insights": {
         insights: [
@@ -478,7 +577,7 @@ describe("App", () => {
   });
 
   it("renders a clean landing page that explains the local inbox-to-dashboard flow", () => {
-    renderAtPath("/");
+    renderAtPath("/legacy");
 
     expect(
       screen.getByRole("heading", {
@@ -489,10 +588,13 @@ describe("App", () => {
     expect(screen.getByText("Connects to Gmail locally")).toBeTruthy();
     expect(screen.getByText("Syncs safe metadata first")).toBeTruthy();
     expect(screen.getByText("Filters and classifies job email")).toBeTruthy();
-    expect(screen.getByText("Reconstructs applications and timelines")).toBeTruthy();
+    expect(
+      screen.getByText("Reconstructs applications and timelines"),
+    ).toBeTruthy();
     expect(screen.getByText("Charts deterministic metrics")).toBeTruthy();
-    expect(screen.getByText("Generates grounded insights only when supported"))
-      .toBeTruthy();
+    expect(
+      screen.getByText("Generates grounded insights only when supported"),
+    ).toBeTruthy();
     expect(screen.getByRole("link", { name: "Run features" })).toHaveProperty(
       "href",
       `${window.location.origin}/features`,
@@ -529,9 +631,7 @@ describe("App", () => {
     expect(screen.getByText("Filter decisions")).toBeTruthy();
     expect(screen.getByText("Retained bodies")).toBeTruthy();
     expect(screen.getByText("Applications")).toBeTruthy();
-    expect(
-      screen.getByText("Gmail connected:", { exact: false }),
-    ).toBeTruthy();
+    expect(screen.getByText("Gmail connected:", { exact: false })).toBeTruthy();
     expect(
       await screen.findByText(
         "No synced email metadata is stored yet. Run a sync to fill this list.",
@@ -759,9 +859,13 @@ describe("App", () => {
     expect(within(readiness).getByText("2 need classification")).toBeTruthy();
     expect(within(readiness).getByText("1 stale model")).toBeTruthy();
     expect(within(readiness).getByText("4,200 estimated tokens")).toBeTruthy();
-    expect(within(readiness).getByText("Estimated cost $0.42 USD")).toBeTruthy();
     expect(
-      within(readiness).getByText("Model gpt-4.1-mini, prompt classification-v1"),
+      within(readiness).getByText("Estimated cost $0.42 USD"),
+    ).toBeTruthy();
+    expect(
+      within(readiness).getByText(
+        "Model gpt-4.1-mini, prompt classification-v1",
+      ),
     ).toBeTruthy();
   });
 
@@ -913,7 +1017,9 @@ describe("App", () => {
         "Data source: GET /classification/reprocessing-plan",
       ),
     ).toBeTruthy();
-    expect(within(retainedCandidatesMetric!).getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      within(retainedCandidatesMetric!).getByText("Table: raw_emails"),
+    ).toBeTruthy();
     expect(
       within(retainedCandidatesMetric!).getByText(
         "Run Gmail sync from this page after connecting Gmail on Setup. If retained candidates are zero, sync has not retained any job-search email bodies for classification yet.",
@@ -1122,7 +1228,9 @@ describe("App", () => {
 
     expect(infoButton.getAttribute("aria-expanded")).toBe("true");
     expect(
-      within(estimateMetric!).getByText("Data source: GET /classification/estimate"),
+      within(estimateMetric!).getByText(
+        "Data source: GET /classification/estimate",
+      ),
     ).toBeTruthy();
     expect(within(estimateMetric!).getByText("Table: raw_emails")).toBeTruthy();
     expect(
@@ -1337,7 +1445,9 @@ describe("App", () => {
     fireEvent.focus(infoButton);
 
     expect(infoButton.getAttribute("aria-expanded")).toBe("true");
-    expect(within(rawEmailsStage!).getByText("Data source: GET /pipeline/status")).toBeTruthy();
+    expect(
+      within(rawEmailsStage!).getByText("Data source: GET /pipeline/status"),
+    ).toBeTruthy();
     expect(within(rawEmailsStage!).getByText("Table: raw_emails")).toBeTruthy();
     expect(
       within(rawEmailsStage!).getByText(
@@ -1371,7 +1481,9 @@ describe("App", () => {
     expect(
       within(filterStage!).getByText("Data source: GET /pipeline/status"),
     ).toBeTruthy();
-    expect(within(filterStage!).getByText("Table: email_filter_decisions")).toBeTruthy();
+    expect(
+      within(filterStage!).getByText("Table: email_filter_decisions"),
+    ).toBeTruthy();
     expect(
       within(filterStage!).getByText(
         "Run Gmail sync after connecting Gmail on Setup. If both kept and skipped are zero, the broad job-search filter has not evaluated any synced metadata yet.",
@@ -1388,9 +1500,9 @@ describe("App", () => {
 
     renderAtPath("/features");
 
-    const retainedBodiesStage = (await screen.findByText("Retained bodies")).closest(
-      "article",
-    );
+    const retainedBodiesStage = (
+      await screen.findByText("Retained bodies")
+    ).closest("article");
     expect(retainedBodiesStage).toBeTruthy();
 
     const infoButton = within(retainedBodiesStage!).getByRole("button", {
@@ -1402,9 +1514,13 @@ describe("App", () => {
 
     expect(infoButton.getAttribute("aria-expanded")).toBe("true");
     expect(
-      within(retainedBodiesStage!).getByText("Data source: GET /pipeline/status"),
+      within(retainedBodiesStage!).getByText(
+        "Data source: GET /pipeline/status",
+      ),
     ).toBeTruthy();
-    expect(within(retainedBodiesStage!).getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      within(retainedBodiesStage!).getByText("Table: raw_emails"),
+    ).toBeTruthy();
     expect(
       within(retainedBodiesStage!).getByText(
         "Run Gmail sync after connecting Gmail on Setup. If this count is zero while filter candidates exist, retained body fetching has not completed or the provider could not fetch selected candidate bodies.",
@@ -1472,7 +1588,11 @@ describe("App", () => {
     expect(
       within(applicationsStage!).getByText("Data source: GET /pipeline/status"),
     ).toBeTruthy();
-    expect(within(applicationsStage!).getByText("Table: applications, application_events")).toBeTruthy();
+    expect(
+      within(applicationsStage!).getByText(
+        "Table: applications, application_events",
+      ),
+    ).toBeTruthy();
     expect(
       within(applicationsStage!).getByText(
         "Run classification after sync has retained candidate bodies. If applications are zero while classified job-related emails exist, aggregation has not created application timeline records yet or classified emails did not contain application evidence.",
@@ -1503,9 +1623,13 @@ describe("App", () => {
 
     expect(infoButton.getAttribute("aria-expanded")).toBe("true");
     expect(
-      within(providerMessagesMetric!).getByText("Data source: GET /sync/status"),
+      within(providerMessagesMetric!).getByText(
+        "Data source: GET /sync/status",
+      ),
     ).toBeTruthy();
-    expect(within(providerMessagesMetric!).getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      within(providerMessagesMetric!).getByText("Table: raw_emails"),
+    ).toBeTruthy();
     expect(
       within(providerMessagesMetric!).getByText(
         "Run Sync now after connecting Gmail. If this stays zero, no Gmail provider page has returned message metadata for this run yet.",
@@ -1538,7 +1662,9 @@ describe("App", () => {
     expect(
       within(storedRawEmailsMetric!).getByText("Data source: GET /sync/status"),
     ).toBeTruthy();
-    expect(within(storedRawEmailsMetric!).getByText("Table: raw_emails")).toBeTruthy();
+    expect(
+      within(storedRawEmailsMetric!).getByText("Table: raw_emails"),
+    ).toBeTruthy();
     expect(
       within(storedRawEmailsMetric!).getByText(
         "Run Sync now after connecting Gmail. If this is lower than Provider messages, the current run has not finished reconciling Gmail metadata into local raw_emails rows yet.",
@@ -1715,9 +1841,9 @@ describe("App", () => {
               }
             : path === "/setup/status"
               ? setupStatusResponse()
-            : path === "/sync/recent-emails"
-              ? []
-            : null;
+              : path === "/sync/recent-emails"
+                ? []
+                : null;
 
       if (!body) {
         throw new Error(`Unhandled fetch request: ${path}`);
@@ -1859,9 +1985,7 @@ describe("App", () => {
     expect(screen.queryByText("gmail-msg-1")).toBeNull();
     expect(screen.queryByText("thread-1")).toBeNull();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /Subject captured/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Subject captured/ }));
     expect(screen.getByText("Provider")).toBeTruthy();
     expect(screen.getByText("From domain")).toBeTruthy();
     expect(screen.getByText("To domains")).toBeTruthy();
@@ -1896,7 +2020,9 @@ describe("App", () => {
     fireEvent.focus(infoButton);
 
     expect(infoButton.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("Data source: GET /sync/recent-emails")).toBeTruthy();
+    expect(
+      screen.getByText("Data source: GET /sync/recent-emails"),
+    ).toBeTruthy();
     expect(screen.getByText("Table: raw_emails")).toBeTruthy();
     expect(
       screen.getByText(
@@ -1926,7 +2052,9 @@ describe("App", () => {
     expect(await screen.findByText("No sync run yet")).toBeTruthy();
     expect(screen.getByText("Run sync to measure progress")).toBeTruthy();
     expect(screen.getByText("Connect Gmail on Setup")).toBeTruthy();
-    expect(screen.getByText("Connect Gmail, then run sync to set mode")).toBeTruthy();
+    expect(
+      screen.getByText("Connect Gmail, then run sync to set mode"),
+    ).toBeTruthy();
     expect(screen.getByText("Connect Gmail to choose an account")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Sync unavailable" }),
@@ -2016,9 +2144,10 @@ describe("App", () => {
 
     expect(syncRequestStarted).toBe(true);
     expect(await screen.findByText("Sync is running")).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Sync running" }).disabled).toBe(
-      true,
-    );
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Sync running" })
+        .disabled,
+    ).toBe(true);
     expect(
       screen
         .getByRole("progressbar", { name: "Sync progress" })
@@ -2572,7 +2701,7 @@ describe("App", () => {
   });
 
   it("hides the unfinished chat feature from primary navigation", () => {
-    renderAtPath("/");
+    renderAtPath("/legacy");
 
     const primaryNavigation = screen.getByRole("navigation", {
       name: "Primary",
@@ -2676,7 +2805,9 @@ describe("App", () => {
   });
 
   it("shows a setup-status disabled reason when setup choices cannot load", async () => {
-    const fetchMock = vi.fn(() => Promise.reject(new TypeError("backend unavailable")));
+    const fetchMock = vi.fn(() =>
+      Promise.reject(new TypeError("backend unavailable")),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     renderAtPath("/setup");
@@ -2687,10 +2818,9 @@ describe("App", () => {
         "Setup status is unavailable. Start the local backend before saving setup choices or connecting Gmail.",
       ),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Save setup choices" })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(
+      screen.getByRole("button", { name: "Save setup choices" }),
+    ).toHaveProperty("disabled", true);
     expect(screen.queryByText("Gmail auth failed")).toBeNull();
   });
 
@@ -2752,11 +2882,13 @@ describe("App", () => {
     expect(
       screen.getByText(/chat arrives in phase 5 after the hybrid rag agent/i),
     ).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Go to Feature Status" })).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Go to Feature Status" }),
+    ).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: /message/i })).toBeNull();
   });
 
-  it("does not mark the landing page as current on application detail routes", async () => {
+  it("renders the redesigned application detail page on application detail routes", async () => {
     mockFetchResponses({
       "/applications/app-1": {
         company: "Acme Corp",
@@ -2784,18 +2916,15 @@ describe("App", () => {
     renderAtPath("/applications/app-1");
 
     expect(
-      await screen.findByRole("heading", {
-        name: /Acme Corp - Software Engineer/i,
-      }),
+      await screen.findByRole("heading", { name: "Acme Corp" }),
     ).toBeTruthy();
-    expect(
-      screen
-        .getByRole("link", { name: "Job Search" })
-        .getAttribute("aria-current"),
-    ).toBeNull();
+    expect(screen.getByText(/Software Engineer · applied/)).toBeTruthy();
+    expect(screen.getByText("What happened, step by step")).toBeTruthy();
   });
 
   it("shows a public-safe application unavailable state for malformed application detail URLs", () => {
+    const fetchMock = mockFetchResponses({});
+
     renderAtPath("/applications/%E0%A4%A");
 
     expect(
@@ -2804,12 +2933,16 @@ describe("App", () => {
         name: "Application unavailable",
       }),
     ).toBeTruthy();
-    expect(screen.getByText("Application detail unavailable")).toBeTruthy();
     expect(
-      screen
-        .getByRole("link", { name: "Job Search" })
-        .getAttribute("aria-current"),
-    ).toBeNull();
+      screen.getByText("The application link is malformed or unsupported.", {
+        exact: false,
+      }),
+    ).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/applications"),
+      ),
+    ).toBe(false);
   });
 
   it("does not send encoded slash application route segments to backend paths", () => {
@@ -2823,7 +2956,11 @@ describe("App", () => {
         name: "Application unavailable",
       }),
     ).toBeTruthy();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/applications"),
+      ),
+    ).toBe(false);
   });
 
   it("does not send encoded query delimiter application route segments to backend paths", () => {
@@ -2837,7 +2974,11 @@ describe("App", () => {
         name: "Application unavailable",
       }),
     ).toBeTruthy();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/applications"),
+      ),
+    ).toBe(false);
   });
 
   it("does not send encoded backslash application route segments to backend paths", () => {
@@ -2851,7 +2992,11 @@ describe("App", () => {
         name: "Application unavailable",
       }),
     ).toBeTruthy();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/applications"),
+      ),
+    ).toBe(false);
   });
 
   it("does not send double-encoded slash application route segments to backend paths", () => {
@@ -2865,7 +3010,11 @@ describe("App", () => {
         name: "Application unavailable",
       }),
     ).toBeTruthy();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/applications"),
+      ),
+    ).toBe(false);
   });
 
   it("does not send encoded control-character application route segments to backend paths", () => {
@@ -2879,7 +3028,11 @@ describe("App", () => {
         name: "Application unavailable",
       }),
     ).toBeTruthy();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/applications"),
+      ),
+    ).toBe(false);
   });
 
   it("does not send whitespace-padded application route segments to backend paths", () => {
@@ -2893,7 +3046,11 @@ describe("App", () => {
         name: "Application unavailable",
       }),
     ).toBeTruthy();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/applications"),
+      ),
+    ).toBe(false);
   });
 
   it("shows application unavailable for unsupported application subroutes", () => {
@@ -2908,14 +3065,10 @@ describe("App", () => {
       }),
     ).toBeTruthy();
     expect(
-      screen
-        .getByRole("link", { name: "Job Search" })
-        .getAttribute("aria-current"),
-    ).toBeNull();
-    expect(screen.getByRole("link", { name: "Go to Feature Status" }).getAttribute("href")).toBe(
-      "/features",
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/applications"),
+      ),
+    ).toBe(false);
   });
 
   it("keeps the dashboard chart-focused and moves the Q-09 status table out", async () => {
@@ -2933,10 +3086,16 @@ describe("App", () => {
     expect(
       screen.getByRole("region", { name: "Dashboard filters" }),
     ).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Foundational counts" })).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Foundational counts" }),
+    ).toBeTruthy();
     expect(screen.getByRole("region", { name: "Outcome rates" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Response timing" })).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "Metrics overview" })).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Response timing" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Metrics overview" }),
+    ).toBeNull();
     expect(
       screen.queryByRole("region", {
         name: "Current status of every application",
@@ -2947,8 +3106,9 @@ describe("App", () => {
         name: "Application current statuses",
       }),
     ).toBeNull();
-    expect(screen.queryByText("Application statuses moved to Feature Status"))
-      .toBeNull();
+    expect(
+      screen.queryByText("Application statuses moved to Feature Status"),
+    ).toBeNull();
 
     const volumeTrend = screen.getByRole("region", {
       name: "Application volume trend",
@@ -3169,9 +3329,7 @@ describe("App", () => {
     expect(screen.getByText("Features and how to run them")).toBeTruthy();
     expect(screen.getByText("Connect Gmail")).toBeTruthy();
     expect(screen.getByText("Sync mailbox metadata")).toBeTruthy();
-    expect(
-      screen.getByText("Classify and build applications"),
-    ).toBeTruthy();
+    expect(screen.getByText("Classify and build applications")).toBeTruthy();
     expect(screen.getByText("Application status table")).toBeTruthy();
     expect(screen.getByText("Live applications queue")).toBeTruthy();
     expect(
@@ -3195,7 +3353,9 @@ describe("App", () => {
     expect(screen.getByText("First-run setup shell")).toBeTruthy();
     expect(screen.getByText("Dashboard chart workspace")).toBeTruthy();
     expect(screen.queryByText(/summary metric cards/i)).toBeNull();
-    expect(screen.queryByText(/Unimplemented metric values remain Pending/i)).toBeNull();
+    expect(
+      screen.queryByText(/Unimplemented metric values remain Pending/i),
+    ).toBeNull();
     expect(screen.getByText("Insights cached narrative view")).toBeTruthy();
     expect(screen.getByText("Chat unavailable marker")).toBeTruthy();
     expect(
@@ -3203,7 +3363,9 @@ describe("App", () => {
         "QA can confirm chat is absent from primary navigation and direct /chat renders the unavailable Phase 5 page instead of presenting a broken shell.",
       ),
     ).toBeTruthy();
-    expect(screen.queryByText(/Direct \/chat falls back to the landing page/i)).toBeNull();
+    expect(
+      screen.queryByText(/Direct \/chat falls back to the landing page/i),
+    ).toBeNull();
     expect(screen.queryByText("Chat route shell")).toBeNull();
     expect(screen.getByText("Feature Status Dashboard inventory")).toBeTruthy();
     expect(screen.getByText("Manual sync status panel")).toBeTruthy();
@@ -3534,9 +3696,9 @@ describe("App", () => {
       },
     );
 
-    expect(screen.getByLabelText<HTMLInputElement>("Search features").value).toBe(
-      "sync",
-    );
+    expect(
+      screen.getByLabelText<HTMLInputElement>("Search features").value,
+    ).toBe("sync");
     expect(
       screen.getByLabelText<HTMLInputElement>(
         "Module, API, screen, or component",
@@ -3546,5 +3708,1211 @@ describe("App", () => {
     const queryParams = new URLSearchParams(window.location.search);
     expect(queryParams.get("search")).toBe("sync");
     expect(queryParams.get("scope")).toBe("POST /sync");
+  });
+
+  it("redesign Gmail requests the typed authorization URL once and redirects to Google", async () => {
+    let resolveAuthorization: (response: Response) => void = () => {
+      throw new Error("Gmail authorization was not requested.");
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = requestPath(input);
+      if (path === "/auth/gmail") {
+        return new Promise<Response>((resolve) => {
+          resolveAuthorization = resolve;
+        });
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    const assignSpy = vi.fn();
+    const originalWindow = window;
+    const locationProxy = new Proxy(
+      {},
+      {
+        get(_target, property) {
+          return property === "assign"
+            ? assignSpy
+            : (Reflect.get(
+                originalWindow.location,
+                property,
+                originalWindow.location,
+              ) as unknown);
+        },
+      },
+    );
+    vi.stubGlobal(
+      "window",
+      new Proxy(
+        {},
+        {
+          get(_target, property) {
+            return property === "location"
+              ? locationProxy
+              : (Reflect.get(
+                  originalWindow,
+                  property,
+                  originalWindow,
+                ) as unknown);
+          },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/settings");
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Add another inbox" }),
+    );
+    const gmailButton = screen.getByRole("button", { name: "G Gmail" });
+    fireEvent.click(gmailButton);
+    fireEvent.click(gmailButton);
+
+    expect(gmailButton).toHaveProperty("disabled", true);
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input]) => requestPath(input) === "/auth/gmail",
+      ),
+    ).toHaveLength(1);
+
+    resolveAuthorization(
+      new Response(
+        JSON.stringify({
+          authorization_url:
+            "https://accounts.google.com/o/oauth2/v2/auth?state=issued-state&safe=true",
+          provider: "gmail",
+          requested_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+          state: "issued-state",
+        }),
+        { headers: { "Content-Type": "application/json" }, status: 200 },
+      ),
+    );
+
+    await waitFor(() => {
+      expect(assignSpy).toHaveBeenCalledWith(
+        "https://accounts.google.com/o/oauth2/v2/auth?state=issued-state&safe=true",
+      );
+    });
+    expect(assignSpy).not.toHaveBeenCalledWith("/auth/gmail");
+  });
+
+  it("redesign Gmail renders typed authorization failures", async () => {
+    mockFetchResponses({
+      "/auth/gmail": {
+        body: apiErrorResponse(
+          "bad_request",
+          "Configure your Gmail OAuth client before connecting.",
+        ),
+        status: 400,
+      },
+    });
+
+    renderAtPath("/settings");
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Add another inbox" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "G Gmail" }));
+
+    expect(
+      await screen.findByText(
+        "Configure your Gmail OAuth client before connecting.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("redesign sync starts custom dates empty and blocks an incomplete range", () => {
+    const fetchMock = mockFetchResponses({});
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /A specific date range/ }),
+    );
+
+    expect(
+      screen.getByLabelText<HTMLInputElement>("Sync from date").value,
+    ).toBe("");
+    expect(screen.getByLabelText<HTMLInputElement>("Sync to date").value).toBe(
+      "",
+    );
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    const submit = within(menu!).getByRole("button", { name: "Sync" });
+    expect(submit).toHaveProperty("disabled", true);
+    fireEvent.click(submit);
+    expect(
+      fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/sync"),
+    ).toHaveLength(0);
+  });
+
+  it.each([
+    ["New mail since last sync", null],
+    ["Last 7 days", { max_age_days: 7 }],
+    ["Last 30 days", { max_age_days: 30 }],
+    ["Only the most recent emails", { max_messages: 500 }],
+  ])(
+    "redesign sync sends the exact %s payload",
+    async (scopeName, expectedBody) => {
+      const fetchMock = mockFetchResponses({
+        "/sync": { state: "succeeded" },
+      });
+
+      renderAtPath("/");
+      fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: new RegExp(scopeName) }),
+      );
+      const menu = screen.getByText("What should I check?").parentElement;
+      expect(menu).toBeTruthy();
+      fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+      await waitFor(() => {
+        const syncCall = fetchMock.mock.calls.find(
+          ([input]) => requestPath(input) === "/sync",
+        );
+        expect(syncCall).toBeTruthy();
+        const [, init] = syncCall as unknown as [
+          RequestInfo | URL,
+          RequestInit?,
+        ];
+        if (typeof init?.body !== "string") {
+          throw new Error("Expected the sync request body to be JSON text.");
+        }
+        expect(JSON.parse(init.body)).toEqual(expectedBody);
+      });
+      expect(
+        fetchMock.mock.calls.filter(
+          ([input]) => requestPath(input) === "/sync/status",
+        ),
+      ).toHaveLength(0);
+    },
+  );
+
+  it("redesign sync sends the exact custom date payload", async () => {
+    const fetchMock = mockFetchResponses({
+      "/sync": { state: "succeeded" },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /A specific date range/ }),
+    );
+    fireEvent.change(screen.getByLabelText("Sync from date"), {
+      target: { value: "2026-06-01" },
+    });
+    fireEvent.change(screen.getByLabelText("Sync to date"), {
+      target: { value: "2026-07-10" },
+    });
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    await waitFor(() => {
+      const syncCall = fetchMock.mock.calls.find(
+        ([input]) => requestPath(input) === "/sync",
+      );
+      const [, init] = syncCall as unknown as [RequestInfo | URL, RequestInit?];
+      if (typeof init?.body !== "string") {
+        throw new Error("Expected the sync request body to be JSON text.");
+      }
+      expect(JSON.parse(init.body)).toEqual({
+        before_date: "2026-07-10",
+        since_date: "2026-06-01",
+      });
+    });
+  });
+
+  it("redesign sync rejects a reversed custom date range", () => {
+    const fetchMock = mockFetchResponses({});
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /A specific date range/ }),
+    );
+    fireEvent.change(screen.getByLabelText("Sync from date"), {
+      target: { value: "2026-07-10" },
+    });
+    fireEvent.change(screen.getByLabelText("Sync to date"), {
+      target: { value: "2026-06-01" },
+    });
+
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    const submit = within(menu!).getByRole("button", { name: "Sync" });
+    expect(submit).toHaveProperty("disabled", true);
+    expect(within(menu!).getByText("Choose a valid date range")).toBeTruthy();
+    fireEvent.click(submit);
+    expect(
+      fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/sync"),
+    ).toHaveLength(0);
+  });
+
+  it("redesign sync closes only after running transitions to succeeded", async () => {
+    const fetchMock = mockFetchResponses({
+      "/sync": { state: "running" },
+      "/sync/status": { state: "succeeded" },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("What should I check?")).toBeNull();
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input]) => requestPath(input) === "/sync/status",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("redesign sync shows the final last_error when running transitions to failed", async () => {
+    mockFetchResponses({
+      "/sync": { state: "running" },
+      "/sync/status": {
+        last_error: "Gmail rejected the final sync page.",
+        state: "failed",
+      },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Gmail rejected the final sync page.",
+    );
+    expect(screen.getByText("What should I check?")).toBeTruthy();
+  });
+
+  it("redesign sync shows an honest error when the start response is idle", async () => {
+    mockFetchResponses({
+      "/sync": { state: "idle" },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Sync did not start. Try again.",
+    );
+    expect(screen.getByText("What should I check?")).toBeTruthy();
+  });
+
+  it("redesign sync reports a still-running timeout after polling exhaustion", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = requestPath(input);
+      const body =
+        path === "/sync" || path === "/sync/status"
+          ? { state: "running" }
+          : null;
+      if (!body) {
+        return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(
+      screen.getByText("Sync is still running. Check again in a moment.")
+        .textContent,
+    ).toContain("Sync is still running. Check again in a moment.");
+    expect(screen.getByText("What should I check?")).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input]) => requestPath(input) === "/sync/status",
+      ),
+    ).toHaveLength(600);
+  });
+
+  it("redesign sync disables duplicate controls while the start request is pending", () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = requestPath(input);
+      if (path === "/sync") {
+        return new Promise<Response>(() => undefined);
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/");
+    const menuButton = screen.getByRole("button", { name: "Sync ▾" });
+    fireEvent.click(menuButton);
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    const submit = within(menu!).getByRole("button", { name: "Sync" });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+
+    expect(menuButton).toHaveProperty("disabled", true);
+    expect(submit).toHaveProperty("disabled", true);
+    expect(
+      fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/sync"),
+    ).toHaveLength(1);
+  });
+
+  it.each([401, 409, 429, 502, 503] as const)(
+    "redesign sync renders typed %i failures",
+    async (status) => {
+      const message = `Typed sync failure ${status}.`;
+      mockFetchResponses({
+        "/sync": {
+          body: apiErrorResponse(syncFailureCodeByStatus[status], message),
+          status,
+        },
+      });
+
+      renderAtPath("/");
+      fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+      const menu = screen.getByText("What should I check?").parentElement;
+      expect(menu).toBeTruthy();
+      fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+      expect((await screen.findByRole("alert")).textContent).toContain(message);
+    },
+  );
+
+  it("renders the exact five authoritative funnel stages from metrics funnel", async () => {
+    mockFetchResponses({
+      "/metrics/summary": metricsSummaryResponse({
+        offers_received: 91,
+        total_applications: 999,
+      }),
+      "/metrics/rates": metricsRatesResponse({
+        application_to_interview_rate: {
+          denominator: 999,
+          numerator: 88,
+          rate: 0.088,
+        },
+        overall_response_rate: { denominator: 999, numerator: 77, rate: 0.077 },
+      }),
+      "/metrics/funnel": metricsFunnelResponse({
+        stages: [
+          { count: 50, stage: "applied" },
+          { count: 31, stage: "screen" },
+          { count: 17, stage: "interview" },
+          { count: 6, stage: "final" },
+          { count: 2, stage: "offer" },
+        ],
+      }),
+    });
+
+    renderAtPath("/");
+
+    const heading = await screen.findByRole("heading", {
+      name: "Where applications stand",
+    });
+    const funnel = heading.parentElement?.parentElement;
+    expect(funnel).toBeTruthy();
+    for (const [label, count] of [
+      ["Applied", "50"],
+      ["Screen", "31"],
+      ["Interview", "17"],
+      ["Final", "6"],
+      ["Offer", "2"],
+    ]) {
+      const stage = within(funnel!).getByRole("button", {
+        name: new RegExp(`^${label}\\s+${count}$`),
+      });
+      expect(stage).toBeTruthy();
+    }
+  });
+
+  it("distinguishes funnel loading, successful empty, and typed failure", async () => {
+    let resolveFunnel: (response: Response) => void = () => undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = requestPath(input);
+      if (path === "/metrics/funnel") {
+        return new Promise<Response>((resolve) => {
+          resolveFunnel = resolve;
+        });
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderAtPath("/");
+    expect(screen.getByText("Loading funnel…")).toBeTruthy();
+
+    resolveFunnel(
+      new Response(JSON.stringify(metricsFunnelResponse()), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+    expect(await screen.findByText("No funnel activity yet.")).toBeTruthy();
+
+    cleanup();
+    mockFetchResponses({
+      "/metrics/funnel": {
+        body: apiErrorResponse("validation_error", "Funnel is unavailable."),
+        status: 422,
+      },
+    });
+    renderAtPath("/");
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "Funnel is unavailable.",
+    );
+  });
+
+  it("restores application status filters on reload and browser navigation", async () => {
+    mockFetchResponses({
+      "/applications?status=offer": [],
+      "/applications?status=interview": [],
+    });
+    renderAtPath("/applications?status=offer&sort=recent");
+    expect(
+      await screen.findByRole("button", { name: /^Offer 0$/ }),
+    ).toHaveProperty("style.background", "rgb(30, 81, 54)");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Interview 0$/ }));
+    expect(window.location.search).toBe("?sort=recent&status=interview");
+
+    window.history.pushState({}, "", "/applications?sort=recent&status=offer");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^Offer 0$/ })).toHaveProperty(
+        "style.background",
+        "rgb(30, 81, 54)",
+      );
+    });
+  });
+
+  it("requests canonical composite statuses, dedupes IDs, and keeps one population across views", async () => {
+    const shared = applicationRecord({
+      company: "Shared Co",
+      current_status: "assessment",
+      id: "shared",
+    });
+    const review = applicationRecord({
+      company: "Review Co",
+      current_status: "in_review",
+      id: "review",
+    });
+    const fetchMock = mockFetchResponses({
+      "/applications?status=in_review": { body: [review, shared], status: 200 },
+      "/applications?status=assessment": { body: [shared], status: 200 },
+      "/applications/shared/events": { body: [], status: 200 },
+      "/applications/review/events": {
+        body: apiErrorResponse("service_unavailable", "Timeline unavailable."),
+        status: 503,
+      },
+    });
+
+    renderAtPath("/applications?status=screening");
+    expect(
+      await screen.findByText("2 of 2 applications", { exact: false }),
+    ).toBeTruthy();
+    expect(screen.getAllByText("Shared Co")).toHaveLength(1);
+    expect(screen.getAllByText("Review Co")).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/applications?status=in_review",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/applications?status=assessment",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).includes("/events"),
+      ),
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Board" }));
+    expect(screen.getAllByText("Shared Co")).toHaveLength(1);
+    expect(screen.getAllByText("Review Co")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Timeline" }));
+    expect(await screen.findByText("No timeline events")).toBeTruthy();
+    expect(await screen.findByText("Timeline unavailable.")).toBeTruthy();
+    expect(screen.getAllByText("Shared Co")).toHaveLength(1);
+    expect(screen.getAllByText("Review Co")).toHaveLength(1);
+  });
+
+  it.each([
+    ["applied", ["applied"]],
+    ["interview", ["interview"]],
+    ["offer", ["offer"]],
+    ["closed", ["rejected", "ghosted", "withdrawn"]],
+  ] as const)(
+    "maps the %s chip to canonical backend status requests",
+    async (filter, statuses) => {
+      const responses = Object.fromEntries(
+        statuses.map((status) => [`/applications?status=${status}`, []]),
+      );
+      const fetchMock = mockFetchResponses(responses);
+      renderAtPath(`/applications?status=${filter}`);
+
+      await waitFor(() => {
+        for (const status of statuses) {
+          expect(fetchMock).toHaveBeenCalledWith(
+            `/applications?status=${status}`,
+            expect.objectContaining({ method: "GET" }),
+          );
+        }
+      });
+    },
+  );
+
+  it("redesign settings stays neutral and blocks config writes while the initial GET is pending", () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = requestPath(input);
+      if (path === "/config/providers" && init?.method === "GET") {
+        return new Promise<Response>(() => undefined);
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/settings");
+
+    const local = screen.getByRole("button", { name: /On this computer/ });
+    const cloud = screen.getByRole("button", { name: /Cloud AI/ });
+    const interval =
+      screen.getByLabelText<HTMLSelectElement>("Auto-sync interval");
+    const classification = screen.getByRole("switch", {
+      name: "Toggle pre-filtering",
+    });
+    expect(screen.getByText("Loading provider settings...")).toBeTruthy();
+    expect(screen.queryByText(/Currently using:/)).toBeNull();
+    expect(local).toHaveProperty("disabled", true);
+    expect(cloud).toHaveProperty("disabled", true);
+    expect(interval).toHaveProperty("disabled", true);
+    expect(interval.value).toBe("");
+    expect(classification).toHaveProperty("disabled", true);
+
+    fireEvent.click(local);
+    fireEvent.click(cloud);
+    fireEvent.change(interval, { target: { value: "hour" } });
+    fireEvent.click(classification);
+
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          requestPath(input) === "/config/providers" && init?.method === "PUT",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("redesign settings shows a typed initial config failure and keeps controls disabled", async () => {
+    mockFetchResponses({
+      "/config/providers": {
+        body: apiErrorResponse(
+          "service_unavailable",
+          "Provider settings are temporarily unavailable.",
+        ),
+        status: 503,
+      },
+    });
+
+    renderAtPath("/settings");
+
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "Provider settings are temporarily unavailable.",
+    );
+    expect(screen.queryByText(/Currently using:/)).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /On this computer/ }),
+    ).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: /Cloud AI/ })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByLabelText("Auto-sync interval")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(
+      screen.getByRole("switch", { name: "Toggle pre-filtering" }),
+    ).toHaveProperty("disabled", true);
+    expect(
+      screen.getByRole("button", { name: "Retry provider settings" }),
+    ).toBeTruthy();
+  });
+
+  it("redesign settings retries initial config loading and enables confirmed values", async () => {
+    const fetchMock = mockFetchResponses({
+      "/config/providers": [
+        {
+          body: apiErrorResponse(
+            "service_unavailable",
+            "Provider settings are temporarily unavailable.",
+          ),
+          status: 503,
+        },
+        providerConfigResponse("ollama"),
+      ],
+    });
+
+    renderAtPath("/settings");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Retry provider settings" }),
+    );
+
+    expect(
+      await screen.findByText(/Currently using: a local model/),
+    ).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /On this computer/ }),
+    ).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: /Cloud AI/ })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(
+      screen.getByLabelText<HTMLSelectElement>("Auto-sync interval").value,
+    ).toBe("30min");
+    expect(
+      screen.getByRole("switch", { name: "Toggle pre-filtering" }),
+    ).toHaveProperty("disabled", false);
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input]) => requestPath(input) === "/config/providers",
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("redesign settings recovers from an initial transport failure through a serialized retry", async () => {
+    let configAttempts = 0;
+    let resolveRetry: (response: Response) => void = () => undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = requestPath(input);
+      if (path === "/config/providers" && init?.method === "GET") {
+        configAttempts += 1;
+        if (configAttempts === 1) {
+          return Promise.reject(new Error("private transport detail"));
+        }
+        return new Promise<Response>((resolve) => {
+          resolveRetry = resolve;
+        });
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/settings");
+
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "Provider settings could not be loaded. Check the local backend.",
+    );
+    expect(screen.queryByText("private transport detail")).toBeNull();
+    expect(screen.queryByText(/Currently using:/)).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /On this computer/ }),
+    ).toHaveProperty("disabled", true);
+    expect(screen.getByLabelText("Auto-sync interval")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(
+      screen.getByRole("switch", { name: "Toggle pre-filtering" }),
+    ).toHaveProperty("disabled", true);
+
+    const retry = screen.getByRole("button", {
+      name: "Retry provider settings",
+    });
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+
+    expect(configAttempts).toBe(2);
+    resolveRetry(
+      new Response(JSON.stringify(providerConfigResponse("ollama")), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+
+    expect(
+      await screen.findByText(/Currently using: a local model/),
+    ).toBeTruthy();
+    expect(configAttempts).toBe(2);
+  });
+
+  it.each([
+    [900, "Every 15 minutes"],
+    [5400, "Every 90 minutes"],
+  ])(
+    "redesign settings labels the confirmed %i-second interval without submitting it",
+    async (intervalSeconds, expectedLabel) => {
+      const fetchMock = vi.fn(
+        (input: RequestInfo | URL, init?: RequestInit) => {
+          const path = requestPath(input);
+          if (path === "/config/providers" && init?.method === "GET") {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify(
+                  confirmedProviderConfig({
+                    classificationMode: "local",
+                    intervalSeconds,
+                    llmProvider: "ollama",
+                    recommendedMode: "local",
+                  }),
+                ),
+                {
+                  headers: { "Content-Type": "application/json" },
+                  status: 200,
+                },
+              ),
+            );
+          }
+          return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+        },
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      renderAtPath("/settings");
+
+      await screen.findByText(/Currently using: a local model/);
+      const interval =
+        screen.getByLabelText<HTMLSelectElement>("Auto-sync interval");
+      expect(interval.selectedOptions[0]?.textContent).toBe(expectedLabel);
+      expect(
+        fetchMock.mock.calls.filter(
+          ([input, init]) =>
+            requestPath(input) === "/config/providers" &&
+            init?.method === "PUT",
+        ),
+      ).toHaveLength(0);
+    },
+  );
+
+  it("redesign settings restores Ollama pre-filtering to the confirmed local recommendation", async () => {
+    const requests: Record<string, unknown>[] = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = requestPath(input);
+      if (path === "/config/providers" && init?.method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              confirmedProviderConfig({
+                classificationMode: "llm",
+                llmProvider: "ollama",
+                recommendedMode: "local",
+              }),
+            ),
+            { headers: { "Content-Type": "application/json" }, status: 200 },
+          ),
+        );
+      }
+      if (path === "/config/providers" && init?.method === "PUT") {
+        if (typeof init.body !== "string") {
+          throw new Error(
+            "Expected provider config request body to be JSON text.",
+          );
+        }
+        const request = JSON.parse(init.body) as Record<string, unknown>;
+        requests.push(request);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              confirmedProviderConfig({
+                classificationMode: "local",
+                llmProvider: "ollama",
+                recommendedMode: "local",
+              }),
+            ),
+            { headers: { "Content-Type": "application/json" }, status: 200 },
+          ),
+        );
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/settings");
+    const toggle = await screen.findByRole("switch", {
+      name: "Toggle pre-filtering",
+    });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(requests).toEqual([{ classification_mode: "local" }]),
+    );
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("redesign settings restores Azure pre-filtering to the last confirmed hybrid mode", async () => {
+    const requests: Record<string, unknown>[] = [];
+    const responses = [
+      confirmedProviderConfig({
+        classificationMode: "llm",
+        llmProvider: "azure_openai",
+        recommendedMode: "hybrid",
+      }),
+      confirmedProviderConfig({
+        classificationMode: "hybrid",
+        llmProvider: "azure_openai",
+        recommendedMode: "hybrid",
+      }),
+    ];
+    const initial = confirmedProviderConfig({
+      classificationMode: "hybrid",
+      llmProvider: "azure_openai",
+      recommendedMode: "hybrid",
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = requestPath(input);
+      if (path === "/config/providers" && init?.method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(initial), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+      if (path === "/config/providers" && init?.method === "PUT") {
+        if (typeof init.body !== "string") {
+          throw new Error(
+            "Expected provider config request body to be JSON text.",
+          );
+        }
+        requests.push(JSON.parse(init.body) as Record<string, unknown>);
+        const response = responses.shift();
+        return Promise.resolve(
+          new Response(JSON.stringify(response), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/settings");
+    const toggle = await screen.findByRole("switch", {
+      name: "Toggle pre-filtering",
+    });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(toggle.getAttribute("aria-checked")).toBe("false"),
+    );
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(requests).toEqual([
+        { classification_mode: "llm" },
+        { classification_mode: "hybrid" },
+      ]),
+    );
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("redesign settings confirms a provider only after success and checks unavailable health", async () => {
+    let resolveUpdate: (response: Response) => void = () => undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = requestPath(input);
+      if (path === "/config/providers" && init?.method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(providerConfigResponse("ollama")), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+      if (path === "/config/providers" && init?.method === "PUT") {
+        return new Promise<Response>((resolve) => {
+          resolveUpdate = resolve;
+        });
+      }
+      if (path === "/config/providers/llm/health") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              checks: [
+                {
+                  detail: "The configured deployment could not be reached.",
+                  kind: "chat",
+                  model: "chat",
+                  status: "unavailable",
+                },
+              ],
+              provider_name: "Azure OpenAI",
+              status: "unavailable",
+            }),
+            { headers: { "Content-Type": "application/json" }, status: 200 },
+          ),
+        );
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/settings");
+    await screen.findByText(/Currently using: a local model/);
+    const cloud = screen.getByRole("button", { name: /Cloud AI/ });
+    const local = screen.getByRole("button", { name: /On this computer/ });
+    fireEvent.click(cloud);
+    fireEvent.click(cloud);
+
+    expect(screen.getByText(/Currently using: a local model/)).toBeTruthy();
+    expect(cloud).toHaveProperty("disabled", true);
+    expect(local).toHaveProperty("disabled", true);
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          requestPath(input) === "/config/providers" && init?.method === "PUT",
+      ),
+    ).toHaveLength(1);
+
+    resolveUpdate(
+      new Response(JSON.stringify(providerConfigResponse("azure_openai")), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+
+    expect(
+      await screen.findByText(/Currently using: your own cloud AI account/),
+    ).toBeTruthy();
+    expect(await screen.findByText("Azure OpenAI unavailable")).toBeTruthy();
+    expect(screen.queryByText(/operational/i)).toBeNull();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input]) => requestPath(input) === "/config/providers/llm/health",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("redesign settings preserves confirmed provider and interval after typed failures", async () => {
+    const fetchMock = mockFetchResponses({
+      "/config/providers": [
+        providerConfigResponse("ollama"),
+        {
+          body: apiErrorResponse("service_unavailable", "Provider unchanged."),
+          status: 503,
+        },
+        {
+          body: apiErrorResponse("service_unavailable", "Schedule unchanged."),
+          status: 503,
+        },
+      ],
+    });
+
+    renderAtPath("/settings");
+    await screen.findByText(/Currently using: a local model/);
+    fireEvent.click(screen.getByRole("button", { name: /Cloud AI/ }));
+
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "Provider unchanged.",
+    );
+    expect(screen.getByText(/Currently using: a local model/)).toBeTruthy();
+
+    const interval =
+      screen.getByLabelText<HTMLSelectElement>("Auto-sync interval");
+    fireEvent.change(interval, { target: { value: "hour" } });
+
+    await waitFor(() => expect(interval.value).toBe("30min"));
+    expect(screen.getByRole("alert")).toHaveProperty(
+      "textContent",
+      "Schedule unchanged.",
+    );
+    expect(
+      fetchMock.mock.calls.some(
+        ([input]) => requestPath(input) === "/config/providers/llm/health",
+      ),
+    ).toBe(false);
+  });
+
+  it("redesign settings confirms the interval from the typed response and disables duplicates", async () => {
+    let resolveUpdate: (response: Response) => void = () => undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = requestPath(input);
+      if (path === "/config/providers" && init?.method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(providerConfigResponse("ollama")), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+      if (path === "/config/providers" && init?.method === "PUT") {
+        return new Promise<Response>((resolve) => {
+          resolveUpdate = resolve;
+        });
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/settings");
+    const interval =
+      await screen.findByLabelText<HTMLSelectElement>("Auto-sync interval");
+    expect(interval.value).toBe("30min");
+    fireEvent.change(interval, { target: { value: "hour" } });
+    fireEvent.change(interval, { target: { value: "manual" } });
+
+    expect(interval.value).toBe("30min");
+    expect(interval).toHaveProperty("disabled", true);
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          requestPath(input) === "/config/providers" && init?.method === "PUT",
+      ),
+    ).toHaveLength(1);
+
+    resolveUpdate(
+      new Response(
+        JSON.stringify(
+          providerConfigResponse("ollama", {
+            settings: {
+              ...(providerConfigResponse("ollama").settings as Record<
+                string,
+                unknown
+              >),
+              sync_interval_seconds: 3600,
+            },
+          }),
+        ),
+        { headers: { "Content-Type": "application/json" }, status: 200 },
+      ),
+    );
+
+    await waitFor(() => expect(interval.value).toBe("hour"));
+  });
+
+  it("redesign settings describes accounts as stored when no active account is identified", async () => {
+    mockFetchResponses({
+      "/auth/connections": {
+        body: [
+          {
+            account: { account_id: "first", provider: "gmail" },
+            connected_at: "2026-07-10T12:00:00Z",
+            credential_ref: {
+              kind: "oauth_token",
+              name: "first",
+              provider: "gmail",
+            },
+            display_email: { address: "first@example.com" },
+            granted_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+            reauth_required: false,
+          },
+          {
+            account: { account_id: "second", provider: "gmail" },
+            connected_at: "2026-07-09T12:00:00Z",
+            credential_ref: {
+              kind: "oauth_token",
+              name: "second",
+              provider: "gmail",
+            },
+            display_email: { address: "second@example.com" },
+            granted_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+            reauth_required: false,
+          },
+        ],
+        status: 200,
+      },
+    });
+
+    renderAtPath("/settings");
+
+    const connectionsCard = screen.getByRole("heading", {
+      name: "Connected inboxes",
+    }).parentElement;
+    expect(connectionsCard).toBeTruthy();
+    expect(
+      await within(connectionsCard!).findAllByText("Stored connection"),
+    ).toHaveLength(2);
+    expect(within(connectionsCard!).queryByText("Primary")).toBeNull();
+    expect(within(connectionsCard!).queryByText("Connected")).toBeNull();
+    expect(within(connectionsCard!).queryByText(/synced/)).toBeNull();
+  });
+
+  it("redesign chat keeps the drawer structure but disables all Phase 5 actions", () => {
+    const fetchMock = mockFetchResponses({});
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Ask AI" }));
+
+    const drawer = screen.getByLabelText("Ask AI drawer");
+    expect(drawer).toHaveProperty("style.width", "380px");
+    expect(within(drawer).getByText("Ask your job search")).toBeTruthy();
+    expect(within(drawer).getByText(/Phase 5.*unavailable/i)).toBeTruthy();
+    for (const suggestion of [
+      "Why am I getting rejected?",
+      "Who should I follow up with?",
+      "How is my search going overall?",
+    ]) {
+      const control = within(drawer).getByRole("button", { name: suggestion });
+      expect(control).toHaveProperty("disabled", true);
+      fireEvent.click(control);
+    }
+    const input = within(drawer).getByPlaceholderText(
+      "e.g. Why am I getting rejected?",
+    );
+    const ask = within(drawer).getByRole("button", { name: "Ask" });
+    expect(input).toHaveProperty("disabled", true);
+    expect(ask).toHaveProperty("disabled", true);
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(ask);
+
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestPath(input).startsWith("/chat"),
+      ),
+    ).toBe(false);
+    expect(
+      within(drawer).queryByText(/Overview and Insights pages show everything/),
+    ).toBeNull();
+    expect(
+      within(drawer).queryByText("Why am I getting rejected?", {
+        selector: "div",
+      }),
+    ).toBeNull();
+  });
+
+  it("redesign developer derives truthful statuses from the feature registry", () => {
+    renderAtPath("/dev");
+
+    expect(screen.getByText("Gmail sync").parentElement?.textContent).toContain(
+      "Completed",
+    );
+    expect(
+      screen.getByText("Email classification").parentElement?.textContent,
+    ).toContain("Completed");
+    expect(
+      screen.getByText("Applications & timeline").parentElement?.textContent,
+    ).toContain("Completed");
+    expect(
+      screen.getByText("Manual corrections").parentElement?.textContent,
+    ).toContain("Completed");
+    expect(
+      screen.getByText("Cached insights").parentElement?.textContent,
+    ).toContain("Completed");
+    const chatRow = screen.getByText("Chat agent (RAG)").parentElement;
+    expect(chatRow?.textContent).toContain("Phase 5");
+    expect(chatRow?.textContent).toContain("Planned");
+    expect(screen.queryByText("Live")).toBeNull();
   });
 });

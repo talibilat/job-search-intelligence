@@ -3,18 +3,25 @@ import { Alert } from "./components/ui";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FeatureStatusDashboard } from "./pages/FeatureStatusDashboard";
 import { Insights } from "./pages/Insights";
+import { RedesignApp, redesignRouteFromPath } from "./redesign/RedesignApp";
 import { SetupPage } from "./pages/SetupPage";
 import { safeDecodeApplicationRouteSegment } from "./lib/applicationRoutes";
 
-const navigationItems = [
-  { href: "/", label: "Job Search" },
+const legacyNavigationItems = [
+  { href: "/legacy", label: "Job Search" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },
   { href: "/features", label: "Feature Status" },
-  { href: "/insights", label: "Insights" },
+  { href: "/legacy/insights", label: "Insights" },
 ] as const;
 
-const routePaths = new Set(["/", "/dashboard", "/setup", "/features", "/insights"]);
+const legacyRoutePaths = new Set([
+  "/legacy",
+  "/dashboard",
+  "/setup",
+  "/features",
+  "/legacy/insights",
+]);
 
 const productFlowSteps = [
   {
@@ -130,21 +137,20 @@ function ChatUnavailablePage() {
   );
 }
 
-function App() {
-  const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
-  const isApplicationRoute =
-    routePath === "/applications" || routePath.startsWith("/applications/");
-  const applicationDetailMatch = /^\/applications\/([^/]+)$/.exec(routePath);
-  const applicationId = applicationDetailMatch
-    ? safeDecodeApplicationRouteSegment(applicationDetailMatch[1])
+function LegacyApp({ routePath }: { routePath: string }) {
+  const legacyApplicationDetailMatch = /^\/legacy\/applications\/([^/]+)$/.exec(routePath);
+  const applicationId = legacyApplicationDetailMatch
+    ? safeDecodeApplicationRouteSegment(legacyApplicationDetailMatch[1])
     : null;
-  const currentPath = isApplicationRoute
+  const isLegacyApplicationRoute =
+    routePath === "/legacy/applications" || routePath.startsWith("/legacy/applications/");
+  const currentPath = isLegacyApplicationRoute
     ? null
-    : routePaths.has(routePath)
+    : legacyRoutePaths.has(routePath)
       ? routePath
       : routePath === "/chat"
         ? "/chat"
-      : "/";
+        : "/legacy";
 
   return (
     <>
@@ -153,7 +159,7 @@ function App() {
           JobTracker
         </a>
         <div className="app-nav__links">
-          {navigationItems.map((item) => (
+          {legacyNavigationItems.map((item) => (
             <a
               aria-current={currentPath === item.href ? "page" : undefined}
               className="app-nav__link"
@@ -165,9 +171,9 @@ function App() {
           ))}
         </div>
       </nav>
-      {applicationDetailMatch && applicationId ? (
+      {legacyApplicationDetailMatch && applicationId ? (
         <ApplicationDetailPage applicationId={applicationId} />
-      ) : isApplicationRoute ? (
+      ) : isLegacyApplicationRoute ? (
         <ApplicationRouteUnavailablePage />
       ) : currentPath === "/setup" ? (
         <SetupPage />
@@ -175,7 +181,7 @@ function App() {
         <DashboardPage />
       ) : currentPath === "/features" ? (
         <FeatureStatusDashboard />
-      ) : currentPath === "/insights" ? (
+      ) : currentPath === "/legacy/insights" ? (
         <Insights />
       ) : currentPath === "/chat" ? (
         <ChatUnavailablePage />
@@ -184,6 +190,18 @@ function App() {
       )}
     </>
   );
+}
+
+function App() {
+  const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
+  const redesignRoute = redesignRouteFromPath(routePath);
+  if (redesignRoute) {
+    return <RedesignApp initialRoute={redesignRoute} />;
+  }
+  if (routePath === "/applications" || routePath.startsWith("/applications/")) {
+    return <RedesignApp initialRoute={{ page: "detail", detailId: null, statusFilter: "all" }} />;
+  }
+  return <LegacyApp routePath={routePath} />;
 }
 
 export default App;

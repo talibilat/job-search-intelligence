@@ -194,6 +194,25 @@ export interface ApplicationEventEditResponse {
   event: ApplicationEventRecord;
 }
 
+/**
+ * Application event enriched with source-email metadata for timeline UIs.
+ *
+ * Exposes only email metadata (subject), never body-derived content.
+ */
+export interface ApplicationEventTimelineRecord {
+  application_id: string;
+  classification_classified_at?: string | null;
+  classification_confidence?: number | null;
+  email_id: string | null;
+  email_sent_at?: string | null;
+  email_subject?: string | null;
+  event_at: string;
+  event_type: ApplicationEventType;
+  extract_note: string | null;
+  extracted_status?: ApplicationStatus | null;
+  id: string;
+}
+
 export interface ApplicationMergeRequest {
   reason?: string | null;
   /** @minLength 1 */
@@ -263,6 +282,15 @@ export interface ApplicationSplitResponse {
   moved_events: ApplicationEventRecord[];
   new_application: ApplicationRecord;
   source_application: ApplicationRecord;
+}
+
+/**
+ * Deterministic application counts per canonical current status.
+ */
+export interface ApplicationStatusCountsResponse {
+  counts: Partial<Record<ApplicationStatus, number>>;
+  /** @minimum 0 */
+  total: number;
 }
 
 export interface ApplicationStatusEditRequest {
@@ -725,6 +753,24 @@ export const HealthResponseValue = {
 } as const;
 export type HealthResponse = typeof HealthResponseValue;
 
+/**
+ * Public-safe evidence pointer persisted alongside a cached insight.
+ *
+ * Carries only application and email metadata so insight cards can render
+ * clickable evidence chips without re-deriving the generation inputs.
+ */
+export interface InsightCitation {
+  application_id: string;
+  citation_id: string;
+  company: string;
+  email_id?: string | null;
+  email_subject?: string | null;
+  event_at?: string | null;
+  event_id?: string | null;
+  event_type?: ApplicationEventType | null;
+  role_title: string;
+}
+
 export type InsightType = (typeof InsightType)[keyof typeof InsightType];
 
 export const InsightType = {
@@ -738,6 +784,7 @@ export const InsightType = {
 } as const;
 
 export interface InsightRecord {
+  citations?: InsightCitation[];
   content: string;
   generated_at: string;
   id: number;
@@ -1109,6 +1156,8 @@ export interface ProviderConfigValues {
   ollama_base_url: string;
   ollama_chat_model: string;
   ollama_embedding_model: string;
+  sync_interval_seconds: number;
+  sync_on_open: boolean;
 }
 
 /**
@@ -1138,6 +1187,8 @@ export interface ProviderConfigUpdateRequest {
   ollama_base_url?: string | null;
   ollama_chat_model?: string | null;
   ollama_embedding_model?: string | null;
+  sync_interval_seconds?: number | null;
+  sync_on_open?: boolean | null;
 }
 
 /**
@@ -1179,6 +1230,21 @@ export interface RawEmailPreviewRecord {
   sent_at: string | null;
   subject_present: boolean;
   to_domains: string[];
+}
+
+/**
+ * One cross-application timeline event for the recent-activity feed.
+ */
+export interface RecentApplicationEventRecord {
+  application_id: string;
+  company: string;
+  current_status: ApplicationStatus;
+  email_id?: string | null;
+  email_subject?: string | null;
+  event_at: string;
+  event_id: string;
+  event_type: ApplicationEventType;
+  role_title: string;
 }
 
 export interface ResponseSilenceMetric {
@@ -1235,6 +1301,41 @@ export interface SetupSubmitResponse {
   status: "accepted";
 }
 
+/**
+ * Deterministic totals over locally stored raw-email metadata.
+ */
+export interface SyncLocalStats {
+  last_run_at?: string | null;
+  /** @minimum 0 */
+  total_raw_emails: number;
+}
+
+/**
+ * How a pre-sync scope estimate was derived.
+ */
+export type SyncScopeEstimateBasis =
+  (typeof SyncScopeEstimateBasis)[keyof typeof SyncScopeEstimateBasis];
+
+export const SyncScopeEstimateBasis = {
+  local_history: "local_history",
+  message_cap: "message_cap",
+  unknown_incremental: "unknown_incremental",
+} as const;
+
+/**
+ * Deterministic local approximation of how much email a sync scope covers.
+ *
+ * Derived only from already-synced local metadata; it never calls the provider.
+ */
+export interface SyncScopeEstimate {
+  basis: SyncScopeEstimateBasis;
+  estimated_message_count?: number | null;
+  /** @minimum 0 */
+  total_local_emails: number;
+  window_end?: string | null;
+  window_start?: string | null;
+}
+
 export const WipeDataRequestValue = {
   /** Must exactly equal wipe-local-data to confirm local data deletion. */
   confirmation: "wipe-local-data",
@@ -1259,6 +1360,14 @@ export type ListApplicationsApplicationsGetParams = {
   salary_min?: number | null;
   salary_max?: number | null;
   work_mode?: WorkMode | null;
+};
+
+export type ListRecentApplicationEventsApplicationsEventsRecentGetParams = {
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
 };
 
 export type GmailAuthCallbackAuthGmailCallbackGetParams = {
@@ -1378,6 +1487,13 @@ export type GetMetricsTimeseriesMetricsTimeseriesGetParams = {
   work_mode?: WorkMode | null;
 };
 
+export type SyncEstimateSyncEstimateGetParams = {
+  max_messages?: number | null;
+  since_date?: string | null;
+  before_date?: string | null;
+  max_age_days?: number | null;
+};
+
 export type SyncRecentEmailsSyncRecentEmailsGetParams = {
   limit?: number;
   order?: RawEmailPreviewOrder;
@@ -1449,6 +1565,76 @@ export const listApplicationsApplicationsGet = async (
   } as listApplicationsApplicationsGetResponse;
 };
 
+export type listRecentApplicationEventsApplicationsEventsRecentGetResponse200 =
+  {
+    data: RecentApplicationEventRecord[];
+    status: 200;
+  };
+
+export type listRecentApplicationEventsApplicationsEventsRecentGetResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type listRecentApplicationEventsApplicationsEventsRecentGetResponseSuccess =
+  listRecentApplicationEventsApplicationsEventsRecentGetResponse200 & {
+    headers: Headers;
+  };
+export type listRecentApplicationEventsApplicationsEventsRecentGetResponseError =
+  listRecentApplicationEventsApplicationsEventsRecentGetResponse422 & {
+    headers: Headers;
+  };
+
+export type listRecentApplicationEventsApplicationsEventsRecentGetResponse =
+  | listRecentApplicationEventsApplicationsEventsRecentGetResponseSuccess
+  | listRecentApplicationEventsApplicationsEventsRecentGetResponseError;
+
+export const getListRecentApplicationEventsApplicationsEventsRecentGetUrl = (
+  params?: ListRecentApplicationEventsApplicationsEventsRecentGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/applications/events/recent?${stringifiedParams}`
+    : `/applications/events/recent`;
+};
+
+/**
+ * Returns the newest timeline events across all applications for the overview activity feed, with source-email subject metadata only.
+ * @summary List Recent Application Events
+ */
+export const listRecentApplicationEventsApplicationsEventsRecentGet = async (
+  params?: ListRecentApplicationEventsApplicationsEventsRecentGetParams,
+  options?: RequestInit,
+): Promise<listRecentApplicationEventsApplicationsEventsRecentGetResponse> => {
+  const res = await fetch(
+    getListRecentApplicationEventsApplicationsEventsRecentGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listRecentApplicationEventsApplicationsEventsRecentGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listRecentApplicationEventsApplicationsEventsRecentGetResponse;
+};
+
 export type runGhostInferenceApplicationsGhostInferencePostResponse200 = {
   data: GhostInferenceRunResponse;
   status: 200;
@@ -1500,6 +1686,49 @@ export const runGhostInferenceApplicationsGhostInferencePost = async (
     status: res.status,
     headers: res.headers,
   } as runGhostInferenceApplicationsGhostInferencePostResponse;
+};
+
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponse200 = {
+  data: ApplicationStatusCountsResponse;
+  status: 200;
+};
+
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponseSuccess =
+  getApplicationStatusCountsApplicationsStatusCountsGetResponse200 & {
+    headers: Headers;
+  };
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponse =
+  getApplicationStatusCountsApplicationsStatusCountsGetResponseSuccess;
+
+export const getGetApplicationStatusCountsApplicationsStatusCountsGetUrl =
+  () => {
+    return `/applications/status-counts`;
+  };
+
+/**
+ * Returns deterministic application counts per canonical current status from the local SQLite source of truth, zero-filled for unused statuses.
+ * @summary Get Application Status Counts
+ */
+export const getApplicationStatusCountsApplicationsStatusCountsGet = async (
+  options?: RequestInit,
+): Promise<getApplicationStatusCountsApplicationsStatusCountsGetResponse> => {
+  const res = await fetch(
+    getGetApplicationStatusCountsApplicationsStatusCountsGetUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getApplicationStatusCountsApplicationsStatusCountsGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getApplicationStatusCountsApplicationsStatusCountsGetResponse;
 };
 
 export type editApplicationEventApplicationsApplicationIdEventsEventIdPatchResponse200 =
@@ -2007,7 +2236,7 @@ export const getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsG
   };
 
 export type getApplicationEventsApplicationsIdEventsGetResponse200 = {
-  data: ApplicationEventRecord[];
+  data: ApplicationEventTimelineRecord[];
   status: 200;
 };
 
@@ -2043,7 +2272,7 @@ export const getGetApplicationEventsApplicationsIdEventsGetUrl = (
 };
 
 /**
- * Returns the canonical event timeline for one application from local SQLite.
+ * Returns the canonical event timeline for one application from local SQLite, enriched with source-email subject metadata and classification confidence.
  * @summary List Application Events
  */
 export const getApplicationEventsApplicationsIdEventsGet = async (
@@ -2069,6 +2298,117 @@ export const getApplicationEventsApplicationsIdEventsGet = async (
     headers: res.headers,
   } as getApplicationEventsApplicationsIdEventsGetResponse;
 };
+
+export type listEmailConnectionsAuthConnectionsGetResponse200 = {
+  data: EmailConnection[];
+  status: 200;
+};
+
+export type listEmailConnectionsAuthConnectionsGetResponseSuccess =
+  listEmailConnectionsAuthConnectionsGetResponse200 & {
+    headers: Headers;
+  };
+export type listEmailConnectionsAuthConnectionsGetResponse =
+  listEmailConnectionsAuthConnectionsGetResponseSuccess;
+
+export const getListEmailConnectionsAuthConnectionsGetUrl = () => {
+  return `/auth/connections`;
+};
+
+/**
+ * Returns non-secret metadata for every locally stored email connection. Token material never leaves the configured secret store.
+ * @summary List Email Connections
+ */
+export const listEmailConnectionsAuthConnectionsGet = async (
+  options?: RequestInit,
+): Promise<listEmailConnectionsAuthConnectionsGetResponse> => {
+  const res = await fetch(getListEmailConnectionsAuthConnectionsGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listEmailConnectionsAuthConnectionsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listEmailConnectionsAuthConnectionsGetResponse;
+};
+
+export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse200 =
+  {
+    data: EmailConnection;
+    status: 200;
+  };
+
+export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse404 =
+  {
+    data: ApiErrorResponse;
+    status: 404;
+  };
+
+export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponseSuccess =
+  disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponseError =
+  (
+    | disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse404
+    | disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse422
+  ) & {
+    headers: Headers;
+  };
+
+export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse =
+  | disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponseSuccess
+  | disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponseError;
+
+export const getDisconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteUrl =
+  (provider: EmailProviderName, accountId: string) => {
+    return `/auth/connections/${provider}/${accountId}`;
+  };
+
+/**
+ * Removes one stored email connection and deletes its credential from the configured secret store. Provider-side mailbox data is never touched.
+ * @summary Disconnect Email Connection
+ */
+export const disconnectEmailConnectionAuthConnectionsProviderAccountIdDelete =
+  async (
+    provider: EmailProviderName,
+    accountId: string,
+    options?: RequestInit,
+  ): Promise<disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse> => {
+    const res = await fetch(
+      getDisconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteUrl(
+        provider,
+        accountId,
+      ),
+      {
+        ...options,
+        method: "DELETE",
+      },
+    );
+
+    const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+    const data: disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse["data"] =
+      body ? JSON.parse(body) : {};
+    return {
+      data,
+      status: res.status,
+      headers: res.headers,
+    } as disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse;
+  };
 
 export type gmailAuthUrlAuthGmailGetResponse200 = {
   data: EmailAuthorizationStartResult;
@@ -2450,6 +2790,11 @@ export type updateProviderConfigConfigProvidersPutResponse422 = {
   status: 422;
 };
 
+export type updateProviderConfigConfigProvidersPutResponse503 = {
+  data: ApiErrorResponse;
+  status: 503;
+};
+
 export type updateProviderConfigConfigProvidersPutResponseSuccess =
   updateProviderConfigConfigProvidersPutResponse200 & {
     headers: Headers;
@@ -2457,6 +2802,7 @@ export type updateProviderConfigConfigProvidersPutResponseSuccess =
 export type updateProviderConfigConfigProvidersPutResponseError = (
   | updateProviderConfigConfigProvidersPutResponse400
   | updateProviderConfigConfigProvidersPutResponse422
+  | updateProviderConfigConfigProvidersPutResponse503
 ) & {
   headers: Headers;
 };
@@ -3499,6 +3845,72 @@ export const syncNowSyncPost = async (
   } as syncNowSyncPostResponse;
 };
 
+export type syncEstimateSyncEstimateGetResponse200 = {
+  data: SyncScopeEstimate;
+  status: 200;
+};
+
+export type syncEstimateSyncEstimateGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type syncEstimateSyncEstimateGetResponseSuccess =
+  syncEstimateSyncEstimateGetResponse200 & {
+    headers: Headers;
+  };
+export type syncEstimateSyncEstimateGetResponseError =
+  syncEstimateSyncEstimateGetResponse422 & {
+    headers: Headers;
+  };
+
+export type syncEstimateSyncEstimateGetResponse =
+  | syncEstimateSyncEstimateGetResponseSuccess
+  | syncEstimateSyncEstimateGetResponseError;
+
+export const getSyncEstimateSyncEstimateGetUrl = (
+  params?: SyncEstimateSyncEstimateGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/sync/estimate?${stringifiedParams}`
+    : `/sync/estimate`;
+};
+
+/**
+ * Returns a deterministic local approximation of how much email a sync scope covers, using already-synced metadata only. It never calls the email provider.
+ * @summary Estimate Sync Scope
+ */
+export const syncEstimateSyncEstimateGet = async (
+  params?: SyncEstimateSyncEstimateGetParams,
+  options?: RequestInit,
+): Promise<syncEstimateSyncEstimateGetResponse> => {
+  const res = await fetch(getSyncEstimateSyncEstimateGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: syncEstimateSyncEstimateGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as syncEstimateSyncEstimateGetResponse;
+};
+
 export type syncRecentEmailsSyncRecentEmailsGetResponse200 = {
   data: RawEmailPreviewRecord[];
   status: 200;
@@ -3566,6 +3978,46 @@ export const syncRecentEmailsSyncRecentEmailsGet = async (
     status: res.status,
     headers: res.headers,
   } as syncRecentEmailsSyncRecentEmailsGetResponse;
+};
+
+export type syncStatsSyncStatsGetResponse200 = {
+  data: SyncLocalStats;
+  status: 200;
+};
+
+export type syncStatsSyncStatsGetResponseSuccess =
+  syncStatsSyncStatsGetResponse200 & {
+    headers: Headers;
+  };
+export type syncStatsSyncStatsGetResponse =
+  syncStatsSyncStatsGetResponseSuccess;
+
+export const getSyncStatsSyncStatsGetUrl = () => {
+  return `/sync/stats`;
+};
+
+/**
+ * Returns deterministic totals over locally stored raw-email metadata plus the last manual sync completion time.
+ * @summary Get Local Sync Stats
+ */
+export const syncStatsSyncStatsGet = async (
+  options?: RequestInit,
+): Promise<syncStatsSyncStatsGetResponse> => {
+  const res = await fetch(getSyncStatsSyncStatsGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: syncStatsSyncStatsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as syncStatsSyncStatsGetResponse;
 };
 
 export type syncStatusSyncStatusGetResponse200 = {

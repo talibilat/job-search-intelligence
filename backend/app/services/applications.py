@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import get_args
 
 from app.db.repositories import ApplicationRepository, CorrectionConflictRepository, EventRepository
 from app.models import (
     ApplicationCorrectionConflictRecord,
     ApplicationEventRecord,
     ApplicationRecord,
+    ApplicationStatusCountsResponse,
 )
-from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.records import (
+    ApplicationEventTimelineRecord,
+    ApplicationSource,
+    ApplicationStatus,
+    RecentApplicationEventRecord,
+    SponsorshipStatus,
+    WorkMode,
+)
 
 
 class ApplicationNotFoundError(LookupError):
@@ -59,6 +68,18 @@ class ApplicationDetailService:
             raise ApplicationNotFoundError(application_id)
         return application
 
+    def get_status_counts(self) -> ApplicationStatusCountsResponse:
+        """Return deterministic per-status application counts, with zero-filled statuses."""
+
+        stored_counts = self._application_repository.count_by_status()
+        counts: dict[ApplicationStatus, int] = {
+            status: stored_counts.get(status, 0) for status in get_args(ApplicationStatus.__value__)
+        }
+        return ApplicationStatusCountsResponse(
+            total=sum(counts.values()),
+            counts=counts,
+        )
+
 
 class ApplicationEventsService:
     def __init__(
@@ -75,6 +96,22 @@ class ApplicationEventsService:
         if application is None:
             raise ApplicationNotFoundError(application_id)
         return self._event_repository.list_by_application_id(application_id)
+
+    def list_application_timeline(
+        self,
+        application_id: str,
+    ) -> list[ApplicationEventTimelineRecord]:
+        """Return one application's timeline with email subject and confidence metadata."""
+
+        application = self._application_repository.get_by_id(application_id)
+        if application is None:
+            raise ApplicationNotFoundError(application_id)
+        return self._event_repository.list_timeline_for_application(application_id)
+
+    def list_recent_events(self, *, limit: int = 10) -> list[RecentApplicationEventRecord]:
+        """Return the newest events across all applications for the activity feed."""
+
+        return self._event_repository.list_recent_events(limit=limit)
 
 
 class ApplicationCorrectionConflictService:

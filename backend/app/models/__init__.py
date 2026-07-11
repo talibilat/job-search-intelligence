@@ -1,5 +1,6 @@
 """Pydantic DTOs used at application boundaries."""
 
+from .application import ApplicationStatusCountsResponse
 from .application_edit import (
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
@@ -80,6 +81,7 @@ from .records import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
     ApplicationEventRecord,
+    ApplicationEventTimelineRecord,
     ApplicationRecord,
     ChatMessageRecord,
     ChatMessageRole,
@@ -98,6 +100,7 @@ from .records import (
     EmailFilterDecisionRecord,
     EmailSyncStateRecord,
     EmailTextChunk,
+    InsightCitation,
     InsightInput,
     InsightInputEvidence,
     InsightInputFact,
@@ -106,9 +109,18 @@ from .records import (
     JobEmailCategory,
     RawEmailBodyRetentionState,
     RawEmailRecord,
+    RecentApplicationEventRecord,
 )
 from .setup import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
-from .sync import SyncJobCounts, SyncJobError, SyncJobPhase, SyncJobStatus
+from .sync import (
+    SyncJobCounts,
+    SyncJobError,
+    SyncJobPhase,
+    SyncJobStatus,
+    SyncLocalStats,
+    SyncScopeEstimate,
+    SyncScopeEstimateBasis,
+)
 from .synthetic_fixture import (
     SyntheticApplication,
     SyntheticApplicationEvent,
@@ -127,6 +139,8 @@ from .synthetic_fixture import (
 from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
+    "ApplicationEventTimelineRecord",
+    "ApplicationStatusCountsResponse",
     "ClassificationPromptOutput",
     "CompanyProfileRecord",
     "CompanyProfileSource",
@@ -136,6 +150,11 @@ __all__ = [
     "GhostInferenceRunResponse",
     "GhostInferenceRunApiRequest",
     "HealthResponse",
+    "InsightCitation",
+    "RecentApplicationEventRecord",
+    "SyncLocalStats",
+    "SyncScopeEstimate",
+    "SyncScopeEstimateBasis",
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
     "MetricBreakdownRow",

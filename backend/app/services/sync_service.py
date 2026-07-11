@@ -14,7 +14,14 @@ from app.db.repositories import (
     EmailRepository,
 )
 from app.db.repositories.sync_state import SyncStateRepository
-from app.models import SyncJobCounts, SyncJobPhase, SyncJobStatus
+from app.models import (
+    SyncJobCounts,
+    SyncJobPhase,
+    SyncJobStatus,
+    SyncLocalStats,
+    SyncScopeEstimate,
+    SyncScopeEstimateBasis,
+)
 from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import (
     EmailBackfillStateRecord,
@@ -58,9 +65,13 @@ class ScheduledJobScheduler(Protocol):
         seconds: int,
         id: str,
         replace_existing: bool,
-        next_run_time: datetime | None,
+        next_run_time: datetime | None = None,
     ) -> object:
         """Schedule one async job."""
+        ...
+
+    def remove_job(self, job_id: str) -> None:
+        """Remove one scheduled job by its stable ID."""
         ...
 
     def start(self) -> None:
@@ -102,21 +113,49 @@ class SyncScheduler:
         self._sync_job = sync_job
         self._scheduler = scheduler or create_apscheduler()
         self._started = False
+        self._job_registered = False
+
+    @property
+    def sync_job(self) -> SyncJob:
+        return self._sync_job
 
     def start(self) -> None:
-        if not self._sync_on_open or self._started:
+        if self._started:
             return
 
-        self._scheduler.add_job(
-            self._sync_job,
-            "interval",
-            seconds=self._interval_seconds,
-            id=SYNC_ON_OPEN_JOB_ID,
-            replace_existing=True,
-            next_run_time=datetime.now(UTC),
-        )
+        if self._sync_on_open:
+            self._scheduler.add_job(
+                self._sync_job,
+                "interval",
+                seconds=self._interval_seconds,
+                id=SYNC_ON_OPEN_JOB_ID,
+                replace_existing=True,
+                next_run_time=datetime.now(UTC),
+            )
+            self._job_registered = True
         self._scheduler.start()
         self._started = True
+
+    def reconfigure(self, *, sync_on_open: bool, interval_seconds: int) -> None:
+        if interval_seconds < 1:
+            msg = "interval_seconds must be at least 1"
+            raise ValueError(msg)
+
+        if sync_on_open:
+            self._scheduler.add_job(
+                self._sync_job,
+                "interval",
+                seconds=interval_seconds,
+                id=SYNC_ON_OPEN_JOB_ID,
+                replace_existing=True,
+            )
+            self._job_registered = True
+        elif self._job_registered:
+            self._scheduler.remove_job(SYNC_ON_OPEN_JOB_ID)
+            self._job_registered = False
+
+        self._sync_on_open = sync_on_open
+        self._interval_seconds = interval_seconds
 
     def shutdown(self) -> None:
         if not self._started:
@@ -124,6 +163,7 @@ class SyncScheduler:
 
         self._scheduler.shutdown(wait=False)
         self._started = False
+        self._job_registered = False
 
 
 class EmailSyncRunState(StrEnum):
@@ -189,6 +229,84 @@ class EmailSyncOptions(BaseModel):
             msg = "since_date must be before before_date"
             raise ValueError(msg)
         return self
+
+
+def build_sync_scope_estimate(
+    *,
+    options: EmailSyncOptions,
+    email_repository: EmailRepository,
+    now: datetime,
+) -> SyncScopeEstimate:
+    """Estimate how much email a sync scope covers using only local metadata.
+
+    The estimate never calls the provider: date-bounded scopes count already
+    synced raw emails in the window as a deterministic proxy, message caps
+    report the cap itself, and pure incremental syncs are reported as unknown.
+    """
+
+    total_local_emails = email_repository.count_raw_emails()
+    since_date = options.effective_since_date(now=now)
+    window_start = (
+        datetime(since_date.year, since_date.month, since_date.day, tzinfo=UTC)
+        if since_date is not None
+        else None
+    )
+    window_end = (
+        datetime(
+            options.before_date.year,
+            options.before_date.month,
+            options.before_date.day,
+            tzinfo=UTC,
+        )
+        if options.before_date is not None
+        else None
+    )
+
+    if window_start is None and window_end is None:
+        if options.max_messages is not None:
+            return SyncScopeEstimate(
+                estimated_message_count=min(
+                    options.max_messages,
+                    total_local_emails,
+                )
+                if total_local_emails > 0
+                else options.max_messages,
+                basis=SyncScopeEstimateBasis.MESSAGE_CAP,
+                total_local_emails=total_local_emails,
+            )
+        return SyncScopeEstimate(
+            estimated_message_count=None,
+            basis=SyncScopeEstimateBasis.UNKNOWN_INCREMENTAL,
+            total_local_emails=total_local_emails,
+        )
+
+    window_count = email_repository.count_raw_emails_in_window(
+        sent_from=window_start.isoformat() if window_start is not None else None,
+        sent_before=window_end.isoformat() if window_end is not None else None,
+    )
+    estimated = window_count
+    if options.max_messages is not None:
+        estimated = min(estimated, options.max_messages)
+    return SyncScopeEstimate(
+        estimated_message_count=estimated,
+        basis=SyncScopeEstimateBasis.LOCAL_HISTORY,
+        window_start=window_start,
+        window_end=window_end,
+        total_local_emails=total_local_emails,
+    )
+
+
+def build_sync_local_stats(
+    *,
+    email_repository: EmailRepository,
+    last_run_at: datetime | None,
+) -> SyncLocalStats:
+    """Report deterministic totals over locally stored raw-email metadata."""
+
+    return SyncLocalStats(
+        total_raw_emails=email_repository.count_raw_emails(),
+        last_run_at=last_run_at,
+    )
 
 
 class SyncAlreadyRunningError(RuntimeError):

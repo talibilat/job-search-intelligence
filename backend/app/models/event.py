@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Self
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.application import ApplicationStatus
 
@@ -48,3 +48,27 @@ class ApplicationEventRecord(BaseModel):
             msg = "evidence-backed events require email_id"
             raise ValueError(msg)
         return self
+
+
+class ApplicationEventTimelineRecord(ApplicationEventRecord):
+    """Application event enriched with source-email metadata for timeline UIs.
+
+    Exposes only email metadata (subject), never body-derived content.
+    """
+
+    email_subject: str | None = None
+    classification_confidence: float | None = Field(default=None, ge=0, le=1)
+
+
+class RecentApplicationEventRecord(BaseModel):
+    """One cross-application timeline event for the recent-activity feed."""
+
+    event_id: str
+    application_id: str
+    company: str
+    role_title: str
+    current_status: ApplicationStatus
+    event_type: ApplicationEventType
+    event_at: datetime
+    email_id: str | None = None
+    email_subject: str | None = None

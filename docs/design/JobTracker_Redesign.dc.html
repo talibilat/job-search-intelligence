@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;height:100%;}
+  body{font-family:'Instrument Sans',system-ui,sans-serif;background:#F4F3EF;color:#1B201C;-webkit-font-smoothing:antialiased;}
+  a{color:#1E5136;text-decoration:none;}
+  a:hover{color:#143926;text-decoration:underline;}
+  *{box-sizing:border-box;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#D8D6CC;border-radius:8px;border:3px solid #F4F3EF;}
+  button{font-family:'Instrument Sans',system-ui,sans-serif;}
+  select,input,textarea{font-family:'Instrument Sans',system-ui,sans-serif;}
+  @keyframes slideIn{from{transform:translateX(24px);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</helmet>
+
+<div style="display:flex; height:100vh; overflow:hidden; background:#F4F3EF; font-size:14px; line-height:1.5;">
+
+  <!-- ============ SIDEBAR ============ -->
+  <nav data-screen-label="Sidebar" style="width:224px; flex:none; display:flex; flex-direction:column; gap:4px; padding:20px 12px 16px; border-right:1px solid #E4E2DA; background:#EFEEE8;">
+    <div style="display:flex; align-items:center; gap:10px; padding:0 10px 18px;">
+      <div style="width:28px; height:28px; border-radius:8px; background:#1E5136; color:#F6F4EC; display:grid; place-items:center; font-weight:700; font-size:14px;">J</div>
+      <div>
+        <div style="font-weight:700; font-size:14.5px; letter-spacing:-0.01em;">JobTracker</div>
+        <div style="font-size:10.5px; color:#8B9189;">Your inbox, decoded</div>
+      </div>
+    </div>
+
+    <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="4">
+      <button onClick="{{ item.onClick }}" style="{{ item.st }}">{{ item.label }}</button>
+    </sc-for>
+
+    <div style="flex:1;"></div>
+
+    <button onClick="{{ toggleChat }}" style="display:flex; align-items:center; gap:8px; margin:0 0 10px; padding:10px 12px; border:1px solid #D9D2EE; border-radius:10px; background:#F4F2FB; color:#4B3FA6; font-weight:600; font-size:13px; cursor:pointer; text-align:left;">
+      <span style="width:8px; height:8px; border-radius:50%; background:#6C5FC7;"></span>
+      Ask your job search
+    </button>
+
+    <div style="padding:10px 12px; border-radius:10px; background:#E7EFE8; border:1px solid #D4E2D6;">
+      <div style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1E5136;">
+        <span style="width:7px; height:7px; border-radius:50%; background:#2E7D4F;"></span>
+        {{ inboxLabel }}
+      </div>
+      <div style="font-size:11px; color:#66886F; margin-top:2px;">Synced 2 min ago · {{ syncedCount }} emails read</div>
+    </div>
+
+    <button onClick="{{ goDev }}" style="margin-top:8px; padding:6px 12px; border:none; background:none; color:#9A9F96; font-size:11px; cursor:pointer; text-align:left;">For developers →</button>
+  </nav>
+
+  <!-- ============ MAIN ============ -->
+  <main style="flex:1; min-width:0; overflow-y:auto; position:relative;">
+
+    <!-- top bar -->
+    <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 32px; background:rgba(244,243,239,0.92); backdrop-filter:blur(8px); border-bottom:1px solid #E9E7DF;">
+      <div style="font-weight:700; font-size:16px; letter-spacing:-0.01em;">{{ pageTitle }}</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="position:relative;">
+          <button onClick="{{ toggleSyncMenu }}" style="padding:8px 14px; border:1px solid #E4E2DA; border-radius:999px; background:#fff; color:#1B201C; font-size:12.5px; font-weight:600; cursor:pointer;">{{ syncBtnLabel }} <span style="font-size:10px; color:#9A9F96;">▾</span></button>
+          <sc-if value="{{ syncMenuOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; right:0; top:44px; z-index:20; width:320px; padding:16px; border:1px solid #E4E2DA; border-radius:14px; background:#fff; box-shadow:0 12px 40px rgba(20,25,20,0.14); display:flex; flex-direction:column; gap:10px; text-align:left;">
+              <div style="font-weight:700; font-size:13.5px;">What should I check?</div>
+              <div style="display:flex; flex-direction:column; gap:5px;">
+                <sc-for list="{{ syncScopes }}" as="o" hint-placeholder-count="5">
+                  <button onClick="{{ o.onClick }}" style="{{ o.st }}">
+                    <span style="display:block; font-weight:600; font-size:12.5px;">{{ o.label }}</span>
+                    <span style="display:block; font-size:11.5px; color:#9A9F96;">{{ o.note }}</span>
+                  </button>
+                </sc-for>
+              </div>
+              <sc-if value="{{ scopeCustom }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#4A5049;">
+                  <input type="date" value="{{ customFrom }}" onChange="{{ onCustomFrom }}" style="flex:1; padding:7px 9px; border:1px solid #E4E2DA; border-radius:8px; background:#FAFAF7; font-size:12px;">
+                  <span style="color:#9A9F96;">to</span>
+                  <input type="date" value="{{ customTo }}" onChange="{{ onCustomTo }}" style="flex:1; padding:7px 9px; border:1px solid #E4E2DA; border-radius:8px; background:#FAFAF7; font-size:12px;">
+                </div>
+              </sc-if>
+              <sc-if value="{{ scopeCount }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:10px; font-size:12px; color:#4A5049;">
+                  <span>Most recent</span>
+                  <input type="number" value="{{ lastCount }}" onChange="{{ onLastCount }}" min="50" step="50" style="width:90px; padding:7px 9px; border:1px solid #E4E2DA; border-radius:8px; background:#FAFAF7; font-size:12.5px; font-variant-numeric:tabular-nums;">
+                  <span>emails</span>
+                </div>
+              </sc-if>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid #F0EEE7; padding-top:12px;">
+                <span style="font-size:11.5px; color:#9A9F96;">{{ syncEstimate }}</span>
+                <button onClick="{{ startSync }}" style="padding:8px 16px; border:none; border-radius:999px; background:#1E5136; color:#F6F4EC; font-size:12.5px; font-weight:600; cursor:pointer;">Sync</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        <button onClick="{{ toggleChat }}" style="padding:8px 16px; border:none; border-radius:999px; background:#1E5136; color:#F6F4EC; font-size:12.5px; font-weight:600; cursor:pointer;" style-hover="background:#143926;">Ask AI</button>
+      </div>
+    </div>
+
+    <!-- ============ OVERVIEW ============ -->
+    <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+      <section data-screen-label="Overview" style="max-width:1060px; margin:0 auto; padding:28px 32px 60px; display:flex; flex-direction:column; gap:24px;">
+
+        <div>
+          <h1 style="margin:0; font-size:24px; font-weight:700; letter-spacing:-0.02em;">{{ greeting }}</h1>
+          <p style="margin:6px 0 0; color:#666D66; font-size:14px;">Everything below was built automatically from your email — nothing to enter by hand. <a href="#" style="font-weight:600;">How does this work?</a></p>
+        </div>
+
+        <!-- next best actions -->
+        <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;">
+          <sc-for list="{{ actions }}" as="a" hint-placeholder-count="3">
+            <button onClick="{{ a.onClick }}" style="display:flex; flex-direction:column; gap:6px; padding:16px; border:1px solid #E4E2DA; border-radius:14px; background:#fff; cursor:pointer; text-align:left; box-shadow:0 1px 2px rgba(20,25,20,0.04);" style-hover="border-color:#1E5136;">
+              <span style="font-size:10.5px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:{{ a.color }};">{{ a.tag }}</span>
+              <span style="font-weight:600; font-size:14px; color:#1B201C;">{{ a.title }}</span>
+              <span style="font-size:12.5px; color:#666D66;">{{ a.body }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <!-- key metrics -->
+        <div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;">
+            <h2 style="margin:0; font-size:15px; font-weight:700;">Your search at a glance</h2>
+            <span style="font-size:12px; color:#9A9F96;">Counted from applications, not guesses — tap “How?” on any number</span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;">
+            <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="4">
+              <div style="{{ m.st }}">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:22px;">
+                  <span style="font-size:12.5px; font-weight:600; color:#666D66; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ m.label }}</span>
+                  <sc-if value="{{ showExplain }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ m.onExplain }}" style="flex:none; padding:2px 8px; border:1px solid #E4E2DA; border-radius:999px; background:#FAFAF7; color:#666D66; font-size:10.5px; font-weight:600; cursor:pointer;" style-hover="border-color:#6C5FC7; color:#6C5FC7;">How?</button>
+                  </sc-if>
+                </div>
+                <div style="font-size:30px; font-weight:700; letter-spacing:-0.03em; margin-top:6px; font-variant-numeric:tabular-nums;">{{ m.value }}</div>
+                <div style="font-size:12px; color:#9A9F96; margin-top:2px;">{{ m.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ explainOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; padding:18px 20px; border:1px solid #D9D2EE; border-radius:14px; background:#F4F2FB; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div style="font-weight:700; font-size:13.5px; color:#4B3FA6;">How “{{ explain.title }}” is calculated</div>
+                <button onClick="{{ closeExplain }}" style="border:none; background:none; color:#8B84B8; font-size:12px; cursor:pointer; font-weight:600;">Close ✕</button>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#3F3776; background:#fff; border:1px solid #E4DFF5; border-radius:8px; padding:10px 12px;">{{ explain.formula }}</div>
+              <div style="font-size:13px; color:#565073;">{{ explain.source }}</div>
+              <button onClick="{{ explain.onView }}" style="align-self:flex-start; padding:7px 14px; border:none; border-radius:999px; background:#6C5FC7; color:#fff; font-size:12px; font-weight:600; cursor:pointer;">See the {{ explain.count }} applications behind this number →</button>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- funnel + activity -->
+        <div style="display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:12px;">
+          <div style="padding:20px; border:1px solid #E4E2DA; border-radius:14px; background:#fff; box-shadow:0 1px 2px rgba(20,25,20,0.04);">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
+              <h2 style="margin:0; font-size:15px; font-weight:700;">Where applications stand</h2>
+              <span style="font-size:11.5px; color:#9A9F96;">Click a stage to see who’s in it</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
+              <sc-for list="{{ funnel }}" as="f" hint-placeholder-count="4">
+                <button onClick="{{ f.onClick }}" style="display:grid; grid-template-columns:110px 1fr 40px; align-items:center; gap:12px; border:none; background:none; padding:4px 0; cursor:pointer; text-align:left;">
+                  <span style="font-size:13px; font-weight:600; color:#1B201C;">{{ f.label }}</span>
+                  <span style="height:22px; border-radius:6px; background:#EDEBE4; overflow:hidden; display:block;">
+                    <span style="{{ f.barSt }}"></span>
+                  </span>
+                  <span style="font-size:13.5px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums;">{{ f.count }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <p style="margin:14px 0 0; font-size:12px; color:#9A9F96;">Each drop-off is a real email trail — nothing is estimated.</p>
+          </div>
+
+          <div style="padding:20px; border:1px solid #E4E2DA; border-radius:14px; background:#fff; box-shadow:0 1px 2px rgba(20,25,20,0.04);">
+            <h2 style="margin:0 0 14px; font-size:15px; font-weight:700;">Latest from your inbox</h2>
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <sc-for list="{{ activity }}" as="ev" hint-placeholder-count="5">
+                <button onClick="{{ ev.onClick }}" style="display:flex; gap:10px; align-items:flex-start; border:none; background:none; padding:8px 8px; margin:0 -8px; border-radius:8px; cursor:pointer; text-align:left;" style-hover="background:#F7F6F2;">
+                  <span style="{{ ev.dotSt }}"></span>
+                  <span style="flex:1; min-width:0;">
+                    <span style="display:block; font-size:13px; color:#1B201C;"><strong>{{ ev.company }}</strong> — {{ ev.text }}</span>
+                    <span style="display:block; font-size:11.5px; color:#9A9F96; margin-top:1px;">{{ ev.date }} · from email “{{ ev.email }}”</span>
+                  </span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ============ APPLICATIONS ============ -->
+    <sc-if value="{{ isApps }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="Applications" style="max-width:1060px; margin:0 auto; padding:28px 32px 60px; display:flex; flex-direction:column; gap:16px;">
+
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h1 style="margin:0; font-size:22px; font-weight:700; letter-spacing:-0.02em;">Applications</h1>
+            <p style="margin:4px 0 0; color:#666D66; font-size:13px;">{{ appsCountNote }} — found automatically in your email. <a href="#">Missing one?</a></p>
+          </div>
+          <div style="display:flex; gap:2px; padding:3px; border:1px solid #E4E2DA; border-radius:10px; background:#fff;">
+            <button onClick="{{ setTable }}" style="{{ tableBtnSt }}">Table</button>
+            <button onClick="{{ setBoard }}" style="{{ boardBtnSt }}">Board</button>
+            <button onClick="{{ setList }}" style="{{ listBtnSt }}">Timeline</button>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <sc-for list="{{ statusChips }}" as="c" hint-placeholder-count="6">
+            <button onClick="{{ c.onClick }}" style="{{ c.st }}">{{ c.label }} <span style="opacity:0.6;">{{ c.count }}</span></button>
+          </sc-for>
+        </div>
+
+        <!-- TABLE VIEW -->
+        <sc-if value="{{ viewTable }}" hint-placeholder-val="{{ true }}">
+          <div style="border:1px solid #E4E2DA; border-radius:14px; background:#fff; overflow:hidden; box-shadow:0 1px 2px rgba(20,25,20,0.04);">
+            <div style="display:grid; grid-template-columns:2fr 1.6fr 1fr 1fr 1.6fr; gap:12px; padding:10px 18px; background:#FAFAF7; border-bottom:1px solid #E9E7DF; font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#9A9F96;">
+              <span>Company</span><span>Role</span><span>Status</span><span>Applied</span><span>Latest update</span>
+            </div>
+            <sc-for list="{{ filteredApps }}" as="app" hint-placeholder-count="8">
+              <button onClick="{{ app.open }}" style="display:grid; grid-template-columns:2fr 1.6fr 1fr 1fr 1.6fr; gap:12px; align-items:center; width:100%; padding:13px 18px; border:none; border-bottom:1px solid #F0EEE7; background:#fff; cursor:pointer; text-align:left; font-size:13.5px;" style-hover="background:#F9F8F4;">
+                <span style="display:flex; align-items:center; gap:10px; min-width:0;">
+                  <span style="{{ app.logoSt }}">{{ app.initial }}</span>
+                  <span style="font-weight:600; color:#1B201C;">{{ app.company }}</span>
+                </span>
+                <span style="color:#4A5049;">{{ app.role }}</span>
+                <span><span style="{{ app.pillSt }}">{{ app.pillLabel }}</span></span>
+                <span style="color:#666D66; font-variant-numeric:tabular-nums;">{{ app.applied }}</span>
+                <span style="color:#666D66; font-size:12.5px;">{{ app.last }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- BOARD VIEW -->
+        <sc-if value="{{ viewBoard }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; align-items:start;">
+            <sc-for list="{{ boardCols }}" as="col" hint-placeholder-count="5">
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px; padding:4px 4px 2px;">
+                  <span style="font-size:12px; font-weight:700; color:#4A5049;">{{ col.title }}</span>
+                  <span style="font-size:11px; font-weight:600; color:#9A9F96; background:#EDEBE4; border-radius:999px; padding:1px 8px;">{{ col.count }}</span>
+                </div>
+                <sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="2">
+                  <button onClick="{{ card.open }}" style="display:flex; flex-direction:column; gap:5px; padding:12px 14px; border:1px solid #E4E2DA; border-radius:12px; background:#fff; cursor:pointer; text-align:left; box-shadow:0 1px 2px rgba(20,25,20,0.04);" style-hover="border-color:#1E5136;">
+                    <span style="font-weight:600; font-size:13px; color:#1B201C;">{{ card.company }}</span>
+                    <span style="font-size:12px; color:#666D66;">{{ card.role }}</span>
+                    <span style="font-size:11px; color:#9A9F96;">{{ card.note }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- TIMELINE LIST VIEW -->
+        <sc-if value="{{ viewList }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <sc-for list="{{ filteredApps }}" as="app" hint-placeholder-count="8">
+              <button onClick="{{ app.open }}" style="display:grid; grid-template-columns:2fr 3fr 1.4fr; gap:16px; align-items:center; padding:14px 18px; border:1px solid #E4E2DA; border-radius:12px; background:#fff; cursor:pointer; text-align:left;" style-hover="border-color:#1E5136;">
+                <span style="display:flex; align-items:center; gap:10px;">
+                  <span style="{{ app.logoSt }}">{{ app.initial }}</span>
+                  <span>
+                    <span style="display:block; font-weight:600; font-size:13.5px;">{{ app.company }}</span>
+                    <span style="display:block; font-size:12px; color:#666D66;">{{ app.role }}</span>
+                  </span>
+                </span>
+                <span style="display:flex; align-items:center; gap:4px;">
+                  <sc-for list="{{ app.dots }}" as="d" hint-placeholder-count="3">
+                    <span style="display:flex; align-items:center; gap:4px;">
+                      <span style="{{ d.st }}" title="{{ d.title }}"></span>
+                      <span style="{{ d.lineSt }}"></span>
+                    </span>
+                  </sc-for>
+                  <span style="font-size:11.5px; color:#9A9F96; margin-left:6px;">{{ app.dotsNote }}</span>
+                </span>
+                <span style="text-align:right;"><span style="{{ app.pillSt }}">{{ app.pillLabel }}</span></span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </section>
+    </sc-if>
+
+    <!-- ============ APPLICATION DETAIL ============ -->
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="Application detail" style="max-width:860px; margin:0 auto; padding:24px 32px 60px; display:flex; flex-direction:column; gap:18px;">
+        <button onClick="{{ backToApps }}" style="align-self:flex-start; border:none; background:none; color:#666D66; font-size:12.5px; font-weight:600; cursor:pointer; padding:0;">← All applications</button>
+
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:22px 24px; border:1px solid #E4E2DA; border-radius:16px; background:#fff; box-shadow:0 1px 2px rgba(20,25,20,0.04);">
+          <div style="display:flex; gap:14px; align-items:center;">
+            <span style="{{ detail.logoSt }}">{{ detail.initial }}</span>
+            <div>
+              <h1 style="margin:0; font-size:20px; font-weight:700; letter-spacing:-0.02em;">{{ detail.company }}</h1>
+              <div style="font-size:13.5px; color:#666D66;">{{ detail.role }} · applied {{ detail.applied }}</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            <select value="{{ detail.status }}" onChange="{{ onStatusEdit }}" style="padding:8px 12px; border:1px solid #E4E2DA; border-radius:10px; background:#FAFAF7; font-size:13px; font-weight:600; color:#1B201C; cursor:pointer;">
+              <option value="applied">Applied</option>
+              <option value="screening">In review</option>
+              <option value="interview">Interview</option>
+              <option value="offer">Offer</option>
+              <option value="rejected">Rejected</option>
+              <option value="ghosted">No response</option>
+            </select>
+            <span style="font-size:11px; color:#9A9F96;">{{ detail.lockNote }}</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; border:1px solid #D9D2EE; border-radius:12px; background:#F4F2FB; font-size:12.5px; color:#4B3FA6;">
+          <span style="width:8px; height:8px; border-radius:50%; background:#6C5FC7; flex:none;"></span>
+          <span style="flex:1;">This record was assembled by AI from {{ detail.emailCount }} emails in your inbox. Every step below links to its source, so you can check the work.</span>
+        </div>
+
+        <div style="padding:22px 24px; border:1px solid #E4E2DA; border-radius:16px; background:#fff;">
+          <h2 style="margin:0 0 4px; font-size:15px; font-weight:700;">What happened, step by step</h2>
+          <p style="margin:0 0 16px; font-size:12.5px; color:#9A9F96;">Newest first. Something look wrong? Click any step to correct it — your fix is kept even after re-syncs.</p>
+          <div style="display:flex; flex-direction:column;">
+            <sc-for list="{{ detail.events }}" as="ev" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:20px 1fr; gap:14px;">
+                <span style="display:flex; flex-direction:column; align-items:center;">
+                  <span style="{{ ev.dotSt }}"></span>
+                  <span style="{{ ev.lineSt }}"></span>
+                </span>
+                <div style="padding-bottom:20px;">
+                  <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+                    <span style="font-weight:700; font-size:13.5px;">{{ ev.label }}</span>
+                    <span style="font-size:12px; color:#9A9F96; font-variant-numeric:tabular-nums;">{{ ev.date }}</span>
+                  </div>
+                  <sc-if value="{{ ev.note }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:6px; font-size:13px; color:#4A5049; background:#F7F6F2; border-radius:8px; padding:8px 12px;">“{{ ev.note }}”</div>
+                  </sc-if>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                    <span style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:#666D66; border:1px solid #E4E2DA; border-radius:999px; padding:3px 10px; background:#FAFAF7;">✉ {{ ev.email }}</span>
+                    <span style="font-size:11px; color:#8B84B8; font-family:'JetBrains Mono',monospace;">AI-detected · {{ ev.conf }} sure</span>
+                    <button style="border:none; background:none; color:#1E5136; font-size:11.5px; font-weight:600; cursor:pointer; padding:0;">Fix a mistake</button>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ============ INSIGHTS ============ -->
+    <sc-if value="{{ isInsights }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="Insights" style="max-width:860px; margin:0 auto; padding:28px 32px 60px; display:flex; flex-direction:column; gap:16px;">
+        <div>
+          <h1 style="margin:0; font-size:22px; font-weight:700; letter-spacing:-0.02em;">What your search is telling you</h1>
+          <p style="margin:6px 0 0; color:#666D66; font-size:13.5px; max-width:620px;">AI reads the patterns across your applications and explains them in plain language. The numbers always come from your real data — the AI only writes the story, and every claim links to its evidence.</p>
+        </div>
+
+        <sc-for list="{{ insights }}" as="ins" hint-placeholder-count="3">
+          <div style="padding:22px 24px; border:1px solid #E4E2DA; border-radius:16px; background:#fff; box-shadow:0 1px 2px rgba(20,25,20,0.04); display:flex; flex-direction:column; gap:12px;">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+              <div>
+                <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#8B84B8;">{{ ins.q }}</div>
+                <h2 style="margin:4px 0 0; font-size:16.5px; font-weight:700; letter-spacing:-0.01em;">{{ ins.title }}</h2>
+              </div>
+              <span style="{{ ins.freshSt }}">{{ ins.fresh }}</span>
+            </div>
+            <p style="margin:0; font-size:14px; color:#33382F; line-height:1.65;">{{ ins.body }}</p>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:11.5px; color:#9A9F96;">Evidence:</span>
+              <sc-for list="{{ ins.cites }}" as="c" hint-placeholder-count="3">
+                <button onClick="{{ c.onClick }}" style="border:1px solid #E4E2DA; border-radius:999px; background:#FAFAF7; padding:3px 10px; font-size:11.5px; font-weight:600; color:#1E5136; cursor:pointer;" style-hover="border-color:#1E5136;">{{ c.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; border-top:1px solid #F0EEE7; padding-top:12px;">
+              <button onClick="{{ ins.regen }}" style="padding:7px 14px; border:1px solid #E4E2DA; border-radius:999px; background:#fff; font-size:12px; font-weight:600; color:#1B201C; cursor:pointer;">{{ ins.regenLabel }}</button>
+              <button onClick="{{ ins.toggleHow }}" style="border:none; background:none; color:#6C5FC7; font-size:12px; font-weight:600; cursor:pointer;">{{ ins.howLabel }}</button>
+            </div>
+            <sc-if value="{{ ins.howOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px solid #E4DFF5; border-radius:10px; background:#F4F2FB; padding:14px 16px; font-size:12.5px; color:#565073; display:flex; flex-direction:column; gap:6px;">
+                <div><strong style="color:#4B3FA6;">What went in:</strong> {{ ins.howInputs }}</div>
+                <div><strong style="color:#4B3FA6;">What the AI did:</strong> {{ ins.howDid }}</div>
+                <div><strong style="color:#4B3FA6;">What it can’t do:</strong> invent numbers — all counts are computed from your database first, then handed to the AI.</div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </section>
+    </sc-if>
+
+    <!-- ============ SETTINGS ============ -->
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="Settings" style="max-width:720px; margin:0 auto; padding:28px 32px 60px; display:flex; flex-direction:column; gap:16px;">
+        <div>
+          <h1 style="margin:0; font-size:22px; font-weight:700; letter-spacing:-0.02em;">Settings</h1>
+          <p style="margin:6px 0 0; color:#666D66; font-size:13.5px;">Everything runs on your computer. Your emails never leave this machine unless you choose a cloud AI.</p>
+        </div>
+
+        <div style="padding:20px 22px; border:1px solid #E4E2DA; border-radius:16px; background:#fff; display:flex; flex-direction:column; gap:12px;">
+          <h2 style="margin:0; font-size:15px; font-weight:700;">Connected inboxes</h2>
+          <p style="margin:0; font-size:12.5px; color:#9A9F96;">Read-only access on every provider. JobTracker can never send, delete, or change your mail.</p>
+          <sc-for list="{{ accounts }}" as="acc" hint-placeholder-count="1">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #D4E2D6; border-radius:12px; background:#E7EFE8;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="{{ acc.logoSt }}">{{ acc.initial }}</span>
+                <div>
+                  <div style="font-size:13.5px; font-weight:600; color:#1E5136;">{{ acc.provider }} · {{ acc.email }}</div>
+                  <div style="font-size:12px; color:#66886F;">{{ acc.note }}</div>
+                </div>
+              </div>
+              <button onClick="{{ acc.disconnect }}" style="padding:7px 14px; border:1px solid #C2D6C6; border-radius:999px; background:#fff; font-size:12px; font-weight:600; color:#1E5136; cursor:pointer;">Disconnect</button>
+            </div>
+          </sc-for>
+          <sc-if value="{{ addOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px;">
+              <sc-for list="{{ providers }}" as="pr" hint-placeholder-count="5">
+                <button onClick="{{ pr.onClick }}" style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 6px; border:1px solid #E4E2DA; border-radius:12px; background:#FAFAF7; cursor:pointer;" style-hover="border-color:#1E5136; background:#fff;">
+                  <span style="{{ pr.logoSt }}">{{ pr.initial }}</span>
+                  <span style="font-size:11.5px; font-weight:600; color:#4A5049;">{{ pr.name }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <button onClick="{{ toggleAdd }}" style="align-self:flex-start; padding:8px 16px; border:1px dashed #C9C6BA; border-radius:999px; background:none; font-size:12.5px; font-weight:600; color:#4A5049; cursor:pointer;" style-hover="border-color:#1E5136; color:#1E5136;">{{ addLabel }}</button>
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:13px; color:#4A5049; border-top:1px solid #F0EEE7; padding-top:12px;">
+            <span>Check for new email automatically</span>
+            <select style="padding:6px 10px; border:1px solid #E4E2DA; border-radius:8px; background:#FAFAF7; font-size:12.5px;">
+              <option>Every 30 minutes</option><option>Every hour</option><option>Only when I click Sync</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="padding:20px 22px; border:1px solid #E4E2DA; border-radius:16px; background:#fff; display:flex; flex-direction:column; gap:12px;">
+          <h2 style="margin:0; font-size:15px; font-weight:700;">AI engine</h2>
+          <p style="margin:0; font-size:12.5px; color:#9A9F96;">Which AI reads your job-search emails and writes your insights.</p>
+          <button onClick="{{ setLocal }}" style="{{ localSt }}">
+            <span style="font-weight:700; font-size:13.5px; display:block;">On this computer <span style="font-weight:600; color:#1E5136; font-size:11px;">· Most private</span></span>
+            <span style="font-size:12.5px; color:#666D66;">Uses a local model. Nothing ever leaves your machine. Slower, free.</span>
+          </button>
+          <button onClick="{{ setCloud }}" style="{{ cloudSt }}">
+            <span style="font-weight:700; font-size:13.5px; display:block;">Cloud AI (your own account)</span>
+            <span style="font-size:12.5px; color:#666D66;">Faster and smarter. Only job-related emails are sent, using your own API key.</span>
+          </button>
+          <div style="font-size:12.5px; color:#4A5049; background:#F7F6F2; border-radius:10px; padding:10px 12px;">{{ engineNote }}</div>
+        </div>
+
+        <div style="padding:20px 22px; border:1px solid #E4E2DA; border-radius:16px; background:#fff; display:flex; flex-direction:column; gap:10px;">
+          <h2 style="margin:0; font-size:15px; font-weight:700;">Cost control</h2>
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:13px; color:#4A5049;">
+            <span>Pre-filter emails before sending to AI <span style="color:#9A9F96;">(recommended — cuts cost ~90%)</span></span>
+            <button onClick="{{ toggleFilter }}" style="{{ filterToggleSt }}"><span style="{{ filterKnobSt }}"></span></button>
+          </div>
+          <div style="font-size:12px; color:#9A9F96;">Estimated cost of your next full scan: <strong style="color:#1B201C;">{{ scanCost }}</strong> · <a href="#">see the math</a></div>
+        </div>
+
+        <div style="padding:20px 22px; border:1px solid #EBD9D6; border-radius:16px; background:#FDF9F8; display:flex; flex-direction:column; gap:10px;">
+          <h2 style="margin:0; font-size:15px; font-weight:700; color:#96403C;">Delete everything</h2>
+          <p style="margin:0; font-size:12.5px; color:#8A6560;">Wipes all local data: synced email, applications, insights, and stored keys. Your actual Gmail is untouched.</p>
+          <button onClick="{{ wipeClick }}" style="{{ wipeSt }}">{{ wipeLabel }}</button>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ============ DEVELOPER ============ -->
+    <sc-if value="{{ isDev }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="Developer" style="max-width:720px; margin:0 auto; padding:28px 32px 60px; display:flex; flex-direction:column; gap:14px;">
+        <div>
+          <h1 style="margin:0; font-size:22px; font-weight:700; letter-spacing:-0.02em;">For developers</h1>
+          <p style="margin:6px 0 0; color:#666D66; font-size:13.5px;">Implementation status of each surface. Not shown to regular users.</p>
+        </div>
+        <div style="border:1px solid #E4E2DA; border-radius:14px; background:#fff; overflow:hidden;">
+          <sc-for list="{{ devRows }}" as="r" hint-placeholder-count="6">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; border-bottom:1px solid #F0EEE7; font-size:13px;">
+              <span style="font-weight:600;">{{ r.name }}</span>
+              <span style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:12px; color:#9A9F96; font-family:'JetBrains Mono',monospace;">{{ r.api }}</span>
+                <span style="{{ r.pillSt }}">{{ r.status }}</span>
+              </span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+  </main>
+
+  <!-- ============ CHAT DRAWER ============ -->
+  <sc-if value="{{ chatOpen }}" hint-placeholder-val="{{ false }}">
+    <aside data-screen-label="Ask AI drawer" style="width:380px; flex:none; display:flex; flex-direction:column; border-left:1px solid #E4E2DA; background:#fff; animation:slideIn 0.22s ease;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid #F0EEE7;">
+        <div>
+          <div style="font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; border-radius:50%; background:#6C5FC7;"></span>Ask your job search</div>
+          <div style="font-size:11.5px; color:#9A9F96;">Answers come with receipts — tap any citation</div>
+        </div>
+        <button onClick="{{ toggleChat }}" style="border:none; background:none; color:#9A9F96; font-size:16px; cursor:pointer;">✕</button>
+      </div>
+
+      <div style="flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:12px;">
+        <sc-for list="{{ chatMsgs }}" as="m" hint-placeholder-count="2">
+          <div style="{{ m.st }}">
+            <div style="font-size:13px; line-height:1.6; white-space:pre-wrap;">{{ m.text }}</div>
+            <sc-if value="{{ m.hasCites }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+                <sc-for list="{{ m.cites }}" as="c" hint-placeholder-count="2">
+                  <button onClick="{{ c.onClick }}" style="border:1px solid #E4DFF5; border-radius:999px; background:#fff; padding:2px 9px; font-size:11px; font-weight:600; color:#6C5FC7; cursor:pointer;">{{ c.label }}</button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+          <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="3">
+            <button onClick="{{ s.onClick }}" style="align-self:flex-start; border:1px dashed #D9D2EE; border-radius:999px; background:#FBFAFE; padding:6px 12px; font-size:12px; color:#4B3FA6; cursor:pointer; text-align:left;" style-hover="background:#F4F2FB;">{{ s.text }}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="padding:14px 16px; border-top:1px solid #F0EEE7; display:flex; gap:8px;">
+        <input value="{{ chatInput }}" onChange="{{ onChatInput }}" onKeyDown="{{ onChatKey }}" placeholder="e.g. Why am I getting rejected?" style="flex:1; padding:10px 14px; border:1px solid #E4E2DA; border-radius:10px; background:#FAFAF7; font-size:13px; outline:none;">
+        <button onClick="{{ sendChat }}" style="padding:10px 16px; border:none; border-radius:10px; background:#6C5FC7; color:#fff; font-weight:600; font-size:13px; cursor:pointer;">Ask</button>
+      </div>
+    </aside>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showExplain&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Behavior&quot;}, &quot;chatOpenByDefault&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Behavior&quot;}}">
+class Component extends DCLogic {
+  state = {
+    page: "overview",
+    detailId: null,
+    view: "table",
+    statusFilter: "all",
+    explainKey: null,
+    chatOpen: false,
+    chatInput: "",
+    chatMsgs: [],
+    howOpen: {},
+    regenerating: null,
+    engine: "local",
+    prefilter: true,
+    wipeStage: 0,
+    syncing: false,
+    statusOverrides: {},
+    syncMenuOpen: false,
+    syncScope: "new",
+    customFrom: "2026-06-01",
+    customTo: "2026-07-10",
+    lastCount: 500,
+    accounts: [{ provider: "Gmail", email: "you@gmail.com" }],
+    addOpen: false,
+  };
+
+  PROVIDERS = [
+    { name: "Gmail", hue: 25 },
+    { name: "Outlook", hue: 240 },
+    { name: "Yahoo", hue: 300 },
+    { name: "iCloud", hue: 210 },
+    { name: "Other (IMAP)", hue: 120 },
+  ];
+
+  APPS = [
+    { id: "vercel", company: "Vercel", role: "Product Designer", applied: "May 20", status: "offer", last: "Offer received Jul 1", events: [
+      { label: "Offer received", date: "Jul 1", email: "Your offer from Vercel", conf: "98%", note: "Compensation details attached — respond by Jul 15." },
+      { label: "Final interview", date: "Jun 17", email: "Final round confirmation — Vercel", conf: "97%" },
+      { label: "Interview", date: "Jun 10", email: "Interview scheduled: Design panel", conf: "96%" },
+      { label: "Recruiter screen", date: "May 27", email: "Quick chat about your application?", conf: "93%" },
+      { label: "Applied", date: "May 20", email: "Thanks for applying to Vercel", conf: "99%" },
+    ]},
+    { id: "notion", company: "Notion", role: "Senior Product Designer", applied: "Jun 5", status: "interview", last: "Onsite scheduled Jul 14", events: [
+      { label: "Onsite scheduled", date: "Jul 3", email: "Your onsite at Notion — Jul 14", conf: "97%" },
+      { label: "Interview", date: "Jun 24", email: "Portfolio review with the design team", conf: "95%" },
+      { label: "Recruiter screen", date: "Jun 12", email: "Notion — intro call", conf: "94%" },
+      { label: "Applied", date: "Jun 5", email: "Application received: Senior Product Designer", conf: "99%" },
+    ]},
+    { id: "ramp", company: "Ramp", role: "Senior Product Designer", applied: "Jun 18", status: "interview", last: "Interview Jul 8", events: [
+      { label: "Interview", date: "Jul 8", email: "Design exercise debrief", conf: "92%" },
+      { label: "Recruiter screen", date: "Jun 25", email: "Ramp — recruiter call", conf: "95%" },
+      { label: "Applied", date: "Jun 18", email: "We got your application!", conf: "99%" },
+    ]},
+    { id: "linear", company: "Linear", role: "Product Designer", applied: "Jun 20", status: "screening", last: "Recruiter replied Jun 27", events: [
+      { label: "Recruiter replied", date: "Jun 27", email: "Re: Product Designer application", conf: "91%" },
+      { label: "Applied", date: "Jun 20", email: "Thanks for your interest in Linear", conf: "99%" },
+    ]},
+    { id: "figma", company: "Figma", role: "Design Engineer", applied: "Jun 30", status: "applied", last: "No response yet (10 days)", events: [
+      { label: "Applied", date: "Jun 30", email: "Your application to Figma", conf: "99%" },
+    ]},
+    { id: "datadog", company: "Datadog", role: "Product Designer", applied: "Jun 28", status: "applied", last: "No response yet (12 days)", events: [
+      { label: "Applied", date: "Jun 28", email: "Datadog application confirmation", conf: "99%" },
+    ]},
+    { id: "grammarly", company: "Grammarly", role: "Product Designer", applied: "Jun 26", status: "applied", last: "No response yet (14 days)", events: [
+      { label: "Applied", date: "Jun 26", email: "Thank you for applying — Grammarly", conf: "99%" },
+    ]},
+    { id: "canva", company: "Canva", role: "Product Designer", applied: "May 12", status: "rejected", last: "Rejected after interview Jun 20", events: [
+      { label: "Rejected", date: "Jun 20", email: "Update on your Canva application", conf: "97%", note: "We were impressed, but chose a candidate with deeper mobile portfolio work." },
+      { label: "Interview", date: "Jun 6", email: "Canva design interview", conf: "96%" },
+      { label: "Recruiter screen", date: "May 22", email: "Canva — let's chat", conf: "94%" },
+      { label: "Applied", date: "May 12", email: "Application received — Canva", conf: "99%" },
+    ]},
+    { id: "stripe2", company: "Stripe", role: "Product Designer", applied: "Jun 2", status: "rejected", last: "Rejected Jun 16", events: [
+      { label: "Rejected", date: "Jun 16", email: "Your Stripe application", conf: "98%", note: "Looking for more design-systems experience at this level." },
+      { label: "Recruiter screen", date: "Jun 9", email: "Stripe recruiting — quick call", conf: "93%" },
+      { label: "Applied", date: "Jun 2", email: "Thanks for applying to Stripe", conf: "99%" },
+    ]},
+    { id: "duolingo", company: "Duolingo", role: "Product Designer", applied: "May 15", status: "rejected", last: "Rejected May 22", events: [
+      { label: "Rejected", date: "May 22", email: "Your Duolingo application status", conf: "98%" },
+      { label: "Applied", date: "May 15", email: "Application confirmation", conf: "99%" },
+    ]},
+    { id: "airbnb", company: "Airbnb", role: "Senior Product Designer", applied: "May 8", status: "ghosted", last: "No reply in 63 days", events: [
+      { label: "Applied", date: "May 8", email: "Thank you for applying to Airbnb", conf: "99%" },
+    ]},
+    { id: "intercom", company: "Intercom", role: "Product Designer", applied: "May 30", status: "ghosted", last: "No reply in 41 days", events: [
+      { label: "Applied", date: "May 30", email: "We received your application", conf: "99%" },
+    ]},
+  ];
+
+  STATUS = {
+    applied:   { label: "Applied",     fg: "#5C6660", bg: "#EEF0ED" },
+    screening: { label: "In review",   fg: "#8A6A14", bg: "#F7EFDB" },
+    interview: { label: "Interview",   fg: "#1E5136", bg: "#E3EFE6" },
+    offer:     { label: "Offer",       fg: "#F6F4EC", bg: "#1E5136" },
+    rejected:  { label: "Rejected",    fg: "#96403C", bg: "#F6E9E7" },
+    ghosted:   { label: "No response", fg: "#6B7268", bg: "#EFEFEC" },
+  };
+
+  appStatus(app) { return this.state.statusOverrides[app.id] || app.status; }
+
+  pill(status) {
+    const s = this.STATUS[status];
+    return {
+      st: { display: "inline-block", padding: "3px 10px", borderRadius: "999px", background: s.bg, color: s.fg, fontSize: "11.5px", fontWeight: 700 },
+      label: s.label,
+    };
+  }
+
+  logoSt(name) {
+    const hues = { V: 155, N: 30, R: 210, L: 260, F: 15, D: 290, G: 120, C: 190, S: 250, A: 350, I: 45 };
+    const h = hues[name[0]] ?? 100;
+    return {
+      width: "30px", height: "30px", borderRadius: "8px", flex: "none",
+      background: `oklch(0.93 0.03 ${h})`, color: `oklch(0.4 0.08 ${h})`,
+      display: "grid", placeItems: "center", fontWeight: 700, fontSize: "13px",
+    };
+  }
+
+  go(page, extra) { this.setState({ page, explainKey: null, ...extra }); }
+  openApp(id) { this.setState({ page: "detail", detailId: id }); }
+
+  aiReply(q) {
+    const lower = q.toLowerCase();
+    if (lower.includes("reject")) {
+      return {
+        text: "You've had 3 rejections out of 12 applications. Two came with feedback, and there's a pattern: both Stripe and Canva pointed to depth — design-systems experience and mobile portfolio work. Your interview conversion is actually strong (4 of 7 responses led to interviews), so the issue isn't your pitch — it's how senior-level depth shows in your portfolio.",
+        cites: [
+          { label: "Stripe — rejection email", id: "stripe2" },
+          { label: "Canva — rejection email", id: "canva" },
+        ],
+      };
+    }
+    if (lower.includes("follow")) {
+      return {
+        text: "3 applications have gone quiet past your usual response window (7 days): Figma (10 days), Datadog (12 days), and Grammarly (14 days). Companies that replied to you did so within 7 days on average, so a polite nudge now is well-timed.",
+        cites: [
+          { label: "Figma — Jun 30", id: "figma" },
+          { label: "Datadog — Jun 28", id: "datadog" },
+          { label: "Grammarly — Jun 26", id: "grammarly" },
+        ],
+      };
+    }
+    return {
+      text: "Across 12 applications since May: 7 got responses (58%), 4 reached interviews, and 1 became an offer — Vercel, which needs your answer by Jul 15. Your strongest stretch was applications sent in mid-June, which are converting to interviews at twice your earlier rate.",
+      cites: [
+        { label: "Vercel — offer", id: "vercel" },
+        { label: "Notion — onsite Jul 14", id: "notion" },
+      ],
+    };
+  }
+
+  ask(q) {
+    const reply = this.aiReply(q);
+    this.setState((s) => ({
+      chatMsgs: [...s.chatMsgs, { who: "user", text: q }, { who: "ai", ...reply }],
+      chatInput: "",
+      chatOpen: true,
+    }));
+  }
+
+  renderVals() {
+    const S = this.state;
+    const apps = this.APPS.map((a) => ({ ...a, status: this.appStatus(a) }));
+    const total = apps.length;
+    const responded = apps.filter((a) => a.events.length > 1);
+    const interviewed = apps.filter((a) => a.events.some((e) => e.label.toLowerCase().includes("interview") || e.label.toLowerCase().includes("onsite")));
+    const offers = apps.filter((a) => a.status === "offer");
+    const active = apps.filter((a) => ["applied", "screening", "interview", "offer"].includes(a.status));
+
+    const navDefs = [
+      { key: "overview", label: "Overview" },
+      { key: "applications", label: "Applications" },
+      { key: "insights", label: "Insights" },
+      { key: "settings", label: "Settings" },
+    ];
+    const navItems = navDefs.map((n) => {
+      const activeNav = S.page === n.key || (S.page === "detail" && n.key === "applications");
+      return {
+        label: n.label,
+        onClick: () => this.go(n.key),
+        st: {
+          display: "block", width: "100%", textAlign: "left", padding: "9px 12px",
+          border: "none", borderRadius: "9px", cursor: "pointer",
+          fontSize: "13.5px", fontWeight: 600,
+          background: activeNav ? "#FFFFFF" : "transparent",
+          color: activeNav ? "#1B201C" : "#666D66",
+          boxShadow: activeNav ? "0 1px 2px rgba(20,25,20,0.06)" : "none",
+        },
+      };
+    });
+
+    const pageTitles = { overview: "Overview", applications: "Applications", detail: "Application", insights: "Insights", settings: "Settings", dev: "For developers" };
+
+    // ---- metrics + explainers ----
+    const explains = {
+      total: { title: "Applications tracked", formula: "count(applications)", source: `Each application is a cluster of related emails from one company about one role. We found ${total} distinct clusters in your inbox since May.`, count: total, filter: "all" },
+      response: { title: "Response rate", formula: `replies ÷ applications = ${responded.length} ÷ ${total} = ${Math.round((responded.length / total) * 100)}%`, source: "A “response” means at least one human or scheduling email arrived after your application confirmation. Auto-replies don't count.", count: responded.length, filter: "all" },
+      interview: { title: "Interview rate", formula: `interviews ÷ applications = ${interviewed.length} ÷ ${total} = ${Math.round((interviewed.length / total) * 100)}%`, source: "Counted when an email confirms a scheduled interview — detected phrases like “interview scheduled” or calendar invites from the company.", count: interviewed.length, filter: "interview" },
+      offer: { title: "Offers", formula: "count(applications where status = offer)", source: "An offer is detected from emails containing offer letters or compensation details. Vercel's offer arrived Jul 1.", count: offers.length, filter: "offer" },
+    };
+    const metricDefs = [
+      { key: "total", label: "Applications", value: String(total), note: `${active.length} still active` },
+      { key: "response", label: "Response rate", value: `${Math.round((responded.length / total) * 100)}%`, note: `${responded.length} of ${total} heard back` },
+      { key: "interview", label: "Interview rate", value: `${Math.round((interviewed.length / total) * 100)}%`, note: `${interviewed.length} reached interviews` },
+      { key: "offer", label: "Offers", value: String(offers.length), note: "Vercel — reply by Jul 15" },
+    ];
+    const metrics = metricDefs.map((m) => ({
+      ...m,
+      onExplain: () => this.setState({ explainKey: S.explainKey === m.key ? null : m.key }),
+      st: {
+        minWidth: 0,
+        padding: "16px 18px", borderRadius: "14px", background: "#fff",
+        border: S.explainKey === m.key ? "1px solid #6C5FC7" : "1px solid #E4E2DA",
+        boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
+      },
+    }));
+    const explainDef = S.explainKey ? explains[S.explainKey] : null;
+    const explain = explainDef ? {
+      ...explainDef,
+      onView: () => this.go("applications", { statusFilter: explainDef.filter === "all" ? "all" : explainDef.filter }),
+    } : { title: "", formula: "", source: "", count: 0, onView: () => {} };
+
+    // ---- funnel ----
+    const funnelDefs = [
+      { label: "Applied", count: total, filter: "all" },
+      { label: "Heard back", count: responded.length, filter: "all" },
+      { label: "Interviewed", count: interviewed.length, filter: "interview" },
+      { label: "Offer", count: offers.length, filter: "offer" },
+    ];
+    const funnel = funnelDefs.map((f) => ({
+      ...f,
+      barSt: { display: "block", height: "100%", width: `${Math.max(4, (f.count / total) * 100)}%`, background: "#1E5136", borderRadius: "6px", opacity: 0.85 },
+      onClick: () => this.go("applications", { statusFilter: f.filter }),
+    }));
+
+    // ---- actions ----
+    const actions = [
+      { tag: "Respond", color: "#96403C", title: "Vercel offer expires in 5 days", body: "Your offer needs an answer by Jul 15.", onClick: () => this.openApp("vercel") },
+      { tag: "Prepare", color: "#1E5136", title: "Notion onsite on Jul 14", body: "Panel interview in 4 days — review the timeline.", onClick: () => this.openApp("notion") },
+      { tag: "Follow up", color: "#8A6A14", title: "3 applications gone quiet", body: "Figma, Datadog and Grammarly are past your usual reply window.", onClick: () => this.go("applications", { statusFilter: "applied" }) },
+    ];
+
+    // ---- activity ----
+    const activityDefs = [
+      { company: "Ramp", text: "design exercise debrief scheduled", date: "Jul 8", email: "Design exercise debrief", id: "ramp", kind: "good" },
+      { company: "Notion", text: "onsite confirmed for Jul 14", date: "Jul 3", email: "Your onsite at Notion — Jul 14", id: "notion", kind: "good" },
+      { company: "Vercel", text: "offer received", date: "Jul 1", email: "Your offer from Vercel", id: "vercel", kind: "offer" },
+      { company: "Linear", text: "recruiter replied to your application", date: "Jun 27", email: "Re: Product Designer application", id: "linear", kind: "good" },
+      { company: "Canva", text: "rejected after final interview", date: "Jun 20", email: "Update on your Canva application", id: "canva", kind: "bad" },
+    ];
+    const activity = activityDefs.map((a) => ({
+      ...a,
+      dotSt: { width: "8px", height: "8px", borderRadius: "50%", marginTop: "6px", flex: "none", background: a.kind === "offer" ? "#1E5136" : a.kind === "bad" ? "#C08A86" : "#8FB89B" },
+      onClick: () => this.openApp(a.id),
+    }));
+
+    // ---- applications list ----
+    const filtered = apps.filter((a) => {
+      if (S.statusFilter === "all") return true;
+      if (S.statusFilter === "closed") return ["rejected", "ghosted"].includes(a.status);
+      return a.status === S.statusFilter;
+    });
+    const mkRow = (a) => {
+      const p = this.pill(a.status);
+      const dots = a.events.slice().reverse().map((e, i, arr) => ({
+        title: `${e.label} · ${e.date}`,
+        st: { width: "9px", height: "9px", borderRadius: "50%", flex: "none", background: i === arr.length - 1 ? "#1E5136" : "#B9C9BD" },
+        lineSt: i === arr.length - 1 ? { display: "none" } : { display: "block", width: "14px", height: "2px", background: "#DCE5DE" },
+      }));
+      return {
+        company: a.company, role: a.role, applied: a.applied, last: a.last,
+        initial: a.company[0], logoSt: this.logoSt(a.company),
+        pillSt: p.st, pillLabel: p.label,
+        dots, dotsNote: `${a.events.length} step${a.events.length > 1 ? "s" : ""}`,
+        open: () => this.openApp(a.id),
+      };
+    };
+    const filteredApps = filtered.map(mkRow);
+
+    const chipDefs = [
+      { key: "all", label: "All", count: total },
+      { key: "applied", label: "Applied", count: apps.filter((a) => a.status === "applied").length },
+      { key: "screening", label: "In review", count: apps.filter((a) => a.status === "screening").length },
+      { key: "interview", label: "Interview", count: apps.filter((a) => a.status === "interview").length },
+      { key: "offer", label: "Offer", count: apps.filter((a) => a.status === "offer").length },
+      { key: "closed", label: "Closed", count: apps.filter((a) => ["rejected", "ghosted"].includes(a.status)).length },
+    ];
+    const statusChips = chipDefs.map((c) => ({
+      ...c,
+      onClick: () => this.setState({ statusFilter: c.key }),
+      st: {
+        padding: "6px 13px", borderRadius: "999px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600,
+        border: S.statusFilter === c.key ? "1px solid #1E5136" : "1px solid #E4E2DA",
+        background: S.statusFilter === c.key ? "#1E5136" : "#fff",
+        color: S.statusFilter === c.key ? "#F6F4EC" : "#4A5049",
+      },
+    }));
+
+    const colDefs = [
+      { key: "applied", title: "Applied" },
+      { key: "screening", title: "In review" },
+      { key: "interview", title: "Interview" },
+      { key: "offer", title: "Offer" },
+      { key: "closed", title: "Closed" },
+    ];
+    const boardCols = colDefs.map((c) => {
+      const cards = apps.filter((a) => c.key === "closed" ? ["rejected", "ghosted"].includes(a.status) : a.status === c.key);
+      return {
+        title: c.title, count: cards.length,
+        cards: cards.map((a) => ({ company: a.company, role: a.role, note: a.last, open: () => this.openApp(a.id) })),
+      };
+    });
+
+    const viewBtn = (v) => ({
+      padding: "6px 14px", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600,
+      background: S.view === v ? "#1B201C" : "transparent", color: S.view === v ? "#fff" : "#666D66",
+    });
+
+    // ---- detail ----
+    const app = apps.find((a) => a.id === S.detailId) || apps[0];
+    const p = this.pill(app.status);
+    const detail = {
+      company: app.company, role: app.role, applied: app.applied,
+      initial: app.company[0], logoSt: { ...this.logoSt(app.company), width: "44px", height: "44px", fontSize: "18px", borderRadius: "12px" },
+      status: app.status, pillSt: p.st, pillLabel: p.label,
+      emailCount: app.events.length,
+      lockNote: S.statusOverrides[app.id] ? "Edited by you — protected from auto-updates" : "Kept in sync from your email",
+      events: app.events.map((e, i) => ({
+        ...e,
+        note: e.note || false,
+        dotSt: { width: "11px", height: "11px", borderRadius: "50%", marginTop: "4px", flex: "none", background: i === 0 ? "#1E5136" : "#C7D3C9", border: i === 0 ? "2px solid #1E5136" : "2px solid #C7D3C9" },
+        lineSt: i === app.events.length - 1 ? { display: "none" } : { flex: 1, width: "2px", background: "#E8EDE8" },
+      })),
+    };
+
+    // ---- insights ----
+    const insightDefs = [
+      {
+        key: "feedback", q: "Why am I getting rejected?", title: "Recurring feedback in your rejections",
+        body: "Two of your three rejections came with real feedback, and they rhyme: Stripe wanted deeper design-systems experience, and Canva chose someone with a stronger mobile portfolio. Both were depth objections, not fit objections — you're getting into rooms, but the work shown isn't reading as senior enough. Leading your portfolio with one deep systems case study would address both.",
+        cites: [{ label: "Stripe rejection", id: "stripe2" }, { label: "Canva rejection", id: "canva" }],
+        howInputs: "The 2 rejection emails that contained feedback, plus your application timeline.",
+        howDid: "Grouped similar phrases across rejections and summarized the pattern. It read only these 2 emails.",
+        fresh: "Fresh · Jul 9",
+      },
+      {
+        key: "signals", q: "What's working, what isn't?", title: "Your strongest and weakest signals",
+        body: "Strongest: once a recruiter talks to you, you advance — 4 of your 5 recruiter screens turned into interviews (80%). Weakest: cold applications sent in May got a 33% response rate versus 71% in June, and both no-response companies (Airbnb, Intercom) were from that May batch. Whatever changed in your June applications — keep doing it.",
+        cites: [{ label: "Airbnb — no response", id: "airbnb" }, { label: "Intercom — no response", id: "intercom" }, { label: "Vercel — offer", id: "vercel" }],
+        howInputs: "All 12 applications and their 34 timeline events, grouped by month and stage.",
+        howDid: "Compared conversion rates between stages and time periods. The percentages were computed first; the AI only explains them.",
+        fresh: "Fresh · Jul 9",
+      },
+      {
+        key: "story", q: "How is my search going overall?", title: "The story of your search so far",
+        body: "You started in early May with a broad sweep — 5 applications, mostly silence. Mid-June you narrowed to design-tools companies and things turned: Notion, Ramp and Linear all responded within a week. Vercel, your longest-running thread at 6 weeks, became an offer on Jul 1. You're now in the strongest position of your search: one offer in hand and two live interview processes to weigh against it.",
+        cites: [{ label: "Vercel — offer", id: "vercel" }, { label: "Notion — onsite", id: "notion" }, { label: "Ramp — interview", id: "ramp" }],
+        howInputs: "Every application event from the last 366 days, in chronological order.",
+        howDid: "Arranged your real timeline into a narrative. Dates and counts come from the database, not the AI.",
+        fresh: "Stale · data changed since Jul 6",
+      },
+    ];
+    const insights = insightDefs.map((ins) => ({
+      ...ins,
+      freshSt: {
+        flex: "none", fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "999px",
+        background: ins.fresh.startsWith("Fresh") ? "#E3EFE6" : "#F7EFDB",
+        color: ins.fresh.startsWith("Fresh") ? "#1E5136" : "#8A6A14",
+      },
+      cites: ins.cites.map((c) => ({ label: c.label, onClick: () => this.openApp(c.id) })),
+      howOpen: !!S.howOpen[ins.key],
+      howLabel: S.howOpen[ins.key] ? "Hide how this was made" : "How was this made?",
+      toggleHow: () => this.setState((s) => ({ howOpen: { ...s.howOpen, [ins.key]: !s.howOpen[ins.key] } })),
+      regenLabel: S.regenerating === ins.key ? "Rewriting…" : "Rewrite with latest data · ~$0.002",
+      regen: () => {
+        this.setState({ regenerating: ins.key });
+        setTimeout(() => this.setState({ regenerating: null }), 1200);
+      },
+    }));
+
+    // ---- settings ----
+    const optSt = (on) => ({
+      display: "block", textAlign: "left", padding: "14px 16px", borderRadius: "12px", cursor: "pointer",
+      border: on ? "1.5px solid #1E5136" : "1px solid #E4E2DA",
+      background: on ? "#F3F8F4" : "#FAFAF7",
+    });
+
+    // ---- chat ----
+    const msgSt = (who) => who === "user"
+      ? { alignSelf: "flex-end", maxWidth: "85%", padding: "10px 14px", borderRadius: "14px 14px 4px 14px", background: "#1B201C", color: "#F6F4EC" }
+      : { alignSelf: "flex-start", maxWidth: "92%", padding: "12px 14px", borderRadius: "14px 14px 14px 4px", background: "#F4F2FB", border: "1px solid #E9E5F7", color: "#2B2833" };
+    const chatMsgs = (S.chatMsgs.length ? S.chatMsgs : [{
+      who: "ai",
+      text: "Hi — I can answer questions about your job search using your real email history. Every answer cites the emails and applications it came from. Try one of these:",
+      cites: [],
+    }]).map((m) => ({
+      ...m,
+      st: msgSt(m.who),
+      hasCites: !!(m.cites && m.cites.length),
+      cites: (m.cites || []).map((c) => ({ label: c.label, onClick: () => this.openApp(c.id) })),
+    }));
+
+    const devRows = [
+      { name: "Gmail sync", api: "POST /sync", status: "Live" },
+      { name: "Email classification", api: "GET /classification/estimate", status: "Live" },
+      { name: "Applications & timeline", api: "GET /applications/{id}", status: "Live" },
+      { name: "Manual corrections", api: "POST /applications/{id}/split", status: "Live" },
+      { name: "Cached insights", api: "GET /insights", status: "Live" },
+      { name: "Chat agent (RAG)", api: "POST /chat", status: "Planned · Phase 5" },
+    ].map((r) => ({
+      ...r,
+      pillSt: {
+        fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "999px",
+        background: r.status === "Live" ? "#E3EFE6" : "#EFEFEC",
+        color: r.status === "Live" ? "#1E5136" : "#6B7268",
+      },
+    }));
+
+    return {
+      // shell
+      navItems,
+      pageTitle: pageTitles[S.page] || "Overview",
+      isOverview: S.page === "overview",
+      isApps: S.page === "applications",
+      isDetail: S.page === "detail",
+      isInsights: S.page === "insights",
+      isSettings: S.page === "settings",
+      isDev: S.page === "dev",
+      goDev: () => this.go("dev"),
+      syncedCount: "4,182",
+      syncBtnLabel: S.syncing ? "Checking inboxes…" : "Sync",
+      syncMenuOpen: S.syncMenuOpen,
+      toggleSyncMenu: () => this.setState((s) => ({ syncMenuOpen: !s.syncMenuOpen })),
+      syncScopes: [
+        { key: "new", label: "New mail since last sync", note: "Recommended — fastest" },
+        { key: "7", label: "Last 7 days", note: "Re-checks the past week" },
+        { key: "30", label: "Last 30 days", note: "Catches late replies" },
+        { key: "custom", label: "A specific date range", note: "Pick start and end dates" },
+        { key: "count", label: "Only the most recent emails", note: "Cap by number of emails" },
+      ].map((o) => ({
+        ...o,
+        onClick: () => this.setState({ syncScope: o.key }),
+        st: {
+          display: "block", width: "100%", textAlign: "left", padding: "8px 10px",
+          borderRadius: "9px", cursor: "pointer",
+          border: S.syncScope === o.key ? "1.5px solid #1E5136" : "1px solid #F0EEE7",
+          background: S.syncScope === o.key ? "#F3F8F4" : "#fff",
+        },
+      })),
+      scopeCustom: S.syncScope === "custom",
+      scopeCount: S.syncScope === "count",
+      customFrom: S.customFrom,
+      customTo: S.customTo,
+      onCustomFrom: (e) => this.setState({ customFrom: e.target.value }),
+      onCustomTo: (e) => this.setState({ customTo: e.target.value }),
+      lastCount: S.lastCount,
+      onLastCount: (e) => this.setState({ lastCount: Math.max(1, Number(e.target.value) || 0) }),
+      syncEstimate: (() => {
+        const perAccount = { new: 24, 7: 130, 30: 540, custom: 610, count: Math.min(S.lastCount, 4182) };
+        const n = (perAccount[S.syncScope] ?? 24) * S.accounts.length;
+        return `~${n.toLocaleString("en-US")} emails · ${n < 200 ? "under a minute" : n < 1000 ? "1–2 min" : "a few min"}`;
+      })(),
+      startSync: () => {
+        this.setState({ syncing: true, syncMenuOpen: false });
+        setTimeout(() => this.setState({ syncing: false }), 1500);
+      },
+
+      // inboxes
+      inboxLabel: S.accounts.length === 1 ? `${S.accounts[0].provider} connected` : `${S.accounts.length} inboxes connected`,
+      accounts: S.accounts.map((acc, i) => ({
+        ...acc,
+        initial: acc.provider[0],
+        logoSt: this.logoSt(acc.provider),
+        note: i === 0 ? "Primary · synced 2 min ago" : "Synced 2 min ago",
+        disconnect: () => this.setState((s) => ({ accounts: s.accounts.filter((_, j) => j !== i) })),
+      })),
+      addOpen: S.addOpen,
+      toggleAdd: () => this.setState((s) => ({ addOpen: !s.addOpen })),
+      addLabel: S.addOpen ? "Cancel" : "+ Add another inbox",
+      providers: this.PROVIDERS.map((p) => ({
+        ...p,
+        initial: p.name[0],
+        logoSt: { ...this.logoSt(p.name), background: `oklch(0.93 0.03 ${p.hue})`, color: `oklch(0.4 0.08 ${p.hue})` },
+        onClick: () => this.setState((s) => ({
+          accounts: [...s.accounts, { provider: p.name, email: `you@${p.name.split(" ")[0].toLowerCase()}.com` }],
+          addOpen: false,
+        })),
+      })),
+      greeting: "Good morning — one offer on the table.",
+      showExplain: this.props.showExplain ?? true,
+
+      // overview
+      actions, metrics, funnel, activity,
+      explainOpen: !!S.explainKey, explain,
+      closeExplain: () => this.setState({ explainKey: null }),
+
+      // applications
+      appsCountNote: `${filtered.length} of ${total} applications`,
+      statusChips, filteredApps, boardCols,
+      viewTable: S.view === "table", viewBoard: S.view === "board", viewList: S.view === "list",
+      setTable: () => this.setState({ view: "table" }),
+      setBoard: () => this.setState({ view: "board" }),
+      setList: () => this.setState({ view: "list" }),
+      tableBtnSt: viewBtn("table"), boardBtnSt: viewBtn("board"), listBtnSt: viewBtn("list"),
+
+      // detail
+      detail,
+      backToApps: () => this.go("applications"),
+      onStatusEdit: (e) => this.setState((s) => ({ statusOverrides: { ...s.statusOverrides, [app.id]: e.target.value } })),
+
+      // insights
+      insights,
+
+      // settings
+      setLocal: () => this.setState({ engine: "local" }),
+      setCloud: () => this.setState({ engine: "cloud" }),
+      localSt: optSt(S.engine === "local"),
+      cloudSt: optSt(S.engine === "cloud"),
+      engineNote: S.engine === "local"
+        ? "Currently using: a local model on this computer. Your emails are never uploaded anywhere."
+        : "Currently using: your own cloud AI account. Only emails already identified as job-related are sent — never your whole inbox.",
+      toggleFilter: () => this.setState((s) => ({ prefilter: !s.prefilter })),
+      filterToggleSt: {
+        width: "40px", height: "23px", borderRadius: "999px", border: "none", cursor: "pointer", position: "relative",
+        background: S.prefilter ? "#1E5136" : "#D8D6CC", transition: "background 0.15s",
+      },
+      filterKnobSt: {
+        position: "absolute", top: "2.5px", left: S.prefilter ? "19px" : "3px",
+        width: "18px", height: "18px", borderRadius: "50%", background: "#fff", transition: "left 0.15s", display: "block",
+      },
+      scanCost: S.prefilter ? "$0.14 (312 emails)" : "$1.63 (4,182 emails)",
+      wipeLabel: S.wipeStage === 0 ? "Delete all local data…" : "Click again to confirm — this can't be undone",
+      wipeSt: {
+        alignSelf: "flex-start", padding: "8px 16px", borderRadius: "999px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600,
+        border: "1px solid #DBA9A4", background: S.wipeStage === 0 ? "#fff" : "#96403C", color: S.wipeStage === 0 ? "#96403C" : "#fff",
+      },
+      wipeClick: () => {
+        if (S.wipeStage === 0) {
+          this.setState({ wipeStage: 1 });
+          setTimeout(() => this.setState({ wipeStage: 0 }), 4000);
+        } else {
+          this.setState({ wipeStage: 0 });
+        }
+      },
+
+      // dev
+      devRows,
+
+      // chat
+      chatOpen: S.chatOpen || (this.props.chatOpenByDefault ?? false),
+      toggleChat: () => this.setState((s) => ({ chatOpen: !s.chatOpen })),
+      chatMsgs,
+      chatInput: S.chatInput,
+      onChatInput: (e) => this.setState({ chatInput: e.target.value }),
+      onChatKey: (e) => { if (e.key === "Enter" && this.state.chatInput.trim()) this.ask(this.state.chatInput.trim()); },
+      sendChat: () => { if (this.state.chatInput.trim()) this.ask(this.state.chatInput.trim()); },
+      suggestions: [
+        { text: "Why am I getting rejected?", onClick: () => this.ask("Why am I getting rejected?") },
+        { text: "Who should I follow up with?", onClick: () => this.ask("Who should I follow up with?") },
+        { text: "How is my search going overall?", onClick: () => this.ask("How is my search going overall?") },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

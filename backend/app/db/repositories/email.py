@@ -188,6 +188,35 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             return 0
         return int(row[0])
 
+    def count_raw_emails_in_window(
+        self,
+        *,
+        sent_from: str | None = None,
+        sent_before: str | None = None,
+        provider: EmailProviderName | None = None,
+    ) -> int:
+        """Count locally stored raw emails whose sent_at falls in a window."""
+
+        clauses: list[str] = ["sent_at IS NOT NULL"]
+        parameters: list[object] = []
+        if provider is not None:
+            clauses.append("provider = ?")
+            parameters.append(provider.value)
+        if sent_from is not None:
+            clauses.append("sent_at >= ?")
+            parameters.append(sent_from)
+        if sent_before is not None:
+            clauses.append("sent_at < ?")
+            parameters.append(sent_before)
+
+        row = self.execute(
+            f"SELECT COUNT(*) FROM raw_emails WHERE {' AND '.join(clauses)}",
+            tuple(parameters),
+        ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+
     def list_recent_email_previews(
         self,
         *,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from app.api.provider_config import get_provider_registry
+from app.api.provider_config import get_active_sync_scheduler, get_provider_registry
 from app.config import (
     AppSettings,
     ClassificationMode,
@@ -21,14 +21,53 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
+class RecordingScheduler:
+    def __init__(self, settings: AppSettings | None = None) -> None:
+        self.jobs: list[dict[str, object]] = []
+        self.settings = settings
+        self.settings_at_add: list[tuple[bool, int]] = []
+
+    def add_job(self, *args: object, **kwargs: object) -> None:
+        self.jobs.append(dict(kwargs))
+        if self.settings is not None:
+            self.settings_at_add.append(
+                (self.settings.sync_on_open, self.settings.sync_interval_seconds)
+            )
+
+    def remove_job(self, job_id: str) -> None:
+        return None
+
+    def start(self) -> None:
+        return None
+
+    def shutdown(self, *, wait: bool) -> None:
+        return None
+
+
+class FailingScheduler(RecordingScheduler):
+    def add_job(self, *args: object, **kwargs: object) -> None:
+        if kwargs.get("next_run_time") is None:
+            raise RuntimeError("scheduler exploded")
+
+
+class NoopConfigScheduler:
+    def reconfigure(self, *, sync_on_open: bool, interval_seconds: int) -> None:
+        return None
+
+
 def clear_jobtracker_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for env_name in AppSettings.env_var_names():
         monkeypatch.delenv(env_name, raising=False)
 
 
-def create_test_app(settings: AppSettings) -> FastAPI:
-    fastapi_app = create_app()
+def create_test_app(
+    settings: AppSettings,
+    scheduler: RecordingScheduler | None = None,
+) -> FastAPI:
+    fastapi_app = create_app(settings=settings, scheduler=scheduler)
     fastapi_app.dependency_overrides[get_settings] = lambda: settings
+    if scheduler is None:
+        fastapi_app.dependency_overrides[get_active_sync_scheduler] = NoopConfigScheduler
     return fastapi_app
 
 
@@ -176,6 +215,61 @@ def test_provider_config_update_validates_and_updates_in_process_selection(
     assert follow_up.status_code == 200
     assert follow_up.json()["selection"]["llm_provider"] == "azure_openai"
     assert follow_up.json()["settings"]["azure_openai_chat_deployment"] == "chat"
+
+
+def test_provider_config_update_reconfigures_active_scheduler_before_settings() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        sync_on_open=False,
+        sync_interval_seconds=3600,
+    )
+    scheduler = RecordingScheduler(settings)
+    app = create_test_app(settings, scheduler)
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/config/providers",
+            json={"sync_on_open": True, "sync_interval_seconds": 1800},
+        )
+
+    assert response.status_code == 200
+    assert scheduler.jobs == [
+        {
+            "seconds": 1800,
+            "id": "gmail-sync-on-open",
+            "replace_existing": True,
+        }
+    ]
+    assert scheduler.settings_at_add == [(False, 3600)]
+    assert settings.sync_on_open is True
+    assert settings.sync_interval_seconds == 1800
+
+
+def test_provider_config_update_does_not_mutate_settings_when_scheduler_fails() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        sync_on_open=False,
+        sync_interval_seconds=3600,
+    )
+    app = create_test_app(settings, FailingScheduler())
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/config/providers",
+            json={"sync_on_open": True, "sync_interval_seconds": 1800},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "error": {
+            "code": "service_unavailable",
+            "message": "Sync scheduler settings could not be applied.",
+            "details": [],
+        }
+    }
+    assert settings.sync_on_open is False
+    assert settings.sync_interval_seconds == 3600
+    assert "scheduler exploded" not in response.text
 
 
 def test_provider_config_update_returns_typed_error_for_invalid_selection(
@@ -362,3 +456,6 @@ def test_provider_config_endpoint_is_documented_in_openapi(
     assert paths["/config/providers"]["put"]["responses"]["200"]["content"]["application/json"][
         "schema"
     ] == {"$ref": "#/components/schemas/ProviderConfigResponse"}
+    assert paths["/config/providers"]["put"]["responses"]["503"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/ApiErrorResponse"}

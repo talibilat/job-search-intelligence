@@ -42,6 +42,38 @@ class SyncJobError(BaseModel):
     occurred_at: datetime
 
 
+class SyncLocalStats(BaseModel):
+    """Deterministic totals over locally stored raw-email metadata."""
+
+    model_config = ConfigDict(frozen=True)
+
+    total_raw_emails: int = Field(ge=0)
+    last_run_at: datetime | None = None
+
+
+class SyncScopeEstimateBasis(StrEnum):
+    """How a pre-sync scope estimate was derived."""
+
+    LOCAL_HISTORY = "local_history"
+    MESSAGE_CAP = "message_cap"
+    UNKNOWN_INCREMENTAL = "unknown_incremental"
+
+
+class SyncScopeEstimate(BaseModel):
+    """Deterministic local approximation of how much email a sync scope covers.
+
+    Derived only from already-synced local metadata; it never calls the provider.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    estimated_message_count: int | None = Field(default=None, ge=0)
+    basis: SyncScopeEstimateBasis
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+    total_local_emails: int = Field(ge=0)
+
+
 class SyncJobStatus(BaseModel):
     """Current sync job state for the `/sync/status` API boundary."""
 

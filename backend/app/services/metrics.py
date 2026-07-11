@@ -117,23 +117,23 @@ class MetricsSummaryService:
 
         windows = [
             self._application_window(
-                    window=MetricsApplicationWindow.WEEK,
-                    start_at=week_start,
-                    end_at=week_start + timedelta(days=7),
-                    filters=filters,
-                ),
+                window=MetricsApplicationWindow.WEEK,
+                start_at=week_start,
+                end_at=week_start + timedelta(days=7),
+                filters=filters,
+            ),
             self._application_window(
-                    window=MetricsApplicationWindow.MONTH,
-                    start_at=month_start,
-                    end_at=_next_month_start(month_start),
-                    filters=filters,
-                ),
+                window=MetricsApplicationWindow.MONTH,
+                start_at=month_start,
+                end_at=_next_month_start(month_start),
+                filters=filters,
+            ),
             self._application_window(
-                    window=MetricsApplicationWindow.YEAR,
-                    start_at=year_start,
-                    end_at=datetime(anchor_at.year + 1, 1, 1, tzinfo=UTC),
-                    filters=filters,
-                ),
+                window=MetricsApplicationWindow.YEAR,
+                start_at=year_start,
+                end_at=datetime(anchor_at.year + 1, 1, 1, tzinfo=UTC),
+                filters=filters,
+            ),
         ]
 
         if custom_start_at is not None or custom_end_at is not None:

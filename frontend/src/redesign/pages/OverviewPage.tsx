@@ -1,0 +1,794 @@
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  getMetricsFunnelMetricsFunnelGet,
+  getMetricsRatesMetricsRatesGet,
+  getMetricsSummaryMetricsSummaryGet,
+  listApplicationsApplicationsGet,
+  listRecentApplicationEventsApplicationsEventsRecentGet,
+  type ApplicationRecord,
+  type MetricsRatesResponse,
+  type MetricsFunnelResponse,
+  type MetricsSummaryResponse,
+  type RecentApplicationEventRecord,
+} from "../../api";
+import type { RedesignPage, StatusChipKey } from "../RedesignApp";
+import { publicApiError } from "../apiError";
+import {
+  daysSince,
+  EVENT_FEED_TEXT,
+  eventKind,
+  formatShortDate,
+} from "../theme";
+
+interface OverviewPageProps {
+  go: (page: RedesignPage, extra?: { statusFilter?: StatusChipKey }) => void;
+  openApp: (id: string) => void;
+  reloadKey: number;
+}
+
+interface MetricExplain {
+  title: string;
+  formula: string;
+  source: string;
+  count: number;
+  filter: StatusChipKey;
+  exactPopulation: boolean;
+}
+
+interface MetricCard {
+  key: string;
+  label: string;
+  value: string;
+  note: string;
+  explain: MetricExplain;
+}
+
+interface ActionCard {
+  tag: string;
+  color: string;
+  title: string;
+  body: string;
+  onClick: () => void;
+}
+
+function timeGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) {
+    return "Good morning";
+  }
+  if (hour < 18) {
+    return "Good afternoon";
+  }
+  return "Good evening";
+}
+
+function percent(numerator: number, denominator: number): string {
+  if (denominator === 0) {
+    return "0%";
+  }
+  return `${Math.round((numerator / denominator) * 1_000) / 10}%`;
+}
+
+export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
+  const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
+  const [rates, setRates] = useState<MetricsRatesResponse | null>(null);
+  const [funnel, setFunnel] = useState<MetricsFunnelResponse | null>(null);
+  const [funnelError, setFunnelError] = useState<string | null>(null);
+  const [funnelLoading, setFunnelLoading] = useState(true);
+  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
+  const [activity, setActivity] = useState<RecentApplicationEventRecord[]>([]);
+  const [explainKey, setExplainKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setFunnelLoading(true);
+      setFunnelError(null);
+      const [
+        summaryResponse,
+        ratesResponse,
+        funnelResponse,
+        applicationsResponse,
+        eventsResponse,
+      ] = await Promise.all([
+        getMetricsSummaryMetricsSummaryGet().catch(() => null),
+        getMetricsRatesMetricsRatesGet().catch(() => null),
+        getMetricsFunnelMetricsFunnelGet().catch((error: unknown) => ({
+          error,
+        })),
+        listApplicationsApplicationsGet().catch(() => null),
+        listRecentApplicationEventsApplicationsEventsRecentGet({
+          limit: 5,
+        }).catch(() => null),
+      ]);
+      if (cancelled) {
+        return;
+      }
+      if (summaryResponse?.status === 200) {
+        setSummary(summaryResponse.data);
+      }
+      if (ratesResponse?.status === 200) {
+        setRates(ratesResponse.data);
+      }
+      if ("status" in funnelResponse && funnelResponse.status === 200) {
+        setFunnel(funnelResponse.data);
+      } else {
+        setFunnel(null);
+        setFunnelError(
+          publicApiError(
+            "status" in funnelResponse
+              ? { response: funnelResponse }
+              : funnelResponse.error,
+            "Funnel could not be loaded.",
+          ),
+        );
+      }
+      setFunnelLoading(false);
+      if (applicationsResponse?.status === 200) {
+        setApplications(applicationsResponse.data);
+      }
+      if (eventsResponse?.status === 200) {
+        setActivity(eventsResponse.data);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const total = summary?.total_applications ?? 0;
+  const responded = rates?.overall_response_rate.numerator ?? 0;
+  const interviewed = rates?.application_to_interview_rate.numerator ?? 0;
+  const offers = summary?.offers_received ?? 0;
+  const active = useMemo(
+    () =>
+      applications.filter((application) =>
+        ["applied", "in_review", "assessment", "interview", "offer"].includes(
+          application.current_status,
+        ),
+      ).length,
+    [applications],
+  );
+
+  const greeting =
+    offers === 1
+      ? `${timeGreeting()} — one offer on the table.`
+      : offers > 1
+        ? `${timeGreeting()} — ${offers} offers on the table.`
+        : `${timeGreeting()}.`;
+
+  const metrics: MetricCard[] = [
+    {
+      key: "total",
+      label: "Applications",
+      value: String(total),
+      note: `${active} still active`,
+      explain: {
+        title: "Applications tracked",
+        formula: "count(applications)",
+        source: `Each application is a cluster of related emails from one company about one role. We found ${total} distinct clusters in your inbox.`,
+        count: total,
+        filter: "all",
+        exactPopulation: true,
+      },
+    },
+    {
+      key: "response",
+      label: "Response rate",
+      value: percent(responded, total),
+      note: `${responded} of ${total} heard back`,
+      explain: {
+        title: "Response rate",
+        formula: `replies ÷ applications = ${responded} ÷ ${total} = ${percent(responded, total)}`,
+        source:
+          "A “response” means at least one human or scheduling email arrived after your application confirmation. Auto-replies don't count.",
+        count: responded,
+        filter: "all",
+        exactPopulation: false,
+      },
+    },
+    {
+      key: "interview",
+      label: "Interview rate",
+      value: percent(interviewed, total),
+      note: `${interviewed} reached interviews`,
+      explain: {
+        title: "Interview rate",
+        formula: `interviews ÷ applications = ${interviewed} ÷ ${total} = ${percent(interviewed, total)}`,
+        source:
+          "Counted when an email confirms a scheduled interview — detected phrases like “interview scheduled” or calendar invites from the company.",
+        count: interviewed,
+        filter: "interview",
+        exactPopulation: true,
+      },
+    },
+    {
+      key: "offer",
+      label: "Offers",
+      value: String(offers),
+      note:
+        offers > 0
+          ? `${offers} offer${offers === 1 ? "" : "s"} received`
+          : "None yet",
+      explain: {
+        title: "Offers",
+        formula: "count(applications where status = offer)",
+        source:
+          "An offer is detected from emails containing offer letters or compensation details.",
+        count: offers,
+        filter: "offer",
+        exactPopulation: true,
+      },
+    },
+  ];
+
+  const explain =
+    metrics.find((metric) => metric.key === explainKey)?.explain ?? null;
+
+  const funnelStages = (funnel?.stages ?? []).map((stage) => ({
+    ...stage,
+    filter:
+      stage.stage === "interview"
+        ? ("interview" as const)
+        : stage.stage === "offer"
+          ? ("offer" as const)
+          : stage.stage === "screen"
+            ? ("screening" as const)
+            : ("all" as const),
+    label: {
+      applied: "Applied",
+      screen: "Screen",
+      interview: "Interview",
+      final: "Final",
+      offer: "Offer",
+    }[stage.stage],
+    exact:
+      stage.stage === "applied" ||
+      stage.stage === "interview" ||
+      stage.stage === "offer",
+  }));
+
+  const actions = useMemo<ActionCard[]>(() => {
+    const cards: ActionCard[] = [];
+    const offerApps = applications.filter(
+      (application) => application.current_status === "offer",
+    );
+    if (offerApps.length > 0) {
+      const first = offerApps[0];
+      cards.push({
+        tag: "Respond",
+        color: "#96403C",
+        title: `${first.company} offer needs an answer`,
+        body: `Offer received — last activity ${formatShortDate(first.last_activity_at)}.`,
+        onClick: () => openApp(first.id),
+      });
+    }
+    const interviewApps = applications.filter(
+      (application) => application.current_status === "interview",
+    );
+    if (interviewApps.length > 0) {
+      const first = interviewApps[0];
+      cards.push({
+        tag: "Prepare",
+        color: "#1E5136",
+        title: `${first.company} interview in progress`,
+        body: `Latest activity ${formatShortDate(first.last_activity_at)} — review the timeline.`,
+        onClick: () => openApp(first.id),
+      });
+    }
+    const quietApps = applications
+      .filter(
+        (application) =>
+          application.current_status === "applied" &&
+          (daysSince(application.last_activity_at) ?? 0) >= 7,
+      )
+      .sort(
+        (a, b) =>
+          (daysSince(b.last_activity_at) ?? 0) -
+          (daysSince(a.last_activity_at) ?? 0),
+      );
+    if (quietApps.length > 0) {
+      const names = quietApps
+        .slice(0, 3)
+        .map((application) => application.company);
+      cards.push({
+        tag: "Follow up",
+        color: "#8A6A14",
+        title: `${quietApps.length} application${quietApps.length === 1 ? "" : "s"} gone quiet`,
+        body: `${names.join(", ")} ${quietApps.length === 1 ? "is" : "are"} past your usual reply window.`,
+        onClick: () => go("applications", { statusFilter: "applied" }),
+      });
+    }
+    return cards.slice(0, 3);
+  }, [applications, go, openApp]);
+
+  return (
+    <section
+      style={{
+        maxWidth: "1060px",
+        margin: "0 auto",
+        padding: "28px 32px 60px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "24px",
+      }}
+    >
+      <div>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: "24px",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {greeting}
+        </h1>
+        <p style={{ margin: "6px 0 0", color: "#666D66", fontSize: "14px" }}>
+          Everything below was built automatically from your email — nothing to
+          enter by hand.{" "}
+          <a href="/dev" style={{ fontWeight: 600 }}>
+            How does this work?
+          </a>
+        </p>
+      </div>
+
+      {actions.length > 0 ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+            gap: "12px",
+          }}
+        >
+          {actions.map((action) => (
+            <button
+              className="rd-hover-green-border"
+              key={action.tag}
+              onClick={action.onClick}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                padding: "16px",
+                border: "1px solid #E4E2DA",
+                borderRadius: "14px",
+                background: "#fff",
+                cursor: "pointer",
+                textAlign: "left",
+                boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
+              }}
+              type="button"
+            >
+              <span
+                style={{
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: action.color,
+                }}
+              >
+                {action.tag}
+              </span>
+              <span
+                style={{ fontWeight: 600, fontSize: "14px", color: "#1B201C" }}
+              >
+                {action.title}
+              </span>
+              <span style={{ fontSize: "12.5px", color: "#666D66" }}>
+                {action.body}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            marginBottom: "10px",
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>
+            Your search at a glance
+          </h2>
+          <span style={{ fontSize: "12px", color: "#9A9F96" }}>
+            Counted from applications, not guesses — tap “How?” on any number
+          </span>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+            gap: "12px",
+          }}
+        >
+          {metrics.map((metric) => (
+            <div
+              key={metric.key}
+              style={{
+                minWidth: 0,
+                padding: "16px 18px",
+                borderRadius: "14px",
+                background: "#fff",
+                border:
+                  explainKey === metric.key
+                    ? "1px solid #6C5FC7"
+                    : "1px solid #E4E2DA",
+                boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  minHeight: "22px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    color: "#666D66",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {metric.label}
+                </span>
+                <button
+                  className="rd-hover-purple"
+                  onClick={() =>
+                    setExplainKey((current) =>
+                      current === metric.key ? null : metric.key,
+                    )
+                  }
+                  style={{
+                    flex: "none",
+                    padding: "2px 8px",
+                    border: "1px solid #E4E2DA",
+                    borderRadius: "999px",
+                    background: "#FAFAF7",
+                    color: "#666D66",
+                    fontSize: "10.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                  type="button"
+                >
+                  How?
+                </button>
+              </div>
+              <div
+                style={{
+                  fontSize: "30px",
+                  fontWeight: 700,
+                  letterSpacing: "-0.03em",
+                  marginTop: "6px",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {metric.value}
+              </div>
+              <div
+                style={{ fontSize: "12px", color: "#9A9F96", marginTop: "2px" }}
+              >
+                {metric.note}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {explain ? (
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "18px 20px",
+              border: "1px solid #D9D2EE",
+              borderRadius: "14px",
+              background: "#F4F2FB",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: "13.5px",
+                  color: "#4B3FA6",
+                }}
+              >
+                How “{explain.title}” is calculated
+              </div>
+              <button
+                onClick={() => setExplainKey(null)}
+                style={{
+                  border: "none",
+                  background: "none",
+                  color: "#8B84B8",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+                type="button"
+              >
+                Close ✕
+              </button>
+            </div>
+            <div
+              style={{
+                fontFamily: "'JetBrains Mono',monospace",
+                fontSize: "12.5px",
+                color: "#3F3776",
+                background: "#fff",
+                border: "1px solid #E4DFF5",
+                borderRadius: "8px",
+                padding: "10px 12px",
+              }}
+            >
+              {explain.formula}
+            </div>
+            <div style={{ fontSize: "13px", color: "#565073" }}>
+              {explain.source}
+            </div>
+            <button
+              onClick={() =>
+                go("applications", { statusFilter: explain.filter })
+              }
+              style={{
+                alignSelf: "flex-start",
+                padding: "7px 14px",
+                border: "none",
+                borderRadius: "999px",
+                background: "#6C5FC7",
+                color: "#fff",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+              type="button"
+            >
+              {explain.exactPopulation
+                ? `See the ${explain.count} applications behind this number →`
+                : "Browse current applications related to this metric →"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0,1.2fr) minmax(0,1fr)",
+          gap: "12px",
+        }}
+      >
+        <div
+          style={{
+            padding: "20px",
+            border: "1px solid #E4E2DA",
+            borderRadius: "14px",
+            background: "#fff",
+            boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: "4px",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>
+              Where applications stand
+            </h2>
+            <span style={{ fontSize: "11.5px", color: "#9A9F96" }}>
+              Interview and offer open exact current matches
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              marginTop: "14px",
+            }}
+          >
+            {funnelLoading ? (
+              <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>
+                Loading funnel…
+              </p>
+            ) : null}
+            {!funnelLoading && funnelError ? (
+              <p
+                role="alert"
+                style={{ margin: 0, fontSize: "12.5px", color: "#96403C" }}
+              >
+                {funnelError}
+              </p>
+            ) : null}
+            {!funnelLoading && !funnelError && funnelStages.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>
+                No funnel activity yet.
+              </p>
+            ) : null}
+            {!funnelLoading && !funnelError
+              ? funnelStages.map((stage) => (
+                  <button
+                    key={stage.label}
+                    onClick={() =>
+                      go("applications", { statusFilter: stage.filter })
+                    }
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "110px 1fr 40px",
+                      alignItems: "center",
+                      gap: "12px",
+                      border: "none",
+                      background: "none",
+                      padding: "4px 0",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    type="button"
+                    title={
+                      stage.exact
+                        ? undefined
+                        : "Shows related current statuses, not this exact historical stage population"
+                    }
+                  >
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: "#1B201C",
+                      }}
+                    >
+                      {stage.label}
+                    </span>
+                    <span
+                      style={{
+                        height: "22px",
+                        borderRadius: "6px",
+                        background: "#EDEBE4",
+                        overflow: "hidden",
+                        display: "block",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          height: "100%",
+                          width: `${funnelStages[0]?.count ? Math.max(4, (stage.count / funnelStages[0].count) * 100) : 4}%`,
+                          background: "#1E5136",
+                          borderRadius: "6px",
+                          opacity: 0.85,
+                        }}
+                      />
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "13.5px",
+                        fontWeight: 700,
+                        textAlign: "right",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {stage.count}
+                    </span>
+                  </button>
+                ))
+              : null}
+          </div>
+          <p style={{ margin: "14px 0 0", fontSize: "12px", color: "#9A9F96" }}>
+            Counts are deterministic historical stages. Screen and final cannot
+            be reproduced exactly by the current-status application list.
+          </p>
+        </div>
+
+        <div
+          style={{
+            padding: "20px",
+            border: "1px solid #E4E2DA",
+            borderRadius: "14px",
+            background: "#fff",
+            boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
+          }}
+        >
+          <h2 style={{ margin: "0 0 14px", fontSize: "15px", fontWeight: 700 }}>
+            Latest from your inbox
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            {activity.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>
+                Nothing yet — run a sync to read your inbox.
+              </p>
+            ) : null}
+            {activity.map((event) => {
+              const kind = eventKind(event.event_type);
+              return (
+                <button
+                  className="rd-hover-soft"
+                  key={event.event_id}
+                  onClick={() => openApp(event.application_id)}
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "flex-start",
+                    border: "none",
+                    background: "none",
+                    padding: "8px 8px",
+                    margin: "0 -8px",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  type="button"
+                >
+                  <span
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      marginTop: "6px",
+                      flex: "none",
+                      background:
+                        kind === "offer"
+                          ? "#1E5136"
+                          : kind === "bad"
+                            ? "#C08A86"
+                            : "#8FB89B",
+                    }}
+                  />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "13px",
+                        color: "#1B201C",
+                      }}
+                    >
+                      <strong>{event.company}</strong> —{" "}
+                      {EVENT_FEED_TEXT[event.event_type]}
+                    </span>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "11.5px",
+                        color: "#9A9F96",
+                        marginTop: "1px",
+                      }}
+                    >
+                      {formatShortDate(event.event_at)}
+                      {event.email_subject
+                        ? ` · from email “${event.email_subject}”`
+                        : ""}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

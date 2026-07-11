@@ -283,6 +283,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "is_stale",
             "model",
             "generated_at",
+            "citations_json",
         ]
         assert sqlite_column_names(connection, "email_chunks") == [
             "rowid",

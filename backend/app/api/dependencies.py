@@ -22,6 +22,8 @@ from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
+from app.providers.llm.azure_openai import AzureOpenAIProvider
+from app.security import SecretStore, create_secret_store
 from app.services.aggregation import AggregationService
 from app.services.application_corrections import ApplicationCorrectionService
 from app.services.applications import (
@@ -58,9 +60,19 @@ def get_email_connection_repository(
         connection.close()
 
 
+def get_llm_secret_store(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> SecretStore:
+    return create_secret_store(settings)
+
+
 def get_llm_provider(
     settings: Annotated[AppSettings, Depends(get_settings)],
+    secret_store: Annotated[SecretStore, Depends(get_llm_secret_store)],
 ) -> LLMProvider:
+    if settings.llm_provider is LLMProviderName.AZURE_OPENAI:
+        return AzureOpenAIProvider(settings=settings, secret_store=secret_store)
+
     if settings.llm_provider is LLMProviderName.OLLAMA:
         try:
             return OllamaLLMProvider(settings=settings)
@@ -73,8 +85,8 @@ def get_llm_provider(
 
     raise ApiError(
         status_code=503,
-        code=ApiErrorCode.SERVICE_UNAVAILABLE,
-        message="Selected LLM provider is unavailable.",
+        code=ApiErrorCode.LLM_PROVIDER_UNAVAILABLE,
+        message="The selected LLM provider is unavailable.",
     )
 
 

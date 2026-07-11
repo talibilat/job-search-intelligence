@@ -25,6 +25,24 @@ type InsightType = Literal[
 ]
 
 
+class InsightCitation(BaseModel):
+    """Public-safe evidence pointer persisted alongside a cached insight.
+
+    Carries only application and email metadata so insight cards can render
+    clickable evidence chips without re-deriving the generation inputs.
+    """
+
+    citation_id: str
+    application_id: str
+    company: str
+    role_title: str
+    event_id: str | None = None
+    email_id: str | None = None
+    event_type: ApplicationEventType | None = None
+    event_at: datetime | None = None
+    email_subject: str | None = None
+
+
 class InsightRecord(BaseModel):
     id: int
     type: InsightType
@@ -33,6 +51,13 @@ class InsightRecord(BaseModel):
     is_stale: bool
     model: str
     generated_at: datetime
+    citations: list[InsightCitation] = Field(default_factory=list)
+
+    @field_validator("citations", mode="before")
+    @classmethod
+    def parse_citations(cls, value: object) -> object:
+        parsed = parse_json_column(value)
+        return [] if parsed is None else parsed
 
 
 class InsightRegenerateRequest(BaseModel):

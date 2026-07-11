@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
 from app.models import (
+    InsightCitation,
     InsightInput,
     InsightInputEvidence,
     InsightInputFact,
@@ -176,6 +177,7 @@ class InsightGenerationService:
                 inputs_hash=insight_input.inputs_hash,
                 model=model,
                 generated_at=self._clock(),
+                citations=_citations_from_input(insight_input),
             )
             return InsightGenerationResult(
                 insight=insight,
@@ -200,6 +202,7 @@ class InsightGenerationService:
             inputs_hash=insight_input.inputs_hash,
             model=model,
             generated_at=self._clock(),
+            citations=_citations_from_input(insight_input),
         )
         return InsightGenerationResult(
             insight=insight,
@@ -830,3 +833,22 @@ def _build_role_outcome_summaries(
             summary.role_title.casefold(),
         ),
     )
+
+
+def _citations_from_input(insight_input: InsightInput) -> list[InsightCitation]:
+    """Project generation evidence into public-safe persisted citations."""
+
+    return [
+        InsightCitation(
+            citation_id=item.citation_id,
+            application_id=item.application_id,
+            company=item.company,
+            role_title=item.role_title,
+            event_id=item.event_id,
+            email_id=item.email_id,
+            event_type=item.event_type,
+            event_at=item.event_at,
+            email_subject=item.email_subject,
+        )
+        for item in insight_input.evidence
+    ]

@@ -1,0 +1,97 @@
+.rd-root {
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  background: #f4f3ef;
+  color: #1b201c;
+  -webkit-font-smoothing: antialiased;
+}
+
+.rd-root a {
+  color: #1e5136;
+  text-decoration: none;
+}
+
+.rd-root a:hover {
+  color: #143926;
+  text-decoration: underline;
+}
+
+.rd-root *,
+.rd-root *::before,
+.rd-root *::after {
+  box-sizing: border-box;
+}
+
+.rd-root ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.rd-root ::-webkit-scrollbar-thumb {
+  background: #d8d6cc;
+  border-radius: 8px;
+  border: 3px solid #f4f3ef;
+}
+
+.rd-root button,
+.rd-root select,
+.rd-root input,
+.rd-root textarea {
+  font-family: "Instrument Sans", system-ui, sans-serif;
+}
+
+@keyframes rd-slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.rd-hover-green-border:hover {
+  border-color: #1e5136 !important;
+}
+
+.rd-hover-green-border-white:hover {
+  border-color: #1e5136 !important;
+  background: #fff !important;
+}
+
+.rd-hover-green-border-text:hover {
+  border-color: #1e5136 !important;
+  color: #1e5136 !important;
+}
+
+.rd-hover-dark-green:hover {
+  background: #143926 !important;
+}
+
+.rd-hover-purple:hover {
+  border-color: #6c5fc7 !important;
+  color: #6c5fc7 !important;
+}
+
+.rd-hover-row:hover {
+  background: #f9f8f4 !important;
+}
+
+.rd-hover-soft:hover {
+  background: #f7f6f2 !important;
+}
+
+.rd-hover-lavender:hover {
+  background: #f4f2fb !important;
+}
+
+.rd-event-edit-form .ui-field {
+  gap: 4px;
+  font-size: 11.5px;
+}
+
+.rd-event-edit-form .ui-label {
+  color: inherit;
+  font-size: 11.5px;
+  font-weight: 400;
+}

@@ -21,6 +21,11 @@ from app.providers import (
     ProviderSecretRequirement,
 )
 from app.services.classification_mode_config import recommend_classification_mode
+from app.services.sync_service import SyncScheduler
+
+
+class SyncSchedulerConfigurationError(RuntimeError):
+    """Raised when validated sync settings cannot be applied to the scheduler."""
 
 
 def build_provider_config_response(
@@ -39,6 +44,8 @@ def build_provider_config_response(
         settings=ProviderConfigValues(
             gmail_client_config_file=settings.gmail_client_config_file,
             gmail_scopes=settings.gmail_scopes,
+            sync_on_open=settings.sync_on_open,
+            sync_interval_seconds=settings.sync_interval_seconds,
             azure_openai_endpoint=settings.azure_openai_endpoint,
             azure_openai_api_version=settings.azure_openai_api_version,
             azure_openai_chat_deployment=settings.azure_openai_chat_deployment,
@@ -60,12 +67,23 @@ def apply_provider_config_update(
     settings: AppSettings,
     request: ProviderConfigUpdateRequest,
     registry: ProviderRegistry,
+    *,
+    sync_scheduler: SyncScheduler,
 ) -> ProviderConfigResponse:
     """Validate and apply a Phase 0 in-process provider config update."""
 
     updates = request.model_dump(exclude_none=True, exclude_unset=True)
     updated_settings = _updated_settings(settings, updates)
     registry.validate_settings(updated_settings)
+
+    if {"sync_on_open", "sync_interval_seconds"} & updates.keys():
+        try:
+            sync_scheduler.reconfigure(
+                sync_on_open=updated_settings.sync_on_open,
+                interval_seconds=updated_settings.sync_interval_seconds,
+            )
+        except Exception as error:
+            raise SyncSchedulerConfigurationError from error
 
     fields_to_apply = set(updates)
     if _llm_provider_changed(settings, updates) and "classification_mode" not in updates:

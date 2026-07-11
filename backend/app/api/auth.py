@@ -9,9 +9,10 @@ from app.api.dependencies import (
     get_email_connection_repository as get_email_connection_repository,
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
-from app.config import AppSettings, get_settings
+from app.config import AppSettings, EmailProviderName, get_settings
 from app.db.repositories.connection import EmailConnectionRepository
 from app.providers.email import (
+    EmailAccountRef,
     EmailAuthorizationStartResult,
     EmailConnection,
     EmailProvider,
@@ -57,6 +58,56 @@ def get_gmail_email_provider(
     secret_store: Annotated[SecretStore, Depends(get_gmail_secret_store)],
 ) -> EmailProvider:
     return GmailEmailProvider(settings=settings, secret_store=secret_store)
+
+
+@router.get(
+    "/connections",
+    response_model=list[EmailConnection],
+    summary="List Email Connections",
+    description=(
+        "Returns non-secret metadata for every locally stored email connection. "
+        "Token material never leaves the configured secret store."
+    ),
+)
+def list_email_connections(
+    connection_repository: Annotated[
+        EmailConnectionRepository,
+        Depends(get_email_connection_repository),
+    ],
+) -> list[EmailConnection]:
+    return connection_repository.list_connections_metadata()
+
+
+@router.delete(
+    "/connections/{provider}/{account_id}",
+    response_model=EmailConnection,
+    responses={404: {"model": ApiErrorResponse}},
+    summary="Disconnect Email Connection",
+    description=(
+        "Removes one stored email connection and deletes its credential from the "
+        "configured secret store. Provider-side mailbox data is never touched."
+    ),
+)
+async def disconnect_email_connection(
+    provider: EmailProviderName,
+    account_id: str,
+    connection_repository: Annotated[
+        EmailConnectionRepository,
+        Depends(get_email_connection_repository),
+    ],
+    secret_store: Annotated[SecretStore, Depends(get_gmail_secret_store)],
+) -> EmailConnection:
+    account = EmailAccountRef(provider=provider, account_id=account_id)
+    connection = connection_repository.delete_connection(account)
+    if connection is None:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message="Email connection not found.",
+        )
+
+    await secret_store.delete_secret(connection.credential_ref)
+    return connection
 
 
 @router.get(

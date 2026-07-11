@@ -28,6 +28,13 @@ type WorkMode = Literal["remote", "hybrid", "onsite"]
 type SponsorshipStatus = Literal["offered", "not_offered", "unknown"]
 
 
+class ApplicationStatusCountsResponse(BaseModel):
+    """Deterministic application counts per canonical current status."""
+
+    total: int = Field(ge=0)
+    counts: dict[ApplicationStatus, int]
+
+
 class ApplicationRecord(BaseModel):
     id: str
     company: str

@@ -36,8 +36,22 @@ from app.providers.llm.ollama import (
     OllamaTransportTimeoutError,
     UrllibOllamaTransport,
 )
+from app.security import SecretRef
+from pydantic import SecretStr
 
 EMBEDDING_1536 = tuple(0.003 for _ in range(1536))
+
+
+class FakeSecretStore:
+    async def get_secret(self, ref: SecretRef) -> SecretStr | None:
+        del ref
+        return None
+
+    async def set_secret(self, ref: SecretRef, value: SecretStr) -> None:
+        del ref, value
+
+    async def delete_secret(self, ref: SecretRef) -> None:
+        del ref
 
 
 class FakeOllamaTransport:
@@ -344,7 +358,7 @@ def test_ollama_provider_rejects_non_local_base_url(base_url: str) -> None:
 def test_llm_provider_dependency_resolves_selected_ollama_provider() -> None:
     from app.api.dependencies import get_llm_provider
 
-    provider = get_llm_provider(AppSettings(_env_file=None))
+    provider = get_llm_provider(AppSettings(_env_file=None), FakeSecretStore())
 
     assert isinstance(provider, LLMProvider)
     assert isinstance(provider, OllamaLLMProvider)
@@ -360,7 +374,8 @@ def test_llm_provider_dependency_maps_invalid_ollama_config_to_api_error() -> No
             AppSettings(
                 _env_file=None,
                 ollama_base_url="https://ollama.example.com",
-            )
+            ),
+            FakeSecretStore(),
         )
 
     assert error_info.value.status_code == 400

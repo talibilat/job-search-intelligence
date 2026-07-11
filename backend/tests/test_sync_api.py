@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+import app.api.sync as sync_api
 import pytest
 from app.api.sync import (
     ConfiguredEmailSyncRuntime,
@@ -606,6 +607,27 @@ def test_configured_runtime_rejects_concurrent_manual_syncs(tmp_path: Path) -> N
         await first_run
 
     asyncio.run(run_test())
+
+
+def test_configured_sync_job_skips_when_gmail_connection_is_not_configured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    settings = AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        secret_store_backend=SecretStoreBackend.FERNET,
+        fernet_key_file=tmp_path / "fernet.key",
+        data_dir=tmp_path,
+    )
+    status_store = EmailSyncStatusStore()
+    monkeypatch.setattr(sync_api, "get_sync_status_store", lambda: status_store)
+
+    asyncio.run(sync_api.create_configured_sync_job(settings)())
+
+    assert status_store.current_status().state is EmailSyncRunState.IDLE
 
 
 def email_connection() -> EmailConnection:

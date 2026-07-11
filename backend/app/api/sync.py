@@ -3,11 +3,14 @@ from __future__ import annotations
 import sqlite3
 import threading
 from collections.abc import Callable
+from datetime import UTC, date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query
+from pydantic import ValidationError
 
 from app.api.auth import get_gmail_secret_store
+from app.api.dependencies import get_readonly_email_repository
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.db.repositories import (
@@ -20,6 +23,7 @@ from app.db.repositories import (
 from app.db.sqlite_url import sqlite_database_path
 from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import EmailBackfillStatus, RawEmailPreviewRecord
+from app.models.sync import SyncLocalStats, SyncScopeEstimate
 from app.providers.email import EmailConnection, EmailProvider
 from app.providers.email.gmail import GmailEmailProvider
 from app.security import SecretStore
@@ -33,7 +37,10 @@ from app.services.sync_service import (
     EmailSyncStatus,
     SyncAlreadyRunningError,
     SyncConnectionNotConfiguredError,
+    SyncJob,
     SyncService,
+    build_sync_local_stats,
+    build_sync_scope_estimate,
 )
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -171,6 +178,36 @@ def get_sync_status_store() -> EmailSyncStatusStore:
     return _sync_status_store
 
 
+def build_configured_email_sync_runtime(
+    settings: AppSettings,
+    *,
+    email_provider: EmailProvider | None = None,
+    connection_resolver: EmailSyncConnectionResolver | None = None,
+    status_store: EmailSyncStatusStore | None = None,
+) -> ConfiguredEmailSyncRuntime:
+    resolved_email_provider = email_provider or get_sync_email_provider(
+        settings,
+        get_gmail_secret_store(settings),
+    )
+    return ConfiguredEmailSyncRuntime(
+        settings=settings,
+        email_provider=resolved_email_provider,
+        connection_resolver=connection_resolver or get_email_sync_connection_resolver(settings),
+        status_store=status_store or get_sync_status_store(),
+    )
+
+
+def create_configured_sync_job(settings: AppSettings) -> SyncJob:
+    async def run_configured_sync() -> None:
+        runtime = build_configured_email_sync_runtime(settings)
+        try:
+            await runtime.run_manual_sync()
+        except SyncConnectionNotConfiguredError:
+            return
+
+    return run_configured_sync
+
+
 def get_email_sync_runtime(
     settings: Annotated[AppSettings, Depends(get_settings)],
     email_provider: Annotated[EmailProvider, Depends(get_sync_email_provider)],
@@ -180,8 +217,8 @@ def get_email_sync_runtime(
     ],
     status_store: Annotated[EmailSyncStatusStore, Depends(get_sync_status_store)],
 ) -> EmailSyncRuntime:
-    return ConfiguredEmailSyncRuntime(
-        settings=settings,
+    return build_configured_email_sync_runtime(
+        settings,
         email_provider=email_provider,
         connection_resolver=connection_resolver,
         status_store=status_store,
@@ -244,3 +281,60 @@ def sync_recent_emails(
     """
 
     return list(sync_runtime.recent_email_previews(limit=limit, order=order))
+
+
+@router.get(
+    "/stats",
+    response_model=SyncLocalStats,
+    summary="Get Local Sync Stats",
+    description=(
+        "Returns deterministic totals over locally stored raw-email metadata "
+        "plus the last manual sync completion time."
+    ),
+)
+def sync_stats(
+    email_repository: Annotated[EmailRepository, Depends(get_readonly_email_repository)],
+    sync_runtime: Annotated[EmailSyncRuntime, Depends(get_email_sync_runtime)],
+) -> SyncLocalStats:
+    return build_sync_local_stats(
+        email_repository=email_repository,
+        last_run_at=sync_runtime.current_status().finished_at,
+    )
+
+
+@router.get(
+    "/estimate",
+    response_model=SyncScopeEstimate,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="Estimate Sync Scope",
+    description=(
+        "Returns a deterministic local approximation of how much email a sync "
+        "scope covers, using already-synced metadata only. It never calls the "
+        "email provider."
+    ),
+)
+def sync_estimate(
+    email_repository: Annotated[EmailRepository, Depends(get_readonly_email_repository)],
+    max_messages: Annotated[int | None, Query(ge=1, le=100_000)] = None,
+    since_date: Annotated[date | None, Query()] = None,
+    before_date: Annotated[date | None, Query()] = None,
+    max_age_days: Annotated[int | None, Query(ge=1, le=3650)] = None,
+) -> SyncScopeEstimate:
+    try:
+        options = EmailSyncOptions(
+            max_messages=max_messages,
+            since_date=since_date,
+            before_date=before_date,
+            max_age_days=max_age_days,
+        )
+    except ValidationError as error:
+        raise ApiError(
+            status_code=422,
+            code=ApiErrorCode.VALIDATION_ERROR,
+            message="Sync estimate request validation failed.",
+        ) from error
+    return build_sync_scope_estimate(
+        options=options,
+        email_repository=email_repository,
+        now=datetime.now(UTC),
+    )

@@ -1,4 +1,5 @@
 import asyncio
+from unittest.mock import AsyncMock
 
 import app.main as main
 import pytest
@@ -20,8 +21,11 @@ class RecordingScheduler:
         seconds: int,
         id: str,
         replace_existing: bool,
-        next_run_time: object,
+        next_run_time: object = None,
     ) -> None:
+        return None
+
+    def remove_job(self, job_id: str) -> None:
         return None
 
     def start(self) -> None:
@@ -36,6 +40,19 @@ def test_create_app_returns_fastapi_application() -> None:
 
     assert isinstance(created_app, FastAPI)
     assert isinstance(main.app, FastAPI)
+
+
+def test_create_app_uses_configured_sync_job_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured_job = AsyncMock()
+    monkeypatch.setattr(main, "create_configured_sync_job", lambda settings: configured_job)
+
+    app = main.create_app(settings=AppSettings(_env_file=None))
+
+    with TestClient(app):
+        scheduler = app.state.sync_scheduler
+        assert scheduler.sync_job is configured_job
 
 
 def test_create_app_registers_api_router(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -75,7 +92,7 @@ def test_create_app_starts_and_stops_sync_scheduler_during_lifespan() -> None:
     assert scheduler.shutdown_wait is False
 
 
-def test_create_app_leaves_sync_scheduler_stopped_when_disabled() -> None:
+def test_create_app_keeps_sync_scheduler_running_when_job_disabled() -> None:
     scheduler = RecordingScheduler()
     settings = AppSettings(_env_file=None, sync_on_open=False, sync_interval_seconds=120)
 
@@ -86,8 +103,8 @@ def test_create_app_leaves_sync_scheduler_stopped_when_disabled() -> None:
 
     async def run_lifespan() -> None:
         async with app.router.lifespan_context(app):
-            assert scheduler.started is False
+            assert scheduler.started is True
 
     asyncio.run(run_lifespan())
 
-    assert scheduler.shutdown_wait is None
+    assert scheduler.shutdown_wait is False
