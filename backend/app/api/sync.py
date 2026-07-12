@@ -119,7 +119,7 @@ class ConfiguredEmailSyncRuntime:
                             backfill_state_repository=backfill_state_repository,
                             sync_state_repository=sync_state_repository,
                         ),
-                        options=options,
+                        options=EmailSyncOptions(),
                     )
                 return await sync_service.run_manual_sync(connection=connection, options=options)
         finally:
