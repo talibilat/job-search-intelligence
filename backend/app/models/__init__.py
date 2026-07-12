@@ -77,6 +77,7 @@ from .provider_config import (
     ProviderSelection,
 )
 from .raw_email import (
+    RawEmailDetail,
     RawEmailPreviewOrder,
     RawEmailPreviewPage,
     RawEmailPreviewRecord,
@@ -241,6 +242,7 @@ __all__ = [
     "PipelineStageCounts",
     "PipelineStatus",
     "RawEmailBodyRetentionState",
+    "RawEmailDetail",
     "RawEmailPreviewOrder",
     "RawEmailPreviewPage",
     "RawEmailPreviewRecord",

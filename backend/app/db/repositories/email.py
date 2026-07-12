@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from app.config import EmailProviderName
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
+from app.models._email_address import email_address_domain
 from app.models.classification import (
     ClassificationCandidateStats,
     ClassificationReprocessingStats,
@@ -790,7 +791,7 @@ def _raw_email_preview_from_row(row: sqlite3.Row) -> RawEmailPreviewRecord:
     from_addr = row_data.pop("from_addr")
     to_addr = row_data.pop("to_addr")
     subject = row_data["subject"]
-    row_data["from_domain"] = _email_address_domain(from_addr)
+    row_data["from_domain"] = email_address_domain(from_addr)
     row_data["to_domains"] = _email_address_domains(to_addr)
     row_data["subject_present"] = bool(str(subject or "").strip())
     return RawEmailPreviewRecord.model_validate(row_data)
@@ -808,21 +809,10 @@ def _email_address_domains(value: object) -> list[str]:
         return []
     domains = {
         domain
-        for domain in (_email_address_domain(part) for part in str(value).split(","))
+        for domain in (email_address_domain(part) for part in str(value).split(","))
         if domain is not None
     }
     return sorted(domains)
-
-
-def _email_address_domain(value: object) -> str | None:
-    if value is None:
-        return None
-    address = str(value).strip().rstrip(">")
-    _local_part, separator, domain = address.rpartition("@")
-    if not separator:
-        return None
-    normalized_domain = domain.strip().lower()
-    return normalized_domain or None
 
 
 def _format_datetime(value: datetime | None) -> str | None:

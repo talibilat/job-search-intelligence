@@ -101,6 +101,17 @@ class RawEmailPreviewPage(BaseModel):
     total_pages: int = Field(ge=0)
 
 
+class RawEmailDetail(BaseModel):
+    """Public-safe on-demand email content for the reader dialog."""
+
+    public_id: str
+    from_domain: str | None
+    subject: str | None
+    sent_at: datetime | None
+    body_retention_state: RawEmailBodyRetentionState
+    body_text: str
+
+
 class RawEmailReaderRecord(BaseModel):
     """A raw email resolved through its opaque public identifier.
 
