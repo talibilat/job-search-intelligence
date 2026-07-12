@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -7,6 +8,8 @@ from typing import Literal
 
 from app.config import AppSettings
 from app.db.sqlite_url import sqlite_database_path
+from app.providers.registry import provider_registry
+from app.security import SecretRef, SecretStore, SecretStoreError
 
 APP_OWNED_DATA_DIR_MARKER = ".jobtracker-data"
 
@@ -22,8 +25,17 @@ class UnsafeWipeTargetError(ValueError):
     """Raised when configured storage points at a dangerous filesystem path."""
 
 
-def wipe_local_data(settings: AppSettings) -> WipeDataResult:
-    """Delete configured local storage targets after all targets pass safety checks."""
+class WipeSecretDeletionError(RuntimeError):
+    """Raised without secret-store details when credentials cannot be deleted."""
+
+
+async def wipe_local_data(
+    settings: AppSettings,
+    *,
+    secret_store: SecretStore,
+    connection_secret_refs: list[SecretRef],
+) -> WipeDataResult:
+    """Delete app secrets before deleting preflighted local storage targets."""
 
     targets = _wipe_targets(settings)
     data_dir = _target_path(settings.data_dir)
@@ -32,6 +44,23 @@ def wipe_local_data(settings: AppSettings) -> WipeDataResult:
 
     _preflight_wipe_targets(targets, data_dir)
 
+    try:
+        for ref in _wipe_secret_refs(connection_secret_refs):
+            await secret_store.delete_secret(ref)
+    except SecretStoreError:
+        raise WipeSecretDeletionError("Configured secrets could not be deleted.") from None
+
+    await asyncio.to_thread(_delete_targets, targets, data_dir, deleted_paths, missing_paths)
+
+    return WipeDataResult(deleted_paths=deleted_paths, missing_paths=missing_paths)
+
+
+def _delete_targets(
+    targets: list[Path],
+    data_dir: Path,
+    deleted_paths: list[str],
+    missing_paths: list[str],
+) -> None:
     for target in targets:
         if not target.exists():
             missing_paths.append(str(target))
@@ -43,7 +72,29 @@ def wipe_local_data(settings: AppSettings) -> WipeDataResult:
             target.unlink()
         deleted_paths.append(str(target))
 
-    return WipeDataResult(deleted_paths=deleted_paths, missing_paths=missing_paths)
+
+def _wipe_secret_refs(connection_secret_refs: list[SecretRef]) -> list[SecretRef]:
+    refs = [
+        *connection_secret_refs,
+        *(
+            requirement.ref
+            for provider in provider_registry.email_providers()
+            for requirement in provider.secret_requirements
+        ),
+        *(
+            requirement.ref
+            for provider in provider_registry.llm_providers()
+            for requirement in provider.secret_requirements
+        ),
+    ]
+    unique: list[SecretRef] = []
+    seen: set[tuple[str, str, str]] = set()
+    for ref in refs:
+        key = (ref.kind.value, ref.provider, ref.name)
+        if key not in seen:
+            unique.append(ref)
+            seen.add(key)
+    return unique
 
 
 def _preflight_wipe_targets(targets: list[Path], data_dir: Path) -> None:

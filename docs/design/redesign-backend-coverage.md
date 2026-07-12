@@ -11,7 +11,9 @@ The health route resolves configured Azure OpenAI and Ollama adapters through no
 Evidence: `backend/tests/test_provider_config_api.py::test_provider_config_update_reconfigures_active_scheduler_before_settings`, `backend/tests/test_llm_provider_health.py::test_health_endpoint_resolves_real_azure_adapter_through_normal_di`, and `frontend/src/App.test.tsx::redesign settings confirms a provider only after success and checks unavailable health`.
 
 The redesign delete-everything action uses `POST /local-data/wipe` with the exact `wipe-local-data` confirmation phrase.
-Evidence: `backend/tests/test_wipe_data_api.py::test_wipe_data_endpoint_deletes_configured_local_data` and the `wipeDataLocalDataWipePost` call in `frontend/src/redesign/pages/SettingsPage.tsx`.
+The wipe service deletes every Gmail connection credential reference and app-configured OAuth and LLM secret reference through the configured keyring or Fernet store before deleting SQLite or filesystem data.
+A secret-store failure returns a sanitized typed `503` and leaves local data plus credential references intact for retry.
+Evidence: `backend/tests/test_wipe_data_service.py::test_wipe_local_data_deletes_connection_and_configured_secrets_before_files`, `backend/tests/test_wipe_data_service.py::test_wipe_local_data_deletes_fernet_secrets_before_local_files`, `backend/tests/test_wipe_data_api.py::test_wipe_data_secret_failure_is_typed_sanitized_and_keeps_local_data`, and the `wipeDataLocalDataWipePost` call in `frontend/src/redesign/pages/SettingsPage.tsx`.
 
 Email disconnect uses a focused service that deletes encrypted credential material before connection metadata, preserving the metadata reference when the secret store fails so the user can retry.
 Evidence: `backend/tests/test_connection_service.py::test_disconnect_keeps_connection_metadata_when_secret_deletion_fails` and `backend/tests/test_connection_service.py::test_disconnect_deletes_secret_before_connection_metadata`.

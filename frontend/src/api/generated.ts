@@ -3059,12 +3059,19 @@ export type wipeDataLocalDataWipePostResponse422 = {
   status: 422;
 };
 
+export type wipeDataLocalDataWipePostResponse503 = {
+  data: ApiErrorResponse;
+  status: 503;
+};
+
 export type wipeDataLocalDataWipePostResponseSuccess =
   wipeDataLocalDataWipePostResponse200 & {
     headers: Headers;
   };
 export type wipeDataLocalDataWipePostResponseError = (
-  wipeDataLocalDataWipePostResponse400 | wipeDataLocalDataWipePostResponse422
+  | wipeDataLocalDataWipePostResponse400
+  | wipeDataLocalDataWipePostResponse422
+  | wipeDataLocalDataWipePostResponse503
 ) & {
   headers: Headers;
 };

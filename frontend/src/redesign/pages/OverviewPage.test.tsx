@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OverviewPage } from "./OverviewPage";
@@ -63,5 +63,85 @@ describe("OverviewPage request states", () => {
     }
     expect(screen.queryByText("0%")).toBeNull();
     expect(screen.queryByText(/Nothing yet/)).toBeNull();
+  });
+
+  it("does not expose zero-based summary explainers when summary fails", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/metrics/summary") {
+        return Promise.resolve(response({ error: { code: "failed", details: [], message: "Summary failed." } }, 503));
+      }
+      if (path === "/metrics/rates") return Promise.resolve(response({
+        overall_response_rate: { numerator: 3, denominator: 8, rate: 0.375 },
+        rejection_rate: { numerator: 0, denominator: 8, rate: 0 },
+        ghost_rate: { numerator: 0, denominator: 8, rate: 0 },
+        application_to_interview_rate: { numerator: 2, denominator: 8, rate: 0.25 },
+        interview_to_offer_rate: { numerator: 1, denominator: 2, rate: 0.5 },
+      }));
+      if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
+      if (path === "/applications" || path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+
+    render(<OverviewPage go={() => undefined} openApp={() => undefined} reloadKey={0} />);
+
+    await screen.findByText("Summary failed.");
+    const applicationHow = screen.getByRole("button", { name: "How is Applications calculated?" });
+    const offerHow = screen.getByRole("button", { name: "How are Offers calculated?" });
+    expect(applicationHow).toHaveProperty("disabled", true);
+    expect(offerHow).toHaveProperty("disabled", true);
+    fireEvent.click(applicationHow);
+    fireEvent.click(offerHow);
+    expect(screen.queryByText(/0 distinct clusters/)).toBeNull();
+    expect(screen.queryByText(/How “Applications tracked”/)).toBeNull();
+    expect(screen.queryByText(/How “Offers”/)).toBeNull();
+  });
+
+  it("does not expose 0/0 rate explainers when rates fail", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/metrics/summary") return Promise.resolve(response({ total_applications: 8, offers_received: 2 }));
+      if (path === "/metrics/rates") {
+        return Promise.reject(new TypeError("backend unavailable"));
+      }
+      if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
+      if (path === "/applications" || path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+
+    render(<OverviewPage go={() => undefined} openApp={() => undefined} reloadKey={0} />);
+
+    await screen.findByText("Rates could not be loaded.");
+    const responseHow = screen.getByRole("button", { name: "How is Response rate calculated?" });
+    const interviewHow = screen.getByRole("button", { name: "How is Interview rate calculated?" });
+    expect(responseHow).toHaveProperty("disabled", true);
+    expect(interviewHow).toHaveProperty("disabled", true);
+    fireEvent.click(responseHow);
+    fireEvent.click(interviewHow);
+    expect(screen.queryByText(/0 ÷ 0/)).toBeNull();
+  });
+
+  it("describes offers with the exact event-based backend metric semantics", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/metrics/summary") return Promise.resolve(response({ total_applications: 8, offers_received: 2 }));
+      if (path === "/metrics/rates") return Promise.resolve(response({
+        overall_response_rate: { numerator: 3, denominator: 8, rate: 0.375 },
+        rejection_rate: { numerator: 0, denominator: 8, rate: 0 },
+        ghost_rate: { numerator: 0, denominator: 8, rate: 0 },
+        application_to_interview_rate: { numerator: 2, denominator: 8, rate: 0.25 },
+        interview_to_offer_rate: { numerator: 1, denominator: 2, rate: 0.5 },
+      }));
+      if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
+      if (path === "/applications" || path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+
+    render(<OverviewPage go={() => undefined} openApp={() => undefined} reloadKey={0} />);
+
+    await screen.findByText("2 offers received");
+    fireEvent.click(screen.getByRole("button", { name: "How are Offers calculated?" }));
+    expect(screen.getByText("count(applications with an offer event)")).toBeTruthy();
+    expect(screen.queryByText(/status = offer/)).toBeNull();
   });
 });

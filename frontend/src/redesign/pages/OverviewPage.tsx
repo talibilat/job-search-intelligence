@@ -41,7 +41,7 @@ interface MetricCard {
   label: string;
   value: string;
   note: string;
-  explain: MetricExplain;
+  explain: MetricExplain | null;
 }
 
 interface ActionCard {
@@ -63,8 +63,8 @@ function timeGreeting(): string {
   return "Good evening";
 }
 
-function ratePercent(rate: number | null | undefined): string {
-  return `${Math.round((rate ?? 0) * 1_000) / 10}%`;
+function ratePercent(rate: number): string {
+  return `${Math.round(rate * 1_000) / 10}%`;
 }
 
 export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
@@ -167,10 +167,9 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
     };
   }, [reloadKey]);
 
-  const total = summary?.total_applications ?? 0;
-  const responded = rates?.overall_response_rate.numerator ?? 0;
-  const interviewed = rates?.application_to_interview_rate.numerator ?? 0;
-  const offers = summary?.offers_received ?? 0;
+  const offers = summary?.offers_received;
+  const responseMetric = rates?.overall_response_rate;
+  const interviewMetric = rates?.application_to_interview_rate;
   const active = useMemo(
     () =>
       applications.filter((application) =>
@@ -184,7 +183,7 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
   const greeting =
     offers === 1
       ? `${timeGreeting()} — one offer on the table.`
-      : offers > 1
+      : offers !== undefined && offers > 1
         ? `${timeGreeting()} — ${offers} offers on the table.`
         : `${timeGreeting()}.`;
 
@@ -192,70 +191,70 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
     {
       key: "total",
       label: "Applications",
-      value: summary ? String(total) : "—",
+      value: summary ? String(summary.total_applications) : "—",
       note: applicationsLoading
         ? "Loading active applications"
         : applicationsError
           ? "Active count unavailable"
           : `${active} still active`,
-      explain: {
+      explain: summary ? {
         title: "Applications tracked",
         formula: "count(applications)",
-        source: `Each application is a cluster of related emails from one company about one role. We found ${total} distinct clusters in your inbox.`,
-        count: total,
+        source: `Each application is a cluster of related emails from one company about one role. We found ${summary.total_applications} distinct clusters in your inbox.`,
+        count: summary.total_applications,
         filter: "all",
         exactPopulation: true,
-      },
+      } : null,
     },
     {
       key: "response",
       label: "Response rate",
-      value: rates ? ratePercent(rates.overall_response_rate.rate) : "—",
-      note: rates ? `${responded} of ${rates.overall_response_rate.denominator ?? 0} heard back` : "Rate unavailable",
-      explain: {
+      value: responseMetric?.rate != null ? ratePercent(responseMetric.rate) : "—",
+      note: responseMetric?.rate != null ? `${responseMetric.numerator} of ${responseMetric.denominator} heard back` : "Rate unavailable",
+      explain: responseMetric?.rate != null ? {
         title: "Response rate",
-        formula: `replies ÷ applications = ${responded} ÷ ${rates?.overall_response_rate.denominator ?? 0} = ${ratePercent(rates?.overall_response_rate.rate)}`,
+        formula: `replies ÷ applications = ${responseMetric.numerator} ÷ ${responseMetric.denominator} = ${ratePercent(responseMetric.rate)}`,
         source:
           "A “response” means at least one human or scheduling email arrived after your application confirmation. Auto-replies don't count.",
-        count: responded,
+        count: responseMetric.numerator,
         filter: "all",
         exactPopulation: false,
-      },
+      } : null,
     },
     {
       key: "interview",
       label: "Interview rate",
-      value: rates ? ratePercent(rates.application_to_interview_rate.rate) : "—",
-      note: rates ? `${interviewed} reached interviews` : "Rate unavailable",
-      explain: {
+      value: interviewMetric?.rate != null ? ratePercent(interviewMetric.rate) : "—",
+      note: interviewMetric?.rate != null ? `${interviewMetric.numerator} reached interviews` : "Rate unavailable",
+      explain: interviewMetric?.rate != null ? {
         title: "Interview rate",
-        formula: `interviews ÷ applications = ${interviewed} ÷ ${rates?.application_to_interview_rate.denominator ?? 0} = ${ratePercent(rates?.application_to_interview_rate.rate)}`,
+        formula: `interviews ÷ applications = ${interviewMetric.numerator} ÷ ${interviewMetric.denominator} = ${ratePercent(interviewMetric.rate)}`,
         source:
           "Counted when an email confirms a scheduled interview — detected phrases like “interview scheduled” or calendar invites from the company.",
-        count: interviewed,
+        count: interviewMetric.numerator,
         filter: "interview",
         exactPopulation: false,
-      },
+      } : null,
     },
     {
       key: "offer",
       label: "Offers",
-      value: summary ? String(offers) : "—",
+      value: summary ? String(summary.offers_received) : "—",
       note:
         !summary
           ? "Offer count unavailable"
-          : offers > 0
-          ? `${offers} offer${offers === 1 ? "" : "s"} received`
+          : summary.offers_received > 0
+          ? `${summary.offers_received} offer${summary.offers_received === 1 ? "" : "s"} received`
           : "None yet",
-      explain: {
+      explain: summary ? {
         title: "Offers",
-        formula: "count(applications where status = offer)",
+        formula: "count(applications with an offer event)",
         source:
           "An offer is detected from emails containing offer letters or compensation details.",
-        count: offers,
+        count: summary.offers_received,
         filter: "offer",
         exactPopulation: false,
-      },
+      } : null,
     },
   ];
 
@@ -485,7 +484,9 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
                   {metric.label}
                 </span>
                 <button
+                  aria-label={`${metric.label === "Offers" ? "How are" : "How is"} ${metric.label} calculated?`}
                   className="rd-hover-purple"
+                  disabled={!metric.explain}
                   onClick={() =>
                     setExplainKey((current) =>
                       current === metric.key ? null : metric.key,
@@ -500,7 +501,8 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
                     color: "#666D66",
                     fontSize: "10.5px",
                     fontWeight: 600,
-                    cursor: "pointer",
+                    cursor: metric.explain ? "pointer" : "not-allowed",
+                    opacity: metric.explain ? 1 : 0.55,
                   }}
                   type="button"
                 >

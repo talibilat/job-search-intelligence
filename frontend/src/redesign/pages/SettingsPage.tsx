@@ -18,11 +18,15 @@ import {
   type SyncLocalStats,
 } from "../../api";
 import { publicApiError } from "../apiError";
+import type { RequestLoadState } from "../RedesignApp";
 import { formatCount, logoStyle } from "../theme";
 
 interface SettingsPageProps {
   connections: EmailConnection[];
+  connectionsError: string | null;
+  connectionsLoadState: RequestLoadState;
   onChanged: () => void;
+  onRetryConnections: () => Promise<void>;
   syncStats: SyncLocalStats | null;
 }
 
@@ -62,7 +66,13 @@ function intervalLabel(seconds: number): string {
   return `Every ${seconds} seconds`;
 }
 
-export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
+export function SettingsPage({
+  connections,
+  connectionsError,
+  connectionsLoadState,
+  onChanged,
+  onRetryConnections,
+}: SettingsPageProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [providerNote, setProviderNote] = useState<string | null>(null);
   const [config, setConfig] = useState<ProviderConfigResponse | null>(null);
@@ -78,8 +88,10 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
   const [wipeStage, setWipeStage] = useState(0);
   const [disconnectPending, setDisconnectPending] = useState<string | null>(null);
   const [wipePending, setWipePending] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const [disconnectSuccess, setDisconnectSuccess] = useState<string | null>(null);
+  const [wipeError, setWipeError] = useState<string | null>(null);
+  const [wipeSuccess, setWipeSuccess] = useState<string | null>(null);
   const configRequestPending = useRef(true);
   const confirmedNonLlmModes = useRef<Partial<Record<string, NonLlmClassificationMode>>>({});
   const wipeTimer = useRef<number | null>(null);
@@ -260,21 +272,21 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
     const key = `${connection.account.provider}:${connection.account.account_id}`;
     if (disconnectPending !== null) return;
     setDisconnectPending(key);
-    setActionError(null);
-    setActionSuccess(null);
+    setDisconnectError(null);
+    setDisconnectSuccess(null);
     try {
       const response = await disconnectEmailConnectionAuthConnectionsProviderAccountIdDelete(
         connection.account.provider,
         connection.account.account_id,
       );
       if (response.status !== 200) {
-        setActionError(publicApiError({ response }, "Inbox could not be disconnected."));
+        setDisconnectError(publicApiError({ response }, "Inbox could not be disconnected."));
         return;
       }
-      setActionSuccess("Inbox disconnected successfully.");
+      setDisconnectSuccess("Inbox disconnected successfully.");
       onChanged();
     } catch (disconnectError) {
-      setActionError(publicApiError(disconnectError, "Inbox could not be disconnected. Check the local backend."));
+      setDisconnectError(publicApiError(disconnectError, "Inbox could not be disconnected. Check the local backend."));
     } finally {
       setDisconnectPending(null);
     }
@@ -304,18 +316,18 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
     }
     setWipeStage(0);
     setWipePending(true);
-    setActionError(null);
-    setActionSuccess(null);
+    setWipeError(null);
+    setWipeSuccess(null);
     try {
       const response = await wipeDataLocalDataWipePost({ confirmation: "wipe-local-data" });
       if (response.status !== 200) {
-        setActionError(publicApiError({ response }, "Local data could not be deleted."));
+        setWipeError(publicApiError({ response }, "Local data could not be deleted."));
         return;
       }
-      setActionSuccess("Local data deleted successfully.");
+      setWipeSuccess("Local data deleted successfully.");
       onChanged();
     } catch (wipeError) {
-      setActionError(publicApiError(wipeError, "Local data could not be deleted. Check the local backend."));
+      setWipeError(publicApiError(wipeError, "Local data could not be deleted. Check the local backend."));
     } finally {
       setWipePending(false);
     }
@@ -406,7 +418,19 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
           Read-only access on every provider. JobTracker can never send, delete, or change your
           mail.
         </p>
-        {connections.map((connection) => {
+        {connectionsLoadState === "loading" ? (
+          <div role="status" style={{ fontSize: "12px", color: "#9A9F96" }}>Loading connected inboxes…</div>
+        ) : null}
+        {connectionsLoadState === "error" ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "6px" }}>
+            <div role="alert" style={{ fontSize: "12px", color: "#96403C" }}>{connectionsError}</div>
+            <button aria-label="Retry inbox connections" onClick={() => void onRetryConnections()} style={{ padding: "7px 14px", border: "1px dashed #C9C6BA", borderRadius: "999px", background: "none", color: "#4A5049", cursor: "pointer", fontSize: "12px", fontWeight: 600 }} type="button">Retry</button>
+          </div>
+        ) : null}
+        {connectionsLoadState === "ready" && connections.length === 0 ? (
+          <div style={{ fontSize: "12px", color: "#9A9F96" }}>No connected inboxes yet.</div>
+        ) : null}
+        {connectionsLoadState === "ready" ? connections.map((connection) => {
           const providerName =
             connection.account.provider === "gmail" ? "Gmail" : connection.account.provider;
           const email = connection.display_email?.address ?? connection.account.account_id;
@@ -455,7 +479,9 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
               </button>
             </div>
           );
-        })}
+        }) : null}
+        {disconnectError ? <div role="alert" style={{ fontSize: "12px", color: "#96403C" }}>{disconnectError}</div> : null}
+        {disconnectSuccess ? <div role="status" style={{ fontSize: "12px", color: "#1E5136" }}>{disconnectSuccess}</div> : null}
         {addOpen ? (
           <div
             style={{
@@ -782,8 +808,8 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
             ? "Delete all local data…"
             : "Click again to confirm — this can't be undone"}
         </button>
-        {actionError ? <div role="alert" style={{ fontSize: "12px", color: "#96403C" }}>{actionError}</div> : null}
-        {actionSuccess ? <div role="status" style={{ fontSize: "12px", color: "#1E5136" }}>{actionSuccess}</div> : null}
+        {wipeError ? <div role="alert" style={{ fontSize: "12px", color: "#96403C" }}>{wipeError}</div> : null}
+        {wipeSuccess ? <div role="status" style={{ fontSize: "12px", color: "#1E5136" }}>{wipeSuccess}</div> : null}
       </div>
     </section>
   );

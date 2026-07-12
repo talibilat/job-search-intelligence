@@ -46,6 +46,8 @@ export type StatusChipKey =
   | "offer"
   | "closed";
 
+export type RequestLoadState = "error" | "loading" | "ready";
+
 const STATUS_FILTERS: readonly StatusChipKey[] = [
   "all",
   "applied",
@@ -175,7 +177,13 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
   const [reloadKey, setReloadKey] = useState(0);
 
   const [connections, setConnections] = useState<EmailConnection[]>([]);
+  const [connectionsLoadState, setConnectionsLoadState] = useState<RequestLoadState>("loading");
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const [syncStats, setSyncStats] = useState<SyncLocalStats | null>(null);
+  const [syncStatsLoadState, setSyncStatsLoadState] = useState<RequestLoadState>("loading");
+  const [syncStatsError, setSyncStatsError] = useState<string | null>(null);
+  const connectionsRequestId = useRef(0);
+  const syncStatsRequestId = useRef(0);
 
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
   const [syncScope, setSyncScope] = useState<SyncScopeKey>("new");
@@ -233,28 +241,68 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
     [navigate],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const [connectionsResponse, statsResponse] = await Promise.all([
-        listEmailConnectionsAuthConnectionsGet().catch(() => null),
-        syncStatsSyncStatsGet().catch(() => null),
-      ]);
-      if (cancelled) {
+  const loadConnections = useCallback(async () => {
+    await Promise.resolve();
+    const requestId = ++connectionsRequestId.current;
+    setConnectionsLoadState("loading");
+    setConnectionsError(null);
+    try {
+      const response = await listEmailConnectionsAuthConnectionsGet();
+      if (requestId !== connectionsRequestId.current) return;
+      if (response.status !== 200) {
+        setConnections([]);
+        setConnectionsError(publicApiError({ response }, "Inbox connections could not be loaded."));
+        setConnectionsLoadState("error");
         return;
       }
-      if (connectionsResponse?.status === 200) {
-        setConnections(connectionsResponse.data);
+      setConnections(response.data);
+      setConnectionsLoadState("ready");
+    } catch (error) {
+      if (requestId !== connectionsRequestId.current) return;
+      setConnections([]);
+      setConnectionsError(publicApiError(error, "Inbox connections could not be loaded. Check the local backend."));
+      setConnectionsLoadState("error");
+    }
+  }, []);
+
+  const loadSyncStats = useCallback(async () => {
+    await Promise.resolve();
+    const requestId = ++syncStatsRequestId.current;
+    setSyncStatsLoadState("loading");
+    setSyncStatsError(null);
+    try {
+      const response = await syncStatsSyncStatsGet();
+      if (requestId !== syncStatsRequestId.current) return;
+      if (response.status !== 200) {
+        setSyncStats(null);
+        setSyncStatsError(publicApiError({ response }, "Sync statistics could not be loaded."));
+        setSyncStatsLoadState("error");
+        return;
       }
-      if (statsResponse?.status === 200) {
-        setSyncStats(statsResponse.data);
+      setSyncStats(response.data);
+      setSyncStatsLoadState("ready");
+    } catch (error) {
+      if (requestId !== syncStatsRequestId.current) return;
+      setSyncStats(null);
+      setSyncStatsError(publicApiError(error, "Sync statistics could not be loaded. Check the local backend."));
+      setSyncStatsLoadState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadConnections();
+        void loadSyncStats();
       }
-    };
-    void load();
+    });
     return () => {
       cancelled = true;
+      connectionsRequestId.current += 1;
+      syncStatsRequestId.current += 1;
     };
-  }, [reloadKey]);
+  }, [loadConnections, loadSyncStats, reloadKey]);
 
   useEffect(() => {
     if (!syncMenuOpen) {
@@ -383,18 +431,28 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
     [route.page],
   );
 
-  const inboxLabel =
-    connections.length === 0
+  const inboxLabel = connectionsLoadState === "loading"
+    ? "Checking inbox connection"
+    : connectionsLoadState === "error"
+      ? "Inbox connection unavailable"
+      : connections.length === 0
       ? "No inbox connected"
       : connections.length === 1
         ? "Gmail connected"
         : `${connections.length} inboxes connected`;
-  const syncedRelative = formatRelativeTime(syncStats?.last_run_at) ?? "not synced yet";
-  const syncedCount = formatCount(syncStats?.total_raw_emails ?? 0);
-  const inboxNote =
-    connections.length === 0
-      ? "Connect Gmail in Settings"
-      : `Synced ${syncedRelative} · ${syncedCount} emails read`;
+  const syncedRelative = syncStats ? formatRelativeTime(syncStats.last_run_at) ?? "not synced yet" : null;
+  const syncedCount = syncStats ? formatCount(syncStats.total_raw_emails) : null;
+  const inboxNote = connectionsLoadState === "loading"
+    ? "Loading connection details"
+    : connectionsLoadState === "error"
+      ? connectionsError
+      : syncStatsLoadState === "loading"
+        ? "Loading sync statistics"
+        : syncStatsLoadState === "error"
+          ? syncStatsError
+          : connections.length === 0
+            ? "Connect Gmail in Settings"
+            : `Synced ${syncedRelative} · ${syncedCount} emails read`;
 
   return (
     <div
@@ -501,7 +559,16 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
             />
             {inboxLabel}
           </div>
-          <div style={{ fontSize: "11px", color: "#66886F", marginTop: "2px" }}>{inboxNote}</div>
+          <div style={{ fontSize: "11px", color: connectionsLoadState === "error" || syncStatsLoadState === "error" ? "#96403C" : "#66886F", marginTop: "2px" }}>{inboxNote}</div>
+          {connectionsLoadState === "error" && syncStatsLoadState === "error" ? (
+            <div style={{ color: "#96403C", fontSize: "11px", marginTop: "2px" }}>{syncStatsError}</div>
+          ) : null}
+          {connectionsLoadState === "error" ? (
+            <button aria-label="Retry inbox connections" onClick={() => void loadConnections()} style={{ border: "none", background: "none", color: "#1E5136", cursor: "pointer", fontSize: "11px", fontWeight: 700, padding: "4px 0 0" }} type="button">Retry</button>
+          ) : null}
+          {syncStatsLoadState === "error" ? (
+            <button aria-label="Retry sync statistics" onClick={() => void loadSyncStats()} style={{ border: "none", background: "none", color: "#1E5136", cursor: "pointer", fontSize: "11px", fontWeight: 700, padding: "4px 0 0" }} type="button">Retry</button>
+          ) : null}
         </div>
 
         <button
@@ -814,7 +881,14 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         ) : null}
         {route.page === "insights" ? <InsightsPage openApp={openApp} reloadKey={reloadKey} /> : null}
         {route.page === "settings" ? (
-          <SettingsPage connections={connections} onChanged={refresh} syncStats={syncStats} />
+          <SettingsPage
+            connections={connections}
+            connectionsError={connectionsError}
+            connectionsLoadState={connectionsLoadState}
+            onChanged={refresh}
+            onRetryConnections={loadConnections}
+            syncStats={syncStats}
+          />
         ) : null}
         {route.page === "dev" ? <DeveloperPage /> : null}
       </main>

@@ -404,6 +404,27 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
     const config = responseQueues.get(path);
 
     if (!config) {
+      if (path === "/auth/connections") {
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (path === "/sync/stats") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ last_run_at: null, total_raw_emails: 0 }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
+        );
+      }
+
       if (path === "/metrics/funnel") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsFunnelResponse()), {
@@ -4428,6 +4449,12 @@ describe("App", () => {
           resolveRetry = resolve;
         });
       }
+      if (path === "/auth/connections") {
+        return Promise.resolve(new Response(JSON.stringify([]), { headers: { "Content-Type": "application/json" }, status: 200 }));
+      }
+      if (path === "/sync/stats") {
+        return Promise.resolve(new Response(JSON.stringify({ last_run_at: null, total_raw_emails: 0 }), { headers: { "Content-Type": "application/json" }, status: 200 }));
+      }
       return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -4763,7 +4790,104 @@ describe("App", () => {
     expect(disconnect).toHaveProperty("disabled", true);
     expect(fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/auth/connections/gmail/first")).toHaveLength(1);
     resolveDisconnect(new Response(JSON.stringify(apiErrorResponse("service_unavailable", "Stored credentials could not be removed.")), { headers: { "Content-Type": "application/json" }, status: 503 }));
-    expect(await screen.findByText("Stored credentials could not be removed.")).toBeTruthy();
+    const feedback = await screen.findByText("Stored credentials could not be removed.");
+    const connectedSection = screen.getByRole("heading", { name: "Connected inboxes" }).parentElement;
+    const wipeSection = screen.getByRole("heading", { name: "Delete everything" }).parentElement;
+    expect(connectedSection?.contains(feedback)).toBe(true);
+    expect(wipeSection?.contains(feedback)).toBe(false);
+  });
+
+  it.each([
+    ["typed", new Response(JSON.stringify(apiErrorResponse("service_unavailable", "Connections are unavailable.")), { headers: { "Content-Type": "application/json" }, status: 503 })],
+    ["transport", new TypeError("backend unavailable")],
+  ])("redesign shell distinguishes %s connection failure from empty and recovers", async (_kind, failure) => {
+    let attempts = 0;
+    const baseFetch = mockFetchResponses({
+      "/sync/stats": { last_run_at: "2026-07-10T12:00:00Z", total_raw_emails: 42 },
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (requestPath(input) !== "/auth/connections") return baseFetch(input);
+      attempts += 1;
+      if (attempts === 1) {
+        return failure instanceof Response ? Promise.resolve(failure) : Promise.reject(failure);
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { headers: { "Content-Type": "application/json" }, status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/settings");
+
+    const fallback = _kind === "typed" ? "Connections are unavailable." : "Inbox connections could not be loaded. Check the local backend.";
+    expect(await screen.findAllByText(fallback)).not.toHaveLength(0);
+    expect(screen.queryByText("No inbox connected")).toBeNull();
+    expect(screen.queryByText("No connected inboxes yet.")).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "Retry inbox connections" })[0]);
+    expect(await screen.findByText("No inbox connected")).toBeTruthy();
+    expect(screen.getByText("No connected inboxes yet.")).toBeTruthy();
+    expect(attempts).toBe(2);
+  });
+
+  it.each([
+    ["typed", new Response(JSON.stringify(apiErrorResponse("service_unavailable", "Sync statistics are unavailable.")), { headers: { "Content-Type": "application/json" }, status: 503 })],
+    ["transport", new TypeError("backend unavailable")],
+  ])("redesign shell distinguishes %s sync-stat failure from zero and recovers", async (_kind, failure) => {
+    let attempts = 0;
+    const baseFetch = mockFetchResponses({
+      "/auth/connections": {
+        body: [{
+          account: { account_id: "first", provider: "gmail" },
+          connected_at: "2026-07-10T12:00:00Z",
+          credential_ref: { kind: "oauth_token", name: "first", provider: "gmail" },
+          display_email: { address: "first@example.com" },
+          granted_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+          reauth_required: false,
+        }],
+        status: 200,
+      },
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (requestPath(input) !== "/sync/stats") return baseFetch(input);
+      attempts += 1;
+      if (attempts === 1) {
+        return failure instanceof Response ? Promise.resolve(failure) : Promise.reject(failure);
+      }
+      return Promise.resolve(new Response(JSON.stringify({ last_run_at: null, total_raw_emails: 0 }), { headers: { "Content-Type": "application/json" }, status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/");
+
+    const fallback = _kind === "typed" ? "Sync statistics are unavailable." : "Sync statistics could not be loaded. Check the local backend.";
+    expect(await screen.findByText(fallback)).toBeTruthy();
+    expect(screen.queryByText(/not synced yet/)).toBeNull();
+    expect(screen.queryByText(/0 emails read/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry sync statistics" }));
+    expect(await screen.findByText(/not synced yet · 0 emails read/)).toBeTruthy();
+    expect(attempts).toBe(2);
+  });
+
+  it("redesign settings renders disconnect success beside connected inboxes", async () => {
+    const connection = {
+      account: { account_id: "first", provider: "gmail" },
+      connected_at: "2026-07-10T12:00:00Z",
+      credential_ref: { kind: "oauth_token", name: "first", provider: "gmail" },
+      display_email: { address: "first@example.com" },
+      granted_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+      reauth_required: false,
+    };
+    mockFetchResponses({
+      "/auth/connections": { body: [connection], status: 200 },
+      "/auth/connections/gmail/first": connection,
+    });
+
+    renderAtPath("/settings");
+    fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+
+    const feedback = await screen.findByText("Inbox disconnected successfully.");
+    const connectedSection = screen.getByRole("heading", { name: "Connected inboxes" }).parentElement;
+    const wipeSection = screen.getByRole("heading", { name: "Delete everything" }).parentElement;
+    expect(connectedSection?.contains(feedback)).toBe(true);
+    expect(wipeSection?.contains(feedback)).toBe(false);
   });
 
   it("redesign settings serializes wipe and reports success", async () => {
