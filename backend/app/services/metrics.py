@@ -64,6 +64,7 @@ class MetricsSummaryService:
         )
         return MetricsSummaryResponse(
             total_applications=self._metrics_repository.count_total_applications(filters=filters),
+            live_applications=self._metrics_repository.count_live_applications(filters=filters),
             distinct_company_count=self._metrics_repository.count_distinct_companies(
                 filters=filters,
             ),

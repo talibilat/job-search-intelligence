@@ -513,6 +513,19 @@ class MetricsRepository(BaseRepository[int]):
             return 0
         return int(row[0])
 
+    def count_live_applications(self, filters: MetricsFilter | None = None) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        return self._fetch_count(
+            f"""
+            SELECT COUNT(*)
+            FROM applications
+            {where_clause}
+            {"WHERE" if not where_clause else "AND"}
+                current_status IN ('applied', 'in_review', 'assessment', 'interview', 'offer')
+            """,
+            filter_parameters,
+        )
+
     def count_rejected_applications(self, filters: MetricsFilter | None = None) -> int:
         return self._count_applications_with_current_status("rejected", filters=filters)
 

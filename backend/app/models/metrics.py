@@ -209,6 +209,10 @@ class MetricsSummaryResponse(BaseModel):
     """Deterministic summary metrics for the dashboard."""
 
     total_applications: int = Field(ge=0)
+    live_applications: int = Field(
+        ge=0,
+        description="Applications whose canonical current status is still live.",
+    )
     distinct_company_count: int = Field(ge=0)
     offers_received: int = Field(ge=0)
     ghosted_applications: int = Field(ge=0)
