@@ -328,6 +328,10 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         return;
       }
       const estimate = response.data;
+      if (estimate.basis === "full_backfill") {
+        setSyncEstimateLabel("Full mailbox history · time depends on mailbox size");
+        return;
+      }
       if (estimate.estimated_message_count === null || estimate.estimated_message_count === undefined) {
         setSyncEstimateLabel("New mail only · usually under a minute");
         return;

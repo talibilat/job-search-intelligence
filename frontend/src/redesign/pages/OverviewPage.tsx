@@ -170,15 +170,6 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
   const offers = summary?.offers_received;
   const responseMetric = rates?.overall_response_rate;
   const interviewMetric = rates?.application_to_interview_rate;
-  const active = useMemo(
-    () =>
-      applications.filter((application) =>
-        ["applied", "in_review", "assessment", "interview", "offer"].includes(
-          application.current_status,
-        ),
-      ).length,
-    [applications],
-  );
 
   const greeting =
     offers === 1
@@ -192,11 +183,7 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
       key: "total",
       label: "Applications",
       value: summary ? String(summary.total_applications) : "—",
-      note: applicationsLoading
-        ? "Loading active applications"
-        : applicationsError
-          ? "Active count unavailable"
-          : `${active} still active`,
+      note: summary ? `${summary.live_applications} still active` : "Active count unavailable",
       explain: summary ? {
         title: "Applications tracked",
         formula: "count(applications)",

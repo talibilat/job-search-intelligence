@@ -3157,6 +3157,12 @@
             "title": "Interview Invitation Count",
             "type": "integer"
           },
+          "live_applications": {
+            "description": "Applications whose canonical current status is still live.",
+            "minimum": 0.0,
+            "title": "Live Applications",
+            "type": "integer"
+          },
           "offers_received": {
             "minimum": 0.0,
             "title": "Offers Received",
@@ -3179,6 +3185,7 @@
         },
         "required": [
           "total_applications",
+          "live_applications",
           "distinct_company_count",
           "offers_received",
           "ghosted_applications",
@@ -4428,6 +4435,7 @@
       "SyncScopeEstimateBasis": {
         "description": "How a pre-sync scope estimate was derived.",
         "enum": [
+          "full_backfill",
           "local_history",
           "message_cap",
           "unknown_incremental"
@@ -5995,6 +6003,16 @@
               }
             },
             "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {

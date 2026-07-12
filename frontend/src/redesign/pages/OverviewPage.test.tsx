@@ -16,6 +16,34 @@ afterEach(() => {
 });
 
 describe("OverviewPage request states", () => {
+  it("renders the backend live-application count instead of deriving status semantics", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/metrics/summary") {
+        return Promise.resolve(response({
+          live_applications: 7,
+          offers_received: 0,
+          total_applications: 8,
+        }));
+      }
+      if (path === "/metrics/rates") return Promise.resolve(response({}));
+      if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
+      if (path === "/applications") {
+        return Promise.resolve(response([{
+          current_status: "applied",
+          id: "application-1",
+        }]));
+      }
+      if (path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+
+    render(<OverviewPage go={() => undefined} openApp={() => undefined} reloadKey={0} />);
+
+    expect(await screen.findByText("7 still active")).toBeTruthy();
+    expect(screen.queryByText("1 still active")).toBeNull();
+  });
+
   it("uses backend MetricRate.rate values and labels historical populations non-exact", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;

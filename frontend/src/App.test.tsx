@@ -83,6 +83,7 @@ function metricsSummaryResponse(
     ghost_threshold_days: 30,
     ghosted_applications: 0,
     interview_invitation_count: 0,
+    live_applications: 0,
     offers_received: 0,
     personal_ghost_threshold: {
       threshold_days: 30,
@@ -3862,6 +3863,26 @@ describe("App", () => {
     expect(
       fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/sync"),
     ).toHaveLength(0);
+  });
+
+  it("redesign sync describes a required lifetime backfill honestly", async () => {
+    mockFetchResponses({
+      "/sync/estimate": {
+        basis: "full_backfill",
+        estimated_message_count: null,
+        total_local_emails: 0,
+        window_end: null,
+        window_start: null,
+      },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+
+    expect(
+      await screen.findByText("Full mailbox history · time depends on mailbox size"),
+    ).toBeTruthy();
+    expect(screen.queryByText(/New mail only/)).toBeNull();
   });
 
   it.each([

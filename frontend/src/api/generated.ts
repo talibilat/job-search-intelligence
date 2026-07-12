@@ -1045,6 +1045,11 @@ export interface MetricsSummaryResponse {
   ghosted_applications: number;
   /** @minimum 0 */
   interview_invitation_count: number;
+  /**
+   * Applications whose canonical current status is still live.
+   * @minimum 0
+   */
+  live_applications: number;
   /** @minimum 0 */
   offers_received: number;
   personal_ghost_threshold: PersonalGhostThresholdMetric;
@@ -1317,6 +1322,7 @@ export type SyncScopeEstimateBasis =
   (typeof SyncScopeEstimateBasis)[keyof typeof SyncScopeEstimateBasis];
 
 export const SyncScopeEstimateBasis = {
+  full_backfill: "full_backfill",
   local_history: "local_history",
   message_cap: "message_cap",
   unknown_incremental: "unknown_incremental",
@@ -3054,6 +3060,11 @@ export type wipeDataLocalDataWipePostResponse400 = {
   status: 400;
 };
 
+export type wipeDataLocalDataWipePostResponse409 = {
+  data: ApiErrorResponse;
+  status: 409;
+};
+
 export type wipeDataLocalDataWipePostResponse422 = {
   data: ApiErrorResponse;
   status: 422;
@@ -3070,6 +3081,7 @@ export type wipeDataLocalDataWipePostResponseSuccess =
   };
 export type wipeDataLocalDataWipePostResponseError = (
   | wipeDataLocalDataWipePostResponse400
+  | wipeDataLocalDataWipePostResponse409
   | wipeDataLocalDataWipePostResponse422
   | wipeDataLocalDataWipePostResponse503
 ) & {

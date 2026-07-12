@@ -140,6 +140,7 @@ const legacyMetricsSummary = {
   ghost_threshold_days: 30,
   ghosted_applications: 0,
   interview_invitation_count: 1,
+  live_applications: 2,
   offers_received: 1,
   personal_ghost_threshold: {
     response_sample_size: 2,
@@ -727,6 +728,7 @@ const redesignMetricsSummary = {
   ghost_threshold_days: 30,
   ghosted_applications: 4,
   interview_invitation_count: 7,
+  live_applications: 8,
   offers_received: 2,
   personal_ghost_threshold: {
     response_sample_size: 13,
