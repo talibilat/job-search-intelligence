@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -28,7 +29,13 @@ from app.main import create_app
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
+    EmailBodyBatch,
+    EmailBodyFetchFailure,
+    EmailBodyFetchFailureReason,
+    EmailBodyFetchRequest,
+    EmailBodySource,
     EmailConnection,
+    EmailMessageBody,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
@@ -37,6 +44,7 @@ from app.providers.email import (
     EmailProviderAuthError,
     EmailProviderCursor,
     EmailProviderErrorCode,
+    EmailProviderTransientError,
     EmailSyncCursorExpiredError,
     EmailSyncMode,
 )
@@ -402,6 +410,7 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
             """
             INSERT INTO raw_emails (
                 id,
+                public_id,
                 thread_id,
                 from_addr,
                 to_addr,
@@ -412,10 +421,11 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
                 labels,
                 provider,
                 ingested_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "gmail-msg-1",
+                "0123456789abcdef0123456789abcdef",
                 "thread-1",
                 "jobs@example.com",
                 "me@example.com",
@@ -458,8 +468,10 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
     assert response.status_code == 200
     assert response.json() == [
         {
+            "public_id": "0123456789abcdef0123456789abcdef",
             "from_domain": "example.com",
             "to_domains": ["example.com"],
+            "subject": "Application received",
             "subject_present": True,
             "sent_at": "2026-07-05T12:00:00Z",
             "body_retention_state": "retained",
@@ -488,16 +500,17 @@ def test_get_sync_recent_emails_orders_by_sent_at_by_default(tmp_path: Path) -> 
             # New mailbox message ingested earlier.
             ("gmail-new", "2026-07-01T09:00:00+00:00", "2026-07-02T12:00:00+00:00"),
         )
-        for email_id, sent_at, ingested_at in rows:
+        for index, (email_id, sent_at, ingested_at) in enumerate(rows):
             connection.execute(
                 """
                 INSERT INTO raw_emails (
-                    id, thread_id, from_addr, to_addr, subject, sent_at,
+                    id, public_id, thread_id, from_addr, to_addr, subject, sent_at,
                     body_text, body_retention_state, labels, provider, ingested_at
-                ) VALUES (?, ?, ?, ?, ?, ?, NULL, 'metadata_only', '[]', 'gmail', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'metadata_only', '[]', 'gmail', ?)
                 """,
                 (
                     email_id,
+                    f"{index:032x}",
                     f"thread-{email_id}",
                     "a@example.com",
                     "b@example.com",
@@ -835,6 +848,378 @@ def test_configured_sync_job_skips_when_gmail_connection_is_not_configured(
     assert status_store.current_status().state is EmailSyncRunState.IDLE
 
 
+def test_get_paginated_sync_emails_returns_stable_page(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        for index in range(23):
+            insert_raw_email_row(
+                connection,
+                message_id=f"gmail-msg-{index:02d}",
+                public_id=f"{index:032x}",
+                sent_at=NOW - timedelta(days=index),
+            )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get(
+        "/sync/emails",
+        params={
+            "page": 2,
+            "page_size": 10,
+            "sent_after": "2026-06-01T00:00:00Z",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["page"] == 2
+    assert body["page_size"] == 10
+    assert len(body["items"]) == 10
+    assert "thread_id" not in response.text
+    assert "gmail-msg-" not in response.text
+
+
+def test_get_paginated_sync_emails_rejects_invalid_paging(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    assert client.get("/sync/emails", params={"page": 0}).status_code == 422
+    assert client.get("/sync/emails", params={"page_size": 0}).status_code == 422
+    assert client.get("/sync/emails", params={"page_size": 101}).status_code == 422
+
+
+def test_get_sync_email_content_returns_retained_body(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email_row(
+            connection,
+            message_id="gmail-msg-1",
+            public_id="0123456789abcdef0123456789abcdef",
+            sent_at=NOW,
+            body_text="Private body",
+            body_retention_state="retained",
+        )
+        insert_email_connection_row(connection)
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/0123456789abcdef0123456789abcdef/content")
+
+    assert response.status_code == 200
+    assert response.json()["body_text"] == "Private body"
+    assert "gmail-msg-1" not in response.text
+
+
+def test_get_sync_email_content_fetches_transient_body_for_metadata_only_message(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email_row(
+            connection,
+            message_id="gmail-msg-2",
+            public_id="00000000000000000000000000000002",
+            sent_at=NOW,
+        )
+        insert_email_connection_row(connection)
+    provider = FakeBodyFetchProvider(body_text_by_message_id={"gmail-msg-2": "Fetched text"})
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    app.dependency_overrides[get_sync_email_provider] = lambda: provider
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/00000000000000000000000000000002/content")
+
+    assert response.status_code == 200
+    assert response.json()["body_text"] == "Fetched text"
+    assert len(provider.fetch_requests) == 1
+    with sqlite3.connect(database_path) as connection:
+        stored_body = connection.execute(
+            "SELECT body_text FROM raw_emails WHERE id = 'gmail-msg-2'"
+        ).fetchone()[0]
+    assert stored_body is None
+
+
+def test_get_sync_email_content_returns_404_for_unknown_public_id(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_email_connection_row(connection)
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/ffffffffffffffffffffffffffffffff/content")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_get_sync_email_content_returns_404_when_provider_reports_message_missing(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email_row(
+            connection,
+            message_id="gmail-msg-3",
+            public_id="00000000000000000000000000000003",
+            sent_at=NOW,
+        )
+        insert_email_connection_row(connection)
+    provider = FakeBodyFetchProvider(
+        failure_reason_by_message_id={"gmail-msg-3": EmailBodyFetchFailureReason.NOT_FOUND},
+    )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    app.dependency_overrides[get_sync_email_provider] = lambda: provider
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/00000000000000000000000000000003/content")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_get_sync_email_content_returns_401_for_reauthentication_required(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email_row(
+            connection,
+            message_id="gmail-msg-4",
+            public_id="00000000000000000000000000000004",
+            sent_at=NOW,
+        )
+        insert_email_connection_row(connection)
+    provider = FakeBodyFetchProvider(
+        raises_by_message_id={
+            "gmail-msg-4": EmailProviderAuthError(public_message="Reauthentication required."),
+        },
+    )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    app.dependency_overrides[get_sync_email_provider] = lambda: provider
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/00000000000000000000000000000004/content")
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "email_authorization_required"
+
+
+def test_get_sync_email_content_returns_503_for_transient_provider_failure(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email_row(
+            connection,
+            message_id="gmail-msg-5",
+            public_id="00000000000000000000000000000005",
+            sent_at=NOW,
+        )
+        insert_email_connection_row(connection)
+    provider = FakeBodyFetchProvider(
+        raises_by_message_id={
+            "gmail-msg-5": EmailProviderTransientError(
+                public_message="Gmail is temporarily unavailable.",
+            ),
+        },
+    )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    app.dependency_overrides[get_sync_email_provider] = lambda: provider
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/00000000000000000000000000000005/content")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "email_temporarily_unavailable"
+
+
+def test_get_sync_email_content_returns_400_when_no_connection_is_configured(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email_row(
+            connection,
+            message_id="gmail-msg-6",
+            public_id="00000000000000000000000000000006",
+            sent_at=NOW,
+        )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/00000000000000000000000000000006/content")
+
+    assert response.status_code == 400
+
+
+def insert_raw_email_row(
+    connection: sqlite3.Connection,
+    *,
+    message_id: str,
+    public_id: str,
+    sent_at: datetime,
+    body_text: str | None = None,
+    body_retention_state: str = "metadata_only",
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO raw_emails (
+            id,
+            public_id,
+            thread_id,
+            from_addr,
+            to_addr,
+            subject,
+            sent_at,
+            body_text,
+            body_retention_state,
+            labels,
+            provider,
+            ingested_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            message_id,
+            public_id,
+            f"thread-{message_id}",
+            "jobs@example.com",
+            "me@example.com",
+            "Application received",
+            sent_at.isoformat(),
+            body_text,
+            body_retention_state,
+            "[]",
+            "gmail",
+            sent_at.isoformat(),
+        ),
+    )
+    connection.commit()
+
+
+def insert_email_connection_row(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        INSERT INTO email_connections (
+            provider,
+            account_id,
+            display_email,
+            credential_ref_kind,
+            credential_ref_provider,
+            credential_ref_name,
+            granted_scopes,
+            connected_at,
+            reauth_required,
+            updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "gmail",
+            "me@example.com",
+            "me@example.com",
+            "oauth_token",
+            "gmail",
+            "me-example-com",
+            json.dumps([GMAIL_READONLY_SCOPE]),
+            NOW.isoformat(),
+            0,
+            NOW.isoformat(),
+        ),
+    )
+    connection.commit()
+
+
+class FakeBodyFetchProvider:
+    def __init__(
+        self,
+        *,
+        body_text_by_message_id: dict[str, str] | None = None,
+        failure_reason_by_message_id: dict[str, EmailBodyFetchFailureReason] | None = None,
+        raises_by_message_id: dict[str, Exception] | None = None,
+    ) -> None:
+        self._body_text_by_message_id = body_text_by_message_id or {}
+        self._failure_reason_by_message_id = failure_reason_by_message_id or {}
+        self._raises_by_message_id = raises_by_message_id or {}
+        self.fetch_requests: list[EmailBodyFetchRequest] = []
+
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        del connection
+        self.fetch_requests.append(request)
+        ref = request.refs[0]
+        if ref.message_id in self._raises_by_message_id:
+            raise self._raises_by_message_id[ref.message_id]
+        if ref.message_id in self._failure_reason_by_message_id:
+            return EmailBodyBatch(
+                bodies=(),
+                failures=(
+                    EmailBodyFetchFailure(
+                        ref=ref,
+                        reason=self._failure_reason_by_message_id[ref.message_id],
+                    ),
+                ),
+            )
+        return EmailBodyBatch(
+            bodies=(
+                EmailMessageBody(
+                    ref=ref,
+                    body_text=self._body_text_by_message_id.get(ref.message_id, ""),
+                    body_source=EmailBodySource.TEXT_PLAIN,
+                    truncated=False,
+                    fetched_at=NOW,
+                ),
+            ),
+        )
+
+
 def email_connection() -> EmailConnection:
     account = EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com")
     return EmailConnection(
@@ -868,6 +1253,7 @@ def create_sync_tables(database_path: Path) -> None:
             """
             CREATE TABLE raw_emails (
                 id TEXT PRIMARY KEY,
+                public_id TEXT,
                 thread_id TEXT,
                 from_addr TEXT,
                 to_addr TEXT,
@@ -880,6 +1266,9 @@ def create_sync_tables(database_path: Path) -> None:
                 ingested_at TEXT NOT NULL
             )
             """,
+        )
+        connection.execute(
+            "CREATE UNIQUE INDEX ux_raw_emails_public_id ON raw_emails(public_id)",
         )
         connection.execute(
             """

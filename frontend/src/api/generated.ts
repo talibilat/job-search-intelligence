@@ -1209,6 +1209,18 @@ export const RawEmailBodyRetentionState = {
 } as const;
 
 /**
+ * Public-safe on-demand email content for the reader dialog.
+ */
+export interface RawEmailDetail {
+  body_retention_state: RawEmailBodyRetentionState;
+  body_text: string;
+  from_domain: string | null;
+  public_id: string;
+  sent_at: string | null;
+  subject: string | null;
+}
+
+/**
  * Supported deterministic orderings for the raw-email preview list.
  */
 export type RawEmailPreviewOrder =
@@ -1232,9 +1244,29 @@ export interface RawEmailPreviewRecord {
   has_retained_body: boolean;
   ingested_at: string;
   provider: string;
+  public_id: string;
   sent_at: string | null;
+  subject: string | null;
   subject_present: boolean;
   to_domains: string[];
+}
+
+/**
+ * A validated page of raw email metadata previews.
+ */
+export interface RawEmailPreviewPage {
+  items: RawEmailPreviewRecord[];
+  /** @minimum 1 */
+  page: number;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  page_size: number;
+  /** @minimum 0 */
+  total_items: number;
+  /** @minimum 0 */
+  total_pages: number;
 }
 
 /**
@@ -1491,6 +1523,20 @@ export type GetMetricsTimeseriesMetricsTimeseriesGetParams = {
   salary_min?: number | null;
   salary_max?: number | null;
   work_mode?: WorkMode | null;
+};
+
+export type SyncEmailsSyncEmailsGetParams = {
+  /**
+   * @minimum 1
+   */
+  page?: number;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  page_size?: number;
+  sent_after?: string | null;
+  sent_before?: string | null;
 };
 
 export type SyncEstimateSyncEstimateGetParams = {
@@ -3869,6 +3915,164 @@ export const syncNowSyncPost = async (
     status: res.status,
     headers: res.headers,
   } as syncNowSyncPostResponse;
+};
+
+export type syncEmailsSyncEmailsGetResponse200 = {
+  data: RawEmailPreviewPage;
+  status: 200;
+};
+
+export type syncEmailsSyncEmailsGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type syncEmailsSyncEmailsGetResponseSuccess =
+  syncEmailsSyncEmailsGetResponse200 & {
+    headers: Headers;
+  };
+export type syncEmailsSyncEmailsGetResponseError =
+  syncEmailsSyncEmailsGetResponse422 & {
+    headers: Headers;
+  };
+
+export type syncEmailsSyncEmailsGetResponse =
+  syncEmailsSyncEmailsGetResponseSuccess | syncEmailsSyncEmailsGetResponseError;
+
+export const getSyncEmailsSyncEmailsGetUrl = (
+  params?: SyncEmailsSyncEmailsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/sync/emails?${stringifiedParams}`
+    : `/sync/emails`;
+};
+
+/**
+ * Returns a deterministic page of locally synced raw-email metadata within an optional sent-date window. Never contacts the email provider or triggers classification.
+ * @summary List Synced Emails
+ */
+export const syncEmailsSyncEmailsGet = async (
+  params?: SyncEmailsSyncEmailsGetParams,
+  options?: RequestInit,
+): Promise<syncEmailsSyncEmailsGetResponse> => {
+  const res = await fetch(getSyncEmailsSyncEmailsGetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: syncEmailsSyncEmailsGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as syncEmailsSyncEmailsGetResponse;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse200 = {
+  data: RawEmailDetail;
+  status: 200;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse400 = {
+  data: ApiErrorResponse;
+  status: 400;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse401 = {
+  data: ApiErrorResponse;
+  status: 401;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse403 = {
+  data: ApiErrorResponse;
+  status: 403;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse404 = {
+  data: ApiErrorResponse;
+  status: 404;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse429 = {
+  data: ApiErrorResponse;
+  status: 429;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse503 = {
+  data: ApiErrorResponse;
+  status: 503;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponseSuccess =
+  syncEmailContentSyncEmailsPublicIdContentGetResponse200 & {
+    headers: Headers;
+  };
+export type syncEmailContentSyncEmailsPublicIdContentGetResponseError = (
+  | syncEmailContentSyncEmailsPublicIdContentGetResponse400
+  | syncEmailContentSyncEmailsPublicIdContentGetResponse401
+  | syncEmailContentSyncEmailsPublicIdContentGetResponse403
+  | syncEmailContentSyncEmailsPublicIdContentGetResponse404
+  | syncEmailContentSyncEmailsPublicIdContentGetResponse422
+  | syncEmailContentSyncEmailsPublicIdContentGetResponse429
+  | syncEmailContentSyncEmailsPublicIdContentGetResponse503
+) & {
+  headers: Headers;
+};
+
+export type syncEmailContentSyncEmailsPublicIdContentGetResponse =
+  | syncEmailContentSyncEmailsPublicIdContentGetResponseSuccess
+  | syncEmailContentSyncEmailsPublicIdContentGetResponseError;
+
+export const getSyncEmailContentSyncEmailsPublicIdContentGetUrl = (
+  publicId: string,
+) => {
+  return `/sync/emails/${publicId}/content`;
+};
+
+/**
+ * Returns normalized plain-text content for one synced email. Retained bodies are served from local storage; metadata-only messages are fetched transiently from the email provider and are not persisted.
+ * @summary Read Synced Email Content
+ */
+export const syncEmailContentSyncEmailsPublicIdContentGet = async (
+  publicId: string,
+  options?: RequestInit,
+): Promise<syncEmailContentSyncEmailsPublicIdContentGetResponse> => {
+  const res = await fetch(
+    getSyncEmailContentSyncEmailsPublicIdContentGetUrl(publicId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: syncEmailContentSyncEmailsPublicIdContentGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as syncEmailContentSyncEmailsPublicIdContentGetResponse;
 };
 
 export type syncEstimateSyncEstimateGetResponse200 = {

@@ -174,6 +174,7 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "labels",
             "provider",
             "ingested_at",
+            "public_id",
         ]
         assert sqlite_column_names(connection, "email_connections") == [
             "provider",

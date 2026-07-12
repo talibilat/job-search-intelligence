@@ -76,7 +76,13 @@ from .provider_config import (
     ProviderSecretRequirementResponse,
     ProviderSelection,
 )
-from .raw_email import RawEmailPreviewOrder, RawEmailPreviewRecord
+from .raw_email import (
+    RawEmailDetail,
+    RawEmailPreviewOrder,
+    RawEmailPreviewPage,
+    RawEmailPreviewRecord,
+    RawEmailReaderRecord,
+)
 from .records import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
@@ -236,8 +242,11 @@ __all__ = [
     "PipelineStageCounts",
     "PipelineStatus",
     "RawEmailBodyRetentionState",
+    "RawEmailDetail",
     "RawEmailPreviewOrder",
+    "RawEmailPreviewPage",
     "RawEmailPreviewRecord",
+    "RawEmailReaderRecord",
     "RawEmailRecord",
     "PersonalGhostThresholdMetric",
     "ResponseSilenceMetric",

@@ -69,11 +69,16 @@ class RawEmailPreviewOrder(StrEnum):
     INGESTED_AT = "ingested_at"
 
 
+MAX_EMAIL_PREVIEW_PAGE_SIZE = 100
+
+
 class RawEmailPreviewRecord(BaseModel):
     """Public-safe raw email metadata preview without body text."""
 
+    public_id: str
     from_domain: str | None
     to_domains: list[str]
+    subject: str | None
     subject_present: bool
     sent_at: datetime | None
     body_retention_state: RawEmailBodyRetentionState
@@ -84,3 +89,43 @@ class RawEmailPreviewRecord(BaseModel):
     filter_reason: str | None = None
     classification_category: str | None = None
     classification_is_job_related: bool | None = None
+
+
+class RawEmailPreviewPage(BaseModel):
+    """A validated page of raw email metadata previews."""
+
+    items: tuple[RawEmailPreviewRecord, ...]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=MAX_EMAIL_PREVIEW_PAGE_SIZE)
+    total_items: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
+
+
+class RawEmailDetail(BaseModel):
+    """Public-safe on-demand email content for the reader dialog."""
+
+    public_id: str
+    from_domain: str | None
+    subject: str | None
+    sent_at: datetime | None
+    body_retention_state: RawEmailBodyRetentionState
+    body_text: str
+
+
+class RawEmailReaderRecord(BaseModel):
+    """A raw email resolved through its opaque public identifier.
+
+    ``body_text`` is populated only when the retention state allows it; the
+    repository query enforces that before this DTO is constructed.
+    """
+
+    public_id: str
+    provider_message_id: str = Field(repr=False)
+    thread_id: str | None = Field(repr=False)
+    from_addr: str | None
+    to_addr: str | None
+    subject: str | None
+    sent_at: datetime | None
+    body_text: str | None = Field(default=None, repr=False)
+    body_retention_state: RawEmailBodyRetentionState
+    provider: str

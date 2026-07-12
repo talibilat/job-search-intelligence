@@ -1,24 +1,32 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.config import EmailProviderName
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
+from app.models._email_address import email_address_domain
 from app.models.classification import (
     ClassificationCandidateStats,
     ClassificationReprocessingStats,
     EmailClassificationCandidate,
     EmailClassificationRecord,
 )
-from app.models.raw_email import RawEmailPreviewOrder
+from app.models.filter_decision import EmailCandidateQueryStrategy
+from app.models.raw_email import (
+    MAX_EMAIL_PREVIEW_PAGE_SIZE,
+    RawEmailPreviewOrder,
+    RawEmailPreviewPage,
+    RawEmailPreviewRecord,
+    RawEmailReaderRecord,
+)
 from app.models.records import (
     EmailChunkSource,
     RawEmailBodyRetentionState,
-    RawEmailPreviewRecord,
     RawEmailRecord,
 )
 from app.providers.email import EmailAddress, EmailMessageBody, EmailMessageMetadata
@@ -250,6 +258,114 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             else "raw_emails.ingested_at DESC, raw_emails.sent_at DESC, raw_emails.id DESC"
         )
 
+        columns, joins, join_parameters = self._email_preview_query_parts()
+        rows = self.execute(
+            f"""
+            SELECT{columns}
+            FROM raw_emails{joins}
+            {provider_clause}
+            ORDER BY {order_clause}
+            LIMIT ?
+            """,
+            (*join_parameters, *parameters),
+        ).fetchall()
+
+        return tuple(_raw_email_preview_from_row(row) for row in rows)
+
+    def paginate_email_previews(
+        self,
+        *,
+        provider: EmailProviderName,
+        page: int,
+        page_size: int,
+        sent_after: datetime | None,
+        sent_before: datetime | None,
+    ) -> RawEmailPreviewPage:
+        """Return a deterministic page of email previews within a half-open window."""
+
+        if page < 1:
+            msg = "page must be at least 1"
+            raise ValueError(msg)
+        if not 1 <= page_size <= MAX_EMAIL_PREVIEW_PAGE_SIZE:
+            msg = f"page_size must be between 1 and {MAX_EMAIL_PREVIEW_PAGE_SIZE}"
+            raise ValueError(msg)
+
+        clauses = ["raw_emails.provider = ?"]
+        parameters: list[object] = [provider.value]
+        if sent_after is not None:
+            clauses.append("raw_emails.sent_at >= ?")
+            parameters.append(_utc_isoformat(sent_after))
+        if sent_before is not None:
+            clauses.append("raw_emails.sent_at < ?")
+            parameters.append(_utc_isoformat(sent_before))
+        where_clause = " AND ".join(clauses)
+
+        count_row = self.execute(
+            f"SELECT COUNT(*) FROM raw_emails WHERE {where_clause}",
+            tuple(parameters),
+        ).fetchone()
+        total_items = int(count_row[0]) if count_row is not None else 0
+
+        columns, joins, join_parameters = self._email_preview_query_parts()
+        rows = self.execute(
+            f"""
+            SELECT{columns}
+            FROM raw_emails{joins}
+            WHERE {where_clause}
+            ORDER BY raw_emails.sent_at DESC, raw_emails.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (*join_parameters, *parameters, page_size, (page - 1) * page_size),
+        ).fetchall()
+        return RawEmailPreviewPage(
+            items=tuple(_raw_email_preview_from_row(row) for row in rows),
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=math.ceil(total_items / page_size),
+        )
+
+    def get_reader_record(
+        self,
+        public_id: str,
+        provider: EmailProviderName,
+    ) -> RawEmailReaderRecord | None:
+        """Resolve one raw email through its opaque identifier and provider.
+
+        ``body_text`` is only surfaced for retention states that are allowed
+        to carry retained content, regardless of what the stored value is.
+        """
+
+        row = self.execute(
+            """
+            SELECT
+                public_id,
+                id AS provider_message_id,
+                thread_id,
+                from_addr,
+                to_addr,
+                subject,
+                sent_at,
+                CASE
+                    WHEN body_retention_state IN ('retained', 'debugging') THEN body_text
+                    ELSE NULL
+                END AS body_text,
+                body_retention_state,
+                provider
+            FROM raw_emails
+            WHERE public_id = ? AND provider = ?
+            """,
+            (public_id, provider.value),
+        ).fetchone()
+        if row is None:
+            return None
+        return RawEmailReaderRecord.model_validate(row_to_dict(row))
+
+    def _email_preview_query_parts(self) -> tuple[str, str, tuple[object, ...]]:
+        """Return the shared preview column list, joins, and join parameters."""
+
+        classification_columns = ""
+        classification_join = ""
         if self._table_exists("email_classifications"):
             classification_columns = """,
                 email_classifications.category AS classification_category,
@@ -257,13 +373,9 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             classification_join = """
             LEFT JOIN email_classifications
                 ON email_classifications.email_id = raw_emails.id"""
-        else:
-            classification_columns = ""
-            classification_join = ""
 
-        rows = self.execute(
-            f"""
-            SELECT
+        columns = f"""
+                raw_emails.public_id,
                 raw_emails.from_addr,
                 raw_emails.to_addr,
                 raw_emails.subject,
@@ -277,19 +389,12 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                 raw_emails.provider,
                 raw_emails.ingested_at,
                 email_filter_decisions.outcome AS filter_outcome,
-                email_filter_decisions.reason AS filter_reason{classification_columns}
-            FROM raw_emails
+                email_filter_decisions.reason AS filter_reason{classification_columns}"""
+        joins = f"""
             LEFT JOIN email_filter_decisions
                 ON email_filter_decisions.email_id = raw_emails.id
-                AND email_filter_decisions.strategy = 'broad_job_search'{classification_join}
-            {provider_clause}
-            ORDER BY {order_clause}
-            LIMIT ?
-            """,
-            parameters,
-        ).fetchall()
-
-        return tuple(_raw_email_preview_from_row(row) for row in rows)
+                AND email_filter_decisions.strategy = ?{classification_join}"""
+        return columns, joins, (EmailCandidateQueryStrategy.BROAD_JOB_SEARCH.value,)
 
     def get_classification_candidate_stats(
         self,
@@ -685,11 +790,18 @@ def _raw_email_preview_from_row(row: sqlite3.Row) -> RawEmailPreviewRecord:
     row_data = row_to_dict(row)
     from_addr = row_data.pop("from_addr")
     to_addr = row_data.pop("to_addr")
-    subject = row_data.pop("subject")
-    row_data["from_domain"] = _email_address_domain(from_addr)
+    subject = row_data["subject"]
+    row_data["from_domain"] = email_address_domain(from_addr)
     row_data["to_domains"] = _email_address_domains(to_addr)
     row_data["subject_present"] = bool(str(subject or "").strip())
     return RawEmailPreviewRecord.model_validate(row_data)
+
+
+def _utc_isoformat(value: datetime) -> str:
+    if value.tzinfo is None:
+        msg = "sent_after and sent_before must be timezone-aware"
+        raise ValueError(msg)
+    return value.astimezone(UTC).isoformat()
 
 
 def _email_address_domains(value: object) -> list[str]:
@@ -697,21 +809,10 @@ def _email_address_domains(value: object) -> list[str]:
         return []
     domains = {
         domain
-        for domain in (_email_address_domain(part) for part in str(value).split(","))
+        for domain in (email_address_domain(part) for part in str(value).split(","))
         if domain is not None
     }
     return sorted(domains)
-
-
-def _email_address_domain(value: object) -> str | None:
-    if value is None:
-        return None
-    address = str(value).strip().rstrip(">")
-    _local_part, separator, domain = address.rpartition("@")
-    if not separator:
-        return None
-    normalized_domain = domain.strip().lower()
-    return normalized_domain or None
 
 
 def _format_datetime(value: datetime | None) -> str | None:
