@@ -55,7 +55,8 @@ The response contains:
 - `items` with public-safe metadata and an opaque local email identifier.
 - `page`, `page_size`, `total_items`, and `total_pages`.
 
-The opaque identifier is the local raw-email primary key.
+The opaque identifier is a dedicated random `public_id` stored on each local raw-email row.
+It is distinct from the provider-owned primary key and remains stable across idempotent sync replays.
 Provider message IDs, thread IDs, OAuth material, body snippets, and secrets are not exposed in list responses.
 Ordering is deterministic by `sent_at` descending with the local identifier as the tie-breaker.
 
