@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
@@ -96,6 +97,12 @@ class BackfillStateRepository(BaseRepository[EmailBackfillStateRecord]):
             """,
             (account.provider.value, account.account_id),
         )
+
+    def latest_completed_at(self) -> datetime | None:
+        row = self.connection.execute(
+            "SELECT MAX(completed_at) FROM email_backfill_state WHERE completed_at IS NOT NULL"
+        ).fetchone()
+        return None if row is None or row[0] is None else datetime.fromisoformat(row[0])
 
     def map_row(self, row: sqlite3.Row) -> EmailBackfillStateRecord:
         return EmailBackfillStateRecord.model_validate(row_to_dict(row))

@@ -4,7 +4,8 @@ import asyncio
 from dataclasses import dataclass, field
 
 import pytest
-from app.config import AppSettings
+from app.api.dependencies import get_llm_provider
+from app.config import AppSettings, ClassificationMode, LLMProviderName
 from app.providers.llm import (
     LLMEmbedding,
     LLMEmbeddingProvider,
@@ -112,12 +113,22 @@ class FakeAzureTransport:
 def azure_settings() -> AppSettings:
     return AppSettings(
         _env_file=None,
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        classification_mode=ClassificationMode.HYBRID,
         azure_openai_endpoint="https://example.openai.azure.com/",
         azure_openai_api_version="2024-06-01",
         azure_openai_chat_deployment="jobtracker-chat",
         azure_openai_embedding_deployment="jobtracker-embedding",
         llm_timeout_seconds=17,
     )
+
+
+def test_llm_provider_dependency_resolves_selected_azure_provider() -> None:
+    provider = get_llm_provider(azure_settings(), FakeSecretStore("api-key"))
+
+    assert isinstance(provider, AzureOpenAIProvider)
+    assert provider.provider_name == "azure_openai"
+    assert "api-key" not in repr(provider)
 
 
 def generation_request(

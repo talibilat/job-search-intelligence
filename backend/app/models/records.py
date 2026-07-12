@@ -25,13 +25,19 @@ from app.models.correction import (
     JsonObject,
     JsonObjectList,
 )
-from app.models.event import ApplicationEventRecord, ApplicationEventType
+from app.models.event import (
+    ApplicationEventRecord,
+    ApplicationEventTimelineRecord,
+    ApplicationEventType,
+    RecentApplicationEventRecord,
+)
 from app.models.filter_decision import (
     EmailCandidateQueryStrategy,
     EmailFilterDecisionOutcome,
     EmailFilterDecisionRecord,
 )
 from app.models.insight import (
+    InsightCitation,
     InsightInput,
     InsightInputEvidence,
     InsightInputFact,
@@ -50,7 +56,9 @@ __all__ = [
     "ApplicationCorrectionConflictRecord",
     "ApplicationCorrectionRecord",
     "ApplicationEventRecord",
+    "ApplicationEventTimelineRecord",
     "ApplicationEventType",
+    "RecentApplicationEventRecord",
     "ApplicationRecord",
     "ApplicationSource",
     "ApplicationStatus",
@@ -72,6 +80,7 @@ __all__ = [
     "EmailFilterDecisionRecord",
     "EmailSyncStateRecord",
     "EmailTextChunk",
+    "InsightCitation",
     "InsightRecord",
     "InsightInput",
     "InsightInputEvidence",

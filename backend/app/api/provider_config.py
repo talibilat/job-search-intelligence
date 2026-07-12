@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import ValidationError
 
+from app.api.dependencies import get_llm_provider
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.models import (
@@ -16,13 +17,14 @@ from app.providers import ProviderConfigurationError, ProviderRegistry, provider
 from app.providers.llm import (
     LLMProvider,
     LLMProviderHealthCheckResponse,
-    LLMProviderUnavailableError,
 )
 from app.services.llm_health import check_configured_llm_provider_health
 from app.services.provider_config import (
+    SyncSchedulerConfigurationError,
     apply_provider_config_update,
     build_provider_config_response,
 )
+from app.services.sync_service import SyncScheduler
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -31,16 +33,30 @@ def get_provider_registry() -> ProviderRegistry:
     return provider_registry
 
 
+def get_active_sync_scheduler(request: Request) -> SyncScheduler:
+    """Return the scheduler owned by the active FastAPI lifespan."""
+
+    sync_scheduler = getattr(request.app.state, "sync_scheduler", None)
+    if sync_scheduler is None:
+        raise ApiError(
+            status_code=503,
+            code=ApiErrorCode.SERVICE_UNAVAILABLE,
+            message="Sync scheduler is not available.",
+        )
+    return cast(SyncScheduler, sync_scheduler)
+
+
 def get_configured_llm_provider(
     settings: Annotated[AppSettings, Depends(get_settings)],
     registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
+    llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
 ) -> LLMProvider:
     try:
         registry.validate_settings(settings)
     except ProviderConfigurationError as error:
         raise _provider_configuration_error(error) from error
 
-    raise LLMProviderUnavailableError(public_message="LLM provider adapter is not configured.")
+    return llm_provider
 
 
 async def validate_llm_provider_health_request_body(
@@ -101,17 +117,27 @@ def get_provider_config(
 @router.put(
     "/providers",
     response_model=ProviderConfigResponse,
-    responses={400: {"model": ApiErrorResponse}, 422: {"model": ApiErrorResponse}},
+    responses={
+        400: {"model": ApiErrorResponse},
+        422: {"model": ApiErrorResponse},
+        503: {"model": ApiErrorResponse},
+    },
 )
 def update_provider_config(
     request: ProviderConfigUpdateRequest,
     settings: Annotated[AppSettings, Depends(get_settings)],
     registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
+    sync_scheduler: Annotated[SyncScheduler, Depends(get_active_sync_scheduler)],
 ) -> ProviderConfigResponse:
     """Validate and update provider config, applying recommendations on provider changes."""
 
     try:
-        return apply_provider_config_update(settings, request, registry)
+        return apply_provider_config_update(
+            settings,
+            request,
+            registry,
+            sync_scheduler=sync_scheduler,
+        )
     except ValidationError as error:
         raise ApiError(
             status_code=422,
@@ -121,6 +147,12 @@ def update_provider_config(
         ) from error
     except ProviderConfigurationError as error:
         raise _provider_configuration_error(error) from error
+    except SyncSchedulerConfigurationError as error:
+        raise ApiError(
+            status_code=503,
+            code=ApiErrorCode.SERVICE_UNAVAILABLE,
+            message="Sync scheduler settings could not be applied.",
+        ) from error
 
 
 @router.post(

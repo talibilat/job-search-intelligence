@@ -22,6 +22,8 @@ class ProviderConfigValues(BaseModel):
 
     gmail_client_config_file: Path
     gmail_scopes: tuple[str, ...]
+    sync_on_open: bool
+    sync_interval_seconds: int
     azure_openai_endpoint: str
     azure_openai_api_version: str
     azure_openai_chat_deployment: str
@@ -88,6 +90,8 @@ class ProviderConfigUpdateRequest(BaseModel):
     classification_mode: ClassificationMode | None = None
     gmail_client_config_file: Path | None = None
     gmail_scopes: tuple[str, ...] | None = None
+    sync_on_open: bool | None = None
+    sync_interval_seconds: int | None = Field(default=None, ge=60, le=86_400)
     azure_openai_endpoint: str | None = None
     azure_openai_api_version: str | None = Field(default=None, min_length=1)
     azure_openai_chat_deployment: str | None = None

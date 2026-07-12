@@ -32,7 +32,7 @@ Baseline coding standards for every agent and contributor.
 - Sync services persist provider-owned cursors and in-progress page tokens through `SyncStateRepository`, keyed by provider and account, without treating cursor values or page tokens as OAuth token material or email content.
 - Sync services coordinate provider metadata pagination, persist page progress before continuing, and must recover from expired incremental cursors by restarting resumable full metadata reconciliation without passing stale cursors into full-backfill requests.
 - Public sync status crosses the API boundary through the `EmailSyncStatus` DTO and must expose only run state, mode, deterministic counts, sanitized errors, and timestamps, never provider payloads, OAuth tokens, raw cursors, page tokens, or email content.
-- Sync scheduling stays backend-process local: `SyncScheduler` owns APScheduler start and shutdown through the FastAPI lifespan, registers only injected async sync jobs, and remains stopped when `sync_on_open` is false.
+- Sync scheduling stays backend-process local: `SyncScheduler` keeps the APScheduler backend started for the FastAPI lifespan and keeps the interval job absent when `sync_on_open` is false.
 - Broad job-search candidate selection belongs in provider-neutral DTOs over normalized metadata; provider metadata listing requests must not accept body content, snippets, or provider-specific candidate filters.
 - Candidate decisions must be deterministic scored outcomes with public-safe signal tokens; excluded labels are hard rejections, and same-page thread promotion must expose only a static thread signal instead of raw provider thread IDs.
 - Candidate-query keyword checks may also run over already-normalized retained body text when a caller already has it, but the query must store only static terms and never serialize private email content.
@@ -94,6 +94,7 @@ Baseline coding standards for every agent and contributor.
 - Status-derivation aggregation changes: verify incremental out-of-order evidence, manual-lock preservation, event-type-only derivation, and missing-`event_at` idempotency.
 - Grouping-key-only aggregation changes: run the focused grouping-key tests plus the company and role normalization tests that feed the key.
 - Insight prompt, evidence-scope, or cache-hash changes: run the focused insight input and generation service tests, and verify grounding plus citation behavior.
+- Persisted insight citations contain only evidence IDs referenced by validated narrative content, including deterministic insufficient-evidence content.
 - Never claim work is complete without fresh verification evidence.
 
 ## Ticket-specific conventions

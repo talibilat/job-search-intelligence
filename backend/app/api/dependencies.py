@@ -22,6 +22,8 @@ from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
+from app.providers.llm.azure_openai import AzureOpenAIProvider
+from app.security import SecretRef, SecretStore, create_secret_store
 from app.services.aggregation import AggregationService
 from app.services.application_corrections import ApplicationCorrectionService
 from app.services.applications import (
@@ -58,9 +60,35 @@ def get_email_connection_repository(
         connection.close()
 
 
+def get_email_connection_secret_refs(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> list[SecretRef]:
+    """Read connection credential refs and close SQLite before destructive work."""
+
+    database_path = sqlite_database_path(settings.database_url)
+    if not database_path.is_file():
+        return []
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    try:
+        repository = EmailConnectionRepository(connection)
+        return [item.credential_ref for item in repository.list_connections_metadata()]
+    finally:
+        connection.close()
+
+
+def get_llm_secret_store(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> SecretStore:
+    return create_secret_store(settings)
+
+
 def get_llm_provider(
     settings: Annotated[AppSettings, Depends(get_settings)],
+    secret_store: Annotated[SecretStore, Depends(get_llm_secret_store)],
 ) -> LLMProvider:
+    if settings.llm_provider is LLMProviderName.AZURE_OPENAI:
+        return AzureOpenAIProvider(settings=settings, secret_store=secret_store)
+
     if settings.llm_provider is LLMProviderName.OLLAMA:
         try:
             return OllamaLLMProvider(settings=settings)
@@ -73,8 +101,8 @@ def get_llm_provider(
 
     raise ApiError(
         status_code=503,
-        code=ApiErrorCode.SERVICE_UNAVAILABLE,
-        message="Selected LLM provider is unavailable.",
+        code=ApiErrorCode.LLM_PROVIDER_UNAVAILABLE,
+        message="The selected LLM provider is unavailable.",
     )
 
 

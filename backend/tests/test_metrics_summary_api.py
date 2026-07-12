@@ -157,6 +157,64 @@ def test_get_metrics_summary_counts_rejected_applications(tmp_path: Path) -> Non
     assert body["rejected_applications"] == 2
 
 
+def test_get_metrics_summary_counts_live_applications_with_composed_filters(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="applied-referral-remote",
+            current_status="applied",
+            source="referral",
+            work_mode="remote",
+        )
+        insert_application(
+            connection,
+            application_id="review-company-remote",
+            current_status="in_review",
+            work_mode="remote",
+        )
+        insert_application(
+            connection,
+            application_id="assessment-company-hybrid",
+            current_status="assessment",
+            work_mode="hybrid",
+        )
+        insert_application(
+            connection,
+            application_id="interview-referral-hybrid",
+            current_status="interview",
+            source="referral",
+            work_mode="hybrid",
+        )
+        insert_application(
+            connection,
+            application_id="offer-company-remote",
+            current_status="offer",
+            work_mode="remote",
+        )
+        insert_application(
+            connection,
+            application_id="rejected-referral-remote",
+            current_status="rejected",
+            source="referral",
+            work_mode="remote",
+        )
+        insert_application(connection, application_id="ghosted", current_status="ghosted")
+        insert_application(connection, application_id="withdrawn", current_status="withdrawn")
+
+    client = create_test_client(database_path)
+
+    response = client.get("/metrics/summary")
+    filtered = client.get("/metrics/summary?source=referral&work_mode=remote")
+
+    assert response.status_code == 200
+    assert response.json()["live_applications"] == 5
+    assert filtered.status_code == 200
+    assert filtered.json()["live_applications"] == 1
+
+
 def test_get_metrics_summary_counts_offers_received_from_event_history(
     tmp_path: Path,
 ) -> None:
@@ -489,6 +547,7 @@ def insert_application(
     last_activity_at: str = "2026-07-03T10:00:00+00:00",
     company: str = "Acme Corp",
     source: str = "company_site",
+    work_mode: str | None = None,
 ) -> None:
     connection.execute(
         """
@@ -510,7 +569,7 @@ def insert_application(
             None,
             None,
             None,
-            None,
+            work_mode,
             None,
             "unknown",
             "[]",

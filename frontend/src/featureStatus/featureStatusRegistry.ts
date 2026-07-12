@@ -378,7 +378,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     screens: [],
     sharedUi: [],
     stateConnections: [],
-    status: "in_progress",
+    status: "planned",
     testing: {
       canTestNow: true,
       entryPoint: "/features",

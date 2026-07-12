@@ -9,9 +9,10 @@ from app.api.dependencies import (
     get_email_connection_repository as get_email_connection_repository,
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
-from app.config import AppSettings, get_settings
+from app.config import AppSettings, EmailProviderName, get_settings
 from app.db.repositories.connection import EmailConnectionRepository
 from app.providers.email import (
+    EmailAccountRef,
     EmailAuthorizationStartResult,
     EmailConnection,
     EmailProvider,
@@ -20,7 +21,8 @@ from app.providers.email import (
     EmailProviderTransientError,
 )
 from app.providers.email.gmail import GmailEmailProvider
-from app.security import SecretStore, create_secret_store
+from app.security import SecretStore, SecretStoreError, create_secret_store
+from app.services.connection import ConnectionDisconnectService, ConnectionNotFoundError
 from app.services.gmail_auth import (
     InMemoryOAuthStateStore,
     InvalidOAuthStateError,
@@ -57,6 +59,66 @@ def get_gmail_email_provider(
     secret_store: Annotated[SecretStore, Depends(get_gmail_secret_store)],
 ) -> EmailProvider:
     return GmailEmailProvider(settings=settings, secret_store=secret_store)
+
+
+@router.get(
+    "/connections",
+    response_model=list[EmailConnection],
+    summary="List Email Connections",
+    description=(
+        "Returns non-secret metadata for every locally stored email connection. "
+        "Token material never leaves the configured secret store."
+    ),
+)
+def list_email_connections(
+    connection_repository: Annotated[
+        EmailConnectionRepository,
+        Depends(get_email_connection_repository),
+    ],
+) -> list[EmailConnection]:
+    return connection_repository.list_connections_metadata()
+
+
+@router.delete(
+    "/connections/{provider}/{account_id}",
+    response_model=EmailConnection,
+    responses={
+        404: {"model": ApiErrorResponse},
+        503: {"model": ApiErrorResponse},
+    },
+    summary="Disconnect Email Connection",
+    description=(
+        "Removes one stored email connection and deletes its credential from the "
+        "configured secret store. Provider-side mailbox data is never touched."
+    ),
+)
+async def disconnect_email_connection(
+    provider: EmailProviderName,
+    account_id: str,
+    connection_repository: Annotated[
+        EmailConnectionRepository,
+        Depends(get_email_connection_repository),
+    ],
+    secret_store: Annotated[SecretStore, Depends(get_gmail_secret_store)],
+) -> EmailConnection:
+    account = EmailAccountRef(provider=provider, account_id=account_id)
+    try:
+        return await ConnectionDisconnectService(
+            connection_repository=connection_repository,
+            secret_store=secret_store,
+        ).disconnect(account)
+    except ConnectionNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message="Email connection not found.",
+        ) from error
+    except SecretStoreError as error:
+        raise ApiError(
+            status_code=503,
+            code=ApiErrorCode.SERVICE_UNAVAILABLE,
+            message="Stored credentials could not be removed. Try again.",
+        ) from error
 
 
 @router.get(

@@ -20,7 +20,6 @@ from app.models import (
     ApplicationCorrectionConflictRecord,
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
-    ApplicationEventRecord,
     ApplicationMergeRequest,
     ApplicationMergeResponse,
     ApplicationRecord,
@@ -28,12 +27,20 @@ from app.models import (
     ApplicationResetLockResponse,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
+    ApplicationStatusCountsResponse,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
     GhostInferenceRunApiRequest,
     GhostInferenceRunResponse,
 )
-from app.models.records import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.records import (
+    ApplicationEventTimelineRecord,
+    ApplicationSource,
+    ApplicationStatus,
+    RecentApplicationEventRecord,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.services.application_corrections import (
     ApplicationCorrectionService,
     ApplicationLockResetConflictError,
@@ -170,6 +177,43 @@ async def run_ghost_inference(
 
 
 @router.get(
+    "/status-counts",
+    response_model=ApplicationStatusCountsResponse,
+    summary="Get Application Status Counts",
+    description=(
+        "Returns deterministic application counts per canonical current status "
+        "from the local SQLite source of truth, zero-filled for unused statuses."
+    ),
+)
+def get_application_status_counts(
+    service: Annotated[
+        ApplicationDetailService,
+        Depends(get_application_detail_service),
+    ],
+) -> ApplicationStatusCountsResponse:
+    return service.get_status_counts()
+
+
+@router.get(
+    "/events/recent",
+    response_model=list[RecentApplicationEventRecord],
+    summary="List Recent Application Events",
+    description=(
+        "Returns the newest timeline events across all applications for the "
+        "overview activity feed, with source-email subject metadata only."
+    ),
+)
+def list_recent_application_events(
+    service: Annotated[
+        ApplicationEventsService,
+        Depends(get_application_events_service),
+    ],
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> list[RecentApplicationEventRecord]:
+    return service.list_recent_events(limit=limit)
+
+
+@router.get(
     "/{id}",
     response_model=ApplicationRecord,
     responses={404: {"model": ApiErrorResponse}, 422: {"model": ApiErrorResponse}},
@@ -195,10 +239,13 @@ def get_application_detail(
 
 @router.get(
     "/{id}/events",
-    response_model=list[ApplicationEventRecord],
+    response_model=list[ApplicationEventTimelineRecord],
     responses={404: {"model": ApiErrorResponse}},
     summary="List Application Events",
-    description="Returns the canonical event timeline for one application from local SQLite.",
+    description=(
+        "Returns the canonical event timeline for one application from local SQLite, "
+        "enriched with source-email subject metadata and classification confidence."
+    ),
 )
 def get_application_events(
     id: str,
@@ -206,9 +253,9 @@ def get_application_events(
         ApplicationEventsService,
         Depends(get_application_events_service),
     ],
-) -> list[ApplicationEventRecord]:
+) -> list[ApplicationEventTimelineRecord]:
     try:
-        return service.list_application_events(id)
+        return service.list_application_timeline(id)
     except ApplicationReadNotFoundError as error:
         raise ApiError(
             status_code=404,

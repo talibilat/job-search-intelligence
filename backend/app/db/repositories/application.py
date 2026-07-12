@@ -83,6 +83,18 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         sql = f"{sql} ORDER BY first_seen_at DESC, id ASC"
         return self.fetch_all(sql, tuple(parameters))
 
+    def count_by_status(self) -> dict[str, int]:
+        """Return deterministic application counts grouped by current status."""
+
+        rows = self.execute(
+            """
+            SELECT current_status AS status, COUNT(*) AS count
+            FROM applications
+            GROUP BY current_status
+            """,
+        ).fetchall()
+        return {str(row["status"]): int(row["count"]) for row in rows}
+
     def list_ghost_inference_candidates(self, *, cutoff_at: str) -> list[ApplicationRecord]:
         """Return applied applications whose timeline has no response evidence."""
 

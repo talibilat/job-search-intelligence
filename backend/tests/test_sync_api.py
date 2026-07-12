@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+import app.api.sync as sync_api
 import pytest
 from app.api.sync import (
     ConfiguredEmailSyncRuntime,
@@ -127,6 +128,31 @@ class FakeMetadataProvider:
         )
 
 
+class PagingMetadataProvider:
+    def __init__(self) -> None:
+        self.requests: list[EmailMetadataListRequest] = []
+
+    async def list_message_metadata(
+        self,
+        connection: EmailConnection,
+        request: EmailMetadataListRequest,
+    ) -> EmailMetadataPage:
+        self.requests.append(request)
+        if request.page_token is None:
+            return EmailMetadataPage(
+                messages=(metadata_message(connection, "gmail-msg-1"),),
+                next_page_token="page-2",
+            )
+        return EmailMetadataPage(
+            messages=(metadata_message(connection, "gmail-msg-2"),),
+            next_sync_cursor=EmailProviderCursor(
+                account=connection.account,
+                value="replacement-cursor",
+                issued_at=NOW,
+            ),
+        )
+
+
 class ExpiringCursorMetadataProvider:
     def __init__(self) -> None:
         self.requests: list[EmailMetadataListRequest] = []
@@ -242,6 +268,37 @@ def test_get_sync_status_returns_current_runtime_status() -> None:
 
     assert response.status_code == 200
     assert response.json()["state"] == "idle"
+
+
+def test_get_sync_stats_uses_durable_state_after_process_restart(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO email_sync_state (
+                provider, account_id, sync_cursor, cursor_issued_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "history-1",
+                "2026-07-11T09:00:00+00:00",
+                "2026-07-11T10:00:00+00:00",
+            ),
+        )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    app.dependency_overrides[get_sync_status_store] = EmailSyncStatusStore
+
+    response = TestClient(app).get("/sync/stats")
+
+    assert response.status_code == 200
+    assert response.json()["last_run_at"] == "2026-07-11T10:00:00Z"
 
 
 def test_post_sync_returns_typed_error_until_gmail_connection_is_configured(
@@ -476,13 +533,59 @@ def test_get_sync_recent_emails_orders_by_sent_at_by_default(tmp_path: Path) -> 
     ]
 
 
-def test_post_sync_passes_extraction_limits_to_provider_request(
+def test_incremental_sync_applies_limits_without_provider_date_filters(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
     create_sync_tables(database_path)
     with sqlite3.connect(database_path) as connection:
         EmailConnectionRepository(connection).save_connection(email_connection())
+        connection.execute(
+            """
+            INSERT INTO email_sync_state (
+                provider,
+                account_id,
+                sync_cursor,
+                cursor_issued_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "history-current",
+                NOW.isoformat(),
+                NOW.isoformat(),
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO email_backfill_state (
+                provider,
+                account_id,
+                status,
+                processed_page_count,
+                processed_message_count,
+                sync_cursor,
+                cursor_issued_at,
+                started_at,
+                updated_at,
+                completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "completed",
+                1,
+                1,
+                "history-current",
+                NOW.isoformat(),
+                NOW.isoformat(),
+                NOW.isoformat(),
+                NOW.isoformat(),
+            ),
+        )
     provider = FakeMetadataProvider()
     status_store = EmailSyncStatusStore()
     app = create_app()
@@ -507,12 +610,84 @@ def test_post_sync_passes_extraction_limits_to_provider_request(
 
     assert response.status_code == 200
     assert response.json()["target_message_count"] == 12
+    assert response.json()["message_count"] == 0
     assert len(provider.requests) == 1
     assert provider.requests[0].page_size == 12
-    assert provider.requests[0].since_date is not None
-    assert provider.requests[0].before_date is not None
-    assert provider.requests[0].since_date.isoformat() == "2026-01-01"
-    assert provider.requests[0].before_date.isoformat() == "2026-07-01"
+    assert provider.requests[0].since_date is None
+    assert provider.requests[0].before_date is None
+
+
+def test_bounded_first_sync_runs_complete_unbounded_backfill(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    provider = PagingMetadataProvider()
+    settings = AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        gmail_page_size=77,
+    )
+    runtime = ConfiguredEmailSyncRuntime(
+        settings=settings,
+        email_provider=cast(EmailProvider, provider),
+        connection_resolver=email_connection,
+        status_store=EmailSyncStatusStore(),
+    )
+
+    status = asyncio.run(
+        runtime.run_manual_sync(EmailSyncOptions(max_age_days=7, max_messages=1)),
+    )
+
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert [request.page_token for request in provider.requests] == [None, "page-2"]
+    assert all(request.since_date is None for request in provider.requests)
+    assert all(request.before_date is None for request in provider.requests)
+    assert all(request.page_size == settings.gmail_page_size for request in provider.requests)
+    with sqlite3.connect(database_path) as connection:
+        row = connection.execute(
+            "SELECT sync_cursor FROM email_sync_state WHERE provider = ? AND account_id = ?",
+            ("gmail", "me@example.com"),
+        ).fetchone()
+    assert row == ("replacement-cursor",)
+
+
+def test_cursor_without_completed_backfill_runs_lifetime_backfill(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO email_sync_state (
+                provider, account_id, sync_cursor, cursor_issued_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "legacy-cursor",
+                NOW.isoformat(),
+                NOW.isoformat(),
+            ),
+        )
+    provider = PagingMetadataProvider()
+    runtime = ConfiguredEmailSyncRuntime(
+        settings=AppSettings(
+            _env_file=None,
+            database_url=f"sqlite+aiosqlite:///{database_path}",
+            gmail_page_size=77,
+        ),
+        email_provider=cast(EmailProvider, provider),
+        connection_resolver=email_connection,
+        status_store=EmailSyncStatusStore(),
+    )
+
+    status = asyncio.run(runtime.run_manual_sync(EmailSyncOptions(max_messages=1)))
+
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert [request.mode for request in provider.requests] == [
+        EmailSyncMode.FULL_BACKFILL,
+        EmailSyncMode.FULL_BACKFILL,
+    ]
+    assert [request.page_token for request in provider.requests] == [None, "page-2"]
 
 
 def test_default_sync_email_provider_uses_configured_secret_store(tmp_path: Path) -> None:
@@ -553,6 +728,34 @@ def test_post_sync_recovers_expired_incremental_cursor(tmp_path: Path) -> None:
                 "gmail",
                 "me@example.com",
                 "history-expired",
+                "2026-07-04T12:00:00+00:00",
+                "2026-07-04T12:00:00+00:00",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO email_backfill_state (
+                provider,
+                account_id,
+                status,
+                processed_page_count,
+                processed_message_count,
+                sync_cursor,
+                cursor_issued_at,
+                started_at,
+                updated_at,
+                completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "completed",
+                1,
+                1,
+                "history-expired",
+                "2026-07-04T12:00:00+00:00",
+                "2026-07-04T12:00:00+00:00",
                 "2026-07-04T12:00:00+00:00",
                 "2026-07-04T12:00:00+00:00",
             ),
@@ -606,6 +809,30 @@ def test_configured_runtime_rejects_concurrent_manual_syncs(tmp_path: Path) -> N
         await first_run
 
     asyncio.run(run_test())
+
+
+def test_configured_sync_job_skips_when_gmail_connection_is_not_configured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    settings = AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        secret_store_backend=SecretStoreBackend.FERNET,
+        fernet_key_file=tmp_path / "fernet.key",
+        data_dir=tmp_path,
+    )
+    status_store = EmailSyncStatusStore()
+    monkeypatch.setattr(sync_api, "get_sync_status_store", lambda: status_store)
+
+    async def run_sync_job() -> None:
+        await sync_api.create_configured_sync_job(settings)()
+
+    asyncio.run(run_sync_job())
+
+    assert status_store.current_status().state is EmailSyncRunState.IDLE
 
 
 def email_connection() -> EmailConnection:

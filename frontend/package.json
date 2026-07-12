@@ -20,6 +20,8 @@
     "check": "npm run check:api && npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
+    "@fontsource/instrument-sans": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "recharts": "^3.9.2"

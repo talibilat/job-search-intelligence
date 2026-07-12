@@ -7,12 +7,12 @@ from fastapi import FastAPI
 
 from .api import api_router
 from .api.errors import register_exception_handlers
+from .api.sync import create_configured_sync_job
 from .config import AppSettings, get_settings
 from .services.sync_service import (
     ScheduledJobScheduler,
     SyncJob,
     SyncScheduler,
-    noop_sync_job,
 )
 
 Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None, bool | None]]
@@ -49,7 +49,7 @@ def create_app(
     scheduler: ScheduledJobScheduler | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
-    resolved_sync_job = sync_job or noop_sync_job
+    resolved_sync_job = sync_job or create_configured_sync_job(resolved_settings)
     fastapi_app = FastAPI(
         title="Job Search Intelligence API",
         lifespan=create_lifespan(

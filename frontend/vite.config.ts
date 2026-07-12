@@ -30,7 +30,21 @@ export default defineConfig({
       "/metrics": BACKEND_URL,
       "/pipeline": BACKEND_URL,
       "/classification": BACKEND_URL,
-      "/insights": BACKEND_URL,
+      // "/insights" is both a backend API path and a frontend page route.
+      // Serve SPA page navigations (browser HTML requests) from Vite and
+      // forward JSON API requests to the backend.
+      "/insights": {
+        target: BACKEND_URL,
+        changeOrigin: true,
+        bypass(req: IncomingMessage) {
+          if (
+            req.method === "GET" &&
+            (req.headers.accept ?? "").includes("text/html")
+          ) {
+            return req.url;
+          }
+        },
+      },
       // "/applications/{id}" is both a backend API path and a frontend page
       // route. Serve SPA page navigations (browser HTML requests) from Vite
       // and forward JSON API requests to the backend.

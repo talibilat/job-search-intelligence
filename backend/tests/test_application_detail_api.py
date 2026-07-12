@@ -215,6 +215,8 @@ def test_get_application_events_returns_ordered_timeline(tmp_path: Path) -> None
             "extracted_status": None,
             "email_sent_at": "2026-07-01T09:00:00Z",
             "classification_classified_at": None,
+            "email_subject": "Application update",
+            "classification_confidence": None,
         },
         {
             "id": "event-2",
@@ -226,6 +228,8 @@ def test_get_application_events_returns_ordered_timeline(tmp_path: Path) -> None
             "extracted_status": None,
             "email_sent_at": "2026-07-01T09:00:00Z",
             "classification_classified_at": None,
+            "email_subject": "Application update",
+            "classification_confidence": None,
         },
     ]
 
@@ -343,7 +347,7 @@ def test_application_events_endpoint_is_documented_in_openapi() -> None:
     operation = response.json()["paths"]["/applications/{id}/events"]["get"]
     success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     not_found_schema = operation["responses"]["404"]["content"]["application/json"]["schema"]
-    assert success_schema["items"]["$ref"] == "#/components/schemas/ApplicationEventRecord"
+    assert success_schema["items"]["$ref"] == "#/components/schemas/ApplicationEventTimelineRecord"
     assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 

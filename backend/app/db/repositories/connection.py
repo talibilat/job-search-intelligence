@@ -133,6 +133,51 @@ class EmailConnectionRepository(BaseRepository[EmailConnectionRecord]):
             return None
         return _connection_from_record(record)
 
+    def list_connections_metadata(self) -> list[EmailConnection]:
+        """Return metadata for every stored email connection, newest first."""
+
+        try:
+            records = self.fetch_all(
+                """
+                SELECT
+                    provider,
+                    account_id,
+                    display_email,
+                    credential_ref_kind,
+                    credential_ref_provider,
+                    credential_ref_name,
+                    granted_scopes,
+                    connected_at,
+                    credential_expires_at,
+                    reauth_required,
+                    updated_at
+                FROM email_connections
+                ORDER BY connected_at DESC, updated_at DESC
+                """,
+            )
+        except sqlite3.OperationalError as error:
+            if _is_missing_email_connections_table(error):
+                return []
+            raise
+        return [_connection_from_record(record) for record in records]
+
+    def delete_connection(self, account: EmailAccountRef) -> EmailConnection | None:
+        """Delete one stored connection and return its prior metadata, if any."""
+
+        record = self.fetch_connection(account)
+        if record is None:
+            return None
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            self.execute(
+                "DELETE FROM email_connections WHERE provider = ? AND account_id = ?",
+                (account.provider.value, account.account_id),
+            )
+        if should_commit:
+            self.connection.commit()
+        return _connection_from_record(record)
+
     def map_row(self, row: sqlite3.Row) -> EmailConnectionRecord:
         return EmailConnectionRecord.model_validate(row_to_dict(row))
 

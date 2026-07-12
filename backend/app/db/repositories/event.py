@@ -5,7 +5,11 @@ from typing import Literal
 
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
-from app.models.records import ApplicationEventRecord
+from app.models.records import (
+    ApplicationEventRecord,
+    ApplicationEventTimelineRecord,
+    RecentApplicationEventRecord,
+)
 
 type EventUpsertOutcome = Literal["upserted", "locked_unchanged", "manual_conflict"]
 type GhostEventDeleteOutcome = Literal["deleted", "manual_conflict", "not_found"]
@@ -58,6 +62,67 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
             """,
             (application_id,),
         )
+
+    def list_timeline_for_application(
+        self,
+        application_id: str,
+    ) -> list[ApplicationEventTimelineRecord]:
+        """Return one application's timeline enriched with source-email metadata.
+
+        Exposes only email subject metadata and classification confidence,
+        never body-derived content.
+        """
+
+        rows = self.execute(
+            """
+            SELECT
+                application_events.*,
+                raw_emails.sent_at AS email_sent_at,
+                raw_emails.subject AS email_subject,
+                email_classifications.classified_at AS classification_classified_at,
+                email_classifications.confidence AS classification_confidence
+            FROM application_events
+            LEFT JOIN raw_emails
+                ON raw_emails.id = application_events.email_id
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = application_events.email_id
+            WHERE application_id = ?
+            ORDER BY
+                application_events.event_at,
+                raw_emails.sent_at,
+                email_classifications.classified_at,
+                application_events.id
+            """,
+            (application_id,),
+        ).fetchall()
+        return [ApplicationEventTimelineRecord.model_validate(row_to_dict(row)) for row in rows]
+
+    def list_recent_events(self, *, limit: int) -> list[RecentApplicationEventRecord]:
+        """Return the newest events across all applications for activity feeds."""
+
+        rows = self.execute(
+            """
+            SELECT
+                application_events.id AS event_id,
+                application_events.application_id AS application_id,
+                applications.company AS company,
+                applications.role_title AS role_title,
+                applications.current_status AS current_status,
+                application_events.event_type AS event_type,
+                application_events.event_at AS event_at,
+                application_events.email_id AS email_id,
+                raw_emails.subject AS email_subject
+            FROM application_events
+            JOIN applications
+                ON applications.id = application_events.application_id
+            LEFT JOIN raw_emails
+                ON raw_emails.id = application_events.email_id
+            ORDER BY application_events.event_at DESC, application_events.id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [RecentApplicationEventRecord.model_validate(row_to_dict(row)) for row in rows]
 
     def list_by_ids_for_application(
         self,

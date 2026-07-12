@@ -36,8 +36,10 @@ Keep `JOBTRACKER_FERNET_KEY_FILE` and `JOBTRACKER_DATA_DIR/secrets/` out of git.
 The repository ignores `.jobtracker/` and `*.key`, but custom locations should also stay outside tracked paths.
 Back up the key and encrypted secret files together if you need to preserve local credentials across machines.
 For stronger separation, place `JOBTRACKER_FERNET_KEY_FILE` outside `JOBTRACKER_DATA_DIR` and outside the repository.
-With the default paths, `POST /local-data/wipe` deletes `JOBTRACKER_DATA_DIR`, including `secrets/` and `fernet.key`.
-A custom `JOBTRACKER_FERNET_KEY_FILE` outside `JOBTRACKER_DATA_DIR` is not deleted by wipe-data and must be removed separately if you want a full local credential wipe.
+`POST /local-data/wipe` first deletes all Gmail connection credentials and app-configured OAuth and LLM secret references through the configured `SecretStore`, including OS-keyring values and Fernet-backed values.
+Only after every secret deletion succeeds does it delete `JOBTRACKER_DATA_DIR`, including the default `secrets/` directory and `fernet.key`.
+If any secret deletion fails, the endpoint leaves SQLite and filesystem data intact so its stored credential references remain available for retry.
+A custom `JOBTRACKER_FERNET_KEY_FILE` outside `JOBTRACKER_DATA_DIR` can remain after wipe, but no app-referenced Fernet payload remains decryptable through JobTracker.
 Do not put API keys, OAuth tokens, passwords, Google OAuth client secrets, Fernet keys, or encrypted secret files in `.env.example` or committed docs.
 
 The fallback encrypts secrets at rest, but anyone with both the encrypted payload and the Fernet key can decrypt them.

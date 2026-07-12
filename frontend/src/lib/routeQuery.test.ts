@@ -7,6 +7,10 @@ import {
   stringQueryParam,
   updateRouteQuery,
 } from "./routeQuery";
+import {
+  pathForRoute,
+  redesignRouteFromLocation,
+} from "../redesign/RedesignApp";
 
 const dashboardQuerySchema = {
   statuses: stringListQueryParam("status"),
@@ -74,5 +78,34 @@ describe("route query helpers", () => {
     );
 
     expect(result).toBe("?page=2&tab=activity&sort=recent&status=rejected");
+  });
+});
+
+describe("redesign application status query", () => {
+  it("parses a valid status filter and falls back to all for invalid values", () => {
+    expect(
+      redesignRouteFromLocation("/applications", "?status=interview").statusFilter,
+    ).toBe("interview");
+    expect(
+      redesignRouteFromLocation("/applications", "?status=not-real").statusFilter,
+    ).toBe("all");
+  });
+
+  it("serializes non-default filters and omits all", () => {
+    expect(
+      pathForRoute({ page: "applications", detailId: null, statusFilter: "offer" }),
+    ).toBe("/applications?status=offer");
+    expect(
+      pathForRoute({ page: "applications", detailId: null, statusFilter: "all" }),
+    ).toBe("/applications");
+  });
+
+  it("preserves unrelated query parameters while changing status", () => {
+    expect(
+      pathForRoute(
+        { page: "applications", detailId: null, statusFilter: "closed" },
+        "?sort=recent&debug=1&status=offer",
+      ),
+    ).toBe("/applications?sort=recent&debug=1&status=closed");
   });
 });

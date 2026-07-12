@@ -30,6 +30,7 @@ from app.providers.email import (
 )
 from app.security import SecretKind, SecretRef
 from app.services.sync_service import (
+    SYNC_ON_OPEN_JOB_ID,
     EmailSyncRunState,
     EmailSyncService,
     EmailSyncStatus,
@@ -163,6 +164,7 @@ class RecordingScheduler:
         self.jobs: list[dict[str, object]] = []
         self.started = False
         self.shutdown_wait: bool | None = None
+        self.removed_job_ids: list[str] = []
 
     def add_job(
         self,
@@ -172,7 +174,7 @@ class RecordingScheduler:
         seconds: int,
         id: str,
         replace_existing: bool,
-        next_run_time: datetime | None,
+        next_run_time: datetime | None = None,
     ) -> None:
         self.jobs.append(
             {
@@ -187,6 +189,9 @@ class RecordingScheduler:
 
     def start(self) -> None:
         self.started = True
+
+    def remove_job(self, job_id: str) -> None:
+        self.removed_job_ids.append(job_id)
 
     def shutdown(self, *, wait: bool) -> None:
         self.shutdown_wait = wait
@@ -316,7 +321,7 @@ def test_sync_scheduler_starts_immediate_interval_job_when_enabled() -> None:
     assert calls == 1
 
 
-def test_sync_scheduler_does_not_start_when_sync_on_open_disabled() -> None:
+def test_sync_scheduler_starts_without_job_when_sync_on_open_disabled() -> None:
     scheduler_backend = RecordingScheduler()
 
     async def sync_job() -> None:
@@ -332,9 +337,118 @@ def test_sync_scheduler_does_not_start_when_sync_on_open_disabled() -> None:
     scheduler.start()
     scheduler.shutdown()
 
-    assert scheduler_backend.started is False
+    assert scheduler_backend.started is True
     assert scheduler_backend.jobs == []
-    assert scheduler_backend.shutdown_wait is None
+    assert scheduler_backend.shutdown_wait is False
+
+
+def test_sync_scheduler_reconfigure_enables_live_interval_job() -> None:
+    scheduler_backend = RecordingScheduler()
+
+    async def sync_job() -> None:
+        return None
+
+    scheduler = SyncScheduler(
+        sync_on_open=False,
+        interval_seconds=3600,
+        sync_job=sync_job,
+        scheduler=scheduler_backend,
+    )
+    scheduler.start()
+
+    scheduler.reconfigure(sync_on_open=True, interval_seconds=1800)
+
+    assert scheduler_backend.started is True
+    assert scheduler_backend.jobs[-1]["id"] == SYNC_ON_OPEN_JOB_ID
+    assert scheduler_backend.jobs[-1]["seconds"] == 1800
+    assert scheduler_backend.jobs[-1]["replace_existing"] is True
+    assert scheduler_backend.jobs[-1]["next_run_time"] is None
+
+
+def test_sync_scheduler_reconfigure_replaces_live_interval_job() -> None:
+    scheduler_backend = RecordingScheduler()
+
+    async def sync_job() -> None:
+        return None
+
+    scheduler = SyncScheduler(
+        sync_on_open=True,
+        interval_seconds=3600,
+        sync_job=sync_job,
+        scheduler=scheduler_backend,
+    )
+    scheduler.start()
+
+    scheduler.reconfigure(sync_on_open=True, interval_seconds=1800)
+
+    assert len(scheduler_backend.jobs) == 2
+    assert scheduler_backend.jobs[-1]["id"] == SYNC_ON_OPEN_JOB_ID
+    assert scheduler_backend.jobs[-1]["seconds"] == 1800
+    assert scheduler_backend.jobs[-1]["next_run_time"] is None
+
+
+def test_sync_scheduler_reconfigure_disables_live_interval_job() -> None:
+    scheduler_backend = RecordingScheduler()
+
+    async def sync_job() -> None:
+        return None
+
+    scheduler = SyncScheduler(
+        sync_on_open=True,
+        interval_seconds=3600,
+        sync_job=sync_job,
+        scheduler=scheduler_backend,
+    )
+    scheduler.start()
+
+    scheduler.reconfigure(sync_on_open=False, interval_seconds=1800)
+
+    assert scheduler_backend.removed_job_ids == [SYNC_ON_OPEN_JOB_ID]
+    assert scheduler_backend.started is True
+
+
+def test_sync_scheduler_failed_replacement_preserves_active_configuration() -> None:
+    class FailingReplacementScheduler(RecordingScheduler):
+        def add_job(
+            self,
+            func: object,
+            trigger: str,
+            *,
+            seconds: int,
+            id: str,
+            replace_existing: bool,
+            next_run_time: datetime | None = None,
+        ) -> None:
+            if self.jobs:
+                raise RuntimeError("scheduler exploded")
+            super().add_job(
+                func,
+                trigger,
+                seconds=seconds,
+                id=id,
+                replace_existing=replace_existing,
+                next_run_time=next_run_time,
+            )
+
+    scheduler_backend = FailingReplacementScheduler()
+
+    async def sync_job() -> None:
+        return None
+
+    scheduler = SyncScheduler(
+        sync_on_open=True,
+        interval_seconds=3600,
+        sync_job=sync_job,
+        scheduler=scheduler_backend,
+    )
+    scheduler.start()
+
+    with pytest.raises(RuntimeError, match="scheduler exploded"):
+        scheduler.reconfigure(sync_on_open=True, interval_seconds=1800)
+
+    scheduler.reconfigure(sync_on_open=False, interval_seconds=3600)
+
+    assert scheduler_backend.removed_job_ids == [SYNC_ON_OPEN_JOB_ID]
 
 
 def test_sync_scheduler_shutdown_stops_started_scheduler_without_waiting() -> None:
