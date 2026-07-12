@@ -21,7 +21,12 @@ from app.db.repositories import (
     SyncStateRepository,
 )
 from app.db.sqlite_url import sqlite_database_path
-from app.models.raw_email import RawEmailPreviewOrder
+from app.models.raw_email import (
+    MAX_EMAIL_PREVIEW_PAGE_SIZE,
+    RawEmailDetail,
+    RawEmailPreviewOrder,
+    RawEmailPreviewPage,
+)
 from app.models.records import EmailBackfillStatus, RawEmailPreviewRecord
 from app.models.sync import SyncLocalStats, SyncScopeEstimate
 from app.providers.email import EmailConnection, EmailProvider
@@ -42,6 +47,11 @@ from app.services.sync_service import (
     build_sync_local_stats,
     build_sync_scope_estimate,
     latest_sync_run_at,
+)
+from app.services.synced_email_reader import (
+    SyncedEmailContentUnavailableError,
+    SyncedEmailNotFoundError,
+    SyncedEmailReaderService,
 )
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -227,6 +237,30 @@ def get_email_sync_runtime(
     )
 
 
+def get_synced_email_reader_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    email_repository: Annotated[EmailRepository, Depends(get_readonly_email_repository)],
+    email_provider: Annotated[EmailProvider, Depends(get_sync_email_provider)],
+    connection_resolver: Annotated[
+        EmailSyncConnectionResolver,
+        Depends(get_email_sync_connection_resolver),
+    ],
+) -> SyncedEmailReaderService:
+    connection = connection_resolver()
+    if connection is None:
+        raise ApiError(
+            status_code=400,
+            code=ApiErrorCode.BAD_REQUEST,
+            message="No Gmail connection is configured.",
+        )
+    return SyncedEmailReaderService(
+        repository=email_repository,
+        provider=email_provider,
+        connection=connection,
+        provider_name=settings.email_provider,
+    )
+
+
 @router.post(
     "",
     response_model=EmailSyncStatus,
@@ -283,6 +317,82 @@ def sync_recent_emails(
     """
 
     return list(sync_runtime.recent_email_previews(limit=limit, order=order))
+
+
+@router.get(
+    "/emails",
+    response_model=RawEmailPreviewPage,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="List Synced Emails",
+    description=(
+        "Returns a deterministic page of locally synced raw-email metadata "
+        "within an optional sent-date window. Never contacts the email "
+        "provider or triggers classification."
+    ),
+)
+def sync_emails(
+    email_repository: Annotated[EmailRepository, Depends(get_readonly_email_repository)],
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=MAX_EMAIL_PREVIEW_PAGE_SIZE)] = 10,
+    sent_after: Annotated[datetime | None, Query()] = None,
+    sent_before: Annotated[datetime | None, Query()] = None,
+) -> RawEmailPreviewPage:
+    for bound in (sent_after, sent_before):
+        if bound is not None and bound.tzinfo is None:
+            raise ApiError(
+                status_code=422,
+                code=ApiErrorCode.VALIDATION_ERROR,
+                message="sent_after and sent_before must be timezone-aware.",
+            )
+    return email_repository.paginate_email_previews(
+        provider=settings.email_provider,
+        page=page,
+        page_size=page_size,
+        sent_after=sent_after,
+        sent_before=sent_before,
+    )
+
+
+@router.get(
+    "/emails/{public_id}/content",
+    response_model=RawEmailDetail,
+    responses={
+        400: {"model": ApiErrorResponse},
+        401: {"model": ApiErrorResponse},
+        403: {"model": ApiErrorResponse},
+        404: {"model": ApiErrorResponse},
+        429: {"model": ApiErrorResponse},
+        503: {"model": ApiErrorResponse},
+    },
+    summary="Read Synced Email Content",
+    description=(
+        "Returns normalized plain-text content for one synced email. Retained "
+        "bodies are served from local storage; metadata-only messages are "
+        "fetched transiently from the email provider and are not persisted."
+    ),
+)
+async def sync_email_content(
+    public_id: str,
+    reader_service: Annotated[
+        SyncedEmailReaderService,
+        Depends(get_synced_email_reader_service),
+    ],
+) -> RawEmailDetail:
+    try:
+        return await reader_service.read_email(public_id)
+    except SyncedEmailNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message="Email not found.",
+        ) from error
+    except SyncedEmailContentUnavailableError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message="Email content is not available.",
+        ) from error
 
 
 @router.get(
