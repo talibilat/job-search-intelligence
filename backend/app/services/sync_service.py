@@ -240,9 +240,8 @@ def build_sync_scope_estimate(
 ) -> SyncScopeEstimate:
     """Estimate how much email a sync scope covers using only local metadata.
 
-    The estimate never calls the provider: date-bounded scopes count already
-    synced raw emails in the window as a deterministic proxy, message caps
-    report the cap itself, and pure incremental syncs are reported as unknown.
+    The estimate never calls the provider. Full backfills and message caps are
+    explicit, while unseen incremental provider deltas remain unknown.
     """
 
     total_local_emails = email_repository.count_raw_emails()
@@ -270,34 +269,25 @@ def build_sync_scope_estimate(
         else None
     )
 
+    if options.max_messages is not None:
+        return SyncScopeEstimate(
+            estimated_message_count=options.max_messages,
+            basis=SyncScopeEstimateBasis.MESSAGE_CAP,
+            window_start=window_start,
+            window_end=window_end,
+            total_local_emails=total_local_emails,
+        )
+
     if window_start is None and window_end is None:
-        if options.max_messages is not None:
-            return SyncScopeEstimate(
-                estimated_message_count=min(
-                    options.max_messages,
-                    total_local_emails,
-                )
-                if total_local_emails > 0
-                else options.max_messages,
-                basis=SyncScopeEstimateBasis.MESSAGE_CAP,
-                total_local_emails=total_local_emails,
-            )
         return SyncScopeEstimate(
             estimated_message_count=None,
             basis=SyncScopeEstimateBasis.UNKNOWN_INCREMENTAL,
             total_local_emails=total_local_emails,
         )
 
-    window_count = email_repository.count_raw_emails_in_window(
-        sent_from=window_start.isoformat() if window_start is not None else None,
-        sent_before=window_end.isoformat() if window_end is not None else None,
-    )
-    estimated = window_count
-    if options.max_messages is not None:
-        estimated = min(estimated, options.max_messages)
     return SyncScopeEstimate(
-        estimated_message_count=estimated,
-        basis=SyncScopeEstimateBasis.LOCAL_HISTORY,
+        estimated_message_count=None,
+        basis=SyncScopeEstimateBasis.UNKNOWN_INCREMENTAL_WINDOW,
         window_start=window_start,
         window_end=window_end,
         total_local_emails=total_local_emails,

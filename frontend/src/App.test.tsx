@@ -3885,6 +3885,60 @@ describe("App", () => {
     expect(screen.queryByText(/New mail only/)).toBeNull();
   });
 
+  it("redesign sync describes a message cap as an upper bound", async () => {
+    mockFetchResponses({
+      "/sync/estimate": {
+        basis: "unknown_incremental",
+        estimated_message_count: null,
+        total_local_emails: 2,
+        window_end: null,
+        window_start: null,
+      },
+      "/sync/estimate?max_messages=500": {
+        basis: "message_cap",
+        estimated_message_count: 500,
+        total_local_emails: 2,
+        window_end: null,
+        window_start: null,
+      },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Only the most recent emails/ }),
+    );
+
+    expect(await screen.findByText("Up to 500 new emails")).toBeTruthy();
+  });
+
+  it("redesign sync reports an unknown incremental date-window count", async () => {
+    mockFetchResponses({
+      "/sync/estimate": {
+        basis: "unknown_incremental",
+        estimated_message_count: null,
+        total_local_emails: 2,
+        window_end: null,
+        window_start: null,
+      },
+      "/sync/estimate?max_age_days=7": {
+        basis: "unknown_incremental_window",
+        estimated_message_count: null,
+        total_local_emails: 2,
+        window_end: null,
+        window_start: "2026-07-05T00:00:00Z",
+      },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    fireEvent.click(screen.getByRole("button", { name: /Last 7 days/ }));
+
+    expect(
+      await screen.findByText("New mail in selected date range · count unknown"),
+    ).toBeTruthy();
+  });
+
   it.each([
     ["New mail since last sync", null],
     ["Last 7 days", { max_age_days: 7 }],

@@ -332,6 +332,20 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         setSyncEstimateLabel("Full mailbox history · time depends on mailbox size");
         return;
       }
+      if (estimate.basis === "unknown_incremental_window") {
+        setSyncEstimateLabel("New mail in selected date range · count unknown");
+        return;
+      }
+      if (
+        estimate.basis === "message_cap" &&
+        estimate.estimated_message_count !== null &&
+        estimate.estimated_message_count !== undefined
+      ) {
+        setSyncEstimateLabel(
+          `Up to ${formatCount(estimate.estimated_message_count)} new emails`,
+        );
+        return;
+      }
       if (estimate.estimated_message_count === null || estimate.estimated_message_count === undefined) {
         setSyncEstimateLabel("New mail only · usually under a minute");
         return;

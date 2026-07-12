@@ -108,9 +108,10 @@ class ConfiguredEmailSyncRuntime:
                 )
                 backfill_state = backfill_state_repository.fetch_state(connection.account)
                 sync_cursor = sync_state_repository.get_cursor(connection.account)
-                should_run_full_backfill = sync_cursor is None or (
-                    backfill_state is not None
-                    and backfill_state.status is not EmailBackfillStatus.COMPLETED
+                should_run_full_backfill = (
+                    sync_cursor is None
+                    or backfill_state is None
+                    or backfill_state.status is not EmailBackfillStatus.COMPLETED
                 )
                 if should_run_full_backfill:
                     return await sync_service.run_full_backfill(
@@ -348,9 +349,10 @@ def sync_estimate(
     if email_connection is not None:
         backfill_state = BackfillStateRepository(connection).fetch_state(email_connection.account)
         sync_cursor = SyncStateRepository(connection).get_cursor(email_connection.account)
-        requires_full_backfill = sync_cursor is None or (
-            backfill_state is not None
-            and backfill_state.status is not EmailBackfillStatus.COMPLETED
+        requires_full_backfill = (
+            sync_cursor is None
+            or backfill_state is None
+            or backfill_state.status is not EmailBackfillStatus.COMPLETED
         )
 
     return build_sync_scope_estimate(

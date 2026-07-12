@@ -279,6 +279,28 @@ def test_sync_estimate_reports_full_backfill_before_history_is_complete(
     }
 
 
+def test_sync_estimate_reports_full_backfill_for_legacy_cursor_without_backfill(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_connection(connection)
+        connection.execute(
+            """
+            INSERT INTO email_sync_state (
+                provider, account_id, sync_cursor, cursor_issued_at, updated_at
+            ) VALUES ('gmail', 'you@example.test', 'legacy-cursor', ?, ?)
+            """,
+            ("2026-07-01T09:00:00+00:00", "2026-07-01T09:00:00+00:00"),
+        )
+        connection.commit()
+
+    response = create_test_client(database_path).get("/sync/estimate")
+
+    assert response.status_code == 200
+    assert response.json()["basis"] == "full_backfill"
+
+
 def test_sync_estimate_bases_after_history_is_complete(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -321,13 +343,15 @@ def test_sync_estimate_bases_after_history_is_complete(tmp_path: Path) -> None:
 
     capped = client.get("/sync/estimate?max_messages=500").json()
     assert capped["basis"] == "message_cap"
-    assert capped["estimated_message_count"] == 2
+    assert capped["estimated_message_count"] == 500
 
     windowed = client.get(
         "/sync/estimate?since_date=2026-06-01&before_date=2026-08-01",
     ).json()
-    assert windowed["basis"] == "local_history"
-    assert windowed["estimated_message_count"] == 1
+    assert windowed["basis"] == "unknown_incremental_window"
+    assert windowed["estimated_message_count"] is None
+    assert windowed["window_start"] == "2026-06-01T00:00:00Z"
+    assert windowed["window_end"] == "2026-08-01T00:00:00Z"
 
     invalid = client.get("/sync/estimate?since_date=2026-08-01&before_date=2026-06-01")
     assert invalid.status_code == 422

@@ -55,9 +55,9 @@ class SyncScopeEstimateBasis(StrEnum):
     """How a pre-sync scope estimate was derived."""
 
     FULL_BACKFILL = "full_backfill"
-    LOCAL_HISTORY = "local_history"
     MESSAGE_CAP = "message_cap"
     UNKNOWN_INCREMENTAL = "unknown_incremental"
+    UNKNOWN_INCREMENTAL_WINDOW = "unknown_incremental_window"
 
 
 class SyncScopeEstimate(BaseModel):

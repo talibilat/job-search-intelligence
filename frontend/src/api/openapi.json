@@ -4436,9 +4436,9 @@
         "description": "How a pre-sync scope estimate was derived.",
         "enum": [
           "full_backfill",
-          "local_history",
           "message_cap",
-          "unknown_incremental"
+          "unknown_incremental",
+          "unknown_incremental_window"
         ],
         "title": "SyncScopeEstimateBasis",
         "type": "string"

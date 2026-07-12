@@ -1323,9 +1323,9 @@ export type SyncScopeEstimateBasis =
 
 export const SyncScopeEstimateBasis = {
   full_backfill: "full_backfill",
-  local_history: "local_history",
   message_cap: "message_cap",
   unknown_incremental: "unknown_incremental",
+  unknown_incremental_window: "unknown_incremental_window",
 } as const;
 
 /**

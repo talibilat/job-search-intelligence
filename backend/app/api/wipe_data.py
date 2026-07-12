@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -25,6 +26,31 @@ def get_wipe_secret_store(
     return create_secret_store(settings)
 
 
+async def get_wipe_operation(
+    status_store: Annotated[EmailSyncStatusStore, Depends(get_sync_status_store)],
+) -> AsyncIterator[None]:
+    if not status_store.try_acquire_run():
+        raise ApiError(
+            status_code=409,
+            code=ApiErrorCode.CONFLICT,
+            message="Email sync or local data deletion is already running. Try again later.",
+        )
+    try:
+        yield
+    finally:
+        status_store.release_run()
+
+
+def get_locked_email_connection_secret_refs(
+    _operation: Annotated[None, Depends(get_wipe_operation)],
+    connection_secret_refs: Annotated[
+        list[SecretRef],
+        Depends(get_email_connection_secret_refs),
+    ],
+) -> list[SecretRef]:
+    return connection_secret_refs
+
+
 @router.post(
     "/wipe",
     response_model=WipeDataResponse,
@@ -47,42 +73,32 @@ async def wipe_data(
     settings: Annotated[AppSettings, Depends(get_settings)],
     connection_secret_refs: Annotated[
         list[SecretRef],
-        Depends(get_email_connection_secret_refs),
+        Depends(get_locked_email_connection_secret_refs),
     ],
     secret_store: Annotated[SecretStore, Depends(get_wipe_secret_store)],
-    status_store: Annotated[EmailSyncStatusStore, Depends(get_sync_status_store)],
 ) -> WipeDataResponse:
     del request
-    if not status_store.try_acquire_run():
-        raise ApiError(
-            status_code=409,
-            code=ApiErrorCode.CONFLICT,
-            message="Email sync or local data deletion is already running. Try again later.",
-        )
     try:
-        try:
-            result = await wipe_local_data(
-                settings,
-                secret_store=secret_store,
-                connection_secret_refs=connection_secret_refs,
-            )
-        except UnsafeWipeTargetError as error:
-            raise ApiError(
-                status_code=400,
-                code=ApiErrorCode.BAD_REQUEST,
-                message="Configured local data path is not safe to wipe.",
-            ) from error
-        except WipeSecretDeletionError as error:
-            raise ApiError(
-                status_code=503,
-                code=ApiErrorCode.SERVICE_UNAVAILABLE,
-                message="Stored credentials could not be deleted. Local data was not changed.",
-            ) from error
-
-        return WipeDataResponse(
-            status="wiped",
-            deleted_paths=result.deleted_paths,
-            missing_paths=result.missing_paths,
+        result = await wipe_local_data(
+            settings,
+            secret_store=secret_store,
+            connection_secret_refs=connection_secret_refs,
         )
-    finally:
-        status_store.release_run()
+    except UnsafeWipeTargetError as error:
+        raise ApiError(
+            status_code=400,
+            code=ApiErrorCode.BAD_REQUEST,
+            message="Configured local data path is not safe to wipe.",
+        ) from error
+    except WipeSecretDeletionError as error:
+        raise ApiError(
+            status_code=503,
+            code=ApiErrorCode.SERVICE_UNAVAILABLE,
+            message="Stored credentials could not be deleted. Local data was not changed.",
+        ) from error
+
+    return WipeDataResponse(
+        status="wiped",
+        deleted_paths=result.deleted_paths,
+        missing_paths=result.missing_paths,
+    )

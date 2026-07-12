@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -124,6 +125,7 @@ def create_wipe_data_test_client(
     *,
     secret_store: SecretStore | None = None,
     status_store: EmailSyncStatusStore | None = None,
+    connection_secret_refs_resolver: Callable[[], list[SecretRef]] | None = None,
 ) -> tuple[Path, Path, TestClient]:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -138,7 +140,9 @@ def create_wipe_data_test_client(
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_wipe_secret_store] = lambda: secret_store or NoOpSecretStore()
-    app.dependency_overrides[get_email_connection_secret_refs] = lambda: []
+    app.dependency_overrides[get_email_connection_secret_refs] = (
+        connection_secret_refs_resolver or (lambda: [])
+    )
     if status_store is not None:
         app.dependency_overrides[get_sync_status_store] = lambda: status_store
     return data_dir, marker_file, TestClient(app)
@@ -167,6 +171,31 @@ def test_wipe_data_conflicts_with_active_sync(tmp_path: Path) -> None:
     status_store.release_run()
 
 
+def test_wipe_data_acquires_lock_before_resolving_connection_secrets(
+    tmp_path: Path,
+) -> None:
+    status_store = EmailSyncStatusStore()
+    lock_observations: list[bool] = []
+
+    def resolve_connection_secret_refs() -> list[SecretRef]:
+        acquired = status_store.try_acquire_run()
+        lock_observations.append(not acquired)
+        if acquired:
+            status_store.release_run()
+        return []
+
+    _data_dir, _marker_file, client = create_wipe_data_test_client(
+        tmp_path,
+        status_store=status_store,
+        connection_secret_refs_resolver=resolve_connection_secret_refs,
+    )
+
+    response = client.post("/local-data/wipe", json={"confirmation": "wipe-local-data"})
+
+    assert response.status_code == 200
+    assert lock_observations == [True]
+
+
 def test_wipe_data_endpoint_is_documented_in_openapi() -> None:
     client = TestClient(create_app())
 
@@ -192,10 +221,12 @@ def test_wipe_data_endpoint_returns_typed_error_for_unsafe_target() -> None:
         data_dir=Path.cwd(),
         database_url="sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3",
     )
+    status_store = EmailSyncStatusStore()
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_wipe_secret_store] = lambda: NoOpSecretStore()
     app.dependency_overrides[get_email_connection_secret_refs] = lambda: []
+    app.dependency_overrides[get_sync_status_store] = lambda: status_store
     client = TestClient(app)
 
     response = client.post(
@@ -211,3 +242,5 @@ def test_wipe_data_endpoint_returns_typed_error_for_unsafe_target() -> None:
             "details": [],
         },
     }
+    assert status_store.try_acquire_run()
+    status_store.release_run()

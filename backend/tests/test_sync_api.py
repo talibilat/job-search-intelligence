@@ -650,6 +650,46 @@ def test_bounded_first_sync_runs_complete_unbounded_backfill(tmp_path: Path) -> 
     assert row == ("replacement-cursor",)
 
 
+def test_cursor_without_completed_backfill_runs_lifetime_backfill(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO email_sync_state (
+                provider, account_id, sync_cursor, cursor_issued_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "legacy-cursor",
+                NOW.isoformat(),
+                NOW.isoformat(),
+            ),
+        )
+    provider = PagingMetadataProvider()
+    runtime = ConfiguredEmailSyncRuntime(
+        settings=AppSettings(
+            _env_file=None,
+            database_url=f"sqlite+aiosqlite:///{database_path}",
+            gmail_page_size=77,
+        ),
+        email_provider=cast(EmailProvider, provider),
+        connection_resolver=email_connection,
+        status_store=EmailSyncStatusStore(),
+    )
+
+    status = asyncio.run(runtime.run_manual_sync(EmailSyncOptions(max_messages=1)))
+
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert [request.mode for request in provider.requests] == [
+        EmailSyncMode.FULL_BACKFILL,
+        EmailSyncMode.FULL_BACKFILL,
+    ]
+    assert [request.page_token for request in provider.requests] == [None, "page-2"]
+
+
 def test_default_sync_email_provider_uses_configured_secret_store(tmp_path: Path) -> None:
     settings = AppSettings(
         _env_file=None,
@@ -688,6 +728,34 @@ def test_post_sync_recovers_expired_incremental_cursor(tmp_path: Path) -> None:
                 "gmail",
                 "me@example.com",
                 "history-expired",
+                "2026-07-04T12:00:00+00:00",
+                "2026-07-04T12:00:00+00:00",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO email_backfill_state (
+                provider,
+                account_id,
+                status,
+                processed_page_count,
+                processed_message_count,
+                sync_cursor,
+                cursor_issued_at,
+                started_at,
+                updated_at,
+                completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "completed",
+                1,
+                1,
+                "history-expired",
+                "2026-07-04T12:00:00+00:00",
+                "2026-07-04T12:00:00+00:00",
                 "2026-07-04T12:00:00+00:00",
                 "2026-07-04T12:00:00+00:00",
             ),
