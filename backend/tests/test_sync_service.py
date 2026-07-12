@@ -1154,6 +1154,7 @@ def create_raw_emails_table(connection: sqlite3.Connection) -> None:
         """
         CREATE TABLE raw_emails (
             id TEXT PRIMARY KEY,
+            public_id TEXT NOT NULL DEFAULT (lower(hex(randomblob(16)))),
             thread_id TEXT,
             from_addr TEXT,
             to_addr TEXT,
@@ -1166,6 +1167,9 @@ def create_raw_emails_table(connection: sqlite3.Connection) -> None:
             ingested_at TEXT NOT NULL
         )
         """,
+    )
+    connection.execute(
+        "CREATE UNIQUE INDEX ux_raw_emails_public_id ON raw_emails(public_id)",
     )
 
 

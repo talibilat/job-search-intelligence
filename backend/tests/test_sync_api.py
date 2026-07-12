@@ -402,6 +402,7 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
             """
             INSERT INTO raw_emails (
                 id,
+                public_id,
                 thread_id,
                 from_addr,
                 to_addr,
@@ -412,10 +413,11 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
                 labels,
                 provider,
                 ingested_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "gmail-msg-1",
+                "0123456789abcdef0123456789abcdef",
                 "thread-1",
                 "jobs@example.com",
                 "me@example.com",
@@ -458,8 +460,10 @@ def test_get_sync_recent_emails_returns_safe_metadata_without_body_text(tmp_path
     assert response.status_code == 200
     assert response.json() == [
         {
+            "public_id": "0123456789abcdef0123456789abcdef",
             "from_domain": "example.com",
             "to_domains": ["example.com"],
+            "subject": "Application received",
             "subject_present": True,
             "sent_at": "2026-07-05T12:00:00Z",
             "body_retention_state": "retained",
@@ -488,16 +492,17 @@ def test_get_sync_recent_emails_orders_by_sent_at_by_default(tmp_path: Path) -> 
             # New mailbox message ingested earlier.
             ("gmail-new", "2026-07-01T09:00:00+00:00", "2026-07-02T12:00:00+00:00"),
         )
-        for email_id, sent_at, ingested_at in rows:
+        for index, (email_id, sent_at, ingested_at) in enumerate(rows):
             connection.execute(
                 """
                 INSERT INTO raw_emails (
-                    id, thread_id, from_addr, to_addr, subject, sent_at,
+                    id, public_id, thread_id, from_addr, to_addr, subject, sent_at,
                     body_text, body_retention_state, labels, provider, ingested_at
-                ) VALUES (?, ?, ?, ?, ?, ?, NULL, 'metadata_only', '[]', 'gmail', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'metadata_only', '[]', 'gmail', ?)
                 """,
                 (
                     email_id,
+                    f"{index:032x}",
                     f"thread-{email_id}",
                     "a@example.com",
                     "b@example.com",
@@ -868,6 +873,7 @@ def create_sync_tables(database_path: Path) -> None:
             """
             CREATE TABLE raw_emails (
                 id TEXT PRIMARY KEY,
+                public_id TEXT,
                 thread_id TEXT,
                 from_addr TEXT,
                 to_addr TEXT,
@@ -880,6 +886,9 @@ def create_sync_tables(database_path: Path) -> None:
                 ingested_at TEXT NOT NULL
             )
             """,
+        )
+        connection.execute(
+            "CREATE UNIQUE INDEX ux_raw_emails_public_id ON raw_emails(public_id)",
         )
         connection.execute(
             """
