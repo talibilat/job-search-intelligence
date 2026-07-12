@@ -131,6 +131,11 @@ const PAGE_TITLES: Record<RedesignPage, string> = {
 
 type SyncScopeKey = "new" | "7" | "30" | "custom" | "count";
 
+type CompletedSyncScope = Readonly<{
+  sentAfter?: string;
+  sentBefore?: string;
+}>;
+
 const SYNC_SCOPES: { key: SyncScopeKey; label: string; note: string }[] = [
   { key: "new", label: "New mail since last sync", note: "Recommended — fastest" },
   { key: "7", label: "Last 7 days", note: "Re-checks the past week" },
@@ -166,6 +171,39 @@ function syncOptionsForScope(
   return null;
 }
 
+function completedSyncScope(
+  scope: SyncScopeKey,
+  customFrom: string,
+  customTo: string,
+): CompletedSyncScope {
+  if (scope === "7" || scope === "30") {
+    const days = Number(scope);
+    return {
+      sentAfter: new Date(
+        Date.now() - days * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+    };
+  }
+  if (scope === "custom") {
+    let sentAfter: string | undefined;
+    let sentBefore: string | undefined;
+    if (customFrom) {
+      const [fromYear, fromMonth, fromDay] = customFrom.split("-").map(Number);
+      sentAfter = new Date(
+        Date.UTC(fromYear, fromMonth - 1, fromDay),
+      ).toISOString();
+    }
+    if (customTo) {
+      const [toYear, toMonth, toDay] = customTo.split("-").map(Number);
+      sentBefore = new Date(
+        Date.UTC(toYear, toMonth - 1, toDay + 1),
+      ).toISOString();
+    }
+    return { sentAfter, sentBefore };
+  }
+  return {};
+}
+
 export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
   const [route, setRoute] = useState<RedesignRoute>(() => {
     const parsed = redesignRouteFromPath(window.location.pathname);
@@ -175,6 +213,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
   });
   const [chatOpen, setChatOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [completedScope, setCompletedScope] = useState<CompletedSyncScope>({});
 
   const [connections, setConnections] = useState<EmailConnection[]>([]);
   const [connectionsLoadState, setConnectionsLoadState] = useState<RequestLoadState>("loading");
@@ -391,6 +430,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
 
       switch (state.state) {
         case "succeeded":
+          setCompletedScope(completedSyncScope(syncScope, customFrom, customTo));
           setSyncMenuOpen(false);
           return;
         case "failed":
@@ -837,7 +877,13 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         </div>
 
         {route.page === "overview" ? (
-          <OverviewPage go={go} openApp={openApp} reloadKey={reloadKey} />
+          <OverviewPage
+            go={go}
+            openApp={openApp}
+            reloadKey={reloadKey}
+            sentAfter={completedScope.sentAfter}
+            sentBefore={completedScope.sentBefore}
+          />
         ) : null}
         {route.page === "applications" ? (
           <ApplicationsPage

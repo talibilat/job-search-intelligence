@@ -1,30 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getMetricsFunnelMetricsFunnelGet,
   getMetricsRatesMetricsRatesGet,
   getMetricsSummaryMetricsSummaryGet,
   listApplicationsApplicationsGet,
-  listRecentApplicationEventsApplicationsEventsRecentGet,
   type ApplicationRecord,
   type MetricsRatesResponse,
   type MetricsFunnelResponse,
   type MetricsSummaryResponse,
-  type RecentApplicationEventRecord,
 } from "../../api";
 import type { RedesignPage, StatusChipKey } from "../RedesignApp";
 import { publicApiError } from "../apiError";
-import {
-  daysSince,
-  EVENT_FEED_TEXT,
-  eventKind,
-  formatShortDate,
-} from "../theme";
+import { EmailReaderDialog } from "../components/EmailReaderDialog";
+import { SyncedEmailList } from "../components/SyncedEmailList";
+import { daysSince, formatShortDate } from "../theme";
 
 interface OverviewPageProps {
   go: (page: RedesignPage, extra?: { statusFilter?: StatusChipKey }) => void;
   openApp: (id: string) => void;
   reloadKey: number;
+  sentAfter?: string;
+  sentBefore?: string;
 }
 
 interface MetricExplain {
@@ -67,7 +64,13 @@ function ratePercent(rate: number): string {
   return `${Math.round(rate * 1_000) / 10}%`;
 }
 
-export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
+export function OverviewPage({
+  go,
+  openApp,
+  reloadKey,
+  sentAfter,
+  sentBefore,
+}: OverviewPageProps) {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [rates, setRates] = useState<MetricsRatesResponse | null>(null);
   const [funnel, setFunnel] = useState<MetricsFunnelResponse | null>(null);
@@ -76,14 +79,13 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [ratesError, setRatesError] = useState<string | null>(null);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
-  const [activityError, setActivityError] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [ratesLoading, setRatesLoading] = useState(true);
   const [applicationsLoading, setApplicationsLoading] = useState(true);
-  const [activityLoading, setActivityLoading] = useState(true);
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
-  const [activity, setActivity] = useState<RecentApplicationEventRecord[]>([]);
   const [explainKey, setExplainKey] = useState<string | null>(null);
+  const [openEmailPublicId, setOpenEmailPublicId] = useState<string | null>(null);
+  const emailTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,17 +95,14 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
       setSummaryLoading(true);
       setRatesLoading(true);
       setApplicationsLoading(true);
-      setActivityLoading(true);
       setSummaryError(null);
       setRatesError(null);
       setApplicationsError(null);
-      setActivityError(null);
       const [
         summaryResponse,
         ratesResponse,
         funnelResponse,
         applicationsResponse,
-        eventsResponse,
       ] = await Promise.all([
         getMetricsSummaryMetricsSummaryGet().catch((error: unknown) => ({ error })),
         getMetricsRatesMetricsRatesGet().catch((error: unknown) => ({ error })),
@@ -111,9 +110,6 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
           error,
         })),
         listApplicationsApplicationsGet().catch((error: unknown) => ({ error })),
-        listRecentApplicationEventsApplicationsEventsRecentGet({
-          limit: 5,
-        }).catch((error: unknown) => ({ error })),
       ]);
       if (cancelled) {
         return;
@@ -153,13 +149,6 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
         setApplicationsError(publicApiError("status" in applicationsResponse ? { response: applicationsResponse } : applicationsResponse.error, "Applications could not be loaded."));
       }
       setApplicationsLoading(false);
-      if ("status" in eventsResponse && eventsResponse.status === 200) {
-        setActivity(eventsResponse.data);
-      } else {
-        setActivity([]);
-        setActivityError(publicApiError("status" in eventsResponse ? { response: eventsResponse } : eventsResponse.error, "Activity could not be loaded."));
-      }
-      setActivityLoading(false);
     };
     void load();
     return () => {
@@ -744,83 +733,18 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
           <h2 style={{ margin: "0 0 14px", fontSize: "15px", fontWeight: 700 }}>
             Latest from your inbox
           </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            {activityLoading ? (
-              <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>Loading activity…</p>
-            ) : null}
-            {!activityLoading && activityError ? (
-              <p role="status" style={{ margin: 0, fontSize: "12.5px", color: "#96403C" }}>{activityError}</p>
-            ) : null}
-            {!activityLoading && !activityError && activity.length === 0 ? (
-              <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>
-                Nothing yet — run a sync to read your inbox.
-              </p>
-            ) : null}
-            {activity.map((event) => {
-              const kind = eventKind(event.event_type);
-              return (
-                <button
-                  className="rd-hover-soft"
-                  key={event.event_id}
-                  onClick={() => openApp(event.application_id)}
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    alignItems: "flex-start",
-                    border: "none",
-                    background: "none",
-                    padding: "8px 8px",
-                    margin: "0 -8px",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                  type="button"
-                >
-                  <span
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      marginTop: "6px",
-                      flex: "none",
-                      background:
-                        kind === "offer"
-                          ? "#1E5136"
-                          : kind === "bad"
-                            ? "#C08A86"
-                            : "#8FB89B",
-                    }}
-                  />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "13px",
-                        color: "#1B201C",
-                      }}
-                    >
-                      <strong>{event.company}</strong> —{" "}
-                      {EVENT_FEED_TEXT[event.event_type]}
-                    </span>
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "11.5px",
-                        color: "#9A9F96",
-                        marginTop: "1px",
-                      }}
-                    >
-                      {formatShortDate(event.event_at)}
-                      {event.email_subject
-                        ? ` · from email “${event.email_subject}”`
-                        : ""}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <SyncedEmailList
+            onOpenEmail={(email) => {
+              emailTriggerRef.current =
+                document.activeElement instanceof HTMLElement
+                  ? document.activeElement
+                  : null;
+              setOpenEmailPublicId(email.public_id);
+            }}
+            refreshToken={reloadKey}
+            sentAfter={sentAfter}
+            sentBefore={sentBefore}
+          />
         </div>
       </div>
       {applicationsLoading ? (
@@ -829,6 +753,11 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
       {!applicationsLoading && applicationsError ? (
         <p role="status" style={{ margin: 0, fontSize: "12.5px", color: "#96403C" }}>{applicationsError}</p>
       ) : null}
+      <EmailReaderDialog
+        onClose={() => setOpenEmailPublicId(null)}
+        publicId={openEmailPublicId}
+        triggerRef={emailTriggerRef}
+      />
     </section>
   );
 }

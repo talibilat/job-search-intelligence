@@ -10,6 +10,14 @@ function response(body: unknown, status = 200): Response {
   });
 }
 
+const emptyEmailPage = {
+  items: [],
+  page: 1,
+  page_size: 10,
+  total_items: 0,
+  total_pages: 0,
+};
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -34,7 +42,7 @@ describe("OverviewPage request states", () => {
           id: "application-1",
         }]));
       }
-      if (path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      if (path.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
       return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
     }));
 
@@ -58,7 +66,8 @@ describe("OverviewPage request states", () => {
       if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [
         { stage: "applied", count: 8 }, { stage: "interview", count: 2 }, { stage: "offer", count: 2 },
       ] }));
-      if (path === "/applications" || path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      if (path === "/applications") return Promise.resolve(response([]));
+      if (path.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
       return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
     }));
 
@@ -70,23 +79,26 @@ describe("OverviewPage request states", () => {
     expect(screen.getByText(/Historical event populations cannot be reproduced exactly/)).toBeTruthy();
   });
 
-  it("distinguishes failed summary, rates, applications, and activity from valid zero or empty", async () => {
+  it("distinguishes failed summary, rates, and applications from valid zero or empty", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
+      if (path.startsWith("/sync/emails")) {
+        return Promise.resolve(response(emptyEmailPage));
+      }
       const message = path.includes("summary")
         ? "Summary failed."
         : path.includes("rates")
           ? "Rates failed."
           : path === "/applications"
             ? "Applications failed."
-            : "Activity failed.";
+            : "Unexpected failure.";
       return Promise.resolve(response({ error: { code: "failed", details: [], message } }, 503));
     }));
 
     render(<OverviewPage go={() => undefined} openApp={() => undefined} reloadKey={0} />);
 
-    for (const message of ["Summary failed.", "Rates failed.", "Applications failed.", "Activity failed."]) {
+    for (const message of ["Summary failed.", "Rates failed.", "Applications failed."]) {
       expect(await screen.findByText(message)).toBeTruthy();
     }
     expect(screen.queryByText("0%")).toBeNull();
@@ -107,7 +119,8 @@ describe("OverviewPage request states", () => {
         interview_to_offer_rate: { numerator: 1, denominator: 2, rate: 0.5 },
       }));
       if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
-      if (path === "/applications" || path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      if (path === "/applications") return Promise.resolve(response([]));
+      if (path.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
       return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
     }));
 
@@ -133,7 +146,8 @@ describe("OverviewPage request states", () => {
         return Promise.reject(new TypeError("backend unavailable"));
       }
       if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
-      if (path === "/applications" || path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      if (path === "/applications") return Promise.resolve(response([]));
+      if (path.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
       return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
     }));
 
@@ -161,7 +175,8 @@ describe("OverviewPage request states", () => {
         interview_to_offer_rate: { numerator: 1, denominator: 2, rate: 0.5 },
       }));
       if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
-      if (path === "/applications" || path.startsWith("/applications/events/recent")) return Promise.resolve(response([]));
+      if (path === "/applications") return Promise.resolve(response([]));
+      if (path.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
       return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
     }));
 
@@ -171,5 +186,42 @@ describe("OverviewPage request states", () => {
     fireEvent.click(screen.getByRole("button", { name: "How are Offers calculated?" }));
     expect(screen.getByText("count(applications with an offer event)")).toBeTruthy();
     expect(screen.queryByText(/status = offer/)).toBeNull();
+  });
+
+  it("threads the selected sent-after boundary to the synced email request", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/metrics/summary") return Promise.resolve(response({ total_applications: 0, offers_received: 0 }));
+      if (path === "/metrics/rates") return Promise.resolve(response({}));
+      if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
+      if (path === "/applications") return Promise.resolve(response([]));
+      if (path.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <OverviewPage
+        go={() => undefined}
+        openApp={() => undefined}
+        reloadKey={0}
+        sentAfter="2026-07-05T00:00:00Z"
+      />,
+    );
+
+    await screen.findByText("No emails found in the selected period.");
+    const emailRequest = fetchMock.mock.calls
+      .map(([input]) =>
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url,
+      )
+      .find((path) => path.startsWith("/sync/emails"));
+    expect(emailRequest).toBeTruthy();
+    expect(new URL(emailRequest!, "http://localhost").searchParams.get("sent_after")).toBe(
+      "2026-07-05T00:00:00Z",
+    );
   });
 });

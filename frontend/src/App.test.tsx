@@ -527,6 +527,24 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
         );
       }
 
+      if (path.startsWith("/sync/emails")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              items: [],
+              page: 1,
+              page_size: 10,
+              total_items: 0,
+              total_pages: 0,
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
+        );
+      }
+
       throw new Error(`Unhandled fetch request: ${path}`);
     }
 
@@ -3982,6 +4000,109 @@ describe("App", () => {
     },
   );
 
+  it("redesign successful seven-day sync scopes the email list without classification", async () => {
+    const startedAt = Date.now();
+    const fetchMock = mockFetchResponses({
+      "/sync": { state: "succeeded" },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    fireEvent.click(screen.getByRole("button", { name: /Last 7 days/ }));
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    await waitFor(() => {
+      const scopedRequest = fetchMock.mock.calls
+        .map(([input]) => requestPath(input))
+        .filter((path) => path.startsWith("/sync/emails"))
+        .find((path) =>
+          new URL(path, "http://localhost").searchParams.has("sent_after"),
+        );
+      expect(scopedRequest).toBeTruthy();
+      const sentAfter = new URL(
+        scopedRequest!,
+        "http://localhost",
+      ).searchParams.get("sent_after");
+      const boundary = Date.parse(sentAfter ?? "");
+      expect(Number.isNaN(boundary)).toBe(false);
+      expect(boundary).toBeGreaterThanOrEqual(
+        startedAt - 7 * 24 * 60 * 60 * 1000 - 1_000,
+      );
+      expect(boundary).toBeLessThanOrEqual(
+        Date.now() - 7 * 24 * 60 * 60 * 1000 + 1_000,
+      );
+    });
+
+    expect(
+      fetchMock.mock.calls.filter(([input]) =>
+        requestPath(input).startsWith("/classification"),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("redesign email reader closes without changing the selected inbox page", async () => {
+    const emailRecord = (index: number) => ({
+      body_retention_state: "metadata_only",
+      classification_category: null,
+      classification_is_job_related: null,
+      filter_outcome: null,
+      filter_reason: null,
+      from_domain: `sender-${index}.example`,
+      has_retained_body: false,
+      ingested_at: "2026-07-12T12:00:00Z",
+      provider: "gmail",
+      public_id: `email-${index}`,
+      sent_at: "2026-07-12T12:00:00Z",
+      subject: `Subject ${index}`,
+      subject_present: true,
+      to_domains: ["recipient.example"],
+    });
+    mockFetchResponses({
+      "/sync/emails?page=1&page_size=10": {
+        items: Array.from({ length: 10 }, (_, index) => emailRecord(index + 1)),
+        page: 1,
+        page_size: 10,
+        total_items: 11,
+        total_pages: 2,
+      },
+      "/sync/emails?page=2&page_size=10": {
+        items: [emailRecord(11)],
+        page: 2,
+        page_size: 10,
+        total_items: 11,
+        total_pages: 2,
+      },
+      "/sync/emails/email-11/content": {
+        body_retention_state: "metadata_only",
+        body_text: "Reader body",
+        from_domain: "sender-11.example",
+        public_id: "email-11",
+        sent_at: "2026-07-12T12:00:00Z",
+        subject: "Subject 11",
+      },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(await screen.findByRole("button", { name: "2" }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "2" }).getAttribute("aria-current"),
+      ).toBe("page");
+    });
+    const emailRow = (await screen.findByText("Subject 11")).closest("button");
+    expect(emailRow).toBeTruthy();
+    fireEvent.click(emailRow!);
+    expect(await screen.findByText("Reader body")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close email" }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "2" }).getAttribute("aria-current"),
+    ).toBe("page");
+  });
+
   it("redesign sync sends the exact custom date payload", async () => {
     const fetchMock = mockFetchResponses({
       "/sync": { state: "succeeded" },
@@ -4014,6 +4135,20 @@ describe("App", () => {
         before_date: "2026-07-10",
         since_date: "2026-06-01",
       });
+    });
+
+    await waitFor(() => {
+      const scopedRequest = fetchMock.mock.calls
+        .map(([input]) => requestPath(input))
+        .filter((path) => path.startsWith("/sync/emails"))
+        .find((path) => {
+          const params = new URL(path, "http://localhost").searchParams;
+          return params.has("sent_after") && params.has("sent_before");
+        });
+      expect(scopedRequest).toBeTruthy();
+      const params = new URL(scopedRequest!, "http://localhost").searchParams;
+      expect(params.get("sent_after")).toBe("2026-06-01T00:00:00.000Z");
+      expect(params.get("sent_before")).toBe("2026-07-11T00:00:00.000Z");
     });
   });
 
