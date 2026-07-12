@@ -236,6 +236,7 @@ def build_sync_scope_estimate(
     options: EmailSyncOptions,
     email_repository: EmailRepository,
     now: datetime,
+    requires_full_backfill: bool,
 ) -> SyncScopeEstimate:
     """Estimate how much email a sync scope covers using only local metadata.
 
@@ -245,6 +246,13 @@ def build_sync_scope_estimate(
     """
 
     total_local_emails = email_repository.count_raw_emails()
+    if requires_full_backfill:
+        return SyncScopeEstimate(
+            estimated_message_count=None,
+            basis=SyncScopeEstimateBasis.FULL_BACKFILL,
+            total_local_emails=total_local_emails,
+        )
+
     since_date = options.effective_since_date(now=now)
     window_start = (
         datetime(since_date.year, since_date.month, since_date.day, tzinfo=UTC)

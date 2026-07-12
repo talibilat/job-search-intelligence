@@ -321,6 +321,7 @@ def sync_stats(
 )
 def sync_estimate(
     email_repository: Annotated[EmailRepository, Depends(get_readonly_email_repository)],
+    settings: Annotated[AppSettings, Depends(get_settings)],
     max_messages: Annotated[int | None, Query(ge=1, le=100_000)] = None,
     since_date: Annotated[date | None, Query()] = None,
     before_date: Annotated[date | None, Query()] = None,
@@ -339,8 +340,22 @@ def sync_estimate(
             code=ApiErrorCode.VALIDATION_ERROR,
             message="Sync estimate request validation failed.",
         ) from error
+    connection = email_repository.connection
+    email_connection = EmailConnectionRepository(connection).fetch_default_connection_metadata(
+        settings.email_provider,
+    )
+    requires_full_backfill = True
+    if email_connection is not None:
+        backfill_state = BackfillStateRepository(connection).fetch_state(email_connection.account)
+        sync_cursor = SyncStateRepository(connection).get_cursor(email_connection.account)
+        requires_full_backfill = sync_cursor is None or (
+            backfill_state is not None
+            and backfill_state.status is not EmailBackfillStatus.COMPLETED
+        )
+
     return build_sync_scope_estimate(
         options=options,
         email_repository=email_repository,
         now=datetime.now(UTC),
+        requires_full_backfill=requires_full_backfill,
     )

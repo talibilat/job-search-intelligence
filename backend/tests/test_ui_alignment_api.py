@@ -258,11 +258,60 @@ def test_sync_stats_reports_local_totals(tmp_path: Path) -> None:
     assert payload["last_run_at"] is None
 
 
-def test_sync_estimate_bases(tmp_path: Path) -> None:
+def test_sync_estimate_reports_full_backfill_before_history_is_complete(
+    tmp_path: Path,
+) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
+        insert_connection(connection)
+        insert_raw_email(connection, email_id="email-1")
+    client = create_test_client(database_path)
+
+    response = client.get("/sync/estimate?max_age_days=7")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "basis": "full_backfill",
+        "estimated_message_count": None,
+        "total_local_emails": 1,
+        "window_end": None,
+        "window_start": None,
+    }
+
+
+def test_sync_estimate_bases_after_history_is_complete(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_connection(connection)
         insert_raw_email(connection, email_id="email-1", sent_at="2026-07-01T09:00:00+00:00")
         insert_raw_email(connection, email_id="email-2", sent_at="2026-05-01T09:00:00+00:00")
+        connection.execute(
+            """
+            INSERT INTO email_sync_state (
+                provider, account_id, sync_cursor, cursor_issued_at, updated_at
+            ) VALUES ('gmail', 'you@example.test', 'history-current', ?, ?)
+            """,
+            ("2026-07-01T09:00:00+00:00", "2026-07-01T09:00:00+00:00"),
+        )
+        connection.execute(
+            """
+            INSERT INTO email_backfill_state (
+                provider, account_id, status, next_page_token,
+                processed_page_count, processed_message_count, sync_cursor,
+                cursor_issued_at, started_at, updated_at, completed_at, last_error
+            ) VALUES (
+                'gmail', 'you@example.test', 'completed', NULL,
+                1, 2, 'history-current', ?, ?, ?, ?, NULL
+            )
+            """,
+            (
+                "2026-07-01T09:00:00+00:00",
+                "2026-07-01T09:00:00+00:00",
+                "2026-07-01T09:00:00+00:00",
+                "2026-07-01T09:00:00+00:00",
+            ),
+        )
+        connection.commit()
     client = create_test_client(database_path)
 
     incremental = client.get("/sync/estimate").json()
