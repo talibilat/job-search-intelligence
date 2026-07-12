@@ -3839,6 +3839,66 @@
         "title": "RawEmailBodyRetentionState",
         "type": "string"
       },
+      "RawEmailDetail": {
+        "description": "Public-safe on-demand email content for the reader dialog.",
+        "properties": {
+          "body_retention_state": {
+            "$ref": "#/components/schemas/RawEmailBodyRetentionState"
+          },
+          "body_text": {
+            "title": "Body Text",
+            "type": "string"
+          },
+          "from_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Domain"
+          },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "public_id",
+          "from_domain",
+          "subject",
+          "sent_at",
+          "body_retention_state",
+          "body_text"
+        ],
+        "title": "RawEmailDetail",
+        "type": "object"
+      },
       "RawEmailPreviewOrder": {
         "description": "Supported deterministic orderings for the raw-email preview list.",
         "enum": [
@@ -3847,6 +3907,48 @@
         ],
         "title": "RawEmailPreviewOrder",
         "type": "string"
+      },
+      "RawEmailPreviewPage": {
+        "description": "A validated page of raw email metadata previews.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RawEmailPreviewRecord"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total_items": {
+            "minimum": 0.0,
+            "title": "Total Items",
+            "type": "integer"
+          },
+          "total_pages": {
+            "minimum": 0.0,
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total_items",
+          "total_pages"
+        ],
+        "title": "RawEmailPreviewPage",
+        "type": "object"
       },
       "RawEmailPreviewRecord": {
         "description": "Public-safe raw email metadata preview without body text.",
@@ -3922,6 +4024,10 @@
             "title": "Provider",
             "type": "string"
           },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
           "sent_at": {
             "anyOf": [
               {
@@ -3933,6 +4039,17 @@
               }
             ],
             "title": "Sent At"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
           },
           "subject_present": {
             "title": "Subject Present",
@@ -3947,8 +4064,10 @@
           }
         },
         "required": [
+          "public_id",
           "from_domain",
           "to_domains",
+          "subject",
           "subject_present",
           "sent_at",
           "body_retention_state",
@@ -7611,6 +7730,200 @@
           }
         },
         "summary": "Sync Now",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
+    "/sync/emails": {
+      "get": {
+        "description": "Returns a deterministic page of locally synced raw-email metadata within an optional sent-date window. Never contacts the email provider or triggers classification.",
+        "operationId": "sync_emails_sync_emails_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sent_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sent After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sent_before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sent Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RawEmailPreviewPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Synced Emails",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
+    "/sync/emails/{public_id}/content": {
+      "get": {
+        "description": "Returns normalized plain-text content for one synced email. Retained bodies are served from local storage; metadata-only messages are fetched transiently from the email provider and are not persisted.",
+        "operationId": "sync_email_content_sync_emails__public_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RawEmailDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read Synced Email Content",
         "tags": [
           "sync"
         ]
