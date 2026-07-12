@@ -273,6 +273,39 @@ describe("DetailPage corrections", () => {
 });
 
 describe("DetailPage timeline evidence", () => {
+  it("distinguishes detail transport failure from a missing application and supports retry", async () => {
+    let detailCalls = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/applications/app-1") {
+        detailCalls += 1;
+        return Promise.resolve(detailCalls === 1
+          ? jsonResponse({ error: { code: "service_unavailable", details: [], message: "Database is temporarily unavailable." } }, 503)
+          : jsonResponse(application()));
+      }
+      if (path === "/applications/app-1/events") return Promise.resolve(jsonResponse([]));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+    renderDetail();
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Database is temporarily unavailable.");
+    expect(screen.queryByText("Application unavailable")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText(/Platform Engineer/)).toBeTruthy();
+  });
+
+  it("shows a timeline request failure instead of an empty timeline", async () => {
+    stubDetailFetch(application(), [], {
+      "/applications/app-1/events": jsonResponse(
+        { error: { code: "timeline_failed", details: [], message: "Timeline storage is unavailable." } },
+        503,
+      ),
+    });
+    renderDetail();
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Timeline storage is unavailable.");
+    expect(screen.queryByText(/No source emails are attached/)).toBeNull();
+  });
   it("sorts initial events newest first with stable ties", async () => {
     stubDetailFetch(application(), [
       timelineEvent("oldest", "2026-07-01T12:00:00Z"),

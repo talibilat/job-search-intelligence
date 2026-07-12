@@ -187,7 +187,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
   const [syncing, setSyncing] = useState(false);
   const syncingRef = useRef(false);
   const customRangeInvalid =
-    syncScope === "custom" && (!customFrom || !customTo || customFrom > customTo);
+    syncScope === "custom" && (!customFrom || !customTo || customFrom >= customTo);
 
   const refresh = useCallback(() => {
     setReloadKey((value) => value + 1);
@@ -389,7 +389,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
       : connections.length === 1
         ? "Gmail connected"
         : `${connections.length} inboxes connected`;
-  const syncedRelative = formatRelativeTime(syncStats?.last_run_at) ?? "never";
+  const syncedRelative = formatRelativeTime(syncStats?.last_run_at) ?? "not synced yet";
   const syncedCount = formatCount(syncStats?.total_raw_emails ?? 0);
   const inboxNote =
     connections.length === 0

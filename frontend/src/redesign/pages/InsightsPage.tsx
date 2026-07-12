@@ -10,6 +10,7 @@ import {
 import { Alert, Button } from "../../components/ui";
 import { isSafeApplicationRouteId } from "../../lib/applicationRoutes";
 import { formatShortDate } from "../theme";
+import { publicApiError } from "../apiError";
 
 interface InsightsPageProps {
   openApp: (id: string) => void;
@@ -74,21 +75,6 @@ const DISPLAY_ORDER: InsightType[] = [
   "story",
 ];
 
-function apiErrorMessage(data: unknown, fallback: string) {
-  if (
-    typeof data === "object" &&
-    data !== null &&
-    "error" in data &&
-    typeof data.error === "object" &&
-    data.error !== null &&
-    "message" in data.error &&
-    typeof data.error.message === "string"
-  ) {
-    return data.error.message;
-  }
-  return fallback;
-}
-
 function costLabel(response: InsightListResponse | null, type: InsightType): string {
   const estimate = response?.regeneration_cost_estimates?.find((item) => item.type === type);
   const usd = estimate?.cost.estimated_cost_usd;
@@ -104,23 +90,25 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
   const [howOpen, setHowOpen] = useState<Record<string, boolean>>({});
   const [regenerating, setRegenerating] = useState<InsightType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const regenerationRef = useRef<InsightType | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const listResponse = await listInsightsInsightsGet().catch(() => null);
+      setLoading(true);
+      const listResponse = await listInsightsInsightsGet().catch((requestError: unknown) => ({ error: requestError }));
       if (cancelled) {
         return;
       }
-      if (listResponse?.status === 200) {
+      if ("status" in listResponse && listResponse.status === 200) {
         setResponse(listResponse.data);
         setError(null);
-      } else if (listResponse) {
-        setError(apiErrorMessage(listResponse.data, "Insights are unavailable."));
       } else {
-        setError("Insights are unavailable. Check that the local backend is running.");
+        setResponse(null);
+        setError(publicApiError("status" in listResponse ? { response: listResponse } : listResponse.error, "Insights are unavailable. Check that the local backend is running."));
       }
+      setLoading(false);
     };
     void load();
     return () => {
@@ -153,7 +141,7 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
         });
       } else {
         setError(
-          apiErrorMessage(regenerateResponse.data, `${INSIGHT_COPY[type].title} could not be rewritten.`),
+          publicApiError({ response: regenerateResponse }, `${INSIGHT_COPY[type].title} could not be rewritten.`),
         );
       }
     } catch {
@@ -209,8 +197,13 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
           {error}
         </Alert>
       ) : null}
+      {loading ? (
+        <div style={{ padding: "22px 24px", border: "1px solid #E4E2DA", borderRadius: "16px", background: "#fff", fontSize: "13.5px", color: "#666D66" }}>
+          Loading insights…
+        </div>
+      ) : null}
 
-      {insights.length === 0 ? (
+      {!loading && !error && insights.length === 0 ? (
         <div
           style={{
             padding: "22px 24px",

@@ -177,7 +177,7 @@ class InsightGenerationService:
                 inputs_hash=insight_input.inputs_hash,
                 model=model,
                 generated_at=self._clock(),
-                citations=_citations_from_input(insight_input),
+                citations=_citations_from_content(insight_input, insufficient_content),
             )
             return InsightGenerationResult(
                 insight=insight,
@@ -202,7 +202,7 @@ class InsightGenerationService:
             inputs_hash=insight_input.inputs_hash,
             model=model,
             generated_at=self._clock(),
-            citations=_citations_from_input(insight_input),
+            citations=_citations_from_content(insight_input, content),
         )
         return InsightGenerationResult(
             insight=insight,
@@ -835,9 +835,13 @@ def _build_role_outcome_summaries(
     )
 
 
-def _citations_from_input(insight_input: InsightInput) -> list[InsightCitation]:
+def _citations_from_content(
+    insight_input: InsightInput,
+    content: str,
+) -> list[InsightCitation]:
     """Project generation evidence into public-safe persisted citations."""
 
+    cited_ids = _extract_citation_ids(content)
     return [
         InsightCitation(
             citation_id=item.citation_id,
@@ -851,4 +855,5 @@ def _citations_from_input(insight_input: InsightInput) -> list[InsightCitation]:
             email_subject=item.email_subject,
         )
         for item in insight_input.evidence
+        if item.citation_id in cited_ids
     ]

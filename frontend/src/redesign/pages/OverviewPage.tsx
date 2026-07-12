@@ -63,11 +63,8 @@ function timeGreeting(): string {
   return "Good evening";
 }
 
-function percent(numerator: number, denominator: number): string {
-  if (denominator === 0) {
-    return "0%";
-  }
-  return `${Math.round((numerator / denominator) * 1_000) / 10}%`;
+function ratePercent(rate: number | null | undefined): string {
+  return `${Math.round((rate ?? 0) * 1_000) / 10}%`;
 }
 
 export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
@@ -76,6 +73,14 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
   const [funnel, setFunnel] = useState<MetricsFunnelResponse | null>(null);
   const [funnelError, setFunnelError] = useState<string | null>(null);
   const [funnelLoading, setFunnelLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [ratesError, setRatesError] = useState<string | null>(null);
+  const [applicationsError, setApplicationsError] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [ratesLoading, setRatesLoading] = useState(true);
+  const [applicationsLoading, setApplicationsLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(true);
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [activity, setActivity] = useState<RecentApplicationEventRecord[]>([]);
   const [explainKey, setExplainKey] = useState<string | null>(null);
@@ -85,6 +90,14 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
     const load = async () => {
       setFunnelLoading(true);
       setFunnelError(null);
+      setSummaryLoading(true);
+      setRatesLoading(true);
+      setApplicationsLoading(true);
+      setActivityLoading(true);
+      setSummaryError(null);
+      setRatesError(null);
+      setApplicationsError(null);
+      setActivityError(null);
       const [
         summaryResponse,
         ratesResponse,
@@ -92,25 +105,33 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
         applicationsResponse,
         eventsResponse,
       ] = await Promise.all([
-        getMetricsSummaryMetricsSummaryGet().catch(() => null),
-        getMetricsRatesMetricsRatesGet().catch(() => null),
+        getMetricsSummaryMetricsSummaryGet().catch((error: unknown) => ({ error })),
+        getMetricsRatesMetricsRatesGet().catch((error: unknown) => ({ error })),
         getMetricsFunnelMetricsFunnelGet().catch((error: unknown) => ({
           error,
         })),
-        listApplicationsApplicationsGet().catch(() => null),
+        listApplicationsApplicationsGet().catch((error: unknown) => ({ error })),
         listRecentApplicationEventsApplicationsEventsRecentGet({
           limit: 5,
-        }).catch(() => null),
+        }).catch((error: unknown) => ({ error })),
       ]);
       if (cancelled) {
         return;
       }
-      if (summaryResponse?.status === 200) {
+      if ("status" in summaryResponse && summaryResponse.status === 200) {
         setSummary(summaryResponse.data);
+      } else {
+        setSummary(null);
+        setSummaryError(publicApiError("status" in summaryResponse ? { response: summaryResponse } : summaryResponse.error, "Summary could not be loaded."));
       }
-      if (ratesResponse?.status === 200) {
+      setSummaryLoading(false);
+      if ("status" in ratesResponse && ratesResponse.status === 200) {
         setRates(ratesResponse.data);
+      } else {
+        setRates(null);
+        setRatesError(publicApiError("status" in ratesResponse ? { response: ratesResponse } : ratesResponse.error, "Rates could not be loaded."));
       }
+      setRatesLoading(false);
       if ("status" in funnelResponse && funnelResponse.status === 200) {
         setFunnel(funnelResponse.data);
       } else {
@@ -125,12 +146,20 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
         );
       }
       setFunnelLoading(false);
-      if (applicationsResponse?.status === 200) {
+      if ("status" in applicationsResponse && applicationsResponse.status === 200) {
         setApplications(applicationsResponse.data);
+      } else {
+        setApplications([]);
+        setApplicationsError(publicApiError("status" in applicationsResponse ? { response: applicationsResponse } : applicationsResponse.error, "Applications could not be loaded."));
       }
-      if (eventsResponse?.status === 200) {
+      setApplicationsLoading(false);
+      if ("status" in eventsResponse && eventsResponse.status === 200) {
         setActivity(eventsResponse.data);
+      } else {
+        setActivity([]);
+        setActivityError(publicApiError("status" in eventsResponse ? { response: eventsResponse } : eventsResponse.error, "Activity could not be loaded."));
       }
+      setActivityLoading(false);
     };
     void load();
     return () => {
@@ -163,8 +192,12 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
     {
       key: "total",
       label: "Applications",
-      value: String(total),
-      note: `${active} still active`,
+      value: summary ? String(total) : "—",
+      note: applicationsLoading
+        ? "Loading active applications"
+        : applicationsError
+          ? "Active count unavailable"
+          : `${active} still active`,
       explain: {
         title: "Applications tracked",
         formula: "count(applications)",
@@ -177,11 +210,11 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
     {
       key: "response",
       label: "Response rate",
-      value: percent(responded, total),
-      note: `${responded} of ${total} heard back`,
+      value: rates ? ratePercent(rates.overall_response_rate.rate) : "—",
+      note: rates ? `${responded} of ${rates.overall_response_rate.denominator ?? 0} heard back` : "Rate unavailable",
       explain: {
         title: "Response rate",
-        formula: `replies ÷ applications = ${responded} ÷ ${total} = ${percent(responded, total)}`,
+        formula: `replies ÷ applications = ${responded} ÷ ${rates?.overall_response_rate.denominator ?? 0} = ${ratePercent(rates?.overall_response_rate.rate)}`,
         source:
           "A “response” means at least one human or scheduling email arrived after your application confirmation. Auto-replies don't count.",
         count: responded,
@@ -192,24 +225,26 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
     {
       key: "interview",
       label: "Interview rate",
-      value: percent(interviewed, total),
-      note: `${interviewed} reached interviews`,
+      value: rates ? ratePercent(rates.application_to_interview_rate.rate) : "—",
+      note: rates ? `${interviewed} reached interviews` : "Rate unavailable",
       explain: {
         title: "Interview rate",
-        formula: `interviews ÷ applications = ${interviewed} ÷ ${total} = ${percent(interviewed, total)}`,
+        formula: `interviews ÷ applications = ${interviewed} ÷ ${rates?.application_to_interview_rate.denominator ?? 0} = ${ratePercent(rates?.application_to_interview_rate.rate)}`,
         source:
           "Counted when an email confirms a scheduled interview — detected phrases like “interview scheduled” or calendar invites from the company.",
         count: interviewed,
         filter: "interview",
-        exactPopulation: true,
+        exactPopulation: false,
       },
     },
     {
       key: "offer",
       label: "Offers",
-      value: String(offers),
+      value: summary ? String(offers) : "—",
       note:
-        offers > 0
+        !summary
+          ? "Offer count unavailable"
+          : offers > 0
           ? `${offers} offer${offers === 1 ? "" : "s"} received`
           : "None yet",
       explain: {
@@ -219,7 +254,7 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
           "An offer is detected from emails containing offer letters or compensation details.",
         count: offers,
         filter: "offer",
-        exactPopulation: true,
+        exactPopulation: false,
       },
     },
   ];
@@ -244,10 +279,7 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
       final: "Final",
       offer: "Offer",
     }[stage.stage],
-    exact:
-      stage.stage === "applied" ||
-      stage.stage === "interview" ||
-      stage.stage === "offer",
+    exact: false,
   }));
 
   const actions = useMemo<ActionCard[]>(() => {
@@ -409,6 +441,13 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
             gap: "12px",
           }}
         >
+          {[summaryLoading ? "Loading summary…" : summaryError, ratesLoading ? "Loading rates…" : ratesError]
+            .filter((message): message is string => !!message)
+            .map((message) => (
+              <p key={message} role="status" style={{ gridColumn: "1 / -1", margin: 0, fontSize: "12.5px", color: message.includes("Loading") ? "#9A9F96" : "#96403C" }}>
+                {message}
+              </p>
+            ))}
           {metrics.map((metric) => (
             <div
               key={metric.key}
@@ -601,7 +640,7 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
               Where applications stand
             </h2>
             <span style={{ fontSize: "11.5px", color: "#9A9F96" }}>
-              Interview and offer open exact current matches
+              Historical event counts open related current statuses
             </span>
           </div>
           <div
@@ -699,8 +738,8 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
               : null}
           </div>
           <p style={{ margin: "14px 0 0", fontSize: "12px", color: "#9A9F96" }}>
-            Counts are deterministic historical stages. Screen and final cannot
-            be reproduced exactly by the current-status application list.
+            Historical event populations cannot be reproduced exactly by the
+            current-status application list.
           </p>
         </div>
 
@@ -717,7 +756,13 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
             Latest from your inbox
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            {activity.length === 0 ? (
+            {activityLoading ? (
+              <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>Loading activity…</p>
+            ) : null}
+            {!activityLoading && activityError ? (
+              <p role="status" style={{ margin: 0, fontSize: "12.5px", color: "#96403C" }}>{activityError}</p>
+            ) : null}
+            {!activityLoading && !activityError && activity.length === 0 ? (
               <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>
                 Nothing yet — run a sync to read your inbox.
               </p>
@@ -789,6 +834,12 @@ export function OverviewPage({ go, openApp, reloadKey }: OverviewPageProps) {
           </div>
         </div>
       </div>
+      {applicationsLoading ? (
+        <p role="status" style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>Loading applications…</p>
+      ) : null}
+      {!applicationsLoading && applicationsError ? (
+        <p role="status" style={{ margin: 0, fontSize: "12.5px", color: "#96403C" }}>{applicationsError}</p>
+      ) : null}
     </section>
   );
 }

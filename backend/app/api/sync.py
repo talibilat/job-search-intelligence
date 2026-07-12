@@ -41,6 +41,7 @@ from app.services.sync_service import (
     SyncService,
     build_sync_local_stats,
     build_sync_scope_estimate,
+    latest_sync_run_at,
 )
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -289,16 +290,21 @@ def sync_recent_emails(
     summary="Get Local Sync Stats",
     description=(
         "Returns deterministic totals over locally stored raw-email metadata "
-        "plus the last manual sync completion time."
+        "plus the latest persisted or in-process sync run timestamp."
     ),
 )
 def sync_stats(
     email_repository: Annotated[EmailRepository, Depends(get_readonly_email_repository)],
     sync_runtime: Annotated[EmailSyncRuntime, Depends(get_email_sync_runtime)],
 ) -> SyncLocalStats:
+    connection = email_repository.connection
     return build_sync_local_stats(
         email_repository=email_repository,
-        last_run_at=sync_runtime.current_status().finished_at,
+        last_run_at=latest_sync_run_at(
+            sync_runtime.current_status().finished_at,
+            SyncStateRepository(connection).latest_update_at(),
+            BackfillStateRepository(connection).latest_completed_at(),
+        ),
     )
 
 

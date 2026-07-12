@@ -71,7 +71,7 @@ afterEach(() => {
 });
 
 describe("ApplicationsPage timeline refresh", () => {
-  it("falls back to refreshed applications when refreshed status counts fail", async () => {
+  it("explains that totals are partial when refreshed status counts fail", async () => {
     let applicationRequestCount = 0;
     let countRequestCount = 0;
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
@@ -109,9 +109,40 @@ describe("ApplicationsPage timeline refresh", () => {
 
     rerender(renderApplications(1));
     await screen.findByText("New Two");
+    expect((await screen.findByRole("alert")).textContent).toContain("Counts failed.");
     expect(screen.getByRole("button", { name: "All 2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Applied 0" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Offer 2" })).toBeTruthy();
+  });
+
+  it.each([
+    ["screening", ["assessment-new", "review-new", "assessment-old"]],
+    ["closed", ["rejected-new", "withdrawn-new", "ghost-old"]],
+  ] as const)("globally sorts merged %s responses by first seen date and ID", async (statusFilter, expected) => {
+    const fixtures: Record<string, ApplicationRecord[]> = {
+      assessment: [
+        application({ id: "assessment-new", company: "assessment-new", current_status: "assessment", first_seen_at: "2026-07-05T12:00:00Z" }),
+        application({ id: "assessment-old", company: "assessment-old", current_status: "assessment", first_seen_at: "2026-07-01T12:00:00Z" }),
+      ],
+      in_review: [application({ id: "review-new", company: "review-new", current_status: "in_review", first_seen_at: "2026-07-05T12:00:00Z" })],
+      rejected: [application({ id: "rejected-new", company: "rejected-new", current_status: "rejected", first_seen_at: "2026-07-06T12:00:00Z" })],
+      ghosted: [application({ id: "ghost-old", company: "ghost-old", current_status: "ghosted", first_seen_at: "2026-06-01T12:00:00Z" })],
+      withdrawn: [application({ id: "withdrawn-new", company: "withdrawn-new", current_status: "withdrawn", first_seen_at: "2026-07-06T12:00:00Z" })],
+    };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const status = new URL(path, "http://localhost").searchParams.get("status") ?? "";
+      if (path.startsWith("/applications?")) return Promise.resolve(jsonResponse(fixtures[status] ?? []));
+      if (path === "/applications/status-counts") return Promise.resolve(jsonResponse({ counts: {}, total: 3 }));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+
+    const { container } = render(
+      <ApplicationsPage openApp={() => undefined} reloadKey={0} setStatusFilter={() => undefined} statusFilter={statusFilter} />,
+    );
+    await screen.findByText(expected[0]);
+    const rows = [...container.querySelectorAll(".rd-hover-row")].map((row) => row.textContent ?? "");
+    expect(rows.map((row) => expected.find((id) => row.includes(id)))).toEqual([...expected]);
   });
 
   it("re-enters loading on reload and replaces a prior success", async () => {

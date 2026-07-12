@@ -5490,6 +5490,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Disconnect Email Connection",
@@ -7741,7 +7751,7 @@
     },
     "/sync/stats": {
       "get": {
-        "description": "Returns deterministic totals over locally stored raw-email metadata plus the last manual sync completion time.",
+        "description": "Returns deterministic totals over locally stored raw-email metadata plus the latest persisted or in-process sync run timestamp.",
         "operationId": "sync_stats_sync_stats_get",
         "responses": {
           "200": {

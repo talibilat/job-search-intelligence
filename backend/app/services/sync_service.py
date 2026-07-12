@@ -309,6 +309,13 @@ def build_sync_local_stats(
     )
 
 
+def latest_sync_run_at(
+    *timestamps: datetime | None,
+) -> datetime | None:
+    present = [timestamp for timestamp in timestamps if timestamp is not None]
+    return max(present) if present else None
+
+
 class SyncAlreadyRunningError(RuntimeError):
     """Raised when a manual sync starts while another run is active."""
 

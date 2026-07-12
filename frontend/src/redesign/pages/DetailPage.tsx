@@ -15,6 +15,7 @@ import {
 import { Alert, Button, FormField, TextInput } from "../../components/ui";
 import type { RedesignPage, StatusChipKey } from "../RedesignApp";
 import { EVENT_LABELS, formatShortDate, logoStyle } from "../theme";
+import { publicApiError } from "../apiError";
 
 interface DetailPageProps {
   applicationId: string;
@@ -77,6 +78,10 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
   const [application, setApplication] = useState<ApplicationRecord | null>(null);
   const [events, setEvents] = useState<ApplicationEventTimelineRecord[]>([]);
   const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [loadKey, setLoadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -86,27 +91,39 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      setLoading(true);
+      setNotFound(false);
+      setLoadError(null);
+      setEventsError(null);
       const [detailResponse, eventsResponse] = await Promise.all([
-        getApplicationDetailApplicationsIdGet(applicationId).catch(() => null),
-        getApplicationEventsApplicationsIdEventsGet(applicationId).catch(() => null),
+        getApplicationDetailApplicationsIdGet(applicationId).catch((requestError: unknown) => ({ error: requestError })),
+        getApplicationEventsApplicationsIdEventsGet(applicationId).catch((requestError: unknown) => ({ error: requestError })),
       ]);
       if (cancelled) {
         return;
       }
-      if (detailResponse?.status === 200) {
+      if ("status" in detailResponse && detailResponse.status === 200) {
         setApplication(detailResponse.data);
-      } else {
+      } else if ("status" in detailResponse && detailResponse.status === 404) {
+        setApplication(null);
         setNotFound(true);
+      } else {
+        setApplication(null);
+        setLoadError(publicApiError("status" in detailResponse ? { response: detailResponse } : detailResponse.error, "Application could not be loaded."));
       }
-      if (eventsResponse?.status === 200) {
+      if ("status" in eventsResponse && eventsResponse.status === 200) {
         setEvents(sortEventsNewestFirst(eventsResponse.data));
+      } else {
+        setEvents([]);
+        setEventsError(publicApiError("status" in eventsResponse ? { response: eventsResponse } : eventsResponse.error, "Timeline could not be loaded."));
       }
+      setLoading(false);
     };
     void load();
     return () => {
       cancelled = true;
     };
-  }, [applicationId]);
+  }, [applicationId, loadKey]);
 
   const onStatusEdit = async (nextStatus: ApplicationStatus) => {
     if (!application || savingRef.current || nextStatus === application.current_status) {
@@ -242,9 +259,20 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
     );
   }
 
+  if (loadError) {
+    return (
+      <section style={{ maxWidth: "860px", margin: "0 auto", padding: "24px 32px 60px", display: "flex", flexDirection: "column", gap: "18px" }}>
+        <Alert tone="danger">{loadError}</Alert>
+        <Button onClick={() => setLoadKey((value) => value + 1)} variant="secondary">Retry</Button>
+      </section>
+    );
+  }
+
   if (!application) {
     return (
-      <section style={{ maxWidth: "860px", margin: "0 auto", padding: "24px 32px 60px" }} />
+      <section style={{ maxWidth: "860px", margin: "0 auto", padding: "24px 32px 60px" }}>
+        {loading ? <p style={{ margin: 0, color: "#9A9F96", fontSize: "13px" }}>Loading application…</p> : null}
+      </section>
     );
   }
 
@@ -354,7 +382,11 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
         </div>
       </div>
 
-      <div
+      {eventsError ? (
+        <Alert tone="danger">{eventsError}</Alert>
+      ) : null}
+
+      {!eventsError ? <div
         style={{
           display: "flex",
           alignItems: "center",
@@ -377,7 +409,7 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
           }}
         />
         <span style={{ flex: 1 }}>{sourceEvidenceCopy}</span>
-      </div>
+      </div> : null}
 
       {error ? (
         <Alert

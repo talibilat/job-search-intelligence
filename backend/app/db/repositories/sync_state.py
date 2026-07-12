@@ -167,5 +167,11 @@ class SyncStateRepository(BaseRepository[EmailSyncStateRecord]):
             issued_at=state.cursor_issued_at,
         )
 
+    def latest_update_at(self) -> datetime | None:
+        row = self.connection.execute(
+            "SELECT MAX(updated_at) FROM email_sync_state"
+        ).fetchone()
+        return None if row is None or row[0] is None else datetime.fromisoformat(row[0])
+
     def map_row(self, row: sqlite3.Row) -> EmailSyncStateRecord:
         return EmailSyncStateRecord.model_validate(row_to_dict(row))

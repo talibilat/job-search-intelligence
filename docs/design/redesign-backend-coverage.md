@@ -13,6 +13,16 @@ Evidence: `backend/tests/test_provider_config_api.py::test_provider_config_updat
 The redesign delete-everything action uses `POST /local-data/wipe` with the exact `wipe-local-data` confirmation phrase.
 Evidence: `backend/tests/test_wipe_data_api.py::test_wipe_data_endpoint_deletes_configured_local_data` and the `wipeDataLocalDataWipePost` call in `frontend/src/redesign/pages/SettingsPage.tsx`.
 
+Email disconnect uses a focused service that deletes encrypted credential material before connection metadata, preserving the metadata reference when the secret store fails so the user can retry.
+Evidence: `backend/tests/test_connection_service.py::test_disconnect_keeps_connection_metadata_when_secret_deletion_fails` and `backend/tests/test_connection_service.py::test_disconnect_deletes_secret_before_connection_metadata`.
+
+`GET /sync/stats` combines in-process completion state with durable sync and backfill timestamps, so last-run status survives a backend process restart without a schema change.
+Evidence: `backend/tests/test_sync_api.py::test_get_sync_stats_uses_durable_state_after_process_restart`.
+
+Cached insight citation records contain only citation IDs referenced by validated narrative content.
+The user-approved `20260710_0201` migration is the sole design exception and uses SQLite Alembic batch mode.
+Evidence: `backend/tests/test_insight_generation_service.py::test_insight_generation_service_generates_recurring_feedback_theme_from_repeated_evidence` and `backend/tests/test_insight_repository.py`.
+
 The redesign overview renders the authoritative five-stage response from `GET /metrics/funnel` with separate loading, empty, and error states.
 Evidence: `backend/tests/test_metrics_funnel_api.py::test_metrics_funnel_returns_approved_stage_contract`, `frontend/src/App.test.tsx::renders the exact five authoritative funnel stages from metrics funnel`, and `frontend/src/App.test.tsx::distinguishes funnel loading, successful empty, and typed failure`.
 

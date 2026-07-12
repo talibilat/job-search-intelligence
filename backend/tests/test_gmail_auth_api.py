@@ -11,6 +11,7 @@ from alembic.config import Config
 from app.api.auth import (
     get_email_connection_repository,
     get_gmail_email_provider,
+    get_gmail_secret_store,
     get_oauth_state_store,
 )
 from app.config import GMAIL_READONLY_SCOPE, AppSettings, EmailProviderName, get_settings
@@ -27,7 +28,7 @@ from app.providers.email import (
     EmailProviderError,
     EmailProviderTransientError,
 )
-from app.security import SecretKind, SecretRef
+from app.security import SecretKind, SecretRef, SecretStoreUnavailableError
 from app.services.gmail_auth import InMemoryOAuthStateStore
 from fastapi.testclient import TestClient
 
@@ -138,6 +139,32 @@ class CapturingConnectionRepository:
         return connection
 
 
+class DisconnectConnectionRepository:
+    def __init__(self, stored: EmailConnection) -> None:
+        self.stored = stored
+        self.deleted = False
+
+    def fetch_connection_metadata(self, account: EmailAccountRef) -> EmailConnection | None:
+        return None if self.deleted or account != self.stored.account else self.stored
+
+    def delete_connection(self, account: EmailAccountRef) -> EmailConnection | None:
+        if self.deleted or account != self.stored.account:
+            return None
+        self.deleted = True
+        return self.stored
+
+
+class DisconnectSecretStore:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.deleted: list[SecretRef] = []
+
+    async def delete_secret(self, ref: SecretRef) -> None:
+        if self.fail:
+            raise SecretStoreUnavailableError("private keyring failure")
+        self.deleted.append(ref)
+
+
 def test_gmail_auth_endpoint_returns_readonly_authorization_url_without_secrets(
     tmp_path: Path,
 ) -> None:
@@ -206,6 +233,50 @@ def test_gmail_auth_endpoint_uses_injected_email_provider() -> None:
     assert fake_provider.start_request is not None
     assert fake_provider.start_request.provider is EmailProviderName.GMAIL
     assert fake_provider.start_request.redirect_uri == "http://127.0.0.1:8000/auth/gmail/callback"
+
+
+def test_disconnect_connection_maps_secret_store_failure_and_keeps_metadata() -> None:
+    connection = EmailConnection(
+        account=EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com"),
+        credential_ref=SecretRef(kind=SecretKind.OAUTH_TOKEN, provider="gmail", name="me"),
+        granted_scopes=(GMAIL_READONLY_SCOPE,),
+        connected_at=datetime(2026, 7, 5, 12, 0, tzinfo=UTC),
+    )
+    repository = DisconnectConnectionRepository(connection)
+    app = create_app()
+    app.dependency_overrides[get_email_connection_repository] = lambda: repository
+    app.dependency_overrides[get_gmail_secret_store] = lambda: DisconnectSecretStore(fail=True)
+
+    response = TestClient(app).delete("/auth/connections/gmail/me@example.com")
+
+    assert response.status_code == 503
+    assert response.json()["error"] == {
+        "code": "service_unavailable",
+        "message": "Stored credentials could not be removed. Try again.",
+        "details": [],
+    }
+    assert repository.fetch_connection_metadata(connection.account) == connection
+    assert "private keyring failure" not in response.text
+
+
+def test_disconnect_connection_removes_secret_and_metadata() -> None:
+    connection = EmailConnection(
+        account=EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com"),
+        credential_ref=SecretRef(kind=SecretKind.OAUTH_TOKEN, provider="gmail", name="me"),
+        granted_scopes=(GMAIL_READONLY_SCOPE,),
+        connected_at=datetime(2026, 7, 5, 12, 0, tzinfo=UTC),
+    )
+    repository = DisconnectConnectionRepository(connection)
+    secret_store = DisconnectSecretStore()
+    app = create_app()
+    app.dependency_overrides[get_email_connection_repository] = lambda: repository
+    app.dependency_overrides[get_gmail_secret_store] = lambda: secret_store
+
+    response = TestClient(app).delete("/auth/connections/gmail/me@example.com")
+
+    assert response.status_code == 200
+    assert secret_store.deleted == [connection.credential_ref]
+    assert repository.fetch_connection_metadata(connection.account) is None
 
 
 def test_gmail_auth_callback_completes_authorization_without_echoing_code() -> None:

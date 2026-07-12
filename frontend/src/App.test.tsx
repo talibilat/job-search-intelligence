@@ -3947,6 +3947,20 @@ describe("App", () => {
     ).toHaveLength(0);
   });
 
+  it("redesign sync rejects an equal custom date range", () => {
+    const fetchMock = mockFetchResponses({});
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    fireEvent.click(screen.getByRole("button", { name: /A specific date range/ }));
+    fireEvent.change(screen.getByLabelText("Sync from date"), { target: { value: "2026-07-10" } });
+    fireEvent.change(screen.getByLabelText("Sync to date"), { target: { value: "2026-07-10" } });
+
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    expect(within(menu!).getByRole("button", { name: "Sync" })).toHaveProperty("disabled", true);
+    expect(fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/sync")).toHaveLength(0);
+  });
+
   it("redesign sync closes only after running transitions to succeeded", async () => {
     const fetchMock = mockFetchResponses({
       "/sync": { state: "running" },
@@ -4703,6 +4717,73 @@ describe("App", () => {
         ([input]) => requestPath(input) === "/config/providers/llm/health",
       ),
     ).toHaveLength(1);
+  });
+
+  it("redesign settings shows typed provider-health transport failure", async () => {
+    const fetchMock = mockFetchResponses({
+      "/config/providers": [providerConfigResponse("ollama"), providerConfigResponse("azure_openai")],
+      "/config/providers/llm/health": {
+        body: apiErrorResponse("llm_provider_unavailable", "The selected provider cannot be reached."),
+        status: 503,
+      },
+    });
+    renderAtPath("/settings");
+    await screen.findByText(/Currently using: a local model/);
+    fireEvent.click(screen.getByRole("button", { name: /Cloud AI/ }));
+
+    expect(await screen.findByText("The selected provider cannot be reached.")).toBeTruthy();
+    expect(screen.queryByText(/operational/i)).toBeNull();
+    expect(fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/config/providers/llm/health")).toHaveLength(1);
+  });
+
+  it("redesign settings serializes disconnect and shows typed failure", async () => {
+    let resolveDisconnect: (response: Response) => void = () => undefined;
+    const baseFetch = mockFetchResponses({
+      "/auth/connections": {
+        body: [{
+          account: { account_id: "first", provider: "gmail" },
+          connected_at: "2026-07-10T12:00:00Z",
+          credential_ref: { kind: "oauth_token", name: "first", provider: "gmail" },
+          display_email: { address: "first@example.com" },
+          granted_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+          reauth_required: false,
+        }],
+        status: 200,
+      },
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      requestPath(input) === "/auth/connections/gmail/first"
+        ? new Promise<Response>((resolve) => { resolveDisconnect = resolve; })
+        : baseFetch(input));
+    vi.stubGlobal("fetch", fetchMock);
+    renderAtPath("/settings");
+    const disconnect = await screen.findByRole("button", { name: "Disconnect" });
+    fireEvent.click(disconnect);
+    fireEvent.click(disconnect);
+    expect(disconnect).toHaveProperty("disabled", true);
+    expect(fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/auth/connections/gmail/first")).toHaveLength(1);
+    resolveDisconnect(new Response(JSON.stringify(apiErrorResponse("service_unavailable", "Stored credentials could not be removed.")), { headers: { "Content-Type": "application/json" }, status: 503 }));
+    expect(await screen.findByText("Stored credentials could not be removed.")).toBeTruthy();
+  });
+
+  it("redesign settings serializes wipe and reports success", async () => {
+    let resolveWipe: (response: Response) => void = () => undefined;
+    const baseFetch = mockFetchResponses({});
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      requestPath(input) === "/local-data/wipe"
+        ? new Promise<Response>((resolve) => { resolveWipe = resolve; })
+        : baseFetch(input));
+    vi.stubGlobal("fetch", fetchMock);
+    renderAtPath("/settings");
+    const wipe = await screen.findByRole("button", { name: "Delete all local data…" });
+    fireEvent.click(wipe);
+    const confirm = screen.getByRole("button", { name: /Click again to confirm/ });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(confirm).toHaveProperty("disabled", true);
+    expect(fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/local-data/wipe")).toHaveLength(1);
+    resolveWipe(new Response(JSON.stringify({ status: "wiped" }), { headers: { "Content-Type": "application/json" }, status: 200 }));
+    expect(await screen.findByText("Local data deleted successfully.")).toBeTruthy();
   });
 
   it("redesign settings preserves confirmed provider and interval after typed failures", async () => {

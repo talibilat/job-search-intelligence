@@ -38,7 +38,9 @@ Any required accessibility fix must preserve the intended appearance.
 Backend changes are allowed only when an existing frontend interaction cannot work correctly without them.
 Such changes must preserve the established FastAPI route, service, repository, dependency injection, Pydantic DTO, and typed-error boundaries.
 
-Do not add speculative endpoints, database migrations, source-email body APIs, or Phase 5 chat generation.
+Do not add speculative endpoints, source-email body APIs, or Phase 5 chat generation.
+The user-approved sole migration exception is the existing persisted insight-citations migration required to expose validated narrative evidence across reloads.
+No other migration is approved by this design.
 
 ### Existing Worktree
 
@@ -126,6 +128,7 @@ Insight labels and ordering map to the backend insight types and their PRD quest
 
 Regeneration calls the existing endpoint, keeps the previous cached insight visible while the request is pending, and replaces it only with a successful typed response.
 Citation controls navigate only to real cited applications supported by the response.
+Persisted citation records include only evidence IDs that the validated narrative content actually cites, not every evidence item supplied to generation.
 
 Copy must not describe inferred evidence when the grounding contract allows only cited source evidence.
 
@@ -154,6 +157,7 @@ The existing local registry remains the source for these labels and is updated t
 ## Error Handling
 
 All redesigned data surfaces distinguish loading, empty, and failed states.
+Overview summary, rates, applications, activity, detail, timeline, status totals, insights, and Settings mutations each preserve this distinction.
 
 The frontend extracts messages from the standard typed API error shape:
 

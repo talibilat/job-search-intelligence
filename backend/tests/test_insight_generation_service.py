@@ -239,6 +239,9 @@ def test_insight_generation_service_generates_recurring_feedback_theme_from_repe
     assert FEEDBACK_CITATION_ID in [
         evidence["citation_id"] for evidence in prompt_payload["evidence"]
     ]
+    assert [citation.citation_id for citation in result.insight.citations] == [
+        FEEDBACK_CITATION_ID
+    ]
 
 
 @pytest.mark.parametrize(

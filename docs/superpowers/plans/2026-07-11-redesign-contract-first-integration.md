@@ -12,7 +12,8 @@
 
 - Preserve the redesign's layout, typography, spacing, color system, visual hierarchy, and responsive structure.
 - Do not modify `frontend/src/redesign/redesign.css` or redesign theme values unless a verified accessibility defect requires it.
-- Do not add `POST /chat`, LangGraph execution, vector retrieval, streaming chat, source-email body APIs, or database migrations.
+- Do not add `POST /chat`, LangGraph execution, vector retrieval, streaming chat, source-email body APIs, or database migrations except the user-approved existing migration for persisted insight citations.
+- The migration exception applies only to persisted insight citations and must follow the repository's SQLite Alembic batch-mode convention.
 - Dashboard values remain deterministic backend values; the frontend formats but does not redefine metric semantics.
 - Preserve all pre-existing uncommitted work and do not revert or reformat unrelated changes.
 - Import frontend API functions and DTOs through `frontend/src/api`, never `frontend/src/api/generated.ts`.

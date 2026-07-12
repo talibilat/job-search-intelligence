@@ -245,6 +245,37 @@ def test_get_sync_status_returns_current_runtime_status() -> None:
     assert response.json()["state"] == "idle"
 
 
+def test_get_sync_stats_uses_durable_state_after_process_restart(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO email_sync_state (
+                provider, account_id, sync_cursor, cursor_issued_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "me@example.com",
+                "history-1",
+                "2026-07-11T09:00:00+00:00",
+                "2026-07-11T10:00:00+00:00",
+            ),
+        )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    app.dependency_overrides[get_sync_status_store] = EmailSyncStatusStore
+
+    response = TestClient(app).get("/sync/stats")
+
+    assert response.status_code == 200
+    assert response.json()["last_run_at"] == "2026-07-11T10:00:00Z"
+
+
 def test_post_sync_returns_typed_error_until_gmail_connection_is_configured(
     tmp_path: Path,
 ) -> None:

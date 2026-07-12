@@ -2357,6 +2357,12 @@ export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteRespo
     status: 422;
   };
 
+export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse503 =
+  {
+    data: ApiErrorResponse;
+    status: 503;
+  };
+
 export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponseSuccess =
   disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse200 & {
     headers: Headers;
@@ -2365,6 +2371,7 @@ export type disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteRespo
   (
     | disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse404
     | disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse422
+    | disconnectEmailConnectionAuthConnectionsProviderAccountIdDeleteResponse503
   ) & {
     headers: Headers;
   };
@@ -3997,7 +4004,7 @@ export const getSyncStatsSyncStatsGetUrl = () => {
 };
 
 /**
- * Returns deterministic totals over locally stored raw-email metadata plus the last manual sync completion time.
+ * Returns deterministic totals over locally stored raw-email metadata plus the latest persisted or in-process sync run timestamp.
  * @summary Get Local Sync Stats
  */
 export const syncStatsSyncStatsGet = async (

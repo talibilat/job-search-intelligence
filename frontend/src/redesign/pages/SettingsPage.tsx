@@ -71,10 +71,15 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
   const [configPending, setConfigPending] = useState(false);
   const [providerHealth, setProviderHealth] = useState<LLMProviderHealthCheckResponse | null>(null);
   const [providerHealthPending, setProviderHealthPending] = useState(false);
+  const [providerHealthError, setProviderHealthError] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<ClassificationPreRunEstimate | null>(null);
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null);
   const [gmailAuthPending, setGmailAuthPending] = useState(false);
   const [wipeStage, setWipeStage] = useState(0);
+  const [disconnectPending, setDisconnectPending] = useState<string | null>(null);
+  const [wipePending, setWipePending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const configRequestPending = useRef(true);
   const confirmedNonLlmModes = useRef<Partial<Record<string, NonLlmClassificationMode>>>({});
   const wipeTimer = useRef<number | null>(null);
@@ -196,12 +201,15 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
       }
       if (update.llm_provider !== undefined && update.llm_provider !== null) {
         setProviderHealth(null);
+        setProviderHealthError(null);
         setProviderHealthPending(true);
         const healthResponse = await checkLlmProviderHealthConfigProvidersLlmHealthPost().catch(
-          () => null,
+          (healthError: unknown) => ({ error: healthError }),
         );
-        if (healthResponse?.status === 200) {
+        if ("status" in healthResponse && healthResponse.status === 200) {
           setProviderHealth(healthResponse.data);
+        } else {
+          setProviderHealthError(publicApiError("status" in healthResponse ? { response: healthResponse } : healthResponse.error, "Provider availability could not be checked."));
         }
         setProviderHealthPending(false);
       }
@@ -249,12 +257,26 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
   };
 
   const onDisconnect = async (connection: EmailConnection) => {
-    const response = await disconnectEmailConnectionAuthConnectionsProviderAccountIdDelete(
-      connection.account.provider,
-      connection.account.account_id,
-    ).catch(() => null);
-    if (response?.status === 200) {
+    const key = `${connection.account.provider}:${connection.account.account_id}`;
+    if (disconnectPending !== null) return;
+    setDisconnectPending(key);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const response = await disconnectEmailConnectionAuthConnectionsProviderAccountIdDelete(
+        connection.account.provider,
+        connection.account.account_id,
+      );
+      if (response.status !== 200) {
+        setActionError(publicApiError({ response }, "Inbox could not be disconnected."));
+        return;
+      }
+      setActionSuccess("Inbox disconnected successfully.");
       onChanged();
+    } catch (disconnectError) {
+      setActionError(publicApiError(disconnectError, "Inbox could not be disconnected. Check the local backend."));
+    } finally {
+      setDisconnectPending(null);
     }
   };
 
@@ -270,6 +292,7 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
   };
 
   const onWipeClick = async () => {
+    if (wipePending) return;
     if (wipeStage === 0) {
       setWipeStage(1);
       wipeTimer.current = window.setTimeout(() => setWipeStage(0), 4000);
@@ -280,11 +303,21 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
       wipeTimer.current = null;
     }
     setWipeStage(0);
-    const response = await wipeDataLocalDataWipePost({
-      confirmation: "wipe-local-data",
-    }).catch(() => null);
-    if (response?.status === 200) {
+    setWipePending(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const response = await wipeDataLocalDataWipePost({ confirmation: "wipe-local-data" });
+      if (response.status !== 200) {
+        setActionError(publicApiError({ response }, "Local data could not be deleted."));
+        return;
+      }
+      setActionSuccess("Local data deleted successfully.");
       onChanged();
+    } catch (wipeError) {
+      setActionError(publicApiError(wipeError, "Local data could not be deleted. Check the local backend."));
+    } finally {
+      setWipePending(false);
     }
   };
 
@@ -404,6 +437,7 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
                 </div>
               </div>
               <button
+                disabled={disconnectPending !== null}
                 onClick={() => void onDisconnect(connection)}
                 style={{
                   padding: "7px 14px",
@@ -417,7 +451,7 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
                 }}
                 type="button"
               >
-                Disconnect
+                {disconnectPending === `${connection.account.provider}:${connection.account.account_id}` ? "Disconnecting…" : "Disconnect"}
               </button>
             </div>
           );
@@ -611,6 +645,9 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
               {providerHealth.provider_name} {providerHealth.status}
             </div>
           ) : null}
+          {providerHealthError ? (
+            <div role="alert" style={{ marginTop: "5px", color: "#96403C", fontWeight: 600 }}>{providerHealthError}</div>
+          ) : null}
         </div>
         {configError ? (
           <>
@@ -724,6 +761,7 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
           Gmail is untouched.
         </p>
         <button
+          disabled={wipePending}
           onClick={() => void onWipeClick()}
           style={{
             alignSelf: "flex-start",
@@ -738,10 +776,14 @@ export function SettingsPage({ connections, onChanged }: SettingsPageProps) {
           }}
           type="button"
         >
-          {wipeStage === 0
+          {wipePending
+            ? "Deleting local data…"
+            : wipeStage === 0
             ? "Delete all local data…"
             : "Click again to confirm — this can't be undone"}
         </button>
+        {actionError ? <div role="alert" style={{ fontSize: "12px", color: "#96403C" }}>{actionError}</div> : null}
+        {actionSuccess ? <div role="status" style={{ fontSize: "12px", color: "#1E5136" }}>{actionSuccess}</div> : null}
       </div>
     </section>
   );

@@ -110,6 +110,7 @@ export function ApplicationsPage({
   const [timelineStates, setTimelineStates] = useState<Record<string, TimelineState>>({});
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
+  const [countsError, setCountsError] = useState<string | null>(null);
   const applicationGeneration = `${reloadKey}:${statusFilter}`;
   const [loadedApplicationGeneration, setLoadedApplicationGeneration] = useState<string | null>(
     null,
@@ -122,6 +123,7 @@ export function ApplicationsPage({
       setApplicationsError(null);
       setApplications([]);
       setCounts(null);
+      setCountsError(null);
       setTimelineStates({});
       setLoadedApplicationGeneration(null);
       const statuses = statusesForChip(statusFilter);
@@ -131,7 +133,7 @@ export function ApplicationsPage({
             listApplicationsApplicationsGet(status ? { status } : undefined).catch((error: unknown) => ({ error })),
           ),
         ),
-        getApplicationStatusCountsApplicationsStatusCountsGet().catch(() => null),
+        getApplicationStatusCountsApplicationsStatusCountsGet().catch((error: unknown) => ({ error })),
       ]);
       if (cancelled) {
         return;
@@ -156,14 +158,21 @@ export function ApplicationsPage({
             }
           }
         }
-        setApplications([...merged.values()]);
+        setApplications(
+          [...merged.values()].sort(
+            (left, right) =>
+              Date.parse(right.first_seen_at) - Date.parse(left.first_seen_at) ||
+              left.id.localeCompare(right.id),
+          ),
+        );
       }
       setApplicationsLoading(false);
       setLoadedApplicationGeneration(applicationGeneration);
-      if (countsResponse?.status === 200) {
+      if ("status" in countsResponse && countsResponse.status === 200) {
         setCounts(countsResponse.data);
       } else {
         setCounts(null);
+        setCountsError(publicApiError("status" in countsResponse ? { response: countsResponse } : countsResponse.error, "Status totals could not be loaded."));
       }
     };
     void load();
@@ -352,6 +361,9 @@ export function ApplicationsPage({
           );
         })}
       </div>
+      {countsError ? (
+        <p role="alert" style={{ margin: 0, fontSize: "12.5px", color: "#96403C" }}>{countsError} Showing counts from the visible applications only.</p>
+      ) : null}
 
       {applicationsLoading ? (
         <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>Loading applications…</p>

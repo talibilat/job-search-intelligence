@@ -39,6 +39,17 @@ afterEach(() => {
 });
 
 describe("InsightsPage", () => {
+  it("shows loading and typed initial failure instead of no insights", async () => {
+    const pending = deferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => pending.promise));
+    render(<InsightsPage openApp={() => undefined} reloadKey={0} />);
+
+    expect(screen.getByText("Loading insights…")).toBeTruthy();
+    expect(screen.queryByText(/No insights yet/)).toBeNull();
+    pending.resolve(jsonResponse({ error: { code: "insights_failed", details: [], message: "Insight cache is unavailable." } }, 503));
+    expect((await screen.findByRole("alert")).textContent).toContain("Insight cache is unavailable.");
+    expect(screen.queryByText(/No insights yet/)).toBeNull();
+  });
   it("presents Q-40 through Q-46 in order without inferred-evidence claims", async () => {
     const types: InsightType[] = [
       "why_rejected",
