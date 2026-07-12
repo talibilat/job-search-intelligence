@@ -15,6 +15,7 @@ from app.security import (
 from app.services.wipe_data import (
     APP_OWNED_DATA_DIR_MARKER,
     UnsafeWipeTargetError,
+    WipeDataResult,
     WipeSecretDeletionError,
     wipe_local_data,
 )
@@ -32,18 +33,18 @@ def make_settings(tmp_path: Path) -> AppSettings:
 
 
 class NoOpSecretStore:
-    async def get_secret(self, ref: SecretRef):
+    async def get_secret(self, ref: SecretRef) -> SecretStr | None:
         del ref
         return None
 
-    async def set_secret(self, ref: SecretRef, value):
+    async def set_secret(self, ref: SecretRef, value: SecretStr) -> None:
         del ref, value
 
     async def delete_secret(self, ref: SecretRef) -> None:
         del ref
 
 
-def run_wipe(settings: AppSettings):
+def run_wipe(settings: AppSettings) -> WipeDataResult:
     return asyncio.run(
         wipe_local_data(
             settings,
@@ -282,11 +283,11 @@ class FailingSecretStore:
     def __init__(self, raw_secret: str) -> None:
         self.raw_secret = raw_secret
 
-    async def get_secret(self, ref: SecretRef):
+    async def get_secret(self, ref: SecretRef) -> SecretStr | None:
         del ref
         return None
 
-    async def set_secret(self, ref: SecretRef, value):
+    async def set_secret(self, ref: SecretRef, value: SecretStr) -> None:
         del ref, value
 
     async def delete_secret(self, ref: SecretRef) -> None:
