@@ -25,10 +25,13 @@ import type {
   PipelineStatus,
   ProviderConfigResponse,
   ProviderConfigUpdateRequest,
+  RawEmailDetail,
+  RawEmailPreviewPage,
   RawEmailPreviewRecord,
   RecentApplicationEventRecord,
   SetupStatusResponse,
   SyncLocalStats,
+  SyncScopeEstimate,
 } from "../../src/api";
 
 async function expectCategoricalTooltip(
@@ -875,6 +878,60 @@ const redesignSyncStats = {
   total_raw_emails: 2400,
 } satisfies SyncLocalStats;
 
+const redesignSyncedEmails = Array.from({ length: 11 }, (_, index) => {
+  const rowNumber = String(index + 1).padStart(2, "0");
+  return {
+    body_retention_state: "metadata_only",
+    classification_category: null,
+    classification_is_job_related: null,
+    filter_outcome: null,
+    filter_reason: null,
+    from_domain: "jobs.example",
+    has_retained_body: false,
+    ingested_at: "2026-07-12T12:05:00Z",
+    provider: "gmail",
+    public_id: `fixture-email-${rowNumber}`,
+    sent_at: "2026-07-12T12:00:00Z",
+    subject: `Application received - row ${rowNumber}`,
+    subject_present: true,
+    to_domains: ["me.example"],
+  };
+}) satisfies RawEmailPreviewRecord[];
+
+const redesignEmailDetail = {
+  body_retention_state: "metadata_only",
+  body_text: "Thanks for applying. We will follow up within two weeks.",
+  from_domain: "jobs.example",
+  public_id: "fixture-email-11",
+  sent_at: "2026-07-12T12:00:00Z",
+  subject: "Application received - row 11",
+} satisfies RawEmailDetail;
+
+const redesignSuccessfulSync = {
+  account_id: "fixture-account",
+  finished_at: "2026-07-12T12:10:00Z",
+  last_error: null,
+  message_count: 11,
+  mode: "incremental",
+  page_count: 2,
+  progress: 1,
+  provider: "gmail",
+  raw_email_count: 11,
+  recovered_from_expired_cursor: false,
+  retained_body_failure_count: 0,
+  started_at: "2026-07-12T12:09:00Z",
+  state: "succeeded",
+  target_message_count: 11,
+} satisfies EmailSyncStatus;
+
+const redesignSevenDaySyncEstimate = {
+  basis: "unknown_incremental_window",
+  estimated_message_count: null,
+  total_local_emails: 2400,
+  window_end: null,
+  window_start: "2026-07-05T00:00:00Z",
+} satisfies SyncScopeEstimate;
+
 const classificationEstimate = {
   candidate_count: 12,
   classification_mode: "hybrid",
@@ -1077,7 +1134,20 @@ const schedulerError = {
 async function installRedesignFixtures(page: Page) {
   const timelineRequestEvents: string[] = [];
   const chatRequestEvents: string[] = [];
+  const classificationRequestEvents: string[] = [];
+  const emailContentRequestEvents: string[] = [];
   const mutationRequestEvents: string[] = [];
+  const syncEmailRequestUrls: string[] = [];
+  const syncRequestEvents: Array<{
+    body: unknown;
+    method: string;
+    path: string;
+  }> = [];
+  const syncEstimateRequestEvents: Array<{
+    method: string;
+    path: string;
+    query: string;
+  }> = [];
   let providerUpdateCount = 0;
   let currentProviderConfig: ProviderConfigResponse = providerConfig;
 
@@ -1095,6 +1165,65 @@ async function installRedesignFixtures(page: Page) {
       status: 200,
     }),
   );
+  await page.route("**/sync", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    const requestUrl = new URL(route.request().url());
+    syncRequestEvents.push({
+      body: route.request().postDataJSON(),
+      method: route.request().method(),
+      path: requestUrl.pathname,
+    });
+    await route.fulfill({
+      contentType: "application/json",
+      json: redesignSuccessfulSync,
+      status: 200,
+    });
+  });
+  await page.route("**/sync/estimate**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    syncEstimateRequestEvents.push({
+      method: route.request().method(),
+      path: requestUrl.pathname,
+      query: requestUrl.search,
+    });
+    await route.fulfill({
+      contentType: "application/json",
+      json: redesignSevenDaySyncEstimate,
+      status: 200,
+    });
+  });
+  await page.route("**/sync/emails**", async (route) => {
+    syncEmailRequestUrls.push(route.request().url());
+    const pageNumber = Number(
+      new URL(route.request().url()).searchParams.get("page") ?? "1",
+    );
+    const response = {
+      items:
+        pageNumber === 2
+          ? redesignSyncedEmails.slice(10)
+          : redesignSyncedEmails.slice(0, 10),
+      page: pageNumber,
+      page_size: 10,
+      total_items: 11,
+      total_pages: 2,
+    } satisfies RawEmailPreviewPage;
+    await route.fulfill({
+      contentType: "application/json",
+      json: response,
+      status: 200,
+    });
+  });
+  await page.route("**/sync/emails/*/content", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    emailContentRequestEvents.push(
+      `${route.request().method()} ${requestUrl.pathname}`,
+    );
+    await route.fulfill({
+      contentType: "application/json",
+      json: redesignEmailDetail,
+      status: 200,
+    });
+  });
   await page.route("**/metrics/summary", (route) =>
     route.fulfill({
       contentType: "application/json",
@@ -1294,13 +1423,34 @@ async function installRedesignFixtures(page: Page) {
       status: 409,
     });
   });
-  await page.route("**/classification/estimate", (route) =>
-    route.fulfill({
+  await page.route("**/classification/**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    classificationRequestEvents.push(
+      `${route.request().method()} ${requestUrl.pathname}`,
+    );
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        error: {
+          code: "not_found",
+          details: [],
+          message: "Classification is not available in this smoke fixture.",
+        },
+      } satisfies ApiErrorResponse,
+      status: 404,
+    });
+  });
+  await page.route("**/classification/estimate", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    classificationRequestEvents.push(
+      `${route.request().method()} ${requestUrl.pathname}`,
+    );
+    await route.fulfill({
       contentType: "application/json",
       json: classificationEstimate,
       status: 200,
-    }),
-  );
+    });
+  });
   await page.route("**/auth/gmail", (route) =>
     route.fulfill({
       contentType: "application/json",
@@ -1322,8 +1472,13 @@ async function installRedesignFixtures(page: Page) {
 
   return {
     chatRequestEvents,
+    classificationRequestEvents,
+    emailContentRequestEvents,
     mutationRequestEvents,
     providerUpdateCount: () => providerUpdateCount,
+    syncEmailRequestUrls,
+    syncEstimateRequestEvents,
+    syncRequestEvents,
     timelineRequestEvents,
   };
 }
@@ -1544,4 +1699,86 @@ test("runs the critical private-data-free redesign journey", async ({
   await expect(chatStatusRow).toContainText("Planned");
   await expect(chatStatusRow).toContainText("Phase 5");
   await expect(page.getByText("POST /chat")).toBeVisible();
+
+  requests.classificationRequestEvents.length = 0;
+  requests.emailContentRequestEvents.length = 0;
+  requests.syncEmailRequestUrls.length = 0;
+  requests.syncEstimateRequestEvents.length = 0;
+  requests.syncRequestEvents.length = 0;
+  const syncFlowStartedAt = Date.now();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Sync ▾" }).click();
+  await page.getByRole("button", { name: /Last 7 days/ }).click();
+  const syncScopePanel = page.getByText("What should I check?").locator("..");
+  await syncScopePanel
+    .getByRole("button", { exact: true, name: "Sync" })
+    .click();
+
+  const syncedEmails = page.getByRole("list", { name: "Synced emails" });
+  await expect(syncedEmails).toBeVisible();
+  await expect(syncedEmails.getByRole("button")).toHaveCount(10);
+  const secondPageButton = page.getByRole("button", { exact: true, name: "2" });
+  await expect(secondPageButton).toBeVisible();
+  await secondPageButton.click();
+  const finalEmail = syncedEmails.getByRole("button", {
+    name: /Application received - row 11/,
+  });
+  await expect(finalEmail).toBeVisible();
+  await finalEmail.click();
+
+  const emailDialog = page.getByRole("dialog");
+  await expect(emailDialog).toBeVisible();
+  await expect(
+    emailDialog.getByText(
+      "Thanks for applying. We will follow up within two weeks.",
+      {
+        exact: true,
+      },
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close email" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(requests.syncRequestEvents).toEqual([
+    {
+      body: { max_age_days: 7 },
+      method: "POST",
+      path: "/sync",
+    },
+  ]);
+  const sevenDayEstimateRequests = requests.syncEstimateRequestEvents.filter(
+    (requestEvent) =>
+      new URLSearchParams(requestEvent.query).get("max_age_days") === "7",
+  );
+  expect(sevenDayEstimateRequests).toHaveLength(1);
+  expect(sevenDayEstimateRequests[0]).toMatchObject({
+    method: "GET",
+    path: "/sync/estimate",
+  });
+  expect(
+    Object.fromEntries(
+      new URLSearchParams(sevenDayEstimateRequests[0].query).entries(),
+    ),
+  ).toEqual({ max_age_days: "7" });
+  const scopedEmailRequests = requests.syncEmailRequestUrls
+    .map((requestUrl) => new URL(requestUrl))
+    .filter((requestUrl) => requestUrl.searchParams.has("sent_after"));
+  expect(scopedEmailRequests).toHaveLength(2);
+  for (const [index, requestUrl] of scopedEmailRequests.entries()) {
+    expect(requestUrl.searchParams.get("page")).toBe(String(index + 1));
+    expect(requestUrl.searchParams.get("page_size")).toBe("10");
+    const sentAfter = Date.parse(
+      requestUrl.searchParams.get("sent_after") ?? "",
+    );
+    expect(Number.isNaN(sentAfter)).toBe(false);
+    expect(sentAfter).toBeGreaterThanOrEqual(
+      syncFlowStartedAt - 7 * 24 * 60 * 60 * 1000 - 1_000,
+    );
+    expect(sentAfter).toBeLessThanOrEqual(
+      Date.now() - 7 * 24 * 60 * 60 * 1000 + 1_000,
+    );
+  }
+  expect(requests.emailContentRequestEvents).toEqual([
+    "GET /sync/emails/fixture-email-11/content",
+  ]);
+  expect(requests.classificationRequestEvents).toHaveLength(0);
 });
