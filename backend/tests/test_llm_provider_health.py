@@ -474,9 +474,7 @@ def test_llm_provider_health_endpoint_is_documented_in_openapi() -> None:
     operation = response.json()["paths"]["/config/providers/llm/health"]["post"]
     schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     assert schema["$ref"] == "#/components/schemas/LLMProviderHealthCheckResponse"
-    validation_schema = operation["responses"]["422"]["content"]["application/json"][
-        "schema"
-    ]
+    validation_schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert validation_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
