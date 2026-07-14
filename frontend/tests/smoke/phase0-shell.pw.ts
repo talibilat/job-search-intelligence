@@ -12,6 +12,8 @@ import type {
   ApplicationStatusEditRequest,
   ApplicationStatusEditResponse,
   ClassificationPreRunEstimate,
+  ChatHistoryResponse,
+  ChatResponse,
   EmailAuthorizationStartResult,
   EmailConnection,
   EmailSyncStatus,
@@ -36,6 +38,7 @@ import type {
   SetupStatusResponse,
   SyncLocalStats,
   SyncScopeEstimate,
+  WipeDataResponse,
 } from "../../src/api";
 
 async function expectCategoricalTooltip(
@@ -1012,8 +1015,49 @@ const processingReadiness = {
   gmail_sync: { state: "ready", message: "Gmail is ready." },
   classification_generation: { state: "ready", message: "Classification is ready." },
   embedding_generation: { state: "ready", message: "Embeddings are ready." },
-  chat_generation: { state: "not_implemented", message: "Chat is planned." },
+  chat_generation: { state: "ready", message: "Grounded chat is ready." },
 } satisfies ProviderReadinessResponse;
+
+const quantitativeChatResponse = {
+  answer: "You have 23 applications.",
+  citations: [{
+    citation_id: "metric:summary_counts",
+    metric_template: "summary_counts",
+    source: "metric",
+  }],
+  conversation_id: "release-smoke-chat",
+  increments: [
+    { content: "quantitative", type: "route" },
+    { content: "structured_query", type: "tool" },
+    { content: "You have 23 applications.", type: "answer" },
+  ],
+  route: "quantitative",
+  tool_outputs: [{ tool: "structured_query", values: { total_applications: 23 } }],
+} satisfies ChatResponse;
+
+const contentChatResponse = {
+  answer: "Fixture Systems said the role requires deeper distributed-systems design experience.",
+  citations: [{
+    application_id: "app-fixture",
+    citation_id: "email:fixture-rejection-public",
+    email_public_id: "fixture-rejection-public",
+    sent_at: "2026-07-10T16:00:00Z",
+    snippet: "The role requires deeper distributed-systems design experience.",
+    source: "email",
+    subject: "Rejection decision",
+  }],
+  conversation_id: "release-smoke-chat",
+  increments: [
+    { content: "content", type: "route" },
+    { content: "semantic_search", type: "tool" },
+    {
+      content: "Fixture Systems said the role requires deeper distributed-systems design experience.",
+      type: "answer",
+    },
+  ],
+  route: "content",
+  tool_outputs: [{ tool: "semantic_search" }],
+} satisfies ChatResponse;
 
 const gmailAuthorization = {
   authorization_url: "http://127.0.0.1:4173/oauth-fixture-destination",
@@ -1218,6 +1262,7 @@ async function installRedesignFixtures(page: Page) {
   }> = [];
   let providerUpdateCount = 0;
   let processingComplete = false;
+  const persistedChatMessages: ChatHistoryResponse["messages"] = [];
   let currentProviderConfig: ProviderConfigResponse = providerConfig;
   let currentDetailApplication: ApplicationRecord = {
     ...redesignApplication,
@@ -1638,9 +1683,71 @@ async function installRedesignFixtures(page: Page) {
       status: 200,
     }),
   );
+  await page.route("**/chat/history?**", async (route) => {
+    chatRequestEvents.push(`${route.request().method()} /chat/history`);
+    await route.fulfill({
+      contentType: "application/json",
+      json: { messages: persistedChatMessages } satisfies ChatHistoryResponse,
+      status: 200,
+    });
+  });
   await page.route("**/chat", async (route) => {
+    if (route.request().isNavigationRequest()) {
+      await route.continue();
+      return;
+    }
     chatRequestEvents.push(`${route.request().method()} /chat`);
-    await route.abort();
+    const request = route.request().postDataJSON() as { message: string };
+    const response = request.message.toLowerCase().includes("how many")
+      ? quantitativeChatResponse
+      : contentChatResponse;
+    const createdAt = "2026-07-15T10:00:00Z";
+    persistedChatMessages.push(
+      {
+        citations_json: [],
+        content: request.message,
+        conversation_id: response.conversation_id,
+        created_at: createdAt,
+        id: persistedChatMessages.length + 1,
+        role: "user",
+        tool_outputs_json: [],
+      },
+      {
+        citations_json: response.citations,
+        content: response.answer,
+        conversation_id: response.conversation_id,
+        created_at: createdAt,
+        id: persistedChatMessages.length + 2,
+        role: "assistant",
+        tool_outputs_json: response.tool_outputs,
+      },
+    );
+    await route.fulfill({ contentType: "application/json", json: response, status: 200 });
+  });
+  await page.route("**/sync/emails/fixture-rejection-public/content", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      json: {
+        body_retention_state: "retained",
+        body_text: "The role requires deeper distributed-systems design experience.",
+        from_domain: "fixtures.example",
+        public_id: "fixture-rejection-public",
+        sent_at: "2026-07-10T16:00:00Z",
+        subject: "Rejection decision",
+      } satisfies RawEmailDetail,
+      status: 200,
+    }),
+  );
+  await page.route("**/local-data/wipe", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postDataJSON()).toEqual({ confirmation: "wipe-local-data" });
+    mutationRequestEvents.push("POST /local-data/wipe");
+    persistedChatMessages.length = 0;
+    await route.fulfill({
+      contentType: "application/json",
+      json: { deleted_paths: [], missing_paths: [], status: "wiped" } satisfies WipeDataResponse,
+      status: 200,
+    });
   });
 
   return {
@@ -1872,11 +1979,31 @@ test("runs the critical private-data-free redesign journey", async ({
   ).toBeVisible();
 
   await page.goto("/");
-  const chatRequestsBeforeOpen = requests.chatRequestEvents.length;
-  await expect(page.getByRole("button", { name: "Ask AI" })).toHaveCount(0);
-  await expect(page.getByRole("complementary", { name: "Ask AI drawer" })).toHaveCount(0);
-  await page.waitForTimeout(noRequestObservationMs);
-  expect(requests.chatRequestEvents).toHaveLength(chatRequestsBeforeOpen);
+  await page.getByRole("button", { name: "Ask AI" }).click();
+  await expect(page).toHaveURL("/chat");
+  const chat = page.getByRole("complementary", { name: "Ask AI drawer" });
+  await expect(chat).toBeVisible();
+  await expect(chat.getByText("Ask from your actual search history")).toBeVisible();
+  await chat.getByRole("textbox", { name: "Message" }).fill("How many applications do I have?");
+  await chat.getByRole("button", { name: "Ask" }).click();
+  await expect(chat.getByText("You have 23 applications.")).toBeVisible();
+  await expect(chat.getByText("Dashboard metric · summary_counts")).toBeVisible();
+
+  await chat.getByRole("textbox", { name: "Message" }).fill("What exactly did Fixture Systems say?");
+  await chat.getByRole("button", { name: "Ask" }).click();
+  await expect(chat.getByText("Fixture Systems said the role requires deeper distributed-systems design experience.", { exact: true })).toBeVisible();
+  await expect(chat.getByRole("button", { name: "Open email evidence" })).toBeVisible();
+  await chat.getByRole("button", { name: "Open email evidence" }).click();
+  const citedEmail = page.getByRole("dialog");
+  await expect(citedEmail.getByRole("heading", { name: "Rejection decision" })).toBeVisible();
+  await expect(citedEmail.getByText("The role requires deeper distributed-systems design experience.")).toBeVisible();
+  await citedEmail.getByRole("button", { name: "Close email" }).click();
+
+  await page.reload();
+  await expect(page.getByRole("complementary", { name: "Ask AI drawer" }).getByText("You have 23 applications.")).toBeVisible();
+  await page.getByRole("complementary", { name: "Ask AI drawer" }).getByRole("button", { name: "View application" }).click();
+  await expect(page).toHaveURL("/applications/app-fixture");
+  await expect(page.getByRole("heading", { name: "Fixture Systems" })).toBeVisible();
 
   await page.goto("/dev");
   await expect(
@@ -1889,7 +2016,7 @@ test("runs the critical private-data-free redesign journey", async ({
   const chatStatusRow = page
     .getByText("Chat agent (RAG)", { exact: true })
     .locator("xpath=ancestor::div[span][1]");
-  await expect(chatStatusRow).toContainText("Planned");
+  await expect(chatStatusRow).toContainText("Completed");
   await expect(chatStatusRow).toContainText("Phase 5");
   await expect(page.getByText("POST /chat")).toBeVisible();
 
@@ -1978,4 +2105,10 @@ test("runs the critical private-data-free redesign journey", async ({
       event.startsWith("POST "),
     ),
   ).toHaveLength(0);
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Delete all local data…" }).click();
+  await page.getByRole("button", { name: "Click again to confirm - this can't be undone" }).click();
+  await expect(page.getByText("Local data deleted successfully.")).toBeVisible();
+  expect(requests.mutationRequestEvents).toContain("POST /local-data/wipe");
 });

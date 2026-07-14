@@ -27,6 +27,15 @@ body {
   overflow-x: hidden;
 }
 
+.legacy-route-notice {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid #d9d5c9;
+  background: #fff8df;
+  color: #5f5128;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 a {
   color: inherit;
 }

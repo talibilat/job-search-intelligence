@@ -551,6 +551,15 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
         );
       }
 
+      if (path.startsWith("/chat/history")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ messages: [] }), {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
       if (path.startsWith("/sync/emails")) {
         return Promise.resolve(
           new Response(
@@ -2932,24 +2941,19 @@ describe("App", () => {
     expect(await screen.findByText("Setup choices saved")).toBeTruthy();
   });
 
-  it("shows a clear unavailable state at the unfinished chat route", () => {
+  it("opens the grounded chat workspace at the direct chat route", async () => {
     window.history.pushState({}, "", "/chat");
+    mockFetchResponses({});
 
     render(<App />);
 
     expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: /chat unavailable/i,
-      }),
+      screen.getByRole("complementary", { name: "Ask AI drawer" }),
     ).toBeTruthy();
     expect(
-      screen.getByText(/chat arrives in phase 5 after the hybrid rag agent/i),
+      await screen.findByText("Ask from your actual search history"),
     ).toBeTruthy();
-    expect(
-      screen.getByRole("link", { name: "Go to Feature Status" }),
-    ).toBeTruthy();
-    expect(screen.queryByRole("textbox", { name: /message/i })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeTruthy();
   });
 
   it("renders the redesigned application detail page on application detail routes", async () => {
@@ -3398,7 +3402,7 @@ describe("App", () => {
     expect(screen.getByText("Live applications queue")).toBeTruthy();
     expect(
       screen.getByText(
-        "Hidden from primary navigation; direct /chat URLs show the unavailable Phase 5 state until the grounded chat route is built.",
+        "Available through Ask AI and /chat with persisted local history, grounded refusals, retries, and cited sources.",
       ),
     ).toBeTruthy();
     expect(screen.getByText("Glossary")).toBeTruthy();
@@ -3421,10 +3425,10 @@ describe("App", () => {
       screen.queryByText(/Unimplemented metric values remain Pending/i),
     ).toBeNull();
     expect(screen.getByText("Insights cached narrative view")).toBeTruthy();
-    expect(screen.getByText("Chat unavailable marker")).toBeTruthy();
+    expect(screen.getByText("Grounded chat workspace")).toBeTruthy();
     expect(
       screen.getByText(
-        "QA can confirm chat is absent from primary navigation and direct /chat renders the unavailable Phase 5 page instead of presenting a broken shell.",
+        "QA can ask a quantitative fixture question that matches the dashboard and a content question that links to safe source evidence.",
       ),
     ).toBeTruthy();
     expect(
@@ -3464,7 +3468,7 @@ describe("App", () => {
     expect(frontendApiIntegrations?.textContent).not.toContain(
       "Future GET /metrics/summary",
     );
-    expect(frontendApiIntegrations?.textContent).not.toContain("POST /chat");
+    expect(frontendApiIntegrations?.textContent).toContain("POST /chat");
 
     const connectGmailInfo = screen.getByRole("button", {
       name: "About Connect Gmail",
@@ -5289,18 +5293,20 @@ describe("App", () => {
     expect(within(connectionsCard!).queryByText(/synced/)).toBeNull();
   });
 
-  it("keeps Phase 5 chat out of the operational redesign", () => {
+  it("opens Phase 5 chat from the operational redesign", async () => {
     const fetchMock = mockFetchResponses({});
     renderAtPath("/");
-    expect(screen.queryByRole("button", { name: "Ask AI" })).toBeNull();
-    expect(screen.queryByText("Ask your job search")).toBeNull();
-    expect(screen.queryByLabelText("Ask AI drawer")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ask AI" }));
+    expect(await screen.findByText("Ask from your actual search history")).toBeTruthy();
+    expect(screen.getAllByText("Ask your job search")).toHaveLength(2);
+    expect(window.location.pathname).toBe("/chat");
+    expect(screen.getByLabelText("Ask AI drawer")).toBeTruthy();
 
     expect(
       fetchMock.mock.calls.some(([input]) =>
-        requestPath(input).startsWith("/chat"),
+        requestPath(input).startsWith("/chat/history"),
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("redesign developer derives truthful statuses from the feature registry", () => {
@@ -5323,7 +5329,7 @@ describe("App", () => {
     ).toContain("Completed");
     const chatRow = screen.getByText("Chat agent (RAG)").parentElement;
     expect(chatRow?.textContent).toContain("Phase 5");
-    expect(chatRow?.textContent).toContain("Planned");
+    expect(chatRow?.textContent).toContain("Completed");
     expect(screen.queryByText("Live")).toBeNull();
   });
 });

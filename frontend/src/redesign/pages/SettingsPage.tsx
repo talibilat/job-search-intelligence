@@ -816,7 +816,7 @@ export function SettingsPage({
             ? "Deleting local data…"
             : wipeStage === 0
             ? "Delete all local data…"
-            : "Click again to confirm — this can't be undone"}
+            : "Click again to confirm - this can't be undone"}
         </button>
         {wipeError ? <div role="alert" style={{ fontSize: "12px", color: "#96403C" }}>{wipeError}</div> : null}
         {wipeSuccess ? <div role="status" style={{ fontSize: "12px", color: "#1E5136" }}>{wipeSuccess}</div> : null}
