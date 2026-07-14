@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
+from pydantic import SecretStr
+
 from app.config import AppSettings
+from app.db.repositories.provider_config import ProviderConfigurationRepository
 from app.models import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
     ProviderConfigRequirementResponse,
     ProviderConfigResponse,
     ProviderConfigUpdateRequest,
+    ProviderConfigurationRecord,
     ProviderConfigValues,
     ProviderSecretRequirementResponse,
     ProviderSelection,
@@ -20,20 +25,52 @@ from app.providers import (
     ProviderRegistry,
     ProviderSecretRequirement,
 )
+from app.providers.email.gmail import GoogleOAuthClientConfig
+from app.security import (
+    AZURE_OPENAI_API_KEY_REF,
+    GMAIL_OAUTH_CLIENT_REF,
+    SecretStore,
+)
 from app.services.classification_mode_config import recommend_classification_mode
 from app.services.sync_service import SyncScheduler
+
+_PERSISTED_FIELDS = (
+    "email_provider",
+    "llm_provider",
+    "classification_mode",
+    "sync_on_open",
+    "sync_interval_seconds",
+    "azure_openai_endpoint",
+    "azure_openai_api_version",
+    "azure_openai_chat_deployment",
+    "azure_openai_embedding_deployment",
+    "ollama_base_url",
+    "ollama_chat_model",
+    "ollama_embedding_model",
+)
+_SECRET_FIELDS = {"azure_openai_api_key", "gmail_oauth_client_json"}
 
 
 class SyncSchedulerConfigurationError(RuntimeError):
     """Raised when validated sync settings cannot be applied to the scheduler."""
 
 
+def apply_persisted_provider_config(
+    settings: AppSettings,
+    record: ProviderConfigurationRecord | None,
+) -> None:
+    """Overlay UI-persisted operational fields on environment bootstrap defaults."""
+
+    if record is None:
+        return
+    for field_name in _PERSISTED_FIELDS:
+        setattr(settings, field_name, getattr(record, field_name))
+
+
 def build_provider_config_response(
     settings: AppSettings,
     registry: ProviderRegistry,
 ) -> ProviderConfigResponse:
-    """Build the non-secret provider config API response."""
-
     return ProviderConfigResponse(
         selection=ProviderSelection(
             email_provider=settings.email_provider,
@@ -42,7 +79,6 @@ def build_provider_config_response(
         ),
         recommended_classification_mode=recommend_classification_mode(settings),
         settings=ProviderConfigValues(
-            gmail_client_config_file=settings.gmail_client_config_file,
             gmail_scopes=settings.gmail_scopes,
             sync_on_open=settings.sync_on_open,
             sync_interval_seconds=settings.sync_interval_seconds,
@@ -55,26 +91,28 @@ def build_provider_config_response(
             ollama_embedding_model=settings.ollama_embedding_model,
         ),
         email_providers=tuple(
-            _email_provider_response(provider) for provider in registry.email_providers()
+            _email_provider_response(item) for item in registry.email_providers()
         ),
-        llm_providers=tuple(
-            _llm_provider_response(provider) for provider in registry.llm_providers()
-        ),
+        llm_providers=tuple(_llm_provider_response(item) for item in registry.llm_providers()),
     )
 
 
-def apply_provider_config_update(
+async def apply_provider_config_update(
     settings: AppSettings,
     request: ProviderConfigUpdateRequest,
     registry: ProviderRegistry,
     *,
+    repository: ProviderConfigurationRepository,
+    secret_store: SecretStore,
     sync_scheduler: SyncScheduler,
 ) -> ProviderConfigResponse:
-    """Validate and apply a Phase 0 in-process provider config update."""
+    """Validate, securely store credentials, and durably apply provider settings."""
 
-    updates = request.model_dump(exclude_none=True, exclude_unset=True)
+    request_values = request.model_dump(exclude_none=True, exclude_unset=True)
+    updates = {key: value for key, value in request_values.items() if key not in _SECRET_FIELDS}
     updated_settings = _updated_settings(settings, updates)
     registry.validate_settings(updated_settings)
+    await _store_credentials(request, secret_store)
 
     if {"sync_on_open", "sync_interval_seconds"} & updates.keys():
         try:
@@ -85,14 +123,29 @@ def apply_provider_config_update(
         except Exception as error:
             raise SyncSchedulerConfigurationError from error
 
-    fields_to_apply = set(updates)
-    if _llm_provider_changed(settings, updates) and "classification_mode" not in updates:
-        fields_to_apply.add("classification_mode")
-
-    for field_name in fields_to_apply:
+    repository.save(updated_settings)
+    for field_name in _PERSISTED_FIELDS:
         setattr(settings, field_name, getattr(updated_settings, field_name))
-
     return build_provider_config_response(settings, registry)
+
+
+async def _store_credentials(
+    request: ProviderConfigUpdateRequest,
+    secret_store: SecretStore,
+) -> None:
+    if request.gmail_oauth_client_json is not None:
+        raw_json = request.gmail_oauth_client_json.get_secret_value()
+        try:
+            parsed = json.loads(raw_json)
+            GoogleOAuthClientConfig.model_validate(parsed)
+        except (json.JSONDecodeError, ValueError) as error:
+            raise ValueError("Google OAuth client JSON is invalid.") from error
+        await secret_store.set_secret(GMAIL_OAUTH_CLIENT_REF, SecretStr(raw_json))
+    if request.azure_openai_api_key is not None:
+        api_key = request.azure_openai_api_key.get_secret_value().strip()
+        if not api_key:
+            raise ValueError("Azure OpenAI API key cannot be blank.")
+        await secret_store.set_secret(AZURE_OPENAI_API_KEY_REF, SecretStr(api_key))
 
 
 def _updated_settings(settings: AppSettings, updates: dict[str, Any]) -> AppSettings:
@@ -130,19 +183,15 @@ def _secret_requirement_response(
     )
 
 
-def _email_provider_response(
-    provider: EmailProviderRegistration,
-) -> EmailProviderConfigResponse:
+def _email_provider_response(provider: EmailProviderRegistration) -> EmailProviderConfigResponse:
     return EmailProviderConfigResponse(
         name=provider.name,
         display_name=provider.display_name,
         config_requirements=tuple(
-            _config_requirement_response(requirement)
-            for requirement in provider.config_requirements
+            _config_requirement_response(item) for item in provider.config_requirements
         ),
         secret_requirements=tuple(
-            _secret_requirement_response(requirement)
-            for requirement in provider.secret_requirements
+            _secret_requirement_response(item) for item in provider.secret_requirements
         ),
     )
 
@@ -153,11 +202,9 @@ def _llm_provider_response(provider: LLMProviderRegistration) -> LLMProviderConf
         display_name=provider.display_name,
         is_local=provider.is_local,
         config_requirements=tuple(
-            _config_requirement_response(requirement)
-            for requirement in provider.config_requirements
+            _config_requirement_response(item) for item in provider.config_requirements
         ),
         secret_requirements=tuple(
-            _secret_requirement_response(requirement)
-            for requirement in provider.secret_requirements
+            _secret_requirement_response(item) for item in provider.secret_requirements
         ),
     )

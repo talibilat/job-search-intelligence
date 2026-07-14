@@ -1,36 +1,22 @@
 from __future__ import annotations
 
-from typing import Protocol
-
-from app.config import AppSettings, EmailProviderName
-from app.models import SetupStatusResponse
-from app.providers.email import EmailConnection
+from app.config import AppSettings
+from app.models import ProviderReadinessResponse, ReadinessState, SetupStatusResponse
 from app.services.classification_mode_config import recommend_classification_mode
-
-
-class EmailConnectionStatusReader(Protocol):
-    def fetch_default_connection_metadata(
-        self,
-        provider: EmailProviderName,
-    ) -> EmailConnection | None: ...
 
 
 def build_setup_status(
     settings: AppSettings,
-    connection_reader: EmailConnectionStatusReader | None = None,
+    readiness: ProviderReadinessResponse,
 ) -> SetupStatusResponse:
-    gmail_connected = False
-    if connection_reader is not None:
-        gmail_connected = (
-            connection_reader.fetch_default_connection_metadata(settings.email_provider) is not None
-        )
-
     return SetupStatusResponse(
-        setup_complete=False,
-        gmail_connected=gmail_connected,
-        llm_configured=False,
+        setup_complete=readiness.ready_to_sync and readiness.ready_to_classify,
+        gmail_connected=readiness.gmail_sync.state
+        in {ReadinessState.READY, ReadinessState.REAUTH_REQUIRED},
+        llm_configured=readiness.classification_generation.state is ReadinessState.READY,
         email_provider=settings.email_provider,
         llm_provider=settings.llm_provider,
         classification_mode=settings.classification_mode,
         recommended_classification_mode=recommend_classification_mode(settings),
+        readiness=readiness,
     )

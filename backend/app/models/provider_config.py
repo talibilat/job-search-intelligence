@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
+from datetime import datetime
+from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from app.config import ClassificationMode, EmailProviderName, LLMProviderName
 from app.providers import ProviderRequirementEnforcement
@@ -20,7 +21,6 @@ class ProviderSelection(BaseModel):
 class ProviderConfigValues(BaseModel):
     """Non-secret provider settings visible at the API boundary."""
 
-    gmail_client_config_file: Path
     gmail_scopes: tuple[str, ...]
     sync_on_open: bool
     sync_interval_seconds: int
@@ -81,15 +81,15 @@ class ProviderConfigResponse(BaseModel):
 
 
 class ProviderConfigUpdateRequest(BaseModel):
-    """Partial in-process update for non-secret Phase 0 provider config."""
+    """Partial durable provider config update with write-only credentials."""
 
     model_config = ConfigDict(extra="forbid")
 
     email_provider: EmailProviderName | None = None
     llm_provider: LLMProviderName | None = None
     classification_mode: ClassificationMode | None = None
-    gmail_client_config_file: Path | None = None
-    gmail_scopes: tuple[str, ...] | None = None
+    gmail_oauth_client_json: SecretStr | None = None
+    azure_openai_api_key: SecretStr | None = None
     sync_on_open: bool | None = None
     sync_interval_seconds: int | None = Field(default=None, ge=60, le=86_400)
     azure_openai_endpoint: str | None = None
@@ -105,3 +105,45 @@ class LLMProviderHealthCheckApiRequest(BaseModel):
     """Empty request body accepted by the LLM provider health endpoint."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+class ProviderConfigurationRecord(BaseModel):
+    """Typed singleton row containing only non-secret operational settings."""
+
+    email_provider: EmailProviderName
+    llm_provider: LLMProviderName
+    classification_mode: ClassificationMode
+    sync_on_open: bool
+    sync_interval_seconds: int = Field(ge=60, le=86_400)
+    azure_openai_endpoint: str
+    azure_openai_api_version: str
+    azure_openai_chat_deployment: str
+    azure_openai_embedding_deployment: str
+    ollama_base_url: str
+    ollama_chat_model: str
+    ollama_embedding_model: str
+    updated_at: datetime
+
+
+class ReadinessState(StrEnum):
+    READY = "ready"
+    MISSING_CONFIG = "missing_config"
+    MISSING_CREDENTIAL = "missing_credential"
+    UNAVAILABLE = "unavailable"
+    REAUTH_REQUIRED = "reauth_required"
+    NOT_IMPLEMENTED = "not_implemented"
+
+
+class CapabilityReadiness(BaseModel):
+    state: ReadinessState
+    message: str
+    action: str | None = None
+
+
+class ProviderReadinessResponse(BaseModel):
+    ready_to_sync: bool
+    ready_to_classify: bool
+    gmail_sync: CapabilityReadiness
+    classification_generation: CapabilityReadiness
+    embedding_generation: CapabilityReadiness
+    chat_generation: CapabilityReadiness

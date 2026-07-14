@@ -5,25 +5,34 @@ from typing import Annotated, cast
 from fastapi import APIRouter, Depends, Request
 from pydantic import ValidationError
 
-from app.api.dependencies import get_llm_provider
+from app.api.dependencies import (
+    get_llm_provider,
+    get_llm_secret_store,
+    get_provider_configuration_repository,
+    get_provider_readiness_service,
+)
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.config import AppSettings, get_settings
+from app.db.repositories import ProviderConfigurationRepository
 from app.models import (
     LLMProviderHealthCheckApiRequest,
     ProviderConfigResponse,
     ProviderConfigUpdateRequest,
+    ProviderReadinessResponse,
 )
 from app.providers import ProviderConfigurationError, ProviderRegistry, provider_registry
 from app.providers.llm import (
     LLMProvider,
     LLMProviderHealthCheckResponse,
 )
+from app.security import SecretStore, SecretStoreError
 from app.services.llm_health import check_configured_llm_provider_health
 from app.services.provider_config import (
     SyncSchedulerConfigurationError,
     apply_provider_config_update,
     build_provider_config_response,
 )
+from app.services.readiness import ProviderReadinessService
 from app.services.sync_service import SyncScheduler
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -123,20 +132,27 @@ def get_provider_config(
         503: {"model": ApiErrorResponse},
     },
 )
-def update_provider_config(
+async def update_provider_config(
     request: ProviderConfigUpdateRequest,
     settings: Annotated[AppSettings, Depends(get_settings)],
     registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
     sync_scheduler: Annotated[SyncScheduler, Depends(get_active_sync_scheduler)],
+    repository: Annotated[
+        ProviderConfigurationRepository,
+        Depends(get_provider_configuration_repository),
+    ],
+    secret_store: Annotated[SecretStore, Depends(get_llm_secret_store)],
 ) -> ProviderConfigResponse:
     """Validate and update provider config, applying recommendations on provider changes."""
 
     try:
-        return apply_provider_config_update(
+        return await apply_provider_config_update(
             settings,
             request,
             registry,
             sync_scheduler=sync_scheduler,
+            repository=repository,
+            secret_store=secret_store,
         )
     except ValidationError as error:
         raise ApiError(
@@ -153,6 +169,25 @@ def update_provider_config(
             code=ApiErrorCode.SERVICE_UNAVAILABLE,
             message="Sync scheduler settings could not be applied.",
         ) from error
+    except (SecretStoreError, ValueError) as error:
+        raise ApiError(
+            status_code=400,
+            code=ApiErrorCode.BAD_REQUEST,
+            message=(
+                str(error)
+                if isinstance(error, ValueError)
+                else "Credential storage is unavailable."
+            ),
+        ) from error
+
+
+@router.get("/providers/readiness", response_model=ProviderReadinessResponse)
+async def provider_readiness(
+    service: Annotated[ProviderReadinessService, Depends(get_provider_readiness_service)],
+) -> ProviderReadinessResponse:
+    """Report readiness for each provider-backed product capability."""
+
+    return await service.check()
 
 
 @router.post(

@@ -44,7 +44,13 @@ from app.providers.email.provider import (
     EmailSyncCursorExpiredError,
     EmailSyncMode,
 )
-from app.security import SecretKind, SecretRef, SecretStore, SecretStoreUnavailableError
+from app.security import (
+    GMAIL_OAUTH_CLIENT_REF,
+    SecretKind,
+    SecretRef,
+    SecretStore,
+    SecretStoreUnavailableError,
+)
 
 GMAIL_METADATA_HEADERS = (
     "From",
@@ -204,7 +210,7 @@ class GmailEmailProvider:
                 public_message="Gmail authorization is limited to gmail.readonly in v1."
             )
 
-        client_config = self._load_client_config()
+        client_config = await self._load_client_config()
         return EmailAuthorizationStartResult(
             provider=EmailProviderName.GMAIL,
             authorization_url=self._build_authorization_url(
@@ -226,7 +232,7 @@ class GmailEmailProvider:
         if self._secret_store is None:
             raise EmailProviderAuthError(public_message="Gmail token storage is not configured.")
 
-        client_config = self._load_client_config()
+        client_config = await self._load_client_config()
         token_response = await self._exchange_authorization_code(
             client_config=client_config,
             request=request,
@@ -290,7 +296,7 @@ class GmailEmailProvider:
         refresh_token = stored_credential.refresh_token
         if refresh_token is None:
             raise EmailProviderAuthError(public_message="Reconnect Gmail to continue syncing.")
-        client_config = self._load_client_config()
+        client_config = await self._load_client_config()
         token_response = await self._exchange_refresh_token(
             client_config=client_config,
             refresh_token=refresh_token,
@@ -396,7 +402,23 @@ class GmailEmailProvider:
             raise EmailProviderAuthError(public_message="Reconnect Gmail to continue syncing.")
         return stored_credential
 
-    def _load_client_config(self) -> GoogleOAuthClientConfig:
+    async def _load_client_config(self) -> GoogleOAuthClientConfig:
+        payload: object
+        if self._secret_store is not None:
+            try:
+                stored = await self._secret_store.get_secret(GMAIL_OAUTH_CLIENT_REF)
+            except SecretStoreUnavailableError:
+                stored = None
+            if stored is not None:
+                try:
+                    payload = json.loads(stored.get_secret_value())
+                except json.JSONDecodeError as error:
+                    raise EmailProviderAuthError(
+                        public_message="Stored Google OAuth client JSON is invalid."
+                    ) from error
+                return self._validate_client_config(payload)
+
+        # The path remains a bootstrap fallback for existing environment-based installs.
         try:
             payload = json.loads(self._client_config_file.read_text(encoding="utf-8"))
         except FileNotFoundError as error:
@@ -408,6 +430,10 @@ class GmailEmailProvider:
                 public_message="Google OAuth client config file could not be read."
             ) from error
 
+        return self._validate_client_config(payload)
+
+    @staticmethod
+    def _validate_client_config(payload: object) -> GoogleOAuthClientConfig:
         try:
             return GoogleOAuthClientConfig.model_validate(payload)
         except ValidationError as error:

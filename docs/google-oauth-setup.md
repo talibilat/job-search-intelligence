@@ -54,9 +54,13 @@ Do not move toward a public multi-user OAuth app unless the product scope change
 Use a Desktop app client, not a Web application client.
 The local OAuth start endpoint builds a callback URL on the running backend at `/auth/gmail/callback`, and that callback is handled by the backend while the local process is running.
 
-## Store The Client JSON Outside The Repo
+## Store The Client JSON Securely
 
-Put the downloaded JSON somewhere outside the repository.
+Paste the downloaded Desktop OAuth client JSON into the Setup or Settings credential field.
+The backend accepts it as `SecretStr`, validates its installed-client shape, and stores it through `SecretStore` under `oauth_client:gmail:desktop_client_json`.
+The value is never returned by setup, configuration, readiness, or auth responses.
+
+Existing environment-based installations may continue to use a file outside the repository as a bootstrap fallback.
 The default backend setting points to this path:
 
 ```text
@@ -93,7 +97,7 @@ The backend config validates that v1 uses only `gmail.readonly`, preserving read
 
 ## Start Gmail Authorization
 
-After the backend is running and `JOBTRACKER_GMAIL_CLIENT_CONFIG_FILE` points to your downloaded Desktop client JSON, open `http://127.0.0.1:5173/setup` and use `Start Gmail OAuth` to request an authorization URL from the backend.
+After the backend is running, open `http://127.0.0.1:5173/setup`, save the downloaded Desktop client JSON, and use `Connect Gmail` to request an authorization URL from the backend.
 The setup page shows a `Continue to Google` link and the requested `gmail.readonly` scope.
 
 You can also request the same authorization URL directly from the backend:

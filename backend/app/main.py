@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
@@ -9,6 +10,9 @@ from .api import api_router
 from .api.errors import register_exception_handlers
 from .api.sync import create_configured_sync_job
 from .config import AppSettings, get_settings
+from .db.repositories import ProviderConfigurationRepository
+from .db.sqlite_url import sqlite_database_path
+from .services.provider_config import apply_persisted_provider_config
 from .services.sync_service import (
     ScheduledJobScheduler,
     SyncJob,
@@ -49,6 +53,16 @@ def create_app(
     scheduler: ScheduledJobScheduler | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
+    database_path = sqlite_database_path(resolved_settings.database_url)
+    if database_path.is_file():
+        connection = sqlite3.connect(database_path)
+        try:
+            apply_persisted_provider_config(
+                resolved_settings,
+                ProviderConfigurationRepository(connection).fetch(),
+            )
+        finally:
+            connection.close()
     resolved_sync_job = sync_job or create_configured_sync_job(resolved_settings)
     fastapi_app = FastAPI(
         title="Job Search Intelligence API",

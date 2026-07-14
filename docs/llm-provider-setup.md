@@ -12,7 +12,9 @@ The current backend has the `SecretStore` protocol, backend selector settings, t
 - No shared or bundled credentials are allowed in this repository.
 - Bring your own Azure OpenAI resource or your own local Ollama runtime.
 - Store secret values through the configured `SecretStore`, not in `backend/.env`.
-- Use `backend/.env` only for non-secret local overrides such as endpoints, model names, deployment names, and `classification_mode`.
+- Use `backend/.env` for bootstrap defaults such as endpoints, model names, deployment names, and `classification_mode`.
+- Once provider settings are saved in the UI, the singleton SQLite provider configuration row overrides those operational environment defaults on later backend starts.
+- Process-level bootstrap settings such as the database URL, SecretStore backend, Fernet key path, and fixed Gmail scope are never overridden by the UI.
 - Keep the app local-first: Ollama keeps LLM calls on the machine, while Azure OpenAI sends only configured LLM requests to the user's Azure resource.
 - Keep LLM providers behind the configured app provider path; providers must never execute raw SQL or produce authoritative dashboard counts.
 - Classification calls use the app's provider-neutral JSON-object prompt contract and validate responses with Pydantic before any classification or extraction result is stored.
@@ -46,7 +48,8 @@ JOBTRACKER_AZURE_OPENAI_CHAT_DEPLOYMENT=<chat-deployment-name>
 JOBTRACKER_AZURE_OPENAI_EMBEDDING_DEPLOYMENT=<embedding-deployment-name>
 ```
 
-Store the API key under this secret reference when the setup flow or secret-store adapter is available:
+Enter the API key in Setup or Settings.
+The request treats it as `SecretStr`, stores it under this secret reference, and never returns it:
 
 ```text
 kind: llm_api_key
@@ -127,7 +130,8 @@ If you change model names, update both the setup value and any local model pulls
 
 ## Verify Provider Health
 
-After selecting a provider and configuring its visible model or deployment names, call `POST /config/providers/llm/health` before bulk classification, insight, embedding, or chat runs that depend on the LLM.
+After selecting a provider and configuring its visible model or deployment names, use `GET /config/providers/readiness` to inspect each product capability.
+`POST /config/providers/llm/health` remains available for the lower-level combined model health result.
 The request body is empty because the backend derives the provider, chat model, and embedding model from the current non-secret settings.
 
 The response is a provider-neutral `LLMProviderHealthCheckResponse` with the selected provider name, an overall `available` or `unavailable` status, and one check for the configured chat model plus one check for the configured embedding model.

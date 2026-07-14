@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 from app.config import ClassificationMode, EmailProviderName, LLMProviderName
+from app.models.provider_config import ProviderReadinessResponse
 
 
 class SetupStatusResponse(BaseModel):
@@ -18,6 +18,7 @@ class SetupStatusResponse(BaseModel):
     llm_provider: LLMProviderName
     classification_mode: ClassificationMode
     recommended_classification_mode: ClassificationMode
+    readiness: ProviderReadinessResponse
 
 
 class SetupSubmitRequest(BaseModel):
@@ -28,7 +29,8 @@ class SetupSubmitRequest(BaseModel):
     email_provider: EmailProviderName = EmailProviderName.GMAIL
     llm_provider: LLMProviderName
     classification_mode: ClassificationMode | None = None
-    gmail_client_config_file: Path | None = None
+    gmail_oauth_client_json: SecretStr | None = None
+    azure_openai_api_key: SecretStr | None = None
     azure_openai_endpoint: str | None = None
     azure_openai_api_version: str | None = None
     azure_openai_chat_deployment: str | None = None

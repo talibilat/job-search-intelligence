@@ -10,6 +10,7 @@ _SECRET_REF_PATTERN = r"^[a-z0-9][a-z0-9_.:-]*$"
 
 class SecretKind(StrEnum):
     OAUTH_TOKEN = "oauth_token"
+    OAUTH_CLIENT = "oauth_client"
     LLM_API_KEY = "llm_api_key"
 
 

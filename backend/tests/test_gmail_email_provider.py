@@ -14,6 +14,7 @@ from app.providers.email import (
     EmailAccountRef,
     EmailAttachmentPolicy,
     EmailAuthorizationCallbackRequest,
+    EmailAuthorizationStartRequest,
     EmailBodyFetchFailureReason,
     EmailBodyFetchRequest,
     EmailBodySource,
@@ -25,7 +26,7 @@ from app.providers.email import (
     EmailProviderError,
     EmailSyncMode,
 )
-from app.security import SecretKind, SecretRef
+from app.security import GMAIL_OAUTH_CLIENT_REF, SecretKind, SecretRef
 from pydantic import SecretStr
 
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
@@ -357,6 +358,33 @@ def assert_public_safe_not_implemented_error(error: EmailProviderError) -> None:
     assert "authorization-code" not in str(error)
     assert "csrf-state" not in str(error)
     assert "me@example.com" not in str(error)
+
+
+def test_gmail_provider_prefers_secret_store_oauth_client_json(tmp_path: Path) -> None:
+    from app.providers.email.gmail import GmailEmailProvider
+
+    configured_file = write_google_oauth_client_config(tmp_path)
+    client_json = configured_file.read_text(encoding="utf-8")
+    configured_file.unlink()
+    secret_store = FakeSecretStore(None)
+    secret_store.secrets[GMAIL_OAUTH_CLIENT_REF] = SecretStr(client_json)
+    provider = GmailEmailProvider(
+        settings=AppSettings(_env_file=None, gmail_client_config_file=configured_file),
+        secret_store=secret_store,
+    )
+
+    result = asyncio.run(
+        provider.start_authorization(
+            EmailAuthorizationStartRequest(
+                provider=EmailProviderName.GMAIL,
+                redirect_uri="http://127.0.0.1:8000/auth/gmail/callback",
+                state="safe-state",
+            )
+        )
+    )
+
+    assert "client-id.apps.googleusercontent.com" in result.authorization_url
+    assert "client-secret" not in result.authorization_url
 
 
 def test_gmail_email_provider_completes_authorization_and_persists_tokens(

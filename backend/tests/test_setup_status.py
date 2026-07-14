@@ -7,6 +7,11 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from app.api.dependencies import (
+    get_llm_secret_store,
+    get_provider_configuration_repository,
+)
+from app.api.provider_config import get_active_sync_scheduler
 from app.config import (
     GMAIL_READONLY_SCOPE,
     AppSettings,
@@ -18,9 +23,10 @@ from app.config import (
 from app.db.repositories import EmailConnectionRepository
 from app.main import create_app
 from app.providers.email import EmailAccountRef, EmailAddress, EmailConnection
-from app.security import SecretKind, SecretRef
+from app.security import GMAIL_OAUTH_CLIENT_REF, SecretKind, SecretRef
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,13 +36,47 @@ def clear_jobtracker_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(env_name, raising=False)
 
 
-def create_test_app(settings: AppSettings) -> FastAPI:
+class MemoryProviderConfigRepository:
+    def save(self, settings: AppSettings) -> None:
+        return None
+
+
+class NoopScheduler:
+    def reconfigure(self, *, sync_on_open: bool, interval_seconds: int) -> None:
+        return None
+
+
+class MemorySecretStore:
+    def __init__(self) -> None:
+        self.values: dict[SecretRef, SecretStr] = {}
+
+    async def get_secret(self, ref: SecretRef) -> SecretStr | None:
+        return self.values.get(ref)
+
+    async def set_secret(self, ref: SecretRef, value: SecretStr) -> None:
+        self.values[ref] = value
+
+    async def delete_secret(self, ref: SecretRef) -> None:
+        self.values.pop(ref, None)
+
+
+def create_test_app(
+    settings: AppSettings,
+    secret_store: MemorySecretStore | None = None,
+) -> FastAPI:
     fastapi_app = create_app()
 
     def override_settings() -> AppSettings:
         return settings
 
     fastapi_app.dependency_overrides[get_settings] = override_settings
+    fastapi_app.dependency_overrides[get_provider_configuration_repository] = (
+        MemoryProviderConfigRepository
+    )
+    fastapi_app.dependency_overrides[get_active_sync_scheduler] = NoopScheduler
+    fastapi_app.dependency_overrides[get_llm_secret_store] = lambda: (
+        secret_store or MemorySecretStore()
+    )
     return fastapi_app
 
 
@@ -94,15 +134,12 @@ def test_setup_status_endpoint_returns_phase_zero_shell_status(
     response = client.get("/setup/status")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "setup_complete": False,
-        "gmail_connected": False,
-        "llm_configured": False,
-        "email_provider": "gmail",
-        "llm_provider": "ollama",
-        "classification_mode": "local",
-        "recommended_classification_mode": "local",
-    }
+    payload = response.json()
+    assert payload["setup_complete"] is False
+    assert payload["gmail_connected"] is False
+    assert payload["llm_configured"] is False
+    assert payload["readiness"]["gmail_sync"]["state"] == "missing_credential"
+    assert payload["readiness"]["chat_generation"]["state"] == "not_implemented"
 
 
 def test_setup_status_endpoint_reports_configured_setup_choices(
@@ -153,12 +190,18 @@ def test_setup_status_endpoint_reports_persisted_gmail_connection(
     database_path = tmp_path / "jobtracker.sqlite3"
     migrate_test_database(database_path)
     save_gmail_connection(database_path)
+    secret_store = MemorySecretStore()
+    secret_store.values[GMAIL_OAUTH_CLIENT_REF] = SecretStr("client-json")
+    secret_store.values[
+        SecretRef(kind=SecretKind.OAUTH_TOKEN, provider="gmail", name="me-example-com")
+    ] = SecretStr("token")
     client = TestClient(
         create_test_app(
             AppSettings(
                 _env_file=None,
                 database_url=f"sqlite+aiosqlite:///{database_path}",
-            )
+            ),
+            secret_store,
         )
     )
 
@@ -198,16 +241,9 @@ def test_setup_submit_endpoint_accepts_phase_zero_shell_payload(
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "status": "accepted",
-        "setup_complete": False,
-        "gmail_connected": False,
-        "llm_configured": False,
-        "email_provider": "gmail",
-        "llm_provider": "ollama",
-        "classification_mode": "local",
-        "recommended_classification_mode": "local",
-    }
+    assert response.json()["status"] == "accepted"
+    assert response.json()["setup_complete"] is False
+    assert response.json()["readiness"]["chat_generation"]["state"] == "not_implemented"
 
 
 def test_setup_submit_endpoint_preselects_local_mode_for_ollama(
@@ -292,7 +328,7 @@ def test_setup_submit_endpoint_rejects_incomplete_selected_provider_metadata(
     }
 
 
-def test_setup_submit_endpoint_rejects_unknown_secret_like_fields(
+def test_setup_submit_endpoint_accepts_write_only_api_key_without_returning_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clear_jobtracker_env(monkeypatch)
@@ -308,8 +344,7 @@ def test_setup_submit_endpoint_rejects_unknown_secret_like_fields(
         },
     )
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "validation_error"
+    assert response.status_code == 200
     assert "super-secret-api-key" not in response.text
 
 

@@ -1124,6 +1124,34 @@
         "title": "BackfillProgressState",
         "type": "string"
       },
+      "CapabilityReadiness": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ReadinessState"
+          }
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "title": "CapabilityReadiness",
+        "type": "object"
+      },
       "ChatHistoryResponse": {
         "properties": {
           "messages": {
@@ -3538,8 +3566,21 @@
       },
       "ProviderConfigUpdateRequest": {
         "additionalProperties": false,
-        "description": "Partial in-process update for non-secret Phase 0 provider config.",
+        "description": "Partial durable provider config update with write-only credentials.",
         "properties": {
+          "azure_openai_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Api Key"
+          },
           "azure_openai_api_version": {
             "anyOf": [
               {
@@ -3605,31 +3646,18 @@
               }
             ]
           },
-          "gmail_client_config_file": {
+          "gmail_oauth_client_json": {
             "anyOf": [
               {
-                "format": "path",
-                "type": "string"
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Gmail Client Config File"
-          },
-          "gmail_scopes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gmail Scopes"
+            "title": "Gmail Oauth Client Json"
           },
           "llm_provider": {
             "anyOf": [
@@ -3724,11 +3752,6 @@
             "title": "Azure Openai Endpoint",
             "type": "string"
           },
-          "gmail_client_config_file": {
-            "format": "path",
-            "title": "Gmail Client Config File",
-            "type": "string"
-          },
           "gmail_scopes": {
             "items": {
               "type": "string"
@@ -3758,7 +3781,6 @@
           }
         },
         "required": [
-          "gmail_client_config_file",
           "gmail_scopes",
           "sync_on_open",
           "sync_interval_seconds",
@@ -3771,6 +3793,40 @@
           "ollama_embedding_model"
         ],
         "title": "ProviderConfigValues",
+        "type": "object"
+      },
+      "ProviderReadinessResponse": {
+        "properties": {
+          "chat_generation": {
+            "$ref": "#/components/schemas/CapabilityReadiness"
+          },
+          "classification_generation": {
+            "$ref": "#/components/schemas/CapabilityReadiness"
+          },
+          "embedding_generation": {
+            "$ref": "#/components/schemas/CapabilityReadiness"
+          },
+          "gmail_sync": {
+            "$ref": "#/components/schemas/CapabilityReadiness"
+          },
+          "ready_to_classify": {
+            "title": "Ready To Classify",
+            "type": "boolean"
+          },
+          "ready_to_sync": {
+            "title": "Ready To Sync",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready_to_sync",
+          "ready_to_classify",
+          "gmail_sync",
+          "classification_generation",
+          "embedding_generation",
+          "chat_generation"
+        ],
+        "title": "ProviderReadinessResponse",
         "type": "object"
       },
       "ProviderRequirementEnforcement": {
@@ -4078,6 +4134,18 @@
         "title": "RawEmailPreviewRecord",
         "type": "object"
       },
+      "ReadinessState": {
+        "enum": [
+          "ready",
+          "missing_config",
+          "missing_credential",
+          "unavailable",
+          "reauth_required",
+          "not_implemented"
+        ],
+        "title": "ReadinessState",
+        "type": "string"
+      },
       "RecentApplicationEventRecord": {
         "description": "One cross-application timeline event for the recent-activity feed.",
         "properties": {
@@ -4178,6 +4246,7 @@
       "SecretKind": {
         "enum": [
           "oauth_token",
+          "oauth_client",
           "llm_api_key"
         ],
         "title": "SecretKind",
@@ -4232,6 +4301,9 @@
           "llm_provider": {
             "$ref": "#/components/schemas/LLMProviderName"
           },
+          "readiness": {
+            "$ref": "#/components/schemas/ProviderReadinessResponse"
+          },
           "recommended_classification_mode": {
             "$ref": "#/components/schemas/ClassificationMode"
           },
@@ -4247,7 +4319,8 @@
           "email_provider",
           "llm_provider",
           "classification_mode",
-          "recommended_classification_mode"
+          "recommended_classification_mode",
+          "readiness"
         ],
         "title": "SetupStatusResponse",
         "type": "object"
@@ -4256,6 +4329,19 @@
         "additionalProperties": false,
         "description": "Non-secret first-run setup choices accepted by the Phase 0 API shell.",
         "properties": {
+          "azure_openai_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azure Openai Api Key"
+          },
           "azure_openai_api_version": {
             "anyOf": [
               {
@@ -4314,17 +4400,18 @@
             "$ref": "#/components/schemas/EmailProviderName",
             "default": "gmail"
           },
-          "gmail_client_config_file": {
+          "gmail_oauth_client_json": {
             "anyOf": [
               {
-                "format": "path",
-                "type": "string"
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Gmail Client Config File"
+            "title": "Gmail Oauth Client Json"
           },
           "llm_provider": {
             "$ref": "#/components/schemas/LLMProviderName"
@@ -4389,6 +4476,9 @@
           "llm_provider": {
             "$ref": "#/components/schemas/LLMProviderName"
           },
+          "readiness": {
+            "$ref": "#/components/schemas/ProviderReadinessResponse"
+          },
           "recommended_classification_mode": {
             "$ref": "#/components/schemas/ClassificationMode"
           },
@@ -4410,6 +4500,7 @@
           "llm_provider",
           "classification_mode",
           "recommended_classification_mode",
+          "readiness",
           "status"
         ],
         "title": "SetupSubmitResponse",
@@ -5983,6 +6074,28 @@
         ]
       }
     },
+    "/config/providers/readiness": {
+      "get": {
+        "description": "Report readiness for each provider-backed product capability.",
+        "operationId": "provider_readiness_config_providers_readiness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Provider Readiness",
+        "tags": [
+          "config"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_health_get",
@@ -7545,7 +7658,7 @@
     },
     "/setup": {
       "post": {
-        "description": "Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets. When classification_mode is omitted, the backend applies the selected provider recommendation before validation.",
+        "description": "Durably stores provider choices and write-only credentials through the same service as provider settings. When classification_mode is omitted, the backend applies the selected provider recommendation before validation.",
         "operationId": "setup_submit_setup_post",
         "requestBody": {
           "content": {
