@@ -244,7 +244,9 @@
   .rd-filter-grid,
   .rd-chart-grid,
   .rd-breakdown-grid,
-  .rd-diagnostic-grid {
+  .rd-diagnostic-grid,
+  .rd-repair-grid,
+  .rd-event-edit-form {
     grid-template-columns: minmax(0, 1fr);
   }
 }

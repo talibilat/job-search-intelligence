@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.api.dependencies import (
     get_application_correction_conflict_service,
+    get_application_correction_history_service,
     get_application_correction_service,
     get_application_detail_service,
     get_application_events_service,
@@ -18,6 +19,7 @@ from app.api.dependencies import (
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.models import (
     ApplicationCorrectionConflictRecord,
+    ApplicationCorrectionRecord,
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
     ApplicationMergeRequest,
@@ -51,6 +53,7 @@ from app.services.application_corrections import (
 )
 from app.services.applications import (
     ApplicationCorrectionConflictService,
+    ApplicationCorrectionHistoryService,
     ApplicationDetailService,
     ApplicationEventsService,
     ApplicationFilterValidationError,
@@ -283,6 +286,33 @@ def get_application_correction_conflicts(
 ) -> list[ApplicationCorrectionConflictRecord]:
     try:
         return service.list_application_conflicts(id)
+    except ApplicationReadNotFoundError as error:
+        raise ApiError(
+            status_code=404,
+            code=ApiErrorCode.NOT_FOUND,
+            message="Application not found.",
+        ) from error
+
+
+@router.get(
+    "/{id}/corrections",
+    response_model=list[ApplicationCorrectionRecord],
+    responses={404: {"model": ApiErrorResponse}},
+    summary="List Application Correction History",
+    description=(
+        "Returns the newest-first audit history for one manually corrected application "
+        "from local SQLite."
+    ),
+)
+def get_application_correction_history(
+    id: str,
+    service: Annotated[
+        ApplicationCorrectionHistoryService,
+        Depends(get_application_correction_history_service),
+    ],
+) -> list[ApplicationCorrectionRecord]:
+    try:
+        return service.list_application_corrections(id)
     except ApplicationReadNotFoundError as error:
         raise ApiError(
             status_code=404,

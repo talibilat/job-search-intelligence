@@ -3,9 +3,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import get_args
 
-from app.db.repositories import ApplicationRepository, CorrectionConflictRepository, EventRepository
+from app.db.repositories import (
+    ApplicationRepository,
+    CorrectionConflictRepository,
+    CorrectionRepository,
+    EventRepository,
+)
 from app.models import (
     ApplicationCorrectionConflictRecord,
+    ApplicationCorrectionRecord,
     ApplicationEventRecord,
     ApplicationRecord,
     ApplicationStatusCountsResponse,
@@ -132,6 +138,26 @@ class ApplicationCorrectionConflictService:
         if application is None:
             raise ApplicationNotFoundError(application_id)
         return self._conflict_repository.list_by_application_id(application_id)
+
+
+class ApplicationCorrectionHistoryService:
+    def __init__(
+        self,
+        *,
+        application_repository: ApplicationRepository,
+        correction_repository: CorrectionRepository,
+    ) -> None:
+        self._application_repository = application_repository
+        self._correction_repository = correction_repository
+
+    def list_application_corrections(
+        self,
+        application_id: str,
+    ) -> list[ApplicationCorrectionRecord]:
+        application = self._application_repository.get_by_id(application_id)
+        if application is None:
+            raise ApplicationNotFoundError(application_id)
+        return list(reversed(self._correction_repository.list_by_application_id(application_id)))
 
 
 def _validate_salary_band(*, salary_min: int | None, salary_max: int | None) -> None:

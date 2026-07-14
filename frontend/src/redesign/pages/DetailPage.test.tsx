@@ -68,21 +68,36 @@ type FetchHandler = Response | Promise<Response> | ((init?: RequestInit) => Resp
 
 function stubDetailFetch(
   currentApplication: ApplicationRecord,
-  events: ApplicationEventTimelineRecord[],
+  initialEvents: ApplicationEventTimelineRecord[],
   mutations: Record<string, FetchHandler> = {},
 ) {
-  const handlers: Record<string, FetchHandler> = {
-    "/applications/app-1": jsonResponse(currentApplication),
-    "/applications/app-1/events": jsonResponse(events),
-    ...mutations,
-  };
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+  let loadedApplication = currentApplication;
+  let loadedEvents = initialEvents;
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    const handler = handlers[path];
+    const handler = mutations[path];
     if (!handler) {
-      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+      if (path === "/applications/app-1") return jsonResponse(loadedApplication);
+      if (path === "/applications/app-1/events") return jsonResponse(loadedEvents);
+      if (path === "/applications/app-1/correction-conflicts") return jsonResponse([]);
+      if (path === "/applications/app-1/corrections") return jsonResponse([]);
     }
-    return Promise.resolve(typeof handler === "function" ? handler(init) : handler);
+    if (!handler) {
+      throw new Error(`Unhandled fetch request: ${path}`);
+    }
+    const response = await Promise.resolve(typeof handler === "function" ? handler(init) : handler);
+    const body = await response.clone().json() as {
+        application?: ApplicationRecord;
+        event?: ApplicationEventTimelineRecord;
+        source_application?: ApplicationRecord;
+      };
+    if (body.application || body.source_application || body.event) {
+      loadedApplication = body.application ?? body.source_application ?? loadedApplication;
+      if (body.event) {
+        loadedEvents = loadedEvents.map((event) => event.id === body.event?.id ? body.event : event);
+      }
+    }
+    return response;
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -129,6 +144,79 @@ afterEach(() => {
 });
 
 describe("DetailPage corrections", () => {
+  it("shows the lock, conflicting evidence, and visible correction audit", async () => {
+    stubDetailFetch(application({ manual_lock: true }), [], {
+      "/applications/app-1/correction-conflicts": jsonResponse([{
+        application_id: "app-1",
+        conflict_key: "application_summary:app-1:email-2",
+        conflict_type: "application_summary",
+        created_at: "2026-07-12T12:00:00Z",
+        evidence_email_id: "email-2",
+        existing_json: { application: { current_status: "interview" } },
+        id: 3,
+        proposed_json: { application: { current_status: "rejected" } },
+      }]),
+      "/applications/app-1/corrections": jsonResponse([{
+        ...correction("app-1", "status_edit"),
+        after_json: { current_status: "interview" },
+        before_json: { current_status: "applied" },
+        reason: "The interview email confirms progress.",
+      }]),
+    });
+    renderDetail();
+
+    expect(await screen.findByText("Manual correction lock is on")).toBeTruthy();
+    expect(screen.getByText("New evidence conflicts with your correction")).toBeTruthy();
+    expect(screen.getByText(/application summary from email email-2/)).toBeTruthy();
+    expect(screen.getByText(/status edit/)).toBeTruthy();
+    fireEvent.click(screen.getByText(/status edit/));
+    expect(screen.getByText(/The interview email confirms progress/)).toBeTruthy();
+  });
+
+  it("merges a duplicate and refreshes detail, events, conflicts, history, and metrics", async () => {
+    const fetchMock = stubDetailFetch(application(), [], {
+      "/applications/app-1/merge": jsonResponse({ application: application({ manual_lock: true }), correction: correction("app-1", "status_edit"), moved_events: [] }),
+    });
+    const onChanged = renderDetail();
+
+    await screen.findByText("Repair grouping mistakes");
+    fireEvent.change(screen.getByLabelText("Duplicate application ID"), { target: { value: "app-2" } });
+    fireEvent.change(screen.getByLabelText("Reason", { selector: "input#merge-reason" }), { target: { value: "Duplicate evidence" } });
+    fireEvent.click(screen.getByRole("button", { name: "Merge into this record" }));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    for (const path of [
+      "/applications/app-1",
+      "/applications/app-1/events",
+      "/applications/app-1/correction-conflicts",
+      "/applications/app-1/corrections",
+    ]) {
+      expect(fetchMock.mock.calls.filter(([input]) => input === path)).toHaveLength(2);
+    }
+  });
+
+  it("splits selected evidence and can reset the resulting manual lock", async () => {
+    const first = timelineEvent("event-1", "2026-07-01T12:00:00Z");
+    const second = timelineEvent("event-2", "2026-07-02T12:00:00Z");
+    const fetchMock = stubDetailFetch(application({ manual_lock: true }), [first, second], {
+      "/applications/app-1/split": jsonResponse({ source_application: application({ manual_lock: true }), new_application: application({ id: "split-1", manual_lock: true }), moved_events: [first], correction: correction("app-1", "status_edit") }),
+      "/applications/app-1/reset-lock": jsonResponse({ application: application(), correction: correction("app-1", "status_edit") }),
+    });
+    const onChanged = renderDetail();
+
+    await screen.findByText("Split timeline events");
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.change(screen.getByLabelText("New company"), { target: { value: "Beta" } });
+    fireEvent.change(screen.getByLabelText("New role"), { target: { value: "Engineer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create split application" }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset lock" }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls.some(([input]) => input === "/applications/app-1/split")).toBe(true);
+    expect(fetchMock.mock.calls.some(([input]) => input === "/applications/app-1/reset-lock")).toBe(true);
+  });
+
   it("keeps the saved status until the audited correction succeeds and disables duplicates", async () => {
     const pending = deferredResponse();
     const saved = application({ current_status: "offer", manual_lock: true });
@@ -357,7 +445,7 @@ describe("DetailPage timeline evidence", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
 
     await waitFor(() => expect(screen.queryByLabelText("Event time")).toBeNull());
-    expectBefore("older", "newer");
+    await waitFor(() => expectBefore("older", "newer"));
   });
 
   it("counts only events with source emails", async () => {

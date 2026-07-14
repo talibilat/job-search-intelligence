@@ -30,6 +30,7 @@ from app.services.aggregation import AggregationService
 from app.services.application_corrections import ApplicationCorrectionService
 from app.services.applications import (
     ApplicationCorrectionConflictService,
+    ApplicationCorrectionHistoryService,
     ApplicationDetailService,
     ApplicationEventsService,
 )
@@ -482,6 +483,21 @@ def get_application_correction_service(
         yield ApplicationCorrectionService(
             application_repository=ApplicationRepository(connection),
             event_repository=EventRepository(connection),
+            correction_repository=CorrectionRepository(connection),
+        )
+    finally:
+        connection.close()
+
+
+def get_application_correction_history_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ApplicationCorrectionHistoryService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield ApplicationCorrectionHistoryService(
+            application_repository=ApplicationRepository(connection),
             correction_repository=CorrectionRepository(connection),
         )
     finally:

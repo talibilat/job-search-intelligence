@@ -5963,6 +5963,63 @@
         ]
       }
     },
+    "/applications/{id}/corrections": {
+      "get": {
+        "description": "Returns the newest-first audit history for one manually corrected application from local SQLite.",
+        "operationId": "get_application_correction_history_applications__id__corrections_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationCorrectionRecord"
+                  },
+                  "title": "Response Get Application Correction History Applications  Id  Corrections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Application Correction History",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/applications/{id}/events": {
       "get": {
         "description": "Returns the canonical event timeline for one application from local SQLite, enriched with source-email subject metadata and classification confidence.",

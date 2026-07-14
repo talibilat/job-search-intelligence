@@ -323,6 +323,55 @@ def test_get_application_correction_conflicts_returns_typed_not_found(
     }
 
 
+def test_get_application_correction_history_returns_newest_first(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="application-42", manual_lock=True)
+        connection.executemany(
+            """
+            INSERT INTO application_corrections (
+                application_id, correction_type, before_json, after_json, reason, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    "application-42",
+                    "status_edit",
+                    '{"current_status":"applied"}',
+                    '{"current_status":"interview"}',
+                    "Matched the timeline.",
+                    "2026-07-30T00:00:00Z",
+                ),
+                (
+                    "application-42",
+                    "reset_lock",
+                    '{"manual_lock":true}',
+                    '{"manual_lock":false}',
+                    "Resume automatic updates.",
+                    "2026-07-31T00:00:00Z",
+                ),
+            ),
+        )
+
+    response = create_test_client(database_path).get("/applications/application-42/corrections")
+
+    assert response.status_code == 200
+    assert [item["correction_type"] for item in response.json()] == [
+        "reset_lock",
+        "status_edit",
+    ]
+    assert response.json()[0]["reason"] == "Resume automatic updates."
+
+
+def test_get_application_correction_history_returns_typed_not_found(tmp_path: Path) -> None:
+    response = create_test_client(migrated_database(tmp_path)).get(
+        "/applications/missing-application/corrections"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
 def test_get_application_detail_endpoint_is_documented_in_openapi() -> None:
     client = TestClient(create_app())
 
@@ -363,6 +412,17 @@ def test_application_correction_conflicts_endpoint_is_documented_in_openapi() ->
     assert success_schema["items"]["$ref"] == (
         "#/components/schemas/ApplicationCorrectionConflictRecord"
     )
+    assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
+
+
+def test_application_correction_history_endpoint_is_documented_in_openapi() -> None:
+    response = TestClient(create_app()).get("/openapi.json")
+
+    assert response.status_code == 200
+    operation = response.json()["paths"]["/applications/{id}/corrections"]["get"]
+    success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    not_found_schema = operation["responses"]["404"]["content"]["application/json"]["schema"]
+    assert success_schema["items"]["$ref"] == "#/components/schemas/ApplicationCorrectionRecord"
     assert not_found_schema["$ref"] == "#/components/schemas/ApiErrorResponse"
 
 
