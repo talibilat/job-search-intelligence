@@ -71,6 +71,54 @@ def test_response_silence_metric_returns_zero_counts_for_empty_database(
     }
 
 
+def test_response_silence_metric_composes_every_dashboard_filter(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        insert_application_with_events(
+            connection,
+            application_id="matching-application",
+            event_types=("applied", "response"),
+            company="Filter Labs",
+            role_title="Platform Engineer",
+            source="referral",
+            current_status="in_review",
+            first_seen_at="2026-07-10T09:00:00+00:00",
+            salary_min=140000,
+            salary_max=170000,
+            sponsorship="offered",
+            work_mode="remote",
+        )
+        insert_application_with_events(
+            connection,
+            application_id="nonmatching-application",
+            event_types=("applied",),
+        )
+
+    response = create_test_client(database_path).get(
+        "/metrics/response-silence",
+        params={
+            "status": "in_review",
+            "source": "referral",
+            "sponsorship": "offered",
+            "first_seen_from": "2026-07-01T00:00:00Z",
+            "first_seen_to": "2026-07-31T23:59:59Z",
+            "role": "platform",
+            "salary_min": 130000,
+            "salary_max": 180000,
+            "work_mode": "remote",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question_id": "Q-04",
+        "total_applications": 1,
+        "human_response_count": 1,
+        "silent_count": 0,
+    }
+
+
 def test_response_silence_metric_endpoint_is_documented_in_openapi() -> None:
     client = TestClient(create_app())
 
@@ -106,17 +154,30 @@ def insert_application_with_events(
     *,
     application_id: str,
     event_types: tuple[str, ...],
+    company: str = "Acme Corp",
+    role_title: str = "Software Engineer",
+    source: str = "linkedin",
+    current_status: str = "applied",
+    first_seen_at: str = "2026-07-01T09:00:00+00:00",
+    salary_min: int | None = None,
+    salary_max: int | None = None,
+    sponsorship: str = "unknown",
+    work_mode: str | None = None,
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
-        company="Acme Corp",
-        role_title="Software Engineer",
-        source="linkedin",
-        first_seen_at="2026-07-01T09:00:00+00:00",
-        current_status="applied",
+        company=company,
+        role_title=role_title,
+        source=source,
+        first_seen_at=first_seen_at,
+        current_status=current_status,
         last_activity_at="2026-07-03T10:00:00+00:00",
         created_at="2026-07-01T09:01:00+00:00",
         updated_at="2026-07-03T10:01:00+00:00",
+        salary_min=salary_min,
+        salary_max=salary_max,
+        sponsorship=sponsorship,
+        work_mode=work_mode,
     )
     event_repository = EventRepository(connection)
     for index, event_type in enumerate(event_types, start=1):

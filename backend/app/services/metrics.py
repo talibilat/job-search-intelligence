@@ -101,8 +101,11 @@ class MetricsSummaryService:
             ),
         )
 
-    def get_response_silence_metric(self) -> ResponseSilenceMetric:
-        return self._metrics_repository.get_response_silence_metric()
+    def get_response_silence_metric(
+        self,
+        filters: MetricsFilter | None = None,
+    ) -> ResponseSilenceMetric:
+        return self._metrics_repository.get_response_silence_metric(filters=filters)
 
     def _application_windows(
         self,

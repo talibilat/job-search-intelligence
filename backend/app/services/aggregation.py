@@ -14,6 +14,7 @@ from app.db.repositories import (
 )
 from app.db.repositories.application import ApplicationUpsertOutcome
 from app.models.application import ApplicationRecord, ApplicationStatus
+from app.models.classification import JobEmailCategory
 from app.models.event import ApplicationEventRecord, ApplicationEventType
 from app.models.records import CorrectionConflictType, JsonObject
 from app.pipeline.aggregate import (
@@ -47,6 +48,16 @@ _EVENT_TYPE_BY_STATUS: dict[ApplicationStatus, ApplicationEventType] = {
     "rejected": "rejection",
 }
 
+_APPLICATION_LIFECYCLE_CATEGORIES = frozenset(
+    {
+        JobEmailCategory.APPLICATION_CONFIRMATION,
+        JobEmailCategory.REJECTION,
+        JobEmailCategory.INTERVIEW_INVITE,
+        JobEmailCategory.OFFER,
+        JobEmailCategory.ASSESSMENT,
+    }
+)
+
 
 class AggregationRunResult(BaseModel):
     """Typed result for one aggregation run."""
@@ -60,6 +71,7 @@ class AggregationRunResult(BaseModel):
     applications_upserted: int = Field(ge=0)
     events_upserted: int = Field(ge=0)
     skipped_not_job_related: int = Field(ge=0)
+    skipped_non_application_email_count: int = Field(default=0, ge=0)
     manual_conflict_count: int = Field(default=0, ge=0)
     manual_conflict_application_ids: list[str] = Field(default_factory=list)
     merged_source_skip_count: int = Field(default=0, ge=0)
@@ -104,10 +116,14 @@ class AggregationService:
         manual_conflict_application_ids: list[str] = []
         merged_source_skip_count = 0
 
-        job_related_results = _filter_job_related(accepted_results)
+        job_related_results = [
+            result for result in accepted_results if result.classification.is_job_related
+        ]
         skipped_not_job_related = len(accepted_results) - len(job_related_results)
+        application_results = _filter_application_evidence(job_related_results)
+        skipped_non_application_email_count = len(job_related_results) - len(application_results)
 
-        if not job_related_results:
+        if not application_results:
             return AggregationRunResult(
                 run_id=run_id,
                 started_at=now,
@@ -116,6 +132,7 @@ class AggregationService:
                 applications_upserted=0,
                 events_upserted=0,
                 skipped_not_job_related=skipped_not_job_related,
+                skipped_non_application_email_count=skipped_non_application_email_count,
                 manual_conflict_count=0,
                 manual_conflict_application_ids=[],
                 merged_source_skip_count=0,
@@ -123,10 +140,10 @@ class AggregationService:
 
         _enrich_extractions_with_email_context(
             email_repository=self._email_repository,
-            results=job_related_results,
+            results=application_results,
         )
 
-        groups = _group_by_key(job_related_results)
+        groups = _group_by_key(application_results)
 
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
@@ -178,6 +195,7 @@ class AggregationService:
             applications_upserted=applications_upserted,
             events_upserted=events_upserted,
             skipped_not_job_related=skipped_not_job_related,
+            skipped_non_application_email_count=skipped_non_application_email_count,
             manual_conflict_count=manual_conflict_count,
             manual_conflict_application_ids=manual_conflict_application_ids,
             merged_source_skip_count=merged_source_skip_count,
@@ -233,9 +251,11 @@ class _CorrectionConflict(BaseModel):
     evidence_email_id: str | None
 
 
-def _filter_job_related(
+def _filter_application_evidence(
     results: list[AcceptedLLMExtraction],
 ) -> list[_EnrichedExtraction]:
+    """Keep submitted-application lifecycle evidence out of general job mail."""
+
     return [
         _EnrichedExtraction(
             classification_email_id=result.classification.email_id,
@@ -243,7 +263,7 @@ def _filter_job_related(
             extraction=result.extraction,
         )
         for result in results
-        if result.classification.is_job_related
+        if result.classification.category in _APPLICATION_LIFECYCLE_CATEGORIES
     ]
 
 

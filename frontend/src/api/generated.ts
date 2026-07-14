@@ -1073,7 +1073,7 @@ export interface MetricsSummaryResponse {
   offers_received: number;
   personal_ghost_threshold: PersonalGhostThresholdMetric;
   /**
-   * Total applications whose canonical current status is rejected.
+   * Distinct submitted applications with rejection timeline evidence.
    * @minimum 0
    */
   rejected_applications: number;
@@ -1625,6 +1625,18 @@ export type GetMetricsRatesMetricsRatesGetParams = {
 };
 
 export type GetMetricsResponseRateTrendMetricsResponseRateTrendGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
+export type GetResponseSilenceMetricMetricsResponseSilenceGetParams = {
   status?: ApplicationStatus | null;
   source?: ApplicationSource | null;
   sponsorship?: SponsorshipStatus | null;
@@ -3703,26 +3715,52 @@ export type getResponseSilenceMetricMetricsResponseSilenceGetResponse200 = {
   status: 200;
 };
 
+export type getResponseSilenceMetricMetricsResponseSilenceGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type getResponseSilenceMetricMetricsResponseSilenceGetResponseSuccess =
   getResponseSilenceMetricMetricsResponseSilenceGetResponse200 & {
     headers: Headers;
   };
-export type getResponseSilenceMetricMetricsResponseSilenceGetResponse =
-  getResponseSilenceMetricMetricsResponseSilenceGetResponseSuccess;
+export type getResponseSilenceMetricMetricsResponseSilenceGetResponseError =
+  getResponseSilenceMetricMetricsResponseSilenceGetResponse422 & {
+    headers: Headers;
+  };
 
-export const getGetResponseSilenceMetricMetricsResponseSilenceGetUrl = () => {
-  return `/metrics/response-silence`;
+export type getResponseSilenceMetricMetricsResponseSilenceGetResponse =
+  | getResponseSilenceMetricMetricsResponseSilenceGetResponseSuccess
+  | getResponseSilenceMetricMetricsResponseSilenceGetResponseError;
+
+export const getGetResponseSilenceMetricMetricsResponseSilenceGetUrl = (
+  params?: GetResponseSilenceMetricMetricsResponseSilenceGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/metrics/response-silence?${stringifiedParams}`
+    : `/metrics/response-silence`;
 };
 
 /**
- * Answers Q-04 by counting applications with at least one response-like timeline event versus applications with total silence. Counts are deterministic SQLite reads from applications and application_events.
+ * Answers Q-04 by counting filtered submitted applications with at least one response-like timeline event versus total silence. Counts are deterministic SQLite reads from applications and application_events.
  * @summary Get Response Versus Silence Metric
  */
 export const getResponseSilenceMetricMetricsResponseSilenceGet = async (
+  params?: GetResponseSilenceMetricMetricsResponseSilenceGetParams,
   options?: RequestInit,
 ): Promise<getResponseSilenceMetricMetricsResponseSilenceGetResponse> => {
   const res = await fetch(
-    getGetResponseSilenceMetricMetricsResponseSilenceGetUrl(),
+    getGetResponseSilenceMetricMetricsResponseSilenceGetUrl(params),
     {
       ...options,
       method: "GET",

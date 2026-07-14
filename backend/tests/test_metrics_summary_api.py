@@ -146,6 +146,20 @@ def test_get_metrics_summary_counts_rejected_applications(tmp_path: Path) -> Non
         insert_application(connection, application_id="rejected-1", current_status="rejected")
         insert_application(connection, application_id="rejected-2", current_status="rejected")
         insert_application(connection, application_id="interview-1", current_status="interview")
+        insert_event(
+            connection,
+            event_id="rejected-1-event",
+            application_id="rejected-1",
+            event_type="rejection",
+            event_at="2026-07-02T09:00:00+00:00",
+        )
+        insert_event(
+            connection,
+            event_id="rejected-2-event",
+            application_id="rejected-2",
+            event_type="rejection",
+            event_at="2026-07-03T09:00:00+00:00",
+        )
 
     client = create_test_client(database_path, ghost_threshold_days=30)
 
@@ -474,8 +488,8 @@ def test_metrics_summary_returns_personal_ghost_threshold_distribution(
 
     assert response.status_code == 200
     assert response.json()["personal_ghost_threshold"] == {
-        "threshold_days": 20,
-        "threshold_source": "response_percentile",
+        "threshold_days": 30,
+        "threshold_source": "configured_fallback",
         "response_sample_size": 2,
         "silent_application_count": 2,
         "silence_age_distribution": [
@@ -493,8 +507,8 @@ def test_metrics_summary_returns_personal_ghost_threshold_distribution(
 
     assert filtered_response.status_code == 200
     assert filtered_response.json()["personal_ghost_threshold"] == {
-        "threshold_days": 5,
-        "threshold_source": "response_percentile",
+        "threshold_days": 30,
+        "threshold_source": "configured_fallback",
         "response_sample_size": 1,
         "silent_application_count": 1,
         "silence_age_distribution": [

@@ -148,7 +148,7 @@ function mockApplicationResponses(options: {
       );
     }
 
-    if (url === "/metrics/response-silence") {
+    if (url.startsWith("/metrics/response-silence")) {
       return Promise.resolve(
         new Response(
           JSON.stringify({
@@ -882,6 +882,23 @@ describe("DashboardPage", () => {
     expect(within(silence).getByRole("img")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/metrics/response-silence",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("reloads Q-04 response versus silence with every route-backed filter", async () => {
+    const fetchMock = mockApplicationResponses();
+    window.history.pushState(
+      {},
+      "",
+      "/dashboard?status=in_review&source=referral&sponsorship=offered&first_seen_from=2026-07-01T00%3A00%3A00Z&first_seen_to=2026-07-31T23%3A59%3A59Z&role=platform&salary_min=130000&salary_max=180000&work_mode=remote",
+    );
+
+    render(<DashboardPage />);
+
+    await screen.findByRole("region", { name: "Response versus silence" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/metrics/response-silence?first_seen_from=2026-07-01T00%3A00%3A00Z&first_seen_to=2026-07-31T23%3A59%3A59Z&role=platform&salary_max=180000&salary_min=130000&source=referral&sponsorship=offered&status=in_review&work_mode=remote",
       expect.objectContaining({ method: "GET" }),
     );
   });

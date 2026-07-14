@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import math
 import sqlite3
 from collections.abc import Sequence
 
 from app.db.repositories.base import BaseRepository
 from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 from app.models.metrics import (
-    GhostThresholdSource,
     MetricBreakdownRow,
     MetricFunnelStage,
     MetricRateName,
@@ -201,13 +199,6 @@ class MetricsRepository(BaseRepository[int]):
         filters: MetricsFilter | None = None,
     ) -> PersonalGhostThresholdMetric:
         response_days = self._first_response_days(filters=filters)
-        if response_days:
-            percentile_index = max(0, math.ceil(len(response_days) * 0.95) - 1)
-            threshold_days = max(1, math.ceil(response_days[percentile_index]))
-            threshold_source: GhostThresholdSource = "response_percentile"
-        else:
-            threshold_days = fallback_threshold_days
-            threshold_source = "configured_fallback"
 
         distribution = _empty_silence_age_distribution()
         for silence_days in self._silent_application_ages(
@@ -217,8 +208,8 @@ class MetricsRepository(BaseRepository[int]):
             distribution[_silence_age_bucket(silence_days)] += 1
 
         return PersonalGhostThresholdMetric(
-            threshold_days=threshold_days,
-            threshold_source=threshold_source,
+            threshold_days=fallback_threshold_days,
+            threshold_source="configured_fallback",
             response_sample_size=len(response_days),
             silent_application_count=sum(distribution.values()),
             silence_age_distribution=[
@@ -527,7 +518,7 @@ class MetricsRepository(BaseRepository[int]):
         )
 
     def count_rejected_applications(self, filters: MetricsFilter | None = None) -> int:
-        return self._count_applications_with_current_status("rejected", filters=filters)
+        return self._count_applications_with_event("rejection", filters=filters)
 
     def count_interview_invitation_events(self, filters: MetricsFilter | None = None) -> int:
         where_clause, filter_parameters = _metrics_filter_where_clause(filters)
@@ -1131,11 +1122,10 @@ def _breakdown_order_expression(dimension: MetricsBreakdownDimension) -> str:
 
 
 def _metrics_filter_where_clause(filters: MetricsFilter | None) -> tuple[str, tuple[object, ...]]:
-    if filters is None:
-        return "", ()
-
-    clauses: list[str] = []
+    clauses = [_submitted_application_predicate()]
     parameters: list[object] = []
+    if filters is None:
+        return f"WHERE {' AND '.join(clauses)}", ()
     if filters.status is not None:
         clauses.append("applications.current_status = ?")
         parameters.append(str(filters.status))
@@ -1164,9 +1154,44 @@ def _metrics_filter_where_clause(filters: MetricsFilter | None) -> tuple[str, tu
         clauses.append("applications.work_mode = ?")
         parameters.append(str(filters.work_mode))
 
-    if not clauses:
-        return "", ()
     return f"WHERE {' AND '.join(clauses)}", tuple(parameters)
+
+
+def _submitted_application_predicate() -> str:
+    """Exclude rows proven to come only from general job-search email.
+
+    Canonical and manually created application rows remain valid when they have
+    no classification link. Classified recruiter outreach, follow-up, and other
+    job mail cannot inflate denominators if older aggregation created a row.
+    """
+
+    return """
+    NOT EXISTS (
+        SELECT 1
+        FROM application_events AS submission_events
+        INNER JOIN email_classifications AS submission_classifications
+            ON submission_classifications.email_id = submission_events.email_id
+        WHERE submission_events.application_id = applications.id
+          AND submission_classifications.is_job_related = 1
+          AND submission_classifications.category IN (
+            'recruiter_outreach', 'follow_up', 'other'
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM application_events AS lifecycle_events
+            LEFT JOIN email_classifications AS lifecycle_classifications
+                ON lifecycle_classifications.email_id = lifecycle_events.email_id
+            WHERE lifecycle_events.application_id = applications.id
+              AND (
+                lifecycle_classifications.email_id IS NULL
+                OR lifecycle_classifications.category IN (
+                    'application_confirmation', 'assessment', 'interview_invite',
+                    'rejection', 'offer'
+                )
+              )
+          )
+    )
+    """
 
 
 def _escape_like(value: str) -> str:
