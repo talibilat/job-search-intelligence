@@ -189,21 +189,21 @@ const userFacingFeatures: readonly UserFacingFeature[] = [
   },
   {
     howToRun:
-      "Not runnable from the product UI yet. Track the Phase 5 plan in the advanced developer inventory.",
+      "Current workspace: press Ask AI, or open /chat directly after processing application data.",
     info: {
-      dataSource: "Phase 5 planned POST /chat and GET /chat/history",
-      dataTable: "planned chat_messages and email_chunks",
+      dataSource: "POST /chat and GET /chat/history",
+      dataTable: "chat_messages, applications, application_events, and email_chunks",
       howItWorks:
-        "Will route questions through deterministic structured-query tools and cited semantic retrieval after the RAG agent is built.",
+        "Routes questions through deterministic structured-query tools, cited semantic retrieval, or both, then progressively displays the grounded response contract.",
       missingData:
-        "There is no user action yet; chat is hidden from primary navigation and direct /chat URLs show an unavailable Phase 5 state until the backend route and grounded UI work perfectly.",
+        "If chat cannot answer, process retained job-search email first. If the provider is unavailable, start or reconfigure it in Settings and retry the answer.",
     },
     name: "Chat with your history",
     whatItMeans:
-      "A hybrid question-answering agent over your job-search history, planned for a later phase.",
-    worksToday: "no",
+      "A hybrid question-answering agent over your local job-search history with deterministic counts and navigable evidence.",
+    worksToday: "yes",
     worksTodayNote:
-      "Hidden from primary navigation; direct /chat URLs show the unavailable Phase 5 state until the grounded chat route is built.",
+      "Available through Ask AI and /chat with persisted local history, grounded refusals, retries, and cited sources.",
   },
 ];
 

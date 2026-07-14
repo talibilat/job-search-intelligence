@@ -117,26 +117,6 @@ function ApplicationRouteUnavailablePage() {
   );
 }
 
-function ChatUnavailablePage() {
-  return (
-    <main aria-labelledby="chat-unavailable-title" className="app-shell">
-      <section className="dashboard-hero" aria-labelledby="chat-unavailable-title">
-        <p className="eyebrow">Phase 5 chat</p>
-        <h1 id="chat-unavailable-title">Chat unavailable</h1>
-        <Alert title="Chat is not built yet" tone="warning">
-          <p>
-            Chat arrives in Phase 5 after the hybrid RAG agent can answer with
-            deterministic metrics, cited retrieval, and persisted local history.
-          </p>
-          <p>
-            <a href="/features">Go to Feature Status</a>
-          </p>
-        </Alert>
-      </section>
-    </main>
-  );
-}
-
 function LegacyApp({ routePath }: { routePath: string }) {
   const legacyApplicationDetailMatch = /^\/legacy\/applications\/([^/]+)$/.exec(routePath);
   const applicationId = legacyApplicationDetailMatch
@@ -148,9 +128,7 @@ function LegacyApp({ routePath }: { routePath: string }) {
     ? null
     : legacyRoutePaths.has(routePath)
       ? routePath
-      : routePath === "/chat"
-        ? "/chat"
-        : "/legacy";
+      : "/legacy";
 
   return (
     <>
@@ -171,6 +149,9 @@ function LegacyApp({ routePath }: { routePath: string }) {
           ))}
         </div>
       </nav>
+      <div className="legacy-route-notice" role="status">
+        Legacy diagnostic route. The supported product flow is available from <a href="/">the current workspace</a>.
+      </div>
       {legacyApplicationDetailMatch && applicationId ? (
         <ApplicationDetailPage applicationId={applicationId} />
       ) : isLegacyApplicationRoute ? (
@@ -183,8 +164,6 @@ function LegacyApp({ routePath }: { routePath: string }) {
         <FeatureStatusDashboard />
       ) : currentPath === "/legacy/insights" ? (
         <Insights />
-      ) : currentPath === "/chat" ? (
-        <ChatUnavailablePage />
       ) : (
         <JobSearchPage />
       )}

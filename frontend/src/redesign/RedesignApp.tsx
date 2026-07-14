@@ -14,6 +14,7 @@ import {
 import { safeDecodeApplicationRouteSegment } from "../lib/applicationRoutes";
 import { enumQueryParam, parseRouteQuery, updateRouteQuery } from "../lib/routeQuery";
 import { publicApiError } from "./apiError";
+import { ChatDrawer } from "./ChatDrawer";
 import { formatCount, formatRelativeTime } from "./theme";
 import { ApplicationsPage } from "./pages/ApplicationsPage";
 import { DetailPage } from "./pages/DetailPage";
@@ -28,6 +29,7 @@ export type RedesignPage =
   | "applications"
   | "detail"
   | "insights"
+  | "chat"
   | "settings"
   | "dev";
 
@@ -79,6 +81,9 @@ export function redesignRouteFromPath(pathname: string): RedesignRoute | null {
   if (path === "/insights") {
     return { page: "insights", detailId: null, statusFilter: "all" };
   }
+  if (path === "/chat") {
+    return { page: "chat", detailId: null, statusFilter: "all" };
+  }
   if (path === "/settings") {
     return { page: "settings", detailId: null, statusFilter: "all" };
   }
@@ -124,6 +129,7 @@ const PAGE_TITLES: Record<RedesignPage, string> = {
   applications: "Applications",
   detail: "Application",
   insights: "Insights",
+  chat: "Ask your job search",
   settings: "Settings",
   dev: "For developers",
 };
@@ -636,6 +642,14 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
             {PAGE_TITLES[route.page]}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              aria-current={route.page === "chat" ? "page" : undefined}
+              className="rd-ask-ai-button"
+              onClick={() => go("chat")}
+              type="button"
+            >
+              <span aria-hidden="true">✦</span> Ask AI
+            </button>
             <div style={{ position: "relative" }}>
               <button
                 disabled={syncing}
@@ -828,7 +842,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           </div>
         </div>
 
-        {route.page === "overview" ? (
+        {route.page === "overview" || route.page === "chat" ? (
           <OverviewPage
             go={go}
             openApp={openApp}
@@ -910,7 +924,13 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         ) : null}
         {route.page === "dev" ? <DeveloperPage /> : null}
       </main>
-
+      {route.page === "chat" ? (
+        <ChatDrawer
+          onClose={() => go("overview")}
+          onOpenApplication={openApp}
+          onOpenSettings={() => go("settings")}
+        />
+      ) : null}
     </div>
   );
 }

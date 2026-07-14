@@ -26,7 +26,7 @@ const DEV_FEATURES = [
     api: "GET /insights",
   },
   {
-    id: "frontend-chat-unavailable",
+    id: "frontend-chat-ui",
     name: "Chat agent (RAG)",
     api: "POST /chat",
     phase: "Phase 5",

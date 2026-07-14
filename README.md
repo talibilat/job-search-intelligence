@@ -2,6 +2,9 @@
 
 A local-first web app that connects to your email (Gmail first), mines your entire job-search history, and answers questions about it, from "how many jobs did I apply to?" to "why am I getting rejected and what should I fix?", through a dashboard and a conversational RAG agent.
 
+The supported end-to-end setup, sync, processing, dashboard, insights, grounded chat, and local wipe flow is documented in [`docs/operational-flow.md`](docs/operational-flow.md).
+The current product workspace is `/`; older standalone routes are retained only as visibly marked diagnostic compatibility surfaces.
+
 ## Core principle
 
 All factual job-search answers come from one clean `applications` table and its event timeline (`application_events`).
