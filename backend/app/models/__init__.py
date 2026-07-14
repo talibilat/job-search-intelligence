@@ -65,6 +65,12 @@ from .pipeline import (
     PipelineStageCounts,
     PipelineStatus,
 )
+from .processing import (
+    ProcessingRunRequest,
+    ProcessingRunResult,
+    ProcessingRunState,
+    ProcessingStatus,
+)
 from .provider_config import (
     CapabilityReadiness,
     EmailProviderConfigResponse,
@@ -192,6 +198,10 @@ __all__ = [
     "ProviderReadinessResponse",
     "ProviderSecretRequirementResponse",
     "ProviderSelection",
+    "ProcessingRunRequest",
+    "ProcessingRunResult",
+    "ProcessingRunState",
+    "ProcessingStatus",
     "ReadinessState",
     "ApplicationCorrectionConflictRecord",
     "ApplicationCorrectionRecord",

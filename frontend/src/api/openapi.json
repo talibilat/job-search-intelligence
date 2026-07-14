@@ -3499,6 +3499,397 @@
         "title": "PipelineStatus",
         "type": "object"
       },
+      "ProcessingRunRequest": {
+        "additionalProperties": false,
+        "description": "Explicit user-controlled bound for one processing run.",
+        "properties": {
+          "max_candidates": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Candidates"
+          }
+        },
+        "title": "ProcessingRunRequest",
+        "type": "object"
+      },
+      "ProcessingRunResult": {
+        "description": "Completed processing result returned by the explicit run endpoint.",
+        "properties": {
+          "accepted_count": {
+            "minimum": 0.0,
+            "title": "Accepted Count",
+            "type": "integer"
+          },
+          "applications_upserted": {
+            "minimum": 0.0,
+            "title": "Applications Upserted",
+            "type": "integer"
+          },
+          "candidate_count": {
+            "minimum": 0.0,
+            "title": "Candidate Count",
+            "type": "integer"
+          },
+          "candidate_limit": {
+            "minimum": 1.0,
+            "title": "Candidate Limit",
+            "type": "integer"
+          },
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "completion_tokens": {
+            "minimum": 0.0,
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "estimated_cost_usd": {
+            "minimum": 0.0,
+            "title": "Estimated Cost Usd",
+            "type": "number"
+          },
+          "events_upserted": {
+            "minimum": 0.0,
+            "title": "Events Upserted",
+            "type": "integer"
+          },
+          "ghost_retractions": {
+            "minimum": 0.0,
+            "title": "Ghost Retractions",
+            "type": "integer"
+          },
+          "ghost_updates": {
+            "minimum": 0.0,
+            "title": "Ghost Updates",
+            "type": "integer"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "limit_reached": {
+            "default": false,
+            "title": "Limit Reached",
+            "type": "boolean"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "malformed_count": {
+            "minimum": 0.0,
+            "title": "Malformed Count",
+            "type": "integer"
+          },
+          "manual_conflict_count": {
+            "minimum": 0.0,
+            "title": "Manual Conflict Count",
+            "type": "integer"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "pending_candidate_count": {
+            "minimum": 0.0,
+            "title": "Pending Candidate Count",
+            "type": "integer"
+          },
+          "processed_count": {
+            "minimum": 0.0,
+            "title": "Processed Count",
+            "type": "integer"
+          },
+          "prompt_tokens": {
+            "minimum": 0.0,
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "prompt_version": {
+            "minLength": 1,
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "skipped_not_job_count": {
+            "minimum": 0.0,
+            "title": "Skipped Not Job Count",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ProcessingRunState",
+            "default": "succeeded"
+          },
+          "total_tokens": {
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending_candidate_count",
+          "candidate_count",
+          "candidate_limit",
+          "processed_count",
+          "accepted_count",
+          "malformed_count",
+          "skipped_not_job_count",
+          "applications_upserted",
+          "events_upserted",
+          "ghost_updates",
+          "ghost_retractions",
+          "manual_conflict_count",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens",
+          "estimated_cost_usd",
+          "model",
+          "prompt_version",
+          "llm_provider",
+          "classification_mode"
+        ],
+        "title": "ProcessingRunResult",
+        "type": "object"
+      },
+      "ProcessingRunState": {
+        "enum": [
+          "idle",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "title": "ProcessingRunState",
+        "type": "string"
+      },
+      "ProcessingStatus": {
+        "description": "Public-safe status and accounting for current or latest processing work.",
+        "properties": {
+          "accepted_count": {
+            "minimum": 0.0,
+            "title": "Accepted Count",
+            "type": "integer"
+          },
+          "applications_upserted": {
+            "minimum": 0.0,
+            "title": "Applications Upserted",
+            "type": "integer"
+          },
+          "candidate_count": {
+            "minimum": 0.0,
+            "title": "Candidate Count",
+            "type": "integer"
+          },
+          "candidate_limit": {
+            "minimum": 1.0,
+            "title": "Candidate Limit",
+            "type": "integer"
+          },
+          "classification_mode": {
+            "$ref": "#/components/schemas/ClassificationMode"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "completion_tokens": {
+            "minimum": 0.0,
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "estimated_cost_usd": {
+            "minimum": 0.0,
+            "title": "Estimated Cost Usd",
+            "type": "number"
+          },
+          "events_upserted": {
+            "minimum": 0.0,
+            "title": "Events Upserted",
+            "type": "integer"
+          },
+          "ghost_retractions": {
+            "minimum": 0.0,
+            "title": "Ghost Retractions",
+            "type": "integer"
+          },
+          "ghost_updates": {
+            "minimum": 0.0,
+            "title": "Ghost Updates",
+            "type": "integer"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "limit_reached": {
+            "default": false,
+            "title": "Limit Reached",
+            "type": "boolean"
+          },
+          "llm_provider": {
+            "$ref": "#/components/schemas/LLMProviderName"
+          },
+          "malformed_count": {
+            "minimum": 0.0,
+            "title": "Malformed Count",
+            "type": "integer"
+          },
+          "manual_conflict_count": {
+            "minimum": 0.0,
+            "title": "Manual Conflict Count",
+            "type": "integer"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "pending_candidate_count": {
+            "minimum": 0.0,
+            "title": "Pending Candidate Count",
+            "type": "integer"
+          },
+          "processed_count": {
+            "minimum": 0.0,
+            "title": "Processed Count",
+            "type": "integer"
+          },
+          "prompt_tokens": {
+            "minimum": 0.0,
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "prompt_version": {
+            "minLength": 1,
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "skipped_not_job_count": {
+            "minimum": 0.0,
+            "title": "Skipped Not Job Count",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ProcessingRunState"
+          },
+          "total_tokens": {
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "pending_candidate_count",
+          "candidate_count",
+          "candidate_limit",
+          "processed_count",
+          "accepted_count",
+          "malformed_count",
+          "skipped_not_job_count",
+          "applications_upserted",
+          "events_upserted",
+          "ghost_updates",
+          "ghost_retractions",
+          "manual_conflict_count",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens",
+          "estimated_cost_usd",
+          "model",
+          "prompt_version",
+          "llm_provider",
+          "classification_mode"
+        ],
+        "title": "ProcessingStatus",
+        "type": "object"
+      },
       "ProviderConfigRequirementResponse": {
         "description": "Non-secret provider setting required by a supported provider.",
         "properties": {
@@ -7653,6 +8044,78 @@
         "summary": "Get Pipeline Status",
         "tags": [
           "pipeline"
+        ]
+      }
+    },
+    "/processing/run": {
+      "post": {
+        "operationId": "processing_run_processing_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessingRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingRunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Pending Email Processing",
+        "tags": [
+          "processing"
+        ]
+      }
+    },
+    "/processing/status": {
+      "get": {
+        "operationId": "processing_status_processing_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Processing Status",
+        "tags": [
+          "processing"
         ]
       }
     },

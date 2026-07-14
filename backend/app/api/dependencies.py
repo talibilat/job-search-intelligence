@@ -47,6 +47,7 @@ from app.services.metrics import (
     MetricsSummaryService,
     MetricsTimeseriesService,
 )
+from app.services.processing import ProcessingOrchestrationService
 from app.services.readiness import ProviderReadinessService
 from app.services.structured_extraction import StructuredExtractionService
 
@@ -311,6 +312,28 @@ def get_ghost_inference_service(
         )
     finally:
         connection.close()
+
+
+def get_processing_orchestration_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    email_repository: Annotated[EmailRepository, Depends(get_writable_email_repository)],
+    extraction_service: Annotated[
+        StructuredExtractionService,
+        Depends(get_structured_extraction_service),
+    ],
+    aggregation_service: Annotated[AggregationService, Depends(get_aggregation_service)],
+    ghost_inference_service: Annotated[
+        GhostInferenceService,
+        Depends(get_ghost_inference_service),
+    ],
+) -> ProcessingOrchestrationService:
+    return ProcessingOrchestrationService(
+        settings=settings,
+        email_repository=email_repository,
+        extraction_service=extraction_service,
+        aggregation_service=aggregation_service,
+        ghost_inference_service=ghost_inference_service,
+    )
 
 
 def get_metrics_summary_service(

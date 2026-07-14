@@ -1159,6 +1159,123 @@ export interface PipelineStatus {
 }
 
 /**
+ * Explicit user-controlled bound for one processing run.
+ */
+export interface ProcessingRunRequest {
+  max_candidates?: number | null;
+}
+
+export type ProcessingRunState =
+  (typeof ProcessingRunState)[keyof typeof ProcessingRunState];
+
+export const ProcessingRunState = {
+  idle: "idle",
+  running: "running",
+  succeeded: "succeeded",
+  failed: "failed",
+} as const;
+
+/**
+ * Completed processing result returned by the explicit run endpoint.
+ */
+export interface ProcessingRunResult {
+  /** @minimum 0 */
+  accepted_count: number;
+  /** @minimum 0 */
+  applications_upserted: number;
+  /** @minimum 0 */
+  candidate_count: number;
+  /** @minimum 1 */
+  candidate_limit: number;
+  classification_mode: ClassificationMode;
+  completed_at?: string | null;
+  /** @minimum 0 */
+  completion_tokens: number;
+  /** @minimum 0 */
+  estimated_cost_usd: number;
+  /** @minimum 0 */
+  events_upserted: number;
+  /** @minimum 0 */
+  ghost_retractions: number;
+  /** @minimum 0 */
+  ghost_updates: number;
+  last_error?: string | null;
+  limit_reached?: boolean;
+  llm_provider: LLMProviderName;
+  /** @minimum 0 */
+  malformed_count: number;
+  /** @minimum 0 */
+  manual_conflict_count: number;
+  /** @minLength 1 */
+  model: string;
+  /** @minimum 0 */
+  pending_candidate_count: number;
+  /** @minimum 0 */
+  processed_count: number;
+  /** @minimum 0 */
+  prompt_tokens: number;
+  /** @minLength 1 */
+  prompt_version: string;
+  run_id?: string | null;
+  /** @minimum 0 */
+  skipped_not_job_count: number;
+  started_at?: string | null;
+  state?: ProcessingRunState;
+  /** @minimum 0 */
+  total_tokens: number;
+}
+
+/**
+ * Public-safe status and accounting for current or latest processing work.
+ */
+export interface ProcessingStatus {
+  /** @minimum 0 */
+  accepted_count: number;
+  /** @minimum 0 */
+  applications_upserted: number;
+  /** @minimum 0 */
+  candidate_count: number;
+  /** @minimum 1 */
+  candidate_limit: number;
+  classification_mode: ClassificationMode;
+  completed_at?: string | null;
+  /** @minimum 0 */
+  completion_tokens: number;
+  /** @minimum 0 */
+  estimated_cost_usd: number;
+  /** @minimum 0 */
+  events_upserted: number;
+  /** @minimum 0 */
+  ghost_retractions: number;
+  /** @minimum 0 */
+  ghost_updates: number;
+  last_error?: string | null;
+  limit_reached?: boolean;
+  llm_provider: LLMProviderName;
+  /** @minimum 0 */
+  malformed_count: number;
+  /** @minimum 0 */
+  manual_conflict_count: number;
+  /** @minLength 1 */
+  model: string;
+  /** @minimum 0 */
+  pending_candidate_count: number;
+  /** @minimum 0 */
+  processed_count: number;
+  /** @minimum 0 */
+  prompt_tokens: number;
+  /** @minLength 1 */
+  prompt_version: string;
+  run_id?: string | null;
+  /** @minimum 0 */
+  skipped_not_job_count: number;
+  started_at?: string | null;
+  state: ProcessingRunState;
+  /** @minimum 0 */
+  total_tokens: number;
+}
+
+/**
  * Currently selected provider choices for the setup/config shell.
  */
 export interface ProviderSelection {
@@ -3796,6 +3913,105 @@ export const pipelineStatusPipelineStatusGet = async (
     status: res.status,
     headers: res.headers,
   } as pipelineStatusPipelineStatusGetResponse;
+};
+
+export type processingRunProcessingRunPostResponse200 = {
+  data: ProcessingRunResult;
+  status: 200;
+};
+
+export type processingRunProcessingRunPostResponse409 = {
+  data: ApiErrorResponse;
+  status: 409;
+};
+
+export type processingRunProcessingRunPostResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type processingRunProcessingRunPostResponseSuccess =
+  processingRunProcessingRunPostResponse200 & {
+    headers: Headers;
+  };
+export type processingRunProcessingRunPostResponseError = (
+  | processingRunProcessingRunPostResponse409
+  | processingRunProcessingRunPostResponse422
+) & {
+  headers: Headers;
+};
+
+export type processingRunProcessingRunPostResponse =
+  | processingRunProcessingRunPostResponseSuccess
+  | processingRunProcessingRunPostResponseError;
+
+export const getProcessingRunProcessingRunPostUrl = () => {
+  return `/processing/run`;
+};
+
+/**
+ * @summary Run Pending Email Processing
+ */
+export const processingRunProcessingRunPost = async (
+  processingRunRequest: ProcessingRunRequest,
+  options?: RequestInit,
+): Promise<processingRunProcessingRunPostResponse> => {
+  const res = await fetch(getProcessingRunProcessingRunPostUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(processingRunRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: processingRunProcessingRunPostResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as processingRunProcessingRunPostResponse;
+};
+
+export type processingStatusProcessingStatusGetResponse200 = {
+  data: ProcessingStatus;
+  status: 200;
+};
+
+export type processingStatusProcessingStatusGetResponseSuccess =
+  processingStatusProcessingStatusGetResponse200 & {
+    headers: Headers;
+  };
+export type processingStatusProcessingStatusGetResponse =
+  processingStatusProcessingStatusGetResponseSuccess;
+
+export const getProcessingStatusProcessingStatusGetUrl = () => {
+  return `/processing/status`;
+};
+
+/**
+ * @summary Get Processing Status
+ */
+export const processingStatusProcessingStatusGet = async (
+  options?: RequestInit,
+): Promise<processingStatusProcessingStatusGetResponse> => {
+  const res = await fetch(getProcessingStatusProcessingStatusGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: processingStatusProcessingStatusGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as processingStatusProcessingStatusGetResponse;
 };
 
 export type setupSubmitSetupPostResponse200 = {

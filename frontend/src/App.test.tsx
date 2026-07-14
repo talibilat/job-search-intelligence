@@ -4061,7 +4061,7 @@ describe("App", () => {
 
     expect(
       fetchMock.mock.calls.filter(([input]) =>
-        requestPath(input).startsWith("/classification"),
+        ["/classification/run", "/processing/run"].includes(requestPath(input)),
       ),
     ).toHaveLength(0);
   });

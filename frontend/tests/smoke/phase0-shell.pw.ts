@@ -23,8 +23,10 @@ import type {
   MetricsSummaryResponse,
   MetricsTimeseriesResponse,
   PipelineStatus,
+  ProcessingStatus,
   ProviderConfigResponse,
   ProviderConfigUpdateRequest,
+  ProviderReadinessResponse,
   RawEmailDetail,
   RawEmailPreviewPage,
   RawEmailPreviewRecord,
@@ -977,6 +979,40 @@ const classificationEstimate = {
   token_estimate_method: "private-data-free fixture",
 } satisfies ClassificationPreRunEstimate;
 
+const processingStatus = {
+  state: "idle",
+  pending_candidate_count: 0,
+  candidate_count: 0,
+  candidate_limit: 500,
+  processed_count: 0,
+  accepted_count: 0,
+  malformed_count: 0,
+  skipped_not_job_count: 0,
+  applications_upserted: 0,
+  events_upserted: 0,
+  ghost_updates: 0,
+  ghost_retractions: 0,
+  manual_conflict_count: 0,
+  prompt_tokens: 0,
+  completion_tokens: 0,
+  total_tokens: 0,
+  estimated_cost_usd: 0,
+  model: "fixture-model",
+  prompt_version: "v1",
+  llm_provider: "ollama",
+  classification_mode: "local",
+  limit_reached: false,
+} satisfies ProcessingStatus;
+
+const processingReadiness = {
+  ready_to_sync: true,
+  ready_to_classify: true,
+  gmail_sync: { state: "ready", message: "Gmail is ready." },
+  classification_generation: { state: "ready", message: "Classification is ready." },
+  embedding_generation: { state: "ready", message: "Embeddings are ready." },
+  chat_generation: { state: "not_implemented", message: "Chat is planned." },
+} satisfies ProviderReadinessResponse;
+
 const gmailAuthorization = {
   authorization_url: "http://127.0.0.1:4173/oauth-fixture-destination",
   provider: "gmail",
@@ -1402,6 +1438,27 @@ async function installRedesignFixtures(page: Page) {
       status: 200,
     });
   });
+  await page.route("**/config/providers/readiness", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      json: processingReadiness,
+      status: 200,
+    }),
+  );
+  await page.route("**/pipeline/status", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      json: legacyPipelineStatus,
+      status: 200,
+    }),
+  );
+  await page.route("**/processing/status", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      json: processingStatus,
+      status: 200,
+    }),
+  );
   await page.route("**/config/providers", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
@@ -1810,5 +1867,9 @@ test("runs the critical private-data-free redesign journey", async ({
   expect(requests.emailContentRequestEvents).toEqual([
     "GET /sync/emails/fixture-email-11/content",
   ]);
-  expect(requests.classificationRequestEvents).toHaveLength(0);
+  expect(
+    requests.classificationRequestEvents.filter((event) =>
+      event.startsWith("POST "),
+    ),
+  ).toHaveLength(0);
 });

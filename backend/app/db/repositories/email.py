@@ -606,6 +606,7 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         model: str,
         prompt_version: str,
         limit: int,
+        excluded_email_ids: tuple[str, ...] = (),
     ) -> list[EmailClassificationCandidate]:
         """Return retained emails needing classification for this model and prompt."""
 
@@ -616,8 +617,21 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         if not self._table_exists("raw_emails") or not self._table_exists("email_classifications"):
             return []
 
+        exclusion_sql = ""
+        parameters: list[object] = [
+            provider.value,
+            RawEmailBodyRetentionState.RETAINED.value,
+            model,
+            prompt_version,
+        ]
+        if excluded_email_ids:
+            placeholders = ", ".join("?" for _ in excluded_email_ids)
+            exclusion_sql = f" AND raw_emails.id NOT IN ({placeholders})"
+            parameters.extend(excluded_email_ids)
+        parameters.append(limit)
+
         rows = self.execute(
-            """
+            f"""
             SELECT
                 raw_emails.id AS email_id,
                 raw_emails.subject AS subject,
@@ -636,16 +650,11 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                     OR email_classifications.model != ?
                     OR email_classifications.prompt_version != ?
                 )
+                {exclusion_sql}
             ORDER BY raw_emails.sent_at, raw_emails.id
             LIMIT ?
             """,
-            (
-                provider.value,
-                RawEmailBodyRetentionState.RETAINED.value,
-                model,
-                prompt_version,
-                limit,
-            ),
+            tuple(parameters),
         ).fetchall()
         return [EmailClassificationCandidate.model_validate(row_to_dict(row)) for row in rows]
 

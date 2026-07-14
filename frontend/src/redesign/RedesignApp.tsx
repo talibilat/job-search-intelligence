@@ -880,6 +880,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           <OverviewPage
             go={go}
             openApp={openApp}
+            onProcessed={refresh}
             reloadKey={reloadKey}
             sentAfter={completedScope.sentAfter}
             sentBefore={completedScope.sentBefore}
