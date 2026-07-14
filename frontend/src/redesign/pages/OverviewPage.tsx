@@ -13,6 +13,7 @@ import {
 import type { RedesignPage, StatusChipKey } from "../RedesignApp";
 import { publicApiError } from "../apiError";
 import { EmailReaderDialog } from "../components/EmailReaderDialog";
+import { ProcessingPanel } from "../components/ProcessingPanel";
 import { SyncedEmailList } from "../components/SyncedEmailList";
 import { daysSince, formatShortDate } from "../theme";
 
@@ -22,6 +23,7 @@ interface OverviewPageProps {
   reloadKey: number;
   sentAfter?: string;
   sentBefore?: string;
+  onProcessed?: () => void;
 }
 
 interface MetricExplain {
@@ -70,6 +72,7 @@ export function OverviewPage({
   reloadKey,
   sentAfter,
   sentBefore,
+  onProcessed = () => undefined,
 }: OverviewPageProps) {
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [rates, setRates] = useState<MetricsRatesResponse | null>(null);
@@ -341,6 +344,8 @@ export function OverviewPage({
           </a>
         </p>
       </div>
+
+      <ProcessingPanel onProcessed={onProcessed} reloadKey={reloadKey} />
 
       {actions.length > 0 ? (
         <div

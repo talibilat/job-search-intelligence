@@ -53,7 +53,12 @@ class StructuredExtractionService:
         self._clock = clock or _utcnow
         self._run_id_factory = run_id_factory or _new_run_id
 
-    async def run_batch(self) -> StructuredExtractionRunResult:
+    async def run_batch(
+        self,
+        *,
+        limit: int | None = None,
+        excluded_email_ids: tuple[str, ...] = (),
+    ) -> StructuredExtractionRunResult:
         """Classify and extract one configured batch of retained email candidates."""
 
         model = _classification_model(self._settings)
@@ -63,7 +68,11 @@ class StructuredExtractionService:
             provider=self._settings.email_provider,
             model=model,
             prompt_version=prompt_version,
-            limit=self._settings.classification_batch_size,
+            limit=min(
+                limit or self._settings.classification_batch_size,
+                self._settings.classification_batch_size,
+            ),
+            excluded_email_ids=excluded_email_ids,
         )
         accepted_results: list[AcceptedLLMExtraction] = []
         malformed_results: list[MalformedLLMExtraction] = []
