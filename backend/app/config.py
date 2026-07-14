@@ -97,6 +97,7 @@ class AppSettings(BaseSettings):
     insight_estimate_chars_per_unit: int = Field(default=4, ge=1)
     insight_input_cost_per_1k_units_usd: float = Field(default=0.0, ge=0)
     insight_output_cost_per_1k_units_usd: float = Field(default=0.0, ge=0)
+    chat_index_max_emails: int = Field(default=1000, ge=1, le=100_000)
     llm_timeout_seconds: int = Field(default=60, ge=1)
     llm_max_retries: int = Field(default=2, ge=0)
 

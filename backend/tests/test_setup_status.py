@@ -139,7 +139,7 @@ def test_setup_status_endpoint_returns_phase_zero_shell_status(
     assert payload["gmail_connected"] is False
     assert payload["llm_configured"] is False
     assert payload["readiness"]["gmail_sync"]["state"] == "missing_credential"
-    assert payload["readiness"]["chat_generation"]["state"] == "not_implemented"
+    assert payload["readiness"]["chat_generation"]["state"] == "unavailable"
 
 
 def test_setup_status_endpoint_reports_configured_setup_choices(
@@ -243,7 +243,7 @@ def test_setup_submit_endpoint_accepts_phase_zero_shell_payload(
     assert response.status_code == 200
     assert response.json()["status"] == "accepted"
     assert response.json()["setup_complete"] is False
-    assert response.json()["readiness"]["chat_generation"]["state"] == "not_implemented"
+    assert response.json()["readiness"]["chat_generation"]["state"] == "unavailable"
 
 
 def test_setup_submit_endpoint_preselects_local_mode_for_ollama(

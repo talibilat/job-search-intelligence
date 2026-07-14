@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Literal, Self
+from typing import Literal, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.repositories import MetricsRepository
 from app.models import MetricsBreakdownDimension, MetricsFilter
+from app.models.records import ApplicationRecord
 
 StructuredQueryTemplate = Literal[
     "total_applications",
@@ -15,6 +16,7 @@ StructuredQueryTemplate = Literal[
     "rates",
     "funnel",
     "breakdown",
+    "live_applications",
 ]
 StructuredQueryScalar = str | int | float | None
 
@@ -65,6 +67,7 @@ class StructuredQueryTool:
         *,
         metrics_repository: MetricsRepository,
         ghost_threshold_days: int,
+        application_reader: LiveApplicationReader | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if ghost_threshold_days < 1:
@@ -72,6 +75,7 @@ class StructuredQueryTool:
             raise ValueError(msg)
         self._metrics_repository = metrics_repository
         self._ghost_threshold_days = ghost_threshold_days
+        self._application_reader = application_reader
         self._clock = clock or _utcnow
 
     def run(self, request: StructuredQueryRequest) -> StructuredQueryResult:
@@ -164,6 +168,37 @@ class StructuredQueryTool:
                 ),
             )
 
+        if request.template == "live_applications":
+            if self._application_reader is None:
+                raise ValueError("application_reader is required for live application queries")
+            now = self._clock().astimezone(UTC)
+            rows = []
+            for application in self._application_reader.list_applications():
+                if application.current_status not in {
+                    "applied",
+                    "in_review",
+                    "assessment",
+                    "interview",
+                    "offer",
+                }:
+                    continue
+                days_waiting = max(0, (now - application.last_activity_at.astimezone(UTC)).days)
+                rows.append(
+                    StructuredQueryRow(
+                        label=application.company,
+                        values={
+                            "application_id": application.id,
+                            "company": application.company,
+                            "role_title": application.role_title,
+                            "current_status": application.current_status,
+                            "last_activity_at": application.last_activity_at.isoformat(),
+                            "days_waiting": days_waiting,
+                            "overdue": days_waiting >= self._ghost_threshold_days,
+                        },
+                    )
+                )
+            return StructuredQueryResult(template=request.template, rows=tuple(rows))
+
         dimension = request.breakdown_dimension
         if dimension is None:
             raise ValueError("breakdown_dimension is required for breakdown structured queries")
@@ -195,3 +230,7 @@ class StructuredQueryTool:
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+class LiveApplicationReader(Protocol):
+    def list_applications(self) -> list[ApplicationRecord]: ...

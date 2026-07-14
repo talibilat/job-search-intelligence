@@ -151,7 +151,7 @@ def test_provider_settings_and_credentials_persist_without_secret_columns(tmp_pa
     assert secret_store.values[GMAIL_OAUTH_CLIENT_REF].get_secret_value() == CLIENT_JSON
 
 
-def test_readiness_distinguishes_missing_credentials_and_not_implemented() -> None:
+def test_readiness_propagates_missing_chat_credentials() -> None:
     settings = AppSettings(
         _env_file=None,
         llm_provider=LLMProviderName.AZURE_OPENAI,
@@ -173,7 +173,7 @@ def test_readiness_distinguishes_missing_credentials_and_not_implemented() -> No
     assert result.gmail_sync.state is ReadinessState.MISSING_CREDENTIAL
     assert result.classification_generation.state is ReadinessState.MISSING_CREDENTIAL
     assert result.embedding_generation.state is ReadinessState.MISSING_CREDENTIAL
-    assert result.chat_generation.state is ReadinessState.NOT_IMPLEMENTED
+    assert result.chat_generation.state is ReadinessState.MISSING_CREDENTIAL
     assert result.ready_to_sync is False
     assert result.ready_to_classify is False
 
@@ -245,6 +245,8 @@ def test_readiness_reports_ready_unavailable_reauth_and_missing_config() -> None
     assert ready.ready_to_sync is True
     assert ready.ready_to_classify is True
     assert ready.embedding_generation.state is ReadinessState.READY
+    assert ready.chat_generation.state is ReadinessState.READY
     assert unavailable.classification_generation.state is ReadinessState.UNAVAILABLE
+    assert unavailable.chat_generation.state is ReadinessState.UNAVAILABLE
     assert reauth.gmail_sync.state is ReadinessState.REAUTH_REQUIRED
     assert missing_config.classification_generation.state is ReadinessState.MISSING_CONFIG

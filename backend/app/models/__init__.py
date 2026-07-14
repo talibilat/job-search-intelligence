@@ -8,6 +8,7 @@ from .application_edit import (
     ApplicationStatusEditResponse,
 )
 from .application_merge import ApplicationMergeRequest, ApplicationMergeResponse
+from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
 from .chat_history import ChatHistoryResponse
 from .classification import (
     ClassificationCandidateStats,
@@ -221,6 +222,11 @@ __all__ = [
     "ChatMessageRecord",
     "ChatMessageRole",
     "ChatHistoryResponse",
+    "ChatCitation",
+    "ChatIncrement",
+    "ChatRequest",
+    "ChatResponse",
+    "ChatRoute",
     "ClassificationRunRecord",
     "ClassificationRunApiRequest",
     "CorrectionConflictType",

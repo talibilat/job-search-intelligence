@@ -6,13 +6,16 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from app.agent.tools import SemanticSearchTool, StructuredQueryTool
 from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
+from app.db.engine import load_sqlite_vec_sync, verify_sqlite_vec
 from app.db.repositories import (
     ApplicationRepository,
     ChatRepository,
     CorrectionConflictRepository,
     CorrectionRepository,
+    EmailChunkRepository,
     EventRepository,
     InsightRepository,
     MetricsRepository,
@@ -35,6 +38,8 @@ from app.services.applications import (
     ApplicationEventsService,
 )
 from app.services.chat_history import ChatHistoryService
+from app.services.chat_index import ChatIndexService
+from app.services.chat_service import ChatService
 from app.services.diagnostics import DiagnosticsService
 from app.services.ghost_inference import GhostInferenceService
 from app.services.insights_service import InsightGenerationService, InsightReadService
@@ -161,6 +166,47 @@ def get_chat_history_service(
     connection = sqlite3.connect(connection_target, check_same_thread=False)
     try:
         yield ChatHistoryService(ChatRepository(connection))
+    finally:
+        connection.close()
+
+
+def get_chat_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+) -> Iterator[ChatService]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    load_sqlite_vec_sync(connection, settings.sqlite_vec_extension_path)
+    verify_sqlite_vec(connection)
+    try:
+        email_repository = EmailRepository(connection)
+        chunk_repository = EmailChunkRepository(connection)
+        embedding_model = (
+            settings.azure_openai_embedding_deployment
+            if settings.llm_provider is LLMProviderName.AZURE_OPENAI
+            else settings.ollama_embedding_model
+        )
+        yield ChatService(
+            history_repository=ChatRepository(connection),
+            index_service=ChatIndexService(
+                email_repository=email_repository,
+                chunk_repository=chunk_repository,
+                llm_provider=llm_provider,
+                embedding_model=embedding_model,
+                max_emails=settings.chat_index_max_emails,
+            ),
+            structured_query=StructuredQueryTool(
+                metrics_repository=MetricsRepository(connection),
+                application_reader=ApplicationRepository(connection),
+                ghost_threshold_days=settings.ghost_threshold_days,
+            ),
+            semantic_search=SemanticSearchTool(
+                repository=chunk_repository,
+                llm_provider=llm_provider,
+                embedding_model=embedding_model,
+            ),
+        )
     finally:
         connection.close()
 
