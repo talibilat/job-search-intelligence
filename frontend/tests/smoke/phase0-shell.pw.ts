@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 import type {
   ApiErrorResponse,
+  ApplicationCorrectionConflictRecord,
+  ApplicationCorrectionRecord,
   ApplicationEventEditRequest,
   ApplicationEventEditResponse,
   ApplicationEventTimelineRecord,
@@ -1217,6 +1219,22 @@ async function installRedesignFixtures(page: Page) {
   let providerUpdateCount = 0;
   let processingComplete = false;
   let currentProviderConfig: ProviderConfigResponse = providerConfig;
+  let currentDetailApplication: ApplicationRecord = {
+    ...redesignApplication,
+    manual_lock: true,
+  };
+  let currentDetailEvents: ApplicationEventTimelineRecord[] = redesignEvents;
+  const correctionConflicts = [{
+    application_id: "app-analytics",
+    conflict_key: "application_summary:app-analytics:email-new-evidence",
+    conflict_type: "application_summary",
+    created_at: "2026-07-11T10:07:00Z",
+    evidence_email_id: "email-new-evidence",
+    existing_json: { application: { current_status: "interview" } },
+    id: 7,
+    proposed_json: { application: { current_status: "rejected" } },
+  }] satisfies ApplicationCorrectionConflictRecord[];
+  const correctionHistory = [statusCorrectionResponse.correction] satisfies ApplicationCorrectionRecord[];
   const readyPipelineStatus: PipelineStatus = {
     ...legacyPipelineStatus,
     backfill_complete: true,
@@ -1360,6 +1378,7 @@ async function installRedesignFixtures(page: Page) {
     expect(route.request().method()).toBe("PATCH");
     mutationRequestEvents.push("PATCH /applications/app-analytics/status");
     expect(route.request().postDataJSON()).toEqual(statusCorrectionRequest);
+    currentDetailApplication = statusCorrectionResponse.application;
     await route.fulfill({
       contentType: "application/json",
       json: statusCorrectionResponse,
@@ -1374,6 +1393,12 @@ async function installRedesignFixtures(page: Page) {
         "PATCH /applications/app-analytics/events/event-interview-fixture",
       );
       expect(route.request().postDataJSON()).toEqual(eventCorrectionRequest);
+      currentDetailApplication = eventCorrectionResponse.application;
+      currentDetailEvents = currentDetailEvents.map((event) =>
+        event.id === eventCorrectionResponse.event.id
+          ? { ...event, ...eventCorrectionResponse.event }
+          : event,
+      );
       await route.fulfill({
         contentType: "application/json",
         json: eventCorrectionResponse,
@@ -1387,10 +1412,22 @@ async function installRedesignFixtures(page: Page) {
     );
     await route.fulfill({
       contentType: "application/json",
-      json: redesignEvents,
+      json: currentDetailEvents,
       status: 200,
     });
   });
+  await page.route("**/applications/app-analytics/correction-conflicts", (route) =>
+    route.fulfill({ contentType: "application/json", json: correctionConflicts, status: 200 }),
+  );
+  await page.route("**/applications/app-analytics/corrections", (route) =>
+    route.fulfill({ contentType: "application/json", json: correctionHistory, status: 200 }),
+  );
+  await page.route("**/applications/app-fixture/correction-conflicts", (route) =>
+    route.fulfill({ contentType: "application/json", json: [], status: 200 }),
+  );
+  await page.route("**/applications/app-fixture/corrections", (route) =>
+    route.fulfill({ contentType: "application/json", json: [], status: 200 }),
+  );
   await page.route("**/applications/app-fixture/events", async (route) => {
     timelineRequestEvents.push(
       `${route.request().method()} /applications/app-fixture/events`,
@@ -1417,7 +1454,7 @@ async function installRedesignFixtures(page: Page) {
     }
     return route.fulfill({
       contentType: "application/json",
-      json: redesignApplication,
+      json: currentDetailApplication,
       status: 200,
     });
   });
@@ -1725,6 +1762,8 @@ test("runs the critical private-data-free redesign journey", async ({
   await expect(
     page.getByRole("heading", { name: "Example Analytics" }),
   ).toBeVisible();
+  await expect(page.getByText("New evidence conflicts with your correction")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Correction history" })).toBeVisible();
   await page.getByLabel("Application status").selectOption("offer");
   await expect(
     page.getByText("Edited by you - protected from auto-updates"),

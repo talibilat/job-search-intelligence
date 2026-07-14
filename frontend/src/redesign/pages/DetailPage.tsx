@@ -4,9 +4,16 @@ import {
   ApplicationEventType,
   editApplicationEventApplicationsApplicationIdEventsEventIdPatch,
   editApplicationStatusApplicationsApplicationIdStatusPatch,
+  getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGet,
+  getApplicationCorrectionHistoryApplicationsIdCorrectionsGet,
   getApplicationDetailApplicationsIdGet,
   getApplicationEventsApplicationsIdEventsGet,
+  mergeApplicationApplicationsApplicationIdMergePost,
+  resetApplicationLockApplicationsApplicationIdResetLockPost,
+  splitApplicationApplicationsApplicationIdSplitPost,
   type ApiErrorResponse,
+  type ApplicationCorrectionConflictRecord,
+  type ApplicationCorrectionRecord,
   type ApplicationEventTimelineRecord,
   type ApplicationEventType as ApplicationEventTypeValue,
   type ApplicationRecord,
@@ -36,7 +43,18 @@ const STATUS_OPTIONS: { value: ApplicationStatus; label: string }[] = [
 
 const EVENT_TYPE_OPTIONS = Object.values(ApplicationEventType) as ApplicationEventTypeValue[];
 
+const compactInputStyle = {
+  width: "100%",
+  minHeight: "38px",
+  padding: "8px 10px",
+  border: "1px solid #D9D6CC",
+  borderRadius: "8px",
+  background: "#fff",
+  boxSizing: "border-box" as const,
+};
+
 interface EventEditState {
+  emailId: string;
   eventAt: string;
   eventType: ApplicationEventTypeValue;
   extractNote: string;
@@ -57,6 +75,7 @@ function publicError(data: unknown, fallback: string) {
 
 function eventEditState(event: ApplicationEventTimelineRecord): EventEditState {
   return {
+    emailId: event.email_id ?? "",
     eventAt: event.event_at,
     eventType: event.event_type,
     extractNote: event.extract_note ?? "",
@@ -77,15 +96,25 @@ function sortEventsNewestFirst(events: ApplicationEventTimelineRecord[]) {
 export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
   const [application, setApplication] = useState<ApplicationRecord | null>(null);
   const [events, setEvents] = useState<ApplicationEventTimelineRecord[]>([]);
+  const [conflicts, setConflicts] = useState<ApplicationCorrectionConflictRecord[]>([]);
+  const [corrections, setCorrections] = useState<ApplicationCorrectionRecord[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [correctionDataError, setCorrectionDataError] = useState<string | null>(null);
   const [loadKey, setLoadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventEdit, setEventEdit] = useState<EventEditState | null>(null);
+  const [mergeSourceId, setMergeSourceId] = useState("");
+  const [mergeReason, setMergeReason] = useState("");
+  const [splitEventIds, setSplitEventIds] = useState<string[]>([]);
+  const [splitCompany, setSplitCompany] = useState("");
+  const [splitRole, setSplitRole] = useState("");
+  const [splitReason, setSplitReason] = useState("");
+  const [resetReason, setResetReason] = useState("");
   const savingRef = useRef(false);
 
   useEffect(() => {
@@ -95,9 +124,12 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
       setNotFound(false);
       setLoadError(null);
       setEventsError(null);
-      const [detailResponse, eventsResponse] = await Promise.all([
+      setCorrectionDataError(null);
+      const [detailResponse, eventsResponse, conflictsResponse, correctionsResponse] = await Promise.all([
         getApplicationDetailApplicationsIdGet(applicationId).catch((requestError: unknown) => ({ error: requestError })),
         getApplicationEventsApplicationsIdEventsGet(applicationId).catch((requestError: unknown) => ({ error: requestError })),
+        getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGet(applicationId).catch((requestError: unknown) => ({ error: requestError })),
+        getApplicationCorrectionHistoryApplicationsIdCorrectionsGet(applicationId).catch((requestError: unknown) => ({ error: requestError })),
       ]);
       if (cancelled) {
         return;
@@ -117,6 +149,11 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
         setEvents([]);
         setEventsError(publicApiError("status" in eventsResponse ? { response: eventsResponse } : eventsResponse.error, "Timeline could not be loaded."));
       }
+      setConflicts("status" in conflictsResponse && conflictsResponse.status === 200 ? conflictsResponse.data : []);
+      setCorrections("status" in correctionsResponse && correctionsResponse.status === 200 ? correctionsResponse.data : []);
+      if (!("status" in conflictsResponse && conflictsResponse.status === 200) || !("status" in correctionsResponse && correctionsResponse.status === 200)) {
+        setCorrectionDataError("Correction conflicts or audit history could not be loaded. Retry before assuming this record has no unresolved evidence.");
+      }
       setLoading(false);
     };
     void load();
@@ -124,6 +161,11 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
       cancelled = true;
     };
   }, [applicationId, loadKey]);
+
+  const refreshAfterCorrection = () => {
+    setLoadKey((value) => value + 1);
+    onChanged();
+  };
 
   const onStatusEdit = async (nextStatus: ApplicationStatus) => {
     if (!application || savingRef.current || nextStatus === application.current_status) {
@@ -138,8 +180,7 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
         { current_status: nextStatus, reason: null },
       );
       if (response.status === 200) {
-        setApplication(response.data.application);
-        onChanged();
+        refreshAfterCorrection();
       } else {
         setError(publicError(response.data, "Status correction failed."));
       }
@@ -167,10 +208,14 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
       return;
     }
     const changed =
+      eventEdit.emailId.trim() !== (original.email_id ?? "") ||
       eventEdit.eventAt.trim() !== original.event_at ||
       eventEdit.eventType !== original.event_type ||
       eventEdit.extractNote.trim() !== (original.extract_note ?? "");
-    if (!changed || !eventEdit.reason.trim()) {
+    const sourceIsValid = eventEdit.eventType === "ghost_inferred"
+      ? !eventEdit.emailId.trim()
+      : Boolean(eventEdit.emailId.trim());
+    if (!changed || !eventEdit.reason.trim() || !sourceIsValid) {
       return;
     }
 
@@ -182,7 +227,7 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
         application.id,
         original.id,
         {
-          email_id: original.email_id,
+          email_id: eventEdit.emailId.trim() || null,
           event_at: eventEdit.eventAt.trim(),
           event_type: eventEdit.eventType,
           extract_note: eventEdit.extractNote.trim() || null,
@@ -193,23 +238,76 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
         setError(publicError(response.data, "Event correction failed."));
         return;
       }
-      setApplication(response.data.application);
-      setEvents((current) =>
-        sortEventsNewestFirst(
-          current.map((event) =>
-            event.id === original.id ? { ...event, ...response.data.event } : event,
-          ),
-        ),
-      );
       setEditingEventId(null);
       setEventEdit(null);
-      onChanged();
+      refreshAfterCorrection();
     } catch {
       setError("Event correction failed. Check that the local backend is running.");
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
+  };
+
+  const runRepair = async (operation: () => Promise<{ status: number; data: unknown }>) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await operation();
+      if (response.status !== 200) {
+        setError(publicError(response.data, "Correction failed."));
+        return;
+      }
+      setMergeSourceId("");
+      setMergeReason("");
+      setSplitEventIds([]);
+      setSplitCompany("");
+      setSplitRole("");
+      setSplitReason("");
+      setResetReason("");
+      refreshAfterCorrection();
+    } catch {
+      setError("Correction failed. Check that the local backend is running.");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const submitMerge = (submitEvent: FormEvent<HTMLFormElement>) => {
+    submitEvent.preventDefault();
+    const sourceId = mergeSourceId.trim();
+    if (!sourceId || sourceId === application?.id) return;
+    void runRepair(() =>
+      mergeApplicationApplicationsApplicationIdMergePost(applicationId, {
+        source_application_id: sourceId,
+        reason: mergeReason.trim() || null,
+      }),
+    );
+  };
+
+  const submitSplit = (submitEvent: FormEvent<HTMLFormElement>) => {
+    submitEvent.preventDefault();
+    if (!splitEventIds.length || splitEventIds.length === events.length || !splitCompany.trim() || !splitRole.trim()) return;
+    void runRepair(() =>
+      splitApplicationApplicationsApplicationIdSplitPost(applicationId, {
+        event_ids: splitEventIds,
+        new_application: { company: splitCompany.trim(), role_title: splitRole.trim() },
+        reason: splitReason.trim() || null,
+      }),
+    );
+  };
+
+  const submitReset = (submitEvent: FormEvent<HTMLFormElement>) => {
+    submitEvent.preventDefault();
+    if (!application?.manual_lock) return;
+    void runRepair(() =>
+      resetApplicationLockApplicationsApplicationIdResetLockPost(applicationId, {
+        reason: resetReason.trim() || null,
+      }),
+    );
   };
 
   if (notFound) {
@@ -385,6 +483,7 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
       {eventsError ? (
         <Alert tone="danger">{eventsError}</Alert>
       ) : null}
+      {correctionDataError ? <Alert tone="danger">{correctionDataError}</Alert> : null}
 
       {!eventsError ? <div
         style={{
@@ -427,6 +526,145 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
           {error}
         </Alert>
       ) : null}
+
+      <div
+        style={{
+          padding: "18px 20px",
+          border: application.manual_lock ? "1px solid #D9D2EE" : "1px solid #DDE5DE",
+          borderRadius: "14px",
+          background: application.manual_lock ? "#F8F7FC" : "#F6FAF7",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "18px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <strong style={{ display: "block", fontSize: "13.5px" }}>
+            {application.manual_lock ? "Manual correction lock is on" : "Automatic updates are on"}
+          </strong>
+          <span style={{ display: "block", marginTop: "3px", color: "#666D66", fontSize: "12.5px", maxWidth: "590px" }}>
+            {application.manual_lock
+              ? "Your corrected grouping and status stay protected when new email evidence is processed. Conflicting evidence is recorded below instead of replacing your correction."
+              : "Future aggregation runs may update this record from source-email evidence. A manual correction turns protection back on."}
+          </span>
+        </div>
+        {application.manual_lock ? (
+          <form onSubmit={submitReset} style={{ display: "flex", alignItems: "flex-end", gap: "8px", flexWrap: "wrap" }}>
+            <FormField htmlFor="reset-lock-reason" label="Why resume automatic updates?">
+              <TextInput
+                id="reset-lock-reason"
+                disabled={saving}
+                onChange={(event) => setResetReason(event.target.value)}
+                style={{ ...compactInputStyle, minWidth: "220px" }}
+                value={resetReason}
+              />
+            </FormField>
+            <Button disabled={saving} type="submit" variant="secondary">
+              Reset lock
+            </Button>
+          </form>
+        ) : null}
+      </div>
+
+      {conflicts.length > 0 ? (
+        <div
+          role="alert"
+          style={{ padding: "18px 20px", border: "1px solid #E8C8C2", borderRadius: "14px", background: "#FFF7F5" }}
+        >
+          <h2 style={{ margin: 0, fontSize: "15px" }}>New evidence conflicts with your correction</h2>
+          <p style={{ margin: "5px 0 14px", color: "#725049", fontSize: "12.5px" }}>
+            Nothing was overwritten. Review the proposed source evidence, then edit the record or reset its lock if the new evidence should take precedence.
+          </p>
+          <div style={{ display: "grid", gap: "9px" }}>
+            {conflicts.map((conflict) => (
+              <details key={conflict.id} style={{ padding: "10px 12px", border: "1px solid #EEDBD7", borderRadius: "9px", background: "#fff" }}>
+                <summary style={{ cursor: "pointer", fontSize: "12.5px", fontWeight: 700 }}>
+                  {conflict.conflict_type.replaceAll("_", " ")}
+                  {conflict.evidence_email_id ? ` from email ${conflict.evidence_email_id}` : " from inferred evidence"}
+                </summary>
+                <div style={{ marginTop: "9px", display: "grid", gap: "7px", fontSize: "12px", color: "#4A5049" }}>
+                  <div><strong>Protected value:</strong> <code>{JSON.stringify(conflict.existing_json)}</code></div>
+                  <div><strong>Proposed value:</strong> <code>{JSON.stringify(conflict.proposed_json)}</code></div>
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div style={{ padding: "22px 24px", border: "1px solid #E4E2DA", borderRadius: "16px", background: "#fff" }}>
+        <h2 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700 }}>Repair grouping mistakes</h2>
+        <p style={{ margin: "0 0 16px", color: "#9A9F96", fontSize: "12.5px" }}>
+          Merge a duplicate into this record, or move selected timeline events into a new application. Both actions are audited and protected from automatic overwrite.
+        </p>
+        <div className="rd-repair-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "18px" }}>
+          <form onSubmit={submitMerge} style={{ padding: "14px", border: "1px solid #E8E5DC", borderRadius: "11px", display: "grid", gap: "10px" }}>
+            <strong style={{ fontSize: "13px" }}>Merge duplicate</strong>
+            <FormField htmlFor="merge-source-id" label="Duplicate application ID">
+              <TextInput id="merge-source-id" disabled={saving} onChange={(event) => setMergeSourceId(event.target.value)} required style={compactInputStyle} value={mergeSourceId} />
+            </FormField>
+            <FormField htmlFor="merge-reason" label="Reason">
+              <TextInput id="merge-reason" disabled={saving} onChange={(event) => setMergeReason(event.target.value)} style={compactInputStyle} value={mergeReason} />
+            </FormField>
+            {mergeSourceId.trim() === application.id ? <span style={{ color: "#8A3328", fontSize: "12px" }}>Choose a different application.</span> : null}
+            <Button disabled={saving || !mergeSourceId.trim() || mergeSourceId.trim() === application.id} type="submit">Merge into this record</Button>
+          </form>
+
+          <form onSubmit={submitSplit} style={{ padding: "14px", border: "1px solid #E8E5DC", borderRadius: "11px", display: "grid", gap: "10px" }}>
+            <strong style={{ fontSize: "13px" }}>Split timeline events</strong>
+            <fieldset style={{ margin: 0, padding: "8px 10px", border: "1px solid #E4E2DA", borderRadius: "8px" }}>
+              <legend style={{ padding: "0 4px", fontSize: "12px", color: "#666D66" }}>Events to move</legend>
+              <div style={{ display: "grid", gap: "6px" }}>
+                {events.map((event) => (
+                  <label key={event.id} style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "12px" }}>
+                    <input
+                      checked={splitEventIds.includes(event.id)}
+                      disabled={saving}
+                      onChange={(inputEvent) => setSplitEventIds((current) => inputEvent.target.checked ? [...current, event.id] : current.filter((id) => id !== event.id))}
+                      type="checkbox"
+                    />
+                    {EVENT_LABELS[event.event_type]} - {formatShortDate(event.event_at)}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <FormField htmlFor="split-company" label="New company">
+              <TextInput id="split-company" disabled={saving} onChange={(event) => setSplitCompany(event.target.value)} required style={compactInputStyle} value={splitCompany} />
+            </FormField>
+            <FormField htmlFor="split-role" label="New role">
+              <TextInput id="split-role" disabled={saving} onChange={(event) => setSplitRole(event.target.value)} required style={compactInputStyle} value={splitRole} />
+            </FormField>
+            <FormField htmlFor="split-reason" label="Reason">
+              <TextInput id="split-reason" disabled={saving} onChange={(event) => setSplitReason(event.target.value)} style={compactInputStyle} value={splitReason} />
+            </FormField>
+            {splitEventIds.length === events.length && events.length > 0 ? <span style={{ color: "#8A3328", fontSize: "12px" }}>Leave at least one event on this application.</span> : null}
+            <Button disabled={saving || !splitEventIds.length || splitEventIds.length === events.length || !splitCompany.trim() || !splitRole.trim()} type="submit">Create split application</Button>
+          </form>
+        </div>
+      </div>
+
+      <div style={{ padding: "22px 24px", border: "1px solid #E4E2DA", borderRadius: "16px", background: "#fff" }}>
+        <h2 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700 }}>Correction history</h2>
+        <p style={{ margin: "0 0 14px", color: "#9A9F96", fontSize: "12.5px" }}>Newest first. Every manual change and lock reset remains reviewable.</p>
+        {corrections.length === 0 ? <p style={{ margin: 0, fontSize: "12.5px", color: "#666D66" }}>No manual corrections yet.</p> : (
+          <div style={{ display: "grid", gap: "8px" }}>
+            {corrections.map((correction) => (
+              <details key={correction.id} style={{ padding: "10px 12px", border: "1px solid #E8E5DC", borderRadius: "9px" }}>
+                <summary style={{ cursor: "pointer", fontSize: "12.5px", fontWeight: 700 }}>
+                  {correction.correction_type.replaceAll("_", " ")} - {formatShortDate(correction.created_at)}
+                </summary>
+                <div style={{ marginTop: "8px", display: "grid", gap: "6px", color: "#4A5049", fontSize: "12px" }}>
+                  <div><strong>Reason:</strong> {correction.reason ?? "No reason recorded"}</div>
+                  <div><strong>Before:</strong> <code>{JSON.stringify(correction.before_json)}</code></div>
+                  <div><strong>After:</strong> <code>{JSON.stringify(correction.after_json)}</code></div>
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div
         style={{
@@ -630,6 +868,23 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
                         value={eventEdit.extractNote}
                       />
                     </FormField>
+                    <FormField htmlFor={`${event.id}-email`} label="Source email ID">
+                      <TextInput
+                        disabled={saving}
+                        onChange={(changeEvent) =>
+                          setEventEdit({ ...eventEdit, emailId: changeEvent.target.value })
+                        }
+                        style={{
+                          width: "auto",
+                          minHeight: 0,
+                          padding: "7px 9px",
+                          border: "1px solid #D9D6CC",
+                          borderRadius: "8px",
+                          background: "#fff",
+                        }}
+                        value={eventEdit.emailId}
+                      />
+                    </FormField>
                     <FormField htmlFor={`${event.id}-reason`} label="Correction reason">
                       <TextInput
                         disabled={saving}
@@ -653,7 +908,9 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
                         disabled={
                           saving ||
                           !eventEdit.reason.trim() ||
-                          (eventEdit.eventAt.trim() === event.event_at &&
+                          (eventEdit.eventType === "ghost_inferred" ? Boolean(eventEdit.emailId.trim()) : !eventEdit.emailId.trim()) ||
+                          (eventEdit.emailId.trim() === (event.email_id ?? "") &&
+                            eventEdit.eventAt.trim() === event.event_at &&
                             eventEdit.eventType === event.event_type &&
                             eventEdit.extractNote.trim() === (event.extract_note ?? ""))
                         }

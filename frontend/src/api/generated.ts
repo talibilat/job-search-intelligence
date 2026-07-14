@@ -2446,6 +2446,73 @@ export const getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsG
     } as getApplicationCorrectionConflictsApplicationsIdCorrectionConflictsGetResponse;
   };
 
+export type getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse200 =
+  {
+    data: ApplicationCorrectionRecord[];
+    status: 200;
+  };
+
+export type getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse404 =
+  {
+    data: ApiErrorResponse;
+    status: 404;
+  };
+
+export type getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponseSuccess =
+  getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse200 & {
+    headers: Headers;
+  };
+export type getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponseError =
+  (
+    | getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse404
+    | getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse422
+  ) & {
+    headers: Headers;
+  };
+
+export type getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse =
+  | getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponseSuccess
+  | getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponseError;
+
+export const getGetApplicationCorrectionHistoryApplicationsIdCorrectionsGetUrl =
+  (id: string) => {
+    return `/applications/${id}/corrections`;
+  };
+
+/**
+ * Returns the newest-first audit history for one manually corrected application from local SQLite.
+ * @summary List Application Correction History
+ */
+export const getApplicationCorrectionHistoryApplicationsIdCorrectionsGet =
+  async (
+    id: string,
+    options?: RequestInit,
+  ): Promise<getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse> => {
+    const res = await fetch(
+      getGetApplicationCorrectionHistoryApplicationsIdCorrectionsGetUrl(id),
+      {
+        ...options,
+        method: "GET",
+      },
+    );
+
+    const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+    const data: getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse["data"] =
+      body ? JSON.parse(body) : {};
+    return {
+      data,
+      status: res.status,
+      headers: res.headers,
+    } as getApplicationCorrectionHistoryApplicationsIdCorrectionsGetResponse;
+  };
+
 export type getApplicationEventsApplicationsIdEventsGetResponse200 = {
   data: ApplicationEventTimelineRecord[];
   status: 200;
