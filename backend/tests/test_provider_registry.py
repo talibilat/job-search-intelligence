@@ -28,18 +28,20 @@ def test_registry_declares_gmail_oauth_secret_ref_without_secret_values() -> Non
 
     assert gmail.display_name == "Gmail"
     assert [requirement.setting_name for requirement in gmail.config_requirements] == [
-        "gmail_client_config_file",
         "gmail_scopes",
     ]
     assert {requirement.enforcement for requirement in gmail.config_requirements} == {
         ProviderRequirementEnforcement.DECLARATIVE,
     }
-    assert len(gmail.secret_requirements) == 1
-    secret_ref = gmail.secret_requirements[0].ref
+    assert len(gmail.secret_requirements) == 2
+    client_ref = gmail.secret_requirements[0].ref
+    assert client_ref.kind is SecretKind.OAUTH_CLIENT
+    assert client_ref.name == "desktop_client_json"
+    secret_ref = gmail.secret_requirements[1].ref
     assert secret_ref.kind is SecretKind.OAUTH_TOKEN
     assert secret_ref.provider == "gmail"
     assert secret_ref.name == "refresh_token"
-    assert gmail.secret_requirements[0].enforcement is ProviderRequirementEnforcement.DECLARATIVE
+    assert gmail.secret_requirements[1].enforcement is ProviderRequirementEnforcement.DECLARATIVE
     assert "token-value" not in gmail.model_dump_json()
 
 

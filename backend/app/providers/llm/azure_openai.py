@@ -36,13 +36,8 @@ from app.providers.llm.types import (
     LLMResponseFormat,
     LLMTokenUsage,
 )
-from app.security import SecretKind, SecretRef, SecretStore, SecretStoreUnavailableError
+from app.security import AZURE_OPENAI_API_KEY_REF, SecretStore, SecretStoreUnavailableError
 
-_AZURE_OPENAI_API_KEY_REF = SecretRef(
-    kind=SecretKind.LLM_API_KEY,
-    provider="azure_openai",
-    name="api_key",
-)
 _TRANSIENT_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
 _INVALID_RESPONSE_MESSAGE = "Azure OpenAI returned an invalid response."
 _HEALTH_CHECK_PROMPT = "Health check. Reply OK."
@@ -336,7 +331,7 @@ class AzureOpenAIProvider:
             )
 
         try:
-            api_key = await self._secret_store.get_secret(_AZURE_OPENAI_API_KEY_REF)
+            api_key = await self._secret_store.get_secret(AZURE_OPENAI_API_KEY_REF)
         except SecretStoreUnavailableError as error:
             raise LLMProviderUnavailableError(
                 public_message="Azure OpenAI API key storage is unavailable."

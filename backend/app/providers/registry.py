@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import AppSettings, ClassificationMode, EmailProviderName, LLMProviderName
 from app.providers.llm.ollama import is_local_ollama_base_url
-from app.security import SecretKind, SecretRef
+from app.security import GMAIL_OAUTH_CLIENT_REF, SecretKind, SecretRef
 
 
 class ProviderRequirementEnforcement(StrEnum):
@@ -108,17 +108,16 @@ class ProviderRegistry:
                     display_name="Gmail",
                     config_requirements=(
                         ProviderConfigRequirement(
-                            setting_name="gmail_client_config_file",
-                            label="Google OAuth client JSON path",
-                            enforcement=ProviderRequirementEnforcement.DECLARATIVE,
-                        ),
-                        ProviderConfigRequirement(
                             setting_name="gmail_scopes",
                             label="Gmail OAuth scopes",
                             enforcement=ProviderRequirementEnforcement.DECLARATIVE,
                         ),
                     ),
                     secret_requirements=(
+                        ProviderSecretRequirement(
+                            ref=GMAIL_OAUTH_CLIENT_REF,
+                            label="Google Desktop OAuth client JSON",
+                        ),
                         ProviderSecretRequirement(
                             ref=SecretRef(
                                 kind=SecretKind.OAUTH_TOKEN,

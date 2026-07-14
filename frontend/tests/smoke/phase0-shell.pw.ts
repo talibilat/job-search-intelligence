@@ -216,12 +216,45 @@ const legacySetupStatus = {
   llm_configured: true,
   llm_provider: "azure_openai",
   recommended_classification_mode: "hybrid",
+  readiness: {
+    chat_generation: {
+      action: null,
+      message: "Chat generation is not implemented.",
+      state: "not_implemented",
+    },
+    classification_generation: {
+      action: null,
+      message: "Classification is ready.",
+      state: "ready",
+    },
+    embedding_generation: {
+      action: null,
+      message: "Embeddings are ready.",
+      state: "ready",
+    },
+    gmail_sync: {
+      action: "Connect Gmail.",
+      message: "Gmail has not been authorized.",
+      state: "missing_credential",
+    },
+    ready_to_classify: true,
+    ready_to_sync: false,
+  },
   setup_complete: false,
 } satisfies SetupStatusResponse;
 
 const legacyRunnableFeatureStatus = {
   ...legacySetupStatus,
   gmail_connected: true,
+  readiness: {
+    ...legacySetupStatus.readiness,
+    gmail_sync: {
+      action: null,
+      message: "Gmail is ready.",
+      state: "ready" as const,
+    },
+    ready_to_sync: true,
+  },
 } satisfies SetupStatusResponse;
 
 const legacyCompletedSync = {
@@ -628,21 +661,19 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
     page.getByRole("heading", { name: "Set up JobTracker locally" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", {
-      name: "The wizard must make each privacy and provider choice explicit.",
-    }),
+    page.getByRole("heading", { name: "Setup checklist" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Choose your LLM provider" }),
+    page.getByRole("heading", { name: "Credentials and readiness" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Connect Gmail read-only" }),
-  ).toBeVisible();
+  await expect(page.getByText("Connect Gmail read-only")).toBeVisible();
   await expect(
     page.getByText("Preselected from Azure OpenAI setup"),
   ).toBeVisible();
-  await expect(page.getByText("Waiting for Gmail callback")).toBeVisible();
-  await expect(page.getByText("No telemetry")).toBeVisible();
+  await expect(page.getByText("Gmail has not been authorized.")).toBeVisible();
+  await expect(
+    page.getByText(/Credentials are write-only and encrypted/),
+  ).toBeVisible();
 });
 
 const redesignApplication = {
@@ -810,7 +841,6 @@ const providerConfig = {
     azure_openai_chat_deployment: "fixture-chat",
     azure_openai_embedding_deployment: "fixture-embedding",
     azure_openai_endpoint: "https://example.invalid",
-    gmail_client_config_file: "client-secret.fixture.json",
     gmail_scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
     ollama_base_url: "http://127.0.0.1:11434",
     ollama_chat_model: "fixture-chat",
@@ -1663,7 +1693,7 @@ test("runs the critical private-data-free redesign journey", async ({
   expect(requests.providerUpdateCount()).toBe(3);
 
   await page.getByRole("button", { name: "+ Add another inbox" }).click();
-  await page.getByRole("button", { name: "Gmail" }).click();
+  await page.getByRole("button", { name: "G Gmail", exact: true }).click();
   await expect(page).toHaveURL("/oauth-fixture-destination");
   await expect(
     page.getByRole("heading", { name: "Controlled OAuth fixture destination" }),

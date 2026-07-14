@@ -334,6 +334,24 @@ export const BackfillProgressState = {
   failed: "failed",
 } as const;
 
+export type ReadinessState =
+  (typeof ReadinessState)[keyof typeof ReadinessState];
+
+export const ReadinessState = {
+  ready: "ready",
+  missing_config: "missing_config",
+  missing_credential: "missing_credential",
+  unavailable: "unavailable",
+  reauth_required: "reauth_required",
+  not_implemented: "not_implemented",
+} as const;
+
+export interface CapabilityReadiness {
+  action?: string | null;
+  message: string;
+  state: ReadinessState;
+}
+
 export type JsonObjectList = JsonObject[];
 
 export type ChatMessageRole =
@@ -578,6 +596,7 @@ export type SecretKind = (typeof SecretKind)[keyof typeof SecretKind];
 
 export const SecretKind = {
   oauth_token: "oauth_token",
+  oauth_client: "oauth_client",
   llm_api_key: "llm_api_key",
 } as const;
 
@@ -1156,7 +1175,6 @@ export interface ProviderConfigValues {
   azure_openai_chat_deployment: string;
   azure_openai_embedding_deployment: string;
   azure_openai_endpoint: string;
-  gmail_client_config_file: string;
   gmail_scopes: string[];
   ollama_base_url: string;
   ollama_chat_model: string;
@@ -1177,23 +1195,32 @@ export interface ProviderConfigResponse {
 }
 
 /**
- * Partial in-process update for non-secret Phase 0 provider config.
+ * Partial durable provider config update with write-only credentials.
  */
 export interface ProviderConfigUpdateRequest {
+  azure_openai_api_key?: string | null;
   azure_openai_api_version?: string | null;
   azure_openai_chat_deployment?: string | null;
   azure_openai_embedding_deployment?: string | null;
   azure_openai_endpoint?: string | null;
   classification_mode?: ClassificationMode | null;
   email_provider?: EmailProviderName | null;
-  gmail_client_config_file?: string | null;
-  gmail_scopes?: string[] | null;
+  gmail_oauth_client_json?: string | null;
   llm_provider?: LLMProviderName | null;
   ollama_base_url?: string | null;
   ollama_chat_model?: string | null;
   ollama_embedding_model?: string | null;
   sync_interval_seconds?: number | null;
   sync_on_open?: boolean | null;
+}
+
+export interface ProviderReadinessResponse {
+  chat_generation: CapabilityReadiness;
+  classification_generation: CapabilityReadiness;
+  embedding_generation: CapabilityReadiness;
+  gmail_sync: CapabilityReadiness;
+  ready_to_classify: boolean;
+  ready_to_sync: boolean;
 }
 
 /**
@@ -1303,6 +1330,7 @@ export interface SetupStatusResponse {
   gmail_connected: boolean;
   llm_configured: boolean;
   llm_provider: LLMProviderName;
+  readiness: ProviderReadinessResponse;
   recommended_classification_mode: ClassificationMode;
   setup_complete: boolean;
 }
@@ -1311,13 +1339,14 @@ export interface SetupStatusResponse {
  * Non-secret first-run setup choices accepted by the Phase 0 API shell.
  */
 export interface SetupSubmitRequest {
+  azure_openai_api_key?: string | null;
   azure_openai_api_version?: string | null;
   azure_openai_chat_deployment?: string | null;
   azure_openai_embedding_deployment?: string | null;
   azure_openai_endpoint?: string | null;
   classification_mode?: ClassificationMode | null;
   email_provider?: EmailProviderName;
-  gmail_client_config_file?: string | null;
+  gmail_oauth_client_json?: string | null;
   llm_provider: LLMProviderName;
   ollama_base_url?: string | null;
   ollama_chat_model?: string | null;
@@ -1333,6 +1362,7 @@ export interface SetupSubmitResponse {
   gmail_connected: boolean;
   llm_configured: boolean;
   llm_provider: LLMProviderName;
+  readiness: ProviderReadinessResponse;
   recommended_classification_mode: ClassificationMode;
   setup_complete: boolean;
   status: "accepted";
@@ -2954,6 +2984,48 @@ export const checkLlmProviderHealthConfigProvidersLlmHealthPost = async (
   } as checkLlmProviderHealthConfigProvidersLlmHealthPostResponse;
 };
 
+export type providerReadinessConfigProvidersReadinessGetResponse200 = {
+  data: ProviderReadinessResponse;
+  status: 200;
+};
+
+export type providerReadinessConfigProvidersReadinessGetResponseSuccess =
+  providerReadinessConfigProvidersReadinessGetResponse200 & {
+    headers: Headers;
+  };
+export type providerReadinessConfigProvidersReadinessGetResponse =
+  providerReadinessConfigProvidersReadinessGetResponseSuccess;
+
+export const getProviderReadinessConfigProvidersReadinessGetUrl = () => {
+  return `/config/providers/readiness`;
+};
+
+/**
+ * Report readiness for each provider-backed product capability.
+ * @summary Provider Readiness
+ */
+export const providerReadinessConfigProvidersReadinessGet = async (
+  options?: RequestInit,
+): Promise<providerReadinessConfigProvidersReadinessGetResponse> => {
+  const res = await fetch(
+    getProviderReadinessConfigProvidersReadinessGetUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: providerReadinessConfigProvidersReadinessGetResponse["data"] =
+    body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as providerReadinessConfigProvidersReadinessGetResponse;
+};
+
 export type healthHealthGetResponse200 = {
   data: HealthResponse;
   status: 200;
@@ -3759,7 +3831,7 @@ export const getSetupSubmitSetupPostUrl = () => {
 };
 
 /**
- * Accepts non-secret Phase 0 setup choices and validates selected provider metadata without running provider auth flows or persisting secrets. When classification_mode is omitted, the backend applies the selected provider recommendation before validation.
+ * Durably stores provider choices and write-only credentials through the same service as provider settings. When classification_mode is omitted, the backend applies the selected provider recommendation before validation.
  * @summary Submit first-run setup choices
  */
 export const setupSubmitSetupPost = async (

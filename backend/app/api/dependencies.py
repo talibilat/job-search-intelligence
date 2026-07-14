@@ -16,11 +16,13 @@ from app.db.repositories import (
     EventRepository,
     InsightRepository,
     MetricsRepository,
+    ProviderConfigurationRepository,
 )
 from app.db.repositories.classification_run import ClassificationRunRepository
 from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
+from app.providers import provider_registry
 from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
 from app.providers.llm.azure_openai import AzureOpenAIProvider
 from app.security import SecretRef, SecretStore, create_secret_store
@@ -45,6 +47,7 @@ from app.services.metrics import (
     MetricsSummaryService,
     MetricsTimeseriesService,
 )
+from app.services.readiness import ProviderReadinessService
 from app.services.structured_extraction import StructuredExtractionService
 
 
@@ -56,6 +59,18 @@ def get_email_connection_repository(
     connection = sqlite3.connect(database_path, check_same_thread=False)
     try:
         yield EmailConnectionRepository(connection)
+    finally:
+        connection.close()
+
+
+def get_provider_configuration_repository(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[ProviderConfigurationRepository]:
+    database_path = sqlite_database_path(settings.database_url)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, check_same_thread=False)
+    try:
+        yield ProviderConfigurationRepository(connection)
     finally:
         connection.close()
 
@@ -103,6 +118,24 @@ def get_llm_provider(
         status_code=503,
         code=ApiErrorCode.LLM_PROVIDER_UNAVAILABLE,
         message="The selected LLM provider is unavailable.",
+    )
+
+
+def get_provider_readiness_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+    connection_repository: Annotated[
+        EmailConnectionRepository,
+        Depends(get_email_connection_repository),
+    ],
+    secret_store: Annotated[SecretStore, Depends(get_llm_secret_store)],
+    llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+) -> ProviderReadinessService:
+    return ProviderReadinessService(
+        settings=settings,
+        registry=provider_registry,
+        connection_reader=connection_repository,
+        secret_store=secret_store,
+        llm_provider=llm_provider,
     )
 
 

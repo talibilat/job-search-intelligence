@@ -175,6 +175,30 @@ function setupStatusResponse(
     gmail_connected: true,
     llm_configured: false,
     llm_provider: "ollama",
+    readiness: {
+      chat_generation: {
+        action: null,
+        message: "Chat generation is planned for Phase 5 and is not implemented.",
+        state: "not_implemented",
+      },
+      classification_generation: {
+        action: null,
+        message: "The configured classification model is available.",
+        state: "ready",
+      },
+      embedding_generation: {
+        action: null,
+        message: "The configured embedding model is available.",
+        state: "ready",
+      },
+      gmail_sync: {
+        action: null,
+        message: "Gmail is authorized for read-only sync.",
+        state: "ready",
+      },
+      ready_to_classify: true,
+      ready_to_sync: true,
+    },
     recommended_classification_mode: "local",
     setup_complete: true,
     ...overrides,

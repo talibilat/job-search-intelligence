@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from app.api.dependencies import (
+    get_llm_secret_store,
+    get_provider_configuration_repository,
+)
 from app.api.provider_config import get_active_sync_scheduler, get_provider_registry
 from app.config import (
     AppSettings,
@@ -17,8 +21,10 @@ from app.providers import (
     ProviderRegistry,
     provider_registry,
 )
+from app.security import SecretRef
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 
 class RecordingScheduler:
@@ -55,6 +61,25 @@ class NoopConfigScheduler:
         return None
 
 
+class MemoryProviderConfigRepository:
+    def save(self, settings: AppSettings) -> None:
+        return None
+
+
+class MemorySecretStore:
+    def __init__(self) -> None:
+        self.values: dict[SecretRef, SecretStr] = {}
+
+    async def get_secret(self, ref: SecretRef) -> SecretStr | None:
+        return self.values.get(ref)
+
+    async def set_secret(self, ref: SecretRef, value: SecretStr) -> None:
+        self.values[ref] = value
+
+    async def delete_secret(self, ref: SecretRef) -> None:
+        self.values.pop(ref, None)
+
+
 def clear_jobtracker_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for env_name in AppSettings.env_var_names():
         monkeypatch.delenv(env_name, raising=False)
@@ -68,6 +93,10 @@ def create_test_app(
     fastapi_app.dependency_overrides[get_settings] = lambda: settings
     if scheduler is None:
         fastapi_app.dependency_overrides[get_active_sync_scheduler] = NoopConfigScheduler
+    fastapi_app.dependency_overrides[get_provider_configuration_repository] = (
+        MemoryProviderConfigRepository
+    )
+    fastapi_app.dependency_overrides[get_llm_secret_store] = MemorySecretStore
     return fastapi_app
 
 
@@ -136,6 +165,16 @@ def test_provider_config_endpoint_returns_current_selection_and_metadata_without
     assert payload["settings"]["ollama_chat_model"] == "llama3.1"
     assert payload["email_providers"][0]["name"] == "gmail"
     assert payload["email_providers"][0]["secret_requirements"] == [
+        {
+            "ref": {
+                "kind": "oauth_client",
+                "provider": "gmail",
+                "name": "desktop_client_json",
+            },
+            "label": "Google Desktop OAuth client JSON",
+            "required": True,
+            "enforcement": "declarative",
+        },
         {
             "ref": {
                 "kind": "oauth_token",
@@ -393,7 +432,7 @@ def test_provider_config_update_reports_missing_provider_settings(
     }
 
 
-def test_provider_config_update_rejects_unknown_secret_like_fields(
+def test_provider_config_update_accepts_write_only_api_key_without_returning_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clear_jobtracker_env(monkeypatch)
@@ -408,8 +447,7 @@ def test_provider_config_update_rejects_unknown_secret_like_fields(
         },
     )
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "validation_error"
+    assert response.status_code == 200
     assert "super-secret-api-key" not in response.text
 
 
@@ -428,12 +466,12 @@ def test_provider_config_update_returns_typed_error_for_settings_validation(
     assert response.json() == {
         "error": {
             "code": "validation_error",
-            "message": "Provider config validation failed.",
+            "message": "Request validation failed.",
             "details": [
                 {
-                    "field": "gmail_scopes",
-                    "message": "Value error, gmail_scopes must only include gmail.readonly in v1",
-                    "type": "value_error",
+                    "field": "body.gmail_scopes",
+                    "message": "Extra inputs are not permitted",
+                    "type": "extra_forbidden",
                 },
             ],
         },

@@ -1,61 +1,54 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
 
 from app.config import AppSettings
-from app.models import SetupSubmitRequest, SetupSubmitResponse
-from app.providers import ProviderConfigurationError, ProviderRegistry, provider_registry
-from app.services.classification_mode_config import recommend_classification_mode
+from app.db.repositories.provider_config import ProviderConfigurationRepository
+from app.models import (
+    ProviderConfigUpdateRequest,
+    SetupSubmitRequest,
+    SetupSubmitResponse,
+)
+from app.providers import ProviderConfigurationError, ProviderRegistry
+from app.security import SecretStore
+from app.services.provider_config import apply_provider_config_update
+from app.services.readiness import ProviderReadinessService
 from app.services.setup_status import build_setup_status
+from app.services.sync_service import SyncScheduler
 
 
 class SetupSubmissionValidationError(ValueError):
-    """Raised when submitted non-secret setup choices are not usable."""
-
-    def __init__(
-        self,
-        *,
-        message: str,
-        missing_settings: tuple[str, ...] = (),
-    ) -> None:
+    def __init__(self, *, message: str, missing_settings: tuple[str, ...] = ()) -> None:
         self.message = message
         self.missing_settings = missing_settings
         super().__init__(message)
 
 
-def submit_setup(
+async def submit_setup(
     request: SetupSubmitRequest,
     settings: AppSettings,
-    registry: ProviderRegistry = provider_registry,
+    registry: ProviderRegistry,
+    *,
+    repository: ProviderConfigurationRepository,
+    secret_store: SecretStore,
+    sync_scheduler: SyncScheduler,
+    readiness_service_factory: Callable[[], ProviderReadinessService],
 ) -> SetupSubmitResponse:
-    candidate_settings = _settings_with_submission(settings, request)
     try:
-        registry.validate_settings(candidate_settings)
+        await apply_provider_config_update(
+            settings,
+            ProviderConfigUpdateRequest.model_validate(request.model_dump(exclude_none=True)),
+            registry,
+            repository=repository,
+            secret_store=secret_store,
+            sync_scheduler=sync_scheduler,
+        )
     except ProviderConfigurationError as error:
         raise SetupSubmissionValidationError(
-            message=_setup_submission_error_message(error),
+            message="Submitted setup choices are incomplete."
+            if error.missing_settings
+            else "Submitted setup choices are incompatible.",
             missing_settings=error.missing_settings,
         ) from error
-
-    status = build_setup_status(candidate_settings)
+    status = build_setup_status(settings, await readiness_service_factory().check())
     return SetupSubmitResponse(status="accepted", **status.model_dump())
-
-
-def _settings_with_submission(
-    settings: AppSettings,
-    request: SetupSubmitRequest,
-) -> AppSettings:
-    values: dict[str, Any] = settings.model_dump()
-    updates = request.model_dump(exclude_none=True)
-    values.update(updates)
-    if "classification_mode" not in updates:
-        candidate_settings = AppSettings(_env_file=None, **values)
-        values["classification_mode"] = recommend_classification_mode(candidate_settings)
-    return AppSettings(_env_file=None, **values)
-
-
-def _setup_submission_error_message(error: ProviderConfigurationError) -> str:
-    if error.missing_settings:
-        return "Submitted setup choices are incomplete."
-
-    return "Submitted setup choices are incompatible."

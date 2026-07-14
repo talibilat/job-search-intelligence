@@ -6,8 +6,8 @@ import {
   classificationEstimateClassificationEstimateGet,
   disconnectEmailConnectionAuthConnectionsProviderAccountIdDelete,
   gmailAuthUrlAuthGmailGet,
-  getProviderConfigConfigProvidersGet,
-  updateProviderConfigConfigProvidersPut,
+  loadProviderConfig as getProviderConfigConfigProvidersGet,
+  updateProviderConfig as updateProviderConfigConfigProvidersPut,
   wipeDataLocalDataWipePost,
   type ClassificationPreRunEstimate,
   type ClassificationMode,
@@ -18,6 +18,7 @@ import {
   type SyncLocalStats,
 } from "../../api";
 import { publicApiError } from "../apiError";
+import { ProviderSetup } from "../../components/ProviderSetup";
 import type { RequestLoadState } from "../RedesignApp";
 import { formatCount, logoStyle } from "../theme";
 
@@ -401,6 +402,15 @@ export function SettingsPage({
           a cloud AI.
         </p>
       </div>
+
+      {config ? (
+        <ProviderSetup
+          autoLoad={false}
+          checkReadinessOnMount
+          initialConfig={config}
+          key={`${config.selection.llm_provider}:${config.selection.classification_mode}`}
+        />
+      ) : null}
 
       <div
         style={{

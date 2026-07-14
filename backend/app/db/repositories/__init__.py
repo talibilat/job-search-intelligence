@@ -14,6 +14,7 @@ from .filter_decision import EmailFilterDecisionRepository
 from .insight import InsightRepository
 from .metrics import MetricsRepository
 from .pipeline_status import PipelineStatusRepository
+from .provider_config import ProviderConfigurationRepository
 from .sync_state import SyncStateRepository
 from .synthetic_fixture import SyntheticFixtureRepository
 
@@ -33,6 +34,7 @@ __all__ = [
     "InsightRepository",
     "MetricsRepository",
     "PipelineStatusRepository",
+    "ProviderConfigurationRepository",
     "SqlParameters",
     "SyncStateRepository",
     "SyntheticFixtureRepository",
