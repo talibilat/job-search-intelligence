@@ -1215,7 +1215,30 @@ async function installRedesignFixtures(page: Page) {
     query: string;
   }> = [];
   let providerUpdateCount = 0;
+  let processingComplete = false;
   let currentProviderConfig: ProviderConfigResponse = providerConfig;
+  const readyPipelineStatus: PipelineStatus = {
+    ...legacyPipelineStatus,
+    backfill_complete: true,
+    backfill_state: "completed",
+    counts: {
+      ...legacyPipelineStatus.counts,
+      application_count: redesignMetricsSummary.total_applications,
+      application_event_count: 31,
+      classified_email_count: 24,
+      job_related_email_count: 23,
+    },
+    incremental_sync_ready: true,
+    next_action: "review_dashboard",
+    next_action_reason: "Processing is complete. Review the deterministic dashboard.",
+    unclassified_retained_count: 0,
+  };
+  const processingPipelineStatus: PipelineStatus = {
+    ...readyPipelineStatus,
+    next_action: "run_classification",
+    next_action_reason: "Twelve retained emails need classification.",
+    unclassified_retained_count: 12,
+  };
 
   await page.route("**/auth/connections", (route) =>
     route.fulfill({
@@ -1290,27 +1313,35 @@ async function installRedesignFixtures(page: Page) {
       status: 200,
     });
   });
-  await page.route("**/metrics/summary", (route) =>
+  await page.route("**/metrics/summary**", (route) =>
     route.fulfill({
       contentType: "application/json",
       json: redesignMetricsSummary,
       status: 200,
     }),
   );
-  await page.route("**/metrics/rates", (route) =>
+  await page.route("**/metrics/rates**", (route) =>
     route.fulfill({
       contentType: "application/json",
       json: redesignMetricsRates,
       status: 200,
     }),
   );
-  await page.route("**/metrics/funnel", (route) =>
+  await page.route("**/metrics/funnel**", (route) =>
     route.fulfill({
       contentType: "application/json",
       json: redesignFunnel,
       status: 200,
     }),
   );
+  await page.route("**/metrics/timeseries**", (route) => route.fulfill({ contentType: "application/json", json: redesignMetricsSummary.application_windows.length ? { points: [] } : legacyTimeseries, status: 200 }));
+  await page.route("**/metrics/response-rate-trend**", (route) => route.fulfill({ contentType: "application/json", json: { points: [{ application_count: 10, period_start: "2026-07-01", response_count: 5, response_rate: 0.5 }] }, status: 200 }));
+  await page.route("**/metrics/response-silence**", (route) => route.fulfill({ contentType: "application/json", json: { human_response_count: 13, question_id: "Q-04", silent_count: 10, total_applications: 23 }, status: 200 }));
+  await page.route("**/metrics/diagnostics**", (route) => route.fulfill({ contentType: "application/json", json: { adjacent_role_suggestions: [], baseline_negative_count: 13, baseline_response_count: 13, baseline_success_count: 9, dead_weight_skill_segments: [], negative_outcome_segments: [], segments: [], selling_skill_segments: [], strongest_response_segments: [], successful_application_segments: [], total_applications: 23, wasted_effort_segments: [], weakest_response_segments: [] }, status: 200 }));
+  await page.route("**/metrics/breakdown**", (route) => {
+    const dimension = new URL(route.request().url()).searchParams.get("dimension") ?? "source";
+    return route.fulfill({ contentType: "application/json", json: { dimension, rows: legacySourceBreakdown.rows.map((row) => ({ ...row, dimension })) }, status: 200 });
+  });
   await page.route("**/applications/events/recent?**", (route) =>
     route.fulfill({
       contentType: "application/json",
@@ -1394,8 +1425,6 @@ async function installRedesignFixtures(page: Page) {
     if (route.request().isNavigationRequest()) {
       return route.continue();
     }
-    const requestUrl = new URL(route.request().url());
-    expect(requestUrl.searchParams.get("status")).toBe("interview");
     return route.fulfill({
       contentType: "application/json",
       json: [redesignApplication],
@@ -1448,7 +1477,7 @@ async function installRedesignFixtures(page: Page) {
   await page.route("**/pipeline/status", (route) =>
     route.fulfill({
       contentType: "application/json",
-      json: legacyPipelineStatus,
+      json: processingComplete ? readyPipelineStatus : processingPipelineStatus,
       status: 200,
     }),
   );
@@ -1459,6 +1488,26 @@ async function installRedesignFixtures(page: Page) {
       status: 200,
     }),
   );
+  await page.route("**/processing/run", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    processingComplete = true;
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        ...processingStatus,
+        accepted_count: 12,
+        applications_upserted: 23,
+        candidate_count: 12,
+        completed_at: "2026-07-14T12:01:00Z",
+        events_upserted: 31,
+        processed_count: 12,
+        run_id: "fixture-processing-run",
+        started_at: "2026-07-14T12:00:00Z",
+        state: "succeeded",
+      },
+      status: 200,
+    });
+  });
   await page.route("**/config/providers", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
@@ -1581,11 +1630,18 @@ test("runs the critical private-data-free redesign journey", async ({
   await expect(
     page.getByRole("heading", { name: /offer.*on the table/i }),
   ).toBeVisible();
+  await expect(page.getByText("Dashboard is not final yet")).toBeVisible();
+  await page.getByRole("button", { name: "Process 12 emails" }).click();
+  await expect(page.getByText(/Processed 12; accepted 12/)).toBeVisible();
+  await expect(page.getByText("Your dashboard is ready")).toBeVisible();
   for (const [label, value] of [
     ["Applications", "23"],
-    ["Response rate", "56.5%"],
-    ["Interview rate", "30.4%"],
+    ["Responses", "13"],
+    ["Rejections", "9"],
+    ["Interviews", "7"],
     ["Offers", "2"],
+    ["Ghosts", "4"],
+    ["Live applications", "8"],
   ] as const) {
     const card = page
       .getByRole("main")
@@ -1595,6 +1651,25 @@ test("runs the critical private-data-free redesign journey", async ({
       );
     await expect(card.getByText(value, { exact: true })).toBeVisible();
   }
+  await expect(page.getByRole("heading", { name: "Trends, silence, and segmentation" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Complete breakdowns" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
+
+  await page.getByText("Filter dashboard and applications").click();
+  await page.getByLabel("Status").selectOption("rejected");
+  await page.getByLabel("Source").selectOption("referral");
+  await page.getByLabel("Sponsorship").selectOption("offered");
+  await page.getByLabel("Work mode").selectOption("remote");
+  await page.getByLabel("Role").fill("platform");
+  await page.getByLabel("From").fill("2026-06-01");
+  await page.getByLabel("To").fill("2026-07-14");
+  await page.getByLabel("Salary minimum").fill("120000");
+  await page.getByLabel("Salary maximum").fill("180000");
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page).toHaveURL(/status=rejected/);
+  await expect(page).toHaveURL(/source=referral/);
+  await expect(page).toHaveURL(/sponsorship=offered/);
+  await expect(page).toHaveURL(/work_mode=remote/);
   const funnelHeading = page.getByRole("heading", {
     name: "Where applications stand",
   });
@@ -1622,6 +1697,7 @@ test("runs the critical private-data-free redesign journey", async ({
       name: /Example Analytics.*Senior Data Engineer/i,
     }),
   ).toBeVisible();
+  await expect(page.getByText(/Linkedin.*Remote.*Remote.*senior.*USD 140,000 - 180,000.*Unknown sponsorship.*Python, TypeScript/)).toBeVisible();
   const timelineRequestsBeforeViews = requests.timelineRequestEvents.length;
   await page.waitForTimeout(noRequestObservationMs);
   expect(requests.timelineRequestEvents).toHaveLength(
@@ -1758,17 +1834,8 @@ test("runs the critical private-data-free redesign journey", async ({
 
   await page.goto("/");
   const chatRequestsBeforeOpen = requests.chatRequestEvents.length;
-  await page.getByRole("button", { name: "Ask AI" }).click();
-  const chatDrawer = page.getByRole("complementary", { name: "Ask AI drawer" });
-  await expect(
-    chatDrawer.getByText("Phase 5 unavailable - grounded chat is not active"),
-  ).toBeVisible();
-  await expect(
-    chatDrawer.getByPlaceholder("e.g. Why am I getting rejected?"),
-  ).toBeDisabled();
-  await expect(
-    chatDrawer.getByRole("button", { name: "Ask", exact: true }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Ask AI" })).toHaveCount(0);
+  await expect(page.getByRole("complementary", { name: "Ask AI drawer" })).toHaveCount(0);
   await page.waitForTimeout(noRequestObservationMs);
   expect(requests.chatRequestEvents).toHaveLength(chatRequestsBeforeOpen);
 

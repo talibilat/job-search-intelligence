@@ -16,7 +16,6 @@ import { enumQueryParam, parseRouteQuery, updateRouteQuery } from "../lib/routeQ
 import { publicApiError } from "./apiError";
 import { formatCount, formatRelativeTime } from "./theme";
 import { ApplicationsPage } from "./pages/ApplicationsPage";
-import { ChatDrawer } from "./ChatDrawer";
 import { DetailPage } from "./pages/DetailPage";
 import { DeveloperPage } from "./pages/DeveloperPage";
 import { InsightsPage } from "./pages/InsightsPage";
@@ -211,7 +210,6 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
       ? redesignRouteFromLocation(window.location.pathname, window.location.search)
       : initialRoute;
   });
-  const [chatOpen, setChatOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [completedScope, setCompletedScope] = useState<CompletedSyncScope>({});
 
@@ -456,10 +454,6 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
     }
   }, [syncScope, customFrom, customTo, lastCount, customRangeInvalid, refresh]);
 
-  const toggleChat = useCallback(() => {
-    setChatOpen((value) => !value);
-  }, []);
-
   const navItems = useMemo(
     () =>
       [
@@ -568,31 +562,6 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         ))}
 
         <div style={{ flex: 1 }} />
-
-        <button
-          onClick={toggleChat}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            margin: "0 0 10px",
-            padding: "10px 12px",
-            border: "1px solid #D9D2EE",
-            borderRadius: "10px",
-            background: "#F4F2FB",
-            color: "#4B3FA6",
-            fontWeight: 600,
-            fontSize: "13px",
-            cursor: "pointer",
-            textAlign: "left",
-          }}
-          type="button"
-        >
-          <span
-            style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#6C5FC7" }}
-          />
-          Ask your job search
-        </button>
 
         <div
           style={{
@@ -856,23 +825,6 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
                 </div>
               ) : null}
             </div>
-            <button
-              className="rd-hover-dark-green"
-              onClick={toggleChat}
-              style={{
-                padding: "8px 16px",
-                border: "none",
-                borderRadius: "999px",
-                background: "#1E5136",
-                color: "#F6F4EC",
-                fontSize: "12.5px",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-              type="button"
-            >
-              Ask AI
-            </button>
           </div>
         </div>
 
@@ -889,6 +841,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         {route.page === "applications" ? (
           <ApplicationsPage
             openApp={openApp}
+            onProcessed={refresh}
             reloadKey={reloadKey}
             setStatusFilter={(statusFilter) =>
               navigate({ page: "applications", detailId: null, statusFilter })
@@ -958,7 +911,6 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         {route.page === "dev" ? <DeveloperPage /> : null}
       </main>
 
-      {chatOpen ? <ChatDrawer onClose={toggleChat} /> : null}
     </div>
   );
 }
