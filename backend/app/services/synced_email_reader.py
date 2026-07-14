@@ -6,10 +6,10 @@ from app.config import EmailProviderName
 from app.models._email_address import email_address_domain
 from app.models.raw_email import RawEmailDetail, RawEmailReaderRecord
 from app.providers.email import (
+    EmailBodyBatch,
     EmailBodyFetchRequest,
     EmailConnection,
     EmailMessageRef,
-    EmailProvider,
 )
 
 
@@ -19,6 +19,14 @@ class ReaderRepository(Protocol):
         public_id: str,
         provider: EmailProviderName,
     ) -> RawEmailReaderRecord | None: ...
+
+
+class EmailBodyProvider(Protocol):
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch: ...
 
 
 class SyncedEmailNotFoundError(LookupError):
@@ -41,7 +49,7 @@ class SyncedEmailReaderService:
         self,
         *,
         repository: ReaderRepository,
-        provider: EmailProvider,
+        provider: EmailBodyProvider,
         connection: EmailConnection,
         provider_name: EmailProviderName,
     ) -> None:

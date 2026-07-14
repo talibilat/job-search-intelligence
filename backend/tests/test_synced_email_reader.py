@@ -110,9 +110,9 @@ async def test_read_email_raises_not_found_for_unknown_public_id() -> None:
 
 
 @pytest.mark.anyio
-async def test_read_email_raises_not_found_for_provider_or_account_mismatch() -> None:
+async def test_read_email_scopes_lookup_to_configured_provider() -> None:
     connection = email_connection()
-    repository = FakeEmailRepository(records={}, expected_provider=EmailProviderName.GMAIL)
+    repository = FakeEmailRepository(records={})
     provider = FakeEmailProvider()
     service = SyncedEmailReaderService(
         repository=repository,
@@ -286,10 +286,8 @@ class FakeEmailRepository:
         self,
         *,
         records: dict[str, RawEmailReaderRecord],
-        expected_provider: EmailProviderName | None = None,
     ) -> None:
         self._records = records
-        self._expected_provider = expected_provider
         self.persisted_body_writes: list[EmailMessageBody] = []
         self.lookups: list[tuple[str, EmailProviderName]] = []
 
@@ -299,13 +297,7 @@ class FakeEmailRepository:
         provider: EmailProviderName,
     ) -> RawEmailReaderRecord | None:
         self.lookups.append((public_id, provider))
-        if self._expected_provider is not None and provider is not self._expected_provider:
-            return None
         return self._records.get(public_id)
-
-    def upsert_retained_bodies(self, bodies: object, **kwargs: object) -> int:
-        self.persisted_body_writes.extend(bodies)  # type: ignore[arg-type]
-        return len(list(bodies))  # type: ignore[arg-type]
 
 
 class FakeEmailProvider:
