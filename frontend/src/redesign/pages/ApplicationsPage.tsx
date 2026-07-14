@@ -8,7 +8,11 @@ import {
   type ApplicationRecord,
   type ApplicationStatus,
   type ApplicationStatusCountsResponse,
+  type PipelineStatus,
 } from "../../api";
+import { DashboardFilterPanel } from "../components/DashboardFilterPanel";
+import { ProcessingPanel } from "../components/ProcessingPanel";
+import { apiParamsFromFilters, filtersFromSearch, searchFromFilters, titleize, type DashboardFilters } from "../dashboardFilters";
 import type { StatusChipKey } from "../RedesignApp";
 import { publicApiError } from "../apiError";
 import {
@@ -23,6 +27,7 @@ import {
 interface ApplicationsPageProps {
   openApp: (id: string) => void;
   reloadKey: number;
+  onProcessed?: () => void;
   setStatusFilter: (key: StatusChipKey) => void;
   statusFilter: StatusChipKey;
 }
@@ -101,6 +106,7 @@ function latestUpdateText(application: ApplicationRecord): string {
 export function ApplicationsPage({
   openApp,
   reloadKey,
+  onProcessed = () => undefined,
   setStatusFilter,
   statusFilter,
 }: ApplicationsPageProps) {
@@ -111,6 +117,8 @@ export function ApplicationsPage({
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
   const [countsError, setCountsError] = useState<string | null>(null);
+  const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
+  const [filters, setFilters] = useState<DashboardFilters>(() => filtersFromSearch(window.location.search));
   const applicationGeneration = `${reloadKey}:${statusFilter}`;
   const [loadedApplicationGeneration, setLoadedApplicationGeneration] = useState<string | null>(
     null,
@@ -126,11 +134,12 @@ export function ApplicationsPage({
       setCountsError(null);
       setTimelineStates({});
       setLoadedApplicationGeneration(null);
-      const statuses = statusesForChip(statusFilter);
+      const statuses = filters.status ? [filters.status as ApplicationStatus] : statusesForChip(statusFilter);
+      const params = apiParamsFromFilters(filters);
       const [applicationsResponse, countsResponse] = await Promise.all([
         Promise.all(
           (statuses.length > 0 ? statuses : [null]).map((status) =>
-            listApplicationsApplicationsGet(status ? { status } : undefined).catch((error: unknown) => ({ error })),
+            listApplicationsApplicationsGet({ ...params, status: status ?? undefined }).catch((error: unknown) => ({ error })),
           ),
         ),
         getApplicationStatusCountsApplicationsStatusCountsGet().catch((error: unknown) => ({ error })),
@@ -179,12 +188,12 @@ export function ApplicationsPage({
     return () => {
       cancelled = true;
     };
-  }, [applicationGeneration, statusFilter]);
+  }, [applicationGeneration, filters, statusFilter]);
 
   const filtered = useMemo(
     () =>
-      applications.filter((application) => chipMatches(statusFilter, application.current_status)),
-    [applications, statusFilter],
+      applications.filter((application) => filters.status || chipMatches(statusFilter, application.current_status)),
+    [applications, filters.status, statusFilter],
   );
 
   useEffect(() => {
@@ -286,6 +295,21 @@ export function ApplicationsPage({
     { key: "closed", title: "Closed" },
   ];
 
+  const applyFilters = (next: DashboardFilters) => {
+    window.history.pushState(null, "", `/applications${searchFromFilters(next)}`);
+    setFilters(next);
+  };
+  const publishable = pipeline?.next_action === "review_dashboard";
+  const applicationReady = pipeline === null || publishable;
+  const salary = (application: ApplicationRecord) => {
+    if (application.salary_min == null && application.salary_max == null) return "Salary unknown";
+    const range = [application.salary_min, application.salary_max]
+      .filter((value) => value != null)
+      .map((value) => new Intl.NumberFormat("en-US").format(value))
+      .join(" - ");
+    return `${application.currency ?? ""} ${range}`.trim();
+  };
+
   return (
     <section
       style={{
@@ -311,8 +335,7 @@ export function ApplicationsPage({
             Applications
           </h1>
           <p style={{ margin: "4px 0 0", color: "#666D66", fontSize: "13px" }}>
-            {filtered.length} of {total} applications — found automatically in your email.{" "}
-            <a href="/settings">Missing one?</a>
+            {applicationReady ? `${filtered.length} of ${total} applications` : "Application history is still being built"} - found automatically in your email.
           </p>
         </div>
         <div
@@ -336,6 +359,9 @@ export function ApplicationsPage({
           </button>
         </div>
       </div>
+
+      <ProcessingPanel onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
+      <DashboardFilterPanel filters={filters} onApply={applyFilters} />
 
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
         {chips.map((chip) => {
@@ -374,7 +400,7 @@ export function ApplicationsPage({
         </p>
       ) : null}
       {!applicationsLoading && !applicationsError && filtered.length === 0 ? (
-        <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>No applications match this status.</p>
+        <div className="rd-incomplete"><strong>{applicationReady ? "No applications match these filters" : "Applications are not ready yet"}</strong><p>{applicationReady ? "Clear or change filters to widen the result set." : pipeline?.next_action_reason}</p></div>
       ) : null}
 
       {view === "table" ? (
@@ -390,7 +416,7 @@ export function ApplicationsPage({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "2fr 1.6fr 1fr 1fr 1.6fr",
+              gridTemplateColumns: "1.5fr 1.4fr .8fr 1fr 1.8fr",
               gap: "12px",
               padding: "10px 18px",
               background: "#FAFAF7",
@@ -406,7 +432,7 @@ export function ApplicationsPage({
             <span>Role</span>
             <span>Status</span>
             <span>Applied</span>
-            <span>Latest update</span>
+            <span>Segmentation</span>
           </div>
           {filtered.map((application) => (
             <button
@@ -415,7 +441,7 @@ export function ApplicationsPage({
               onClick={() => openApp(application.id)}
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1.6fr 1fr 1fr 1.6fr",
+                gridTemplateColumns: "1.5fr 1.4fr .8fr 1fr 1.8fr",
                 gap: "12px",
                 alignItems: "center",
                 width: "100%",
@@ -442,8 +468,11 @@ export function ApplicationsPage({
               <span style={{ color: "#666D66", fontVariantNumeric: "tabular-nums" }}>
                 {formatShortDate(application.first_seen_at)}
               </span>
-              <span style={{ color: "#666D66", fontSize: "12.5px" }}>
-                {latestUpdateText(application)}
+              <span style={{ color: "#666D66", fontSize: "11.5px", lineHeight: 1.45 }}>
+                <strong style={{ color: "#4A5049" }}>{titleize(application.source)}</strong> · {application.work_mode ? titleize(application.work_mode) : "Work mode unknown"}<br />
+                {application.location ?? "Location unknown"} · {application.seniority ?? "Seniority unknown"}<br />
+                {salary(application)} · {titleize(application.sponsorship)} sponsorship<br />
+                {application.tech_stack.length ? application.tech_stack.join(", ") : "Tech stack unknown"}
               </span>
             </button>
           ))}
@@ -520,6 +549,7 @@ export function ApplicationsPage({
                     <span style={{ fontSize: "11px", color: "#9A9F96" }}>
                       {latestUpdateText(application)}
                     </span>
+                    <span style={{ fontSize: "10.5px", color: "#777D76" }}>{titleize(application.source)} · {application.work_mode ? titleize(application.work_mode) : "Unknown mode"} · {application.location ?? "Unknown location"}</span>
                   </button>
                 ))}
               </div>

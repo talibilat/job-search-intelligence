@@ -9,12 +9,16 @@ import {
   type MetricsRatesResponse,
   type MetricsFunnelResponse,
   type MetricsSummaryResponse,
+  type PipelineStatus,
 } from "../../api";
 import type { RedesignPage, StatusChipKey } from "../RedesignApp";
 import { publicApiError } from "../apiError";
 import { EmailReaderDialog } from "../components/EmailReaderDialog";
 import { ProcessingPanel } from "../components/ProcessingPanel";
+import { DashboardAnalytics } from "../components/DashboardAnalytics";
+import { DashboardFilterPanel } from "../components/DashboardFilterPanel";
 import { SyncedEmailList } from "../components/SyncedEmailList";
+import { apiParamsFromFilters, filtersFromSearch, searchFromFilters, type DashboardFilters } from "../dashboardFilters";
 import { daysSince, formatShortDate } from "../theme";
 
 interface OverviewPageProps {
@@ -40,6 +44,7 @@ interface MetricCard {
   label: string;
   value: string;
   note: string;
+  rateValue?: string;
   explain: MetricExplain | null;
 }
 
@@ -88,6 +93,8 @@ export function OverviewPage({
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [explainKey, setExplainKey] = useState<string | null>(null);
   const [openEmailPublicId, setOpenEmailPublicId] = useState<string | null>(null);
+  const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
+  const [filters, setFilters] = useState<DashboardFilters>(() => filtersFromSearch(window.location.search));
   const emailTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -107,12 +114,12 @@ export function OverviewPage({
         funnelResponse,
         applicationsResponse,
       ] = await Promise.all([
-        getMetricsSummaryMetricsSummaryGet().catch((error: unknown) => ({ error })),
-        getMetricsRatesMetricsRatesGet().catch((error: unknown) => ({ error })),
-        getMetricsFunnelMetricsFunnelGet().catch((error: unknown) => ({
+        getMetricsSummaryMetricsSummaryGet(apiParamsFromFilters(filters)).catch((error: unknown) => ({ error })),
+        getMetricsRatesMetricsRatesGet(apiParamsFromFilters(filters)).catch((error: unknown) => ({ error })),
+        getMetricsFunnelMetricsFunnelGet(apiParamsFromFilters(filters)).catch((error: unknown) => ({
           error,
         })),
-        listApplicationsApplicationsGet().catch((error: unknown) => ({ error })),
+        listApplicationsApplicationsGet(apiParamsFromFilters(filters)).catch((error: unknown) => ({ error })),
       ]);
       if (cancelled) {
         return;
@@ -157,7 +164,16 @@ export function OverviewPage({
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [filters, reloadKey]);
+
+  const applyFilters = (next: DashboardFilters) => {
+    window.history.pushState(null, "", `/${searchFromFilters(next)}`);
+    setFilters(next);
+  };
+
+  const publishable = pipeline?.next_action === "review_dashboard";
+  const countValue = (value: number | undefined) =>
+    value === undefined ? "—" : !publishable && value === 0 ? "Pending" : String(value);
 
   const offers = summary?.offers_received;
   const responseMetric = rates?.overall_response_rate;
@@ -174,7 +190,7 @@ export function OverviewPage({
     {
       key: "total",
       label: "Applications",
-      value: summary ? String(summary.total_applications) : "—",
+      value: countValue(summary?.total_applications),
       note: summary ? `${summary.live_applications} still active` : "Active count unavailable",
       explain: summary ? {
         title: "Applications tracked",
@@ -187,11 +203,12 @@ export function OverviewPage({
     },
     {
       key: "response",
-      label: "Response rate",
-      value: responseMetric?.rate != null ? ratePercent(responseMetric.rate) : "—",
+      label: "Responses",
+      value: countValue(responseMetric?.numerator),
       note: responseMetric?.rate != null ? `${responseMetric.numerator} of ${responseMetric.denominator} heard back` : "Rate unavailable",
+      rateValue: responseMetric?.rate != null ? ratePercent(responseMetric.rate) : undefined,
       explain: responseMetric?.rate != null ? {
-        title: "Response rate",
+        title: "Responses",
         formula: `replies ÷ applications = ${responseMetric.numerator} ÷ ${responseMetric.denominator} = ${ratePercent(responseMetric.rate)}`,
         source:
           "A “response” means at least one human or scheduling email arrived after your application confirmation. Auto-replies don't count.",
@@ -201,10 +218,18 @@ export function OverviewPage({
       } : null,
     },
     {
+      key: "rejection",
+      label: "Rejections",
+      value: countValue(summary?.rejected_applications),
+      note: rates?.rejection_rate?.rate != null ? `${ratePercent(rates.rejection_rate.rate)} of applications` : "Count unavailable",
+      explain: summary ? { title: "Rejections", formula: "count(applications with rejection evidence)", source: "Distinct submitted applications with a rejection event.", count: summary.rejected_applications, filter: "closed", exactPopulation: false } : null,
+    },
+    {
       key: "interview",
-      label: "Interview rate",
-      value: interviewMetric?.rate != null ? ratePercent(interviewMetric.rate) : "—",
+      label: "Interviews",
+      value: countValue(summary?.interview_invitation_count),
       note: interviewMetric?.rate != null ? `${interviewMetric.numerator} reached interviews` : "Rate unavailable",
+      rateValue: interviewMetric?.rate != null ? ratePercent(interviewMetric.rate) : undefined,
       explain: interviewMetric?.rate != null ? {
         title: "Interview rate",
         formula: `interviews ÷ applications = ${interviewMetric.numerator} ÷ ${interviewMetric.denominator} = ${ratePercent(interviewMetric.rate)}`,
@@ -218,7 +243,7 @@ export function OverviewPage({
     {
       key: "offer",
       label: "Offers",
-      value: summary ? String(summary.offers_received) : "—",
+      value: countValue(summary?.offers_received),
       note:
         !summary
           ? "Offer count unavailable"
@@ -234,6 +259,20 @@ export function OverviewPage({
         filter: "offer",
         exactPopulation: false,
       } : null,
+    },
+    {
+      key: "ghost",
+      label: "Ghosts",
+      value: countValue(summary?.ghosted_applications),
+      note: rates?.ghost_rate?.rate != null ? `${ratePercent(rates.ghost_rate.rate)} of applications` : "Count unavailable",
+      explain: summary ? { title: "Ghosts", formula: `no response after ${summary.ghost_threshold_days} days`, source: "Ghosts are inferred deterministically from the event timeline.", count: summary.ghosted_applications, filter: "closed", exactPopulation: false } : null,
+    },
+    {
+      key: "live",
+      label: "Live applications",
+      value: countValue(summary?.live_applications),
+      note: "Still awaiting a terminal outcome",
+      explain: summary ? { title: "Live applications", formula: "applied + in review + assessment + interview", source: "Canonical current statuses that are still active.", count: summary.live_applications, filter: "all", exactPopulation: false } : null,
     },
   ];
 
@@ -345,7 +384,16 @@ export function OverviewPage({
         </p>
       </div>
 
-      <ProcessingPanel onProcessed={onProcessed} reloadKey={reloadKey} />
+      <ProcessingPanel onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
+
+      <DashboardFilterPanel filters={filters} onApply={applyFilters} />
+
+      {pipeline && !publishable ? (
+        <div className="rd-incomplete" role="status">
+          <strong>Dashboard is not final yet</strong>
+          <p>{pipeline.next_action_reason} Zero-valued metrics stay marked Pending until processing is complete.</p>
+        </div>
+      ) : null}
 
       {actions.length > 0 ? (
         <div
@@ -417,7 +465,7 @@ export function OverviewPage({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+            gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))",
             gap: "12px",
           }}
         >
@@ -505,6 +553,7 @@ export function OverviewPage({
                 style={{ fontSize: "12px", color: "#9A9F96", marginTop: "2px" }}
               >
                 {metric.note}
+                {metric.rateValue ? <span style={{ display: "block", color: "#1E5136", fontWeight: 600 }}>{metric.rateValue}</span> : null}
               </div>
             </div>
           ))}
@@ -594,6 +643,8 @@ export function OverviewPage({
           </div>
         ) : null}
       </div>
+
+      <DashboardAnalytics filters={filters} publishable={publishable} reloadKey={reloadKey} />
 
       <div
         style={{

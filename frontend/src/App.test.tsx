@@ -5289,46 +5289,18 @@ describe("App", () => {
     expect(within(connectionsCard!).queryByText(/synced/)).toBeNull();
   });
 
-  it("redesign chat keeps the drawer structure but disables all Phase 5 actions", () => {
+  it("keeps Phase 5 chat out of the operational redesign", () => {
     const fetchMock = mockFetchResponses({});
     renderAtPath("/");
-    fireEvent.click(screen.getByRole("button", { name: "Ask AI" }));
-
-    const drawer = screen.getByLabelText("Ask AI drawer");
-    expect(drawer).toHaveProperty("style.width", "380px");
-    expect(within(drawer).getByText("Ask your job search")).toBeTruthy();
-    expect(within(drawer).getByText(/Phase 5.*unavailable/i)).toBeTruthy();
-    for (const suggestion of [
-      "Why am I getting rejected?",
-      "Who should I follow up with?",
-      "How is my search going overall?",
-    ]) {
-      const control = within(drawer).getByRole("button", { name: suggestion });
-      expect(control).toHaveProperty("disabled", true);
-      fireEvent.click(control);
-    }
-    const input = within(drawer).getByPlaceholderText(
-      "e.g. Why am I getting rejected?",
-    );
-    const ask = within(drawer).getByRole("button", { name: "Ask" });
-    expect(input).toHaveProperty("disabled", true);
-    expect(ask).toHaveProperty("disabled", true);
-    fireEvent.keyDown(input, { key: "Enter" });
-    fireEvent.click(ask);
+    expect(screen.queryByRole("button", { name: "Ask AI" })).toBeNull();
+    expect(screen.queryByText("Ask your job search")).toBeNull();
+    expect(screen.queryByLabelText("Ask AI drawer")).toBeNull();
 
     expect(
       fetchMock.mock.calls.some(([input]) =>
         requestPath(input).startsWith("/chat"),
       ),
     ).toBe(false);
-    expect(
-      within(drawer).queryByText(/Overview and Insights pages show everything/),
-    ).toBeNull();
-    expect(
-      within(drawer).queryByText("Why am I getting rejected?", {
-        selector: "div",
-      }),
-    ).toBeNull();
   });
 
   it("redesign developer derives truthful statuses from the feature registry", () => {

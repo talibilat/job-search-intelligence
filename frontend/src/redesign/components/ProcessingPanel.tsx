@@ -23,6 +23,7 @@ type WorkflowState =
   | "ready";
 
 interface ProcessingPanelProps {
+  onPipelineStatus?: (pipeline: PipelineStatus) => void;
   onProcessed: () => void;
   reloadKey: number;
 }
@@ -53,7 +54,7 @@ const STATE_COPY: Record<WorkflowState, { label: string; title: string }> = {
   ready: { label: "Up to date", title: "Your dashboard is ready" },
 };
 
-export function ProcessingPanel({ onProcessed, reloadKey }: ProcessingPanelProps) {
+export function ProcessingPanel({ onPipelineStatus, onProcessed, reloadKey }: ProcessingPanelProps) {
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
   const [processing, setProcessing] = useState<ProcessingStatus | null>(null);
   const [readiness, setReadiness] = useState<ProviderReadinessResponse | null>(null);
@@ -81,6 +82,7 @@ export function ProcessingPanel({ onProcessed, reloadKey }: ProcessingPanelProps
           return;
         }
         setPipeline(pipelineResponse.data);
+        onPipelineStatus?.(pipelineResponse.data);
         setProcessing(processingResponse.data);
         setReadiness(readinessResponse.data);
         setEstimate(estimateResponse.data);
@@ -94,7 +96,7 @@ export function ProcessingPanel({ onProcessed, reloadKey }: ProcessingPanelProps
     return () => {
       requestId.current += 1;
     };
-  }, [reloadKey]);
+  }, [onPipelineStatus, reloadKey]);
 
   const runProcessing = async () => {
     if (running) return;
