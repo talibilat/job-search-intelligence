@@ -57,19 +57,6 @@
       "ingested_at": "2026-07-01T11:01:00Z"
     },
     {
-      "id": "email-offer-response",
-      "provider": "gmail",
-      "thread_id": "thread-offer",
-      "from_addr": "recruiting@linkedin.example",
-      "to_addr": "jobseeker@example.test",
-      "subject": "Next steps",
-      "sent_at": "2026-07-02T09:00:00Z",
-      "body_text": "A recruiter replied with next steps.",
-      "body_retention_state": "retained",
-      "labels": ["INBOX"],
-      "ingested_at": "2026-07-02T09:01:00Z"
-    },
-    {
       "id": "email-offer-interview",
       "provider": "gmail",
       "thread_id": "thread-offer",
@@ -133,6 +120,19 @@
       "body_retention_state": "retained",
       "labels": ["INBOX"],
       "ingested_at": "2026-07-02T10:01:00Z"
+    },
+    {
+      "id": "email-account-newsletter",
+      "provider": "gmail",
+      "thread_id": "thread-account-newsletter",
+      "from_addr": "news@example.test",
+      "to_addr": "jobseeker@example.test",
+      "subject": "Weekly account digest",
+      "sent_at": "2026-07-02T11:00:00Z",
+      "body_text": null,
+      "body_retention_state": "metadata_only",
+      "labels": ["INBOX"],
+      "ingested_at": "2026-07-02T11:01:00Z"
     }
   ],
   "classifications": [
@@ -171,15 +171,6 @@
       "model": "synthetic-classifier",
       "prompt_version": "synthetic-v1",
       "classified_at": "2026-07-01T11:02:00Z"
-    },
-    {
-      "email_id": "email-offer-response",
-      "is_job_related": true,
-      "category": "follow_up",
-      "confidence": 0.94,
-      "model": "synthetic-classifier",
-      "prompt_version": "synthetic-v1",
-      "classified_at": "2026-07-02T09:02:00Z"
     },
     {
       "email_id": "email-offer-interview",
@@ -361,14 +352,6 @@
       "event_type": "applied",
       "event_at": "2026-07-01T11:00:00Z",
       "extract_note": "Application confirmation received."
-    },
-    {
-      "id": "event-offer-response",
-      "application_id": "app-interview-offer",
-      "email_id": "email-offer-response",
-      "event_type": "response",
-      "event_at": "2026-07-02T09:00:00Z",
-      "extract_note": "Recruiter response received."
     },
     {
       "id": "event-offer-interview",

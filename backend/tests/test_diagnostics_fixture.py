@@ -23,7 +23,7 @@ def test_diagnostics_service_outputs_match_synthetic_fixture(tmp_path: Path) -> 
 
     assert load_result.fixture_id == "diagnostic-job-search"
     assert load_result.application_count == 5
-    assert load_result.event_count == 11
+    assert load_result.event_count == 10
     assert diagnostics.total_applications == 5
     assert diagnostics.baseline_response_count == 3
     assert diagnostics.baseline_response_rate == 0.6

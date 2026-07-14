@@ -170,6 +170,7 @@ Developer instructions:
 - `docs/conventions.md` - baseline coding standards.
 - `docs/google-oauth-setup.md` - Google OAuth setup guide for user-created Gmail credentials.
 - `docs/llm-provider-setup.md` - Azure OpenAI and Ollama setup values, secret references, and provider boundaries.
+- `docs/pipeline-diagnostic.md` - offline synthetic reproduction from synced emails through deterministic metrics.
 - `docs/synthetic-fixtures.md` - private-data-free backend fixture format and SQLite loader for deterministic backend, aggregation, and dashboard smoke work.
 - `docs/synthetic-fixtures.md` - private-data-free backend fixture formats, including SQLite smoke fixtures and the Phase 2 golden-set JSONL scaffold.
 - `.editorconfig` - shared editor defaults.
