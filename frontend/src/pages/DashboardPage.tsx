@@ -868,7 +868,9 @@ export function DashboardPage() {
       setResponseSilenceLoadState("loading");
       setResponseSilence(null);
 
-      const response = await getResponseSilenceMetricMetricsResponseSilenceGet();
+      const response = await getResponseSilenceMetricMetricsResponseSilenceGet(
+        queryParamsFromFilters(appliedFilters),
+      );
 
       if (isCancelled) {
         return;
@@ -894,7 +896,7 @@ export function DashboardPage() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [appliedFilters]);
 
   useEffect(() => {
     let isCancelled = false;

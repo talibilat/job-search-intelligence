@@ -43,25 +43,6 @@ from app.services.metrics import (
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 
-@router.get(
-    "/response-silence",
-    response_model=ResponseSilenceMetric,
-    summary="Get Response Versus Silence Metric",
-    description=(
-        "Answers Q-04 by counting applications with at least one response-like "
-        "timeline event versus applications with total silence. Counts are "
-        "deterministic SQLite reads from applications and application_events."
-    ),
-)
-def get_response_silence_metric(
-    service: Annotated[
-        MetricsSummaryService,
-        Depends(get_metrics_summary_service),
-    ],
-) -> ResponseSilenceMetric:
-    return service.get_response_silence_metric()
-
-
 def get_metrics_filter(
     status: Annotated[ApplicationStatus | None, Query()] = None,
     source: Annotated[ApplicationSource | None, Query()] = None,
@@ -124,6 +105,27 @@ def _metrics_filter_error_field(message: str) -> str | None:
     if message.startswith("first_seen_from"):
         return "query.first_seen_from"
     return None
+
+
+@router.get(
+    "/response-silence",
+    response_model=ResponseSilenceMetric,
+    responses={422: {"model": ApiErrorResponse}},
+    summary="Get Response Versus Silence Metric",
+    description=(
+        "Answers Q-04 by counting filtered submitted applications with at least "
+        "one response-like timeline event versus total silence. Counts are "
+        "deterministic SQLite reads from applications and application_events."
+    ),
+)
+def get_response_silence_metric(
+    service: Annotated[
+        MetricsSummaryService,
+        Depends(get_metrics_summary_service),
+    ],
+    filters: Annotated[MetricsFilter, Depends(get_metrics_filter)],
+) -> ResponseSilenceMetric:
+    return service.get_response_silence_metric(filters=filters)
 
 
 @router.get(

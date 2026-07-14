@@ -45,7 +45,7 @@ class ApplicationWindowMetric(BaseModel):
 
 
 class MetricsFilter(BaseModel):
-    """Typed dashboard metrics filters for future deterministic metrics queries."""
+    """Typed filters shared by every deterministic dashboard metric query."""
 
     status: ApplicationStatus | None = None
     source: ApplicationSource | None = None
@@ -218,7 +218,7 @@ class MetricsSummaryResponse(BaseModel):
     ghosted_applications: int = Field(ge=0)
     rejected_applications: int = Field(
         ge=0,
-        description="Total applications whose canonical current status is rejected.",
+        description="Distinct submitted applications with rejection timeline evidence.",
     )
     ghost_threshold_days: int = Field(ge=1)
     evaluated_at: datetime

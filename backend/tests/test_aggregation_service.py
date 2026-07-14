@@ -172,7 +172,7 @@ def test_status_derivation_includes_existing_event_history(
     assert_current_status(connection, "offer")
 
 
-def test_status_derivation_preserves_persisted_feedback_status_on_incremental_run(
+def test_follow_up_email_alone_does_not_create_a_submitted_application(
     tmp_path: Path,
 ) -> None:
     connection = migrated_connection(tmp_path)
@@ -181,7 +181,7 @@ def test_status_derivation_preserves_persisted_feedback_status_on_incremental_ru
     connection.commit()
 
     service = make_service(connection)
-    service.run(
+    result = service.run(
         [
             make_extraction(
                 email_id="email-1",
@@ -194,22 +194,42 @@ def test_status_derivation_preserves_persisted_feedback_status_on_incremental_ru
             ),
         ],
     )
-    assert_current_status(connection, "interview")
+    assert result.applications_upserted == 0
+    assert result.events_upserted == 0
+    assert result.skipped_not_job_related == 0
+    assert result.skipped_non_application_email_count == 1
+    assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0
 
-    service.run(
-        [
-            make_extraction(
-                email_id="email-2",
-                company="Acme Corp",
-                role_title="Software Engineer",
-                status="applied",
-                event_type="applied",
-                event_at=datetime(2026, 7, 5, 10, 0, tzinfo=UTC),
-            ),
-        ],
+
+def test_general_job_emails_never_create_applications_on_rerun(tmp_path: Path) -> None:
+    connection = migrated_connection(tmp_path)
+    categories = (
+        JobEmailCategory.RECRUITER_OUTREACH,
+        JobEmailCategory.FOLLOW_UP,
+        JobEmailCategory.OTHER,
     )
+    extractions = []
+    for index, category in enumerate(categories):
+        email_id = f"general-job-email-{index}"
+        insert_raw_email(connection, email_id, thread_id=f"thread-{index}")
+        extractions.append(
+            make_extraction(
+                email_id=email_id,
+                category=category,
+                status=None,
+                event_type=None,
+            )
+        )
+    connection.commit()
+    service = make_service(connection)
 
-    assert_current_status(connection, "interview")
+    first = service.run(extractions)
+    second = service.run(extractions)
+
+    assert first.skipped_non_application_email_count == 3
+    assert second.skipped_non_application_email_count == 3
+    assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0
+    assert connection.execute("SELECT COUNT(*) FROM application_events").fetchone()[0] == 0
 
 
 def test_status_derivation_tiebreaks_same_event_at_by_email_sent_at(

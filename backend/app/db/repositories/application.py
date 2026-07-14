@@ -122,6 +122,31 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
                     'ghost_inferred'
                   )
               )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM application_events AS non_application_events
+                INNER JOIN email_classifications
+                    ON email_classifications.email_id = non_application_events.email_id
+                WHERE non_application_events.application_id = applications.id
+                  AND email_classifications.is_job_related = 1
+                  AND email_classifications.category IN (
+                    'recruiter_outreach', 'follow_up', 'other'
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM application_events AS lifecycle_events
+                    LEFT JOIN email_classifications AS lifecycle_classifications
+                        ON lifecycle_classifications.email_id = lifecycle_events.email_id
+                    WHERE lifecycle_events.application_id = applications.id
+                      AND (
+                        lifecycle_classifications.email_id IS NULL
+                        OR lifecycle_classifications.category IN (
+                            'application_confirmation', 'assessment', 'interview_invite',
+                            'rejection', 'offer'
+                        )
+                      )
+                  )
+              )
             ORDER BY applications.last_activity_at ASC, applications.id ASC
             """,
             (cutoff_at,),

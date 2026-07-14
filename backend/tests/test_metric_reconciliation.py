@@ -161,6 +161,124 @@ def test_metrics_rates_reconcile_with_repository_queries(tmp_path: Path) -> None
     )
 
 
+def test_q01_through_q21_reconcile_from_one_canonical_fixture(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        seed_reconciliation_fixture(connection)
+
+    client = create_test_client(database_path)
+    summary = client.get("/metrics/summary?anchor_at=2026-07-15T12:00:00Z").json()
+    response_silence = client.get("/metrics/response-silence").json()
+    rates = client.get("/metrics/rates").json()
+    funnel = client.get("/metrics/funnel").json()
+    volume = client.get("/metrics/timeseries").json()
+    response_trend = client.get("/metrics/response-rate-trend").json()
+    applications = client.get("/applications").json()
+
+    assert summary["total_applications"] == 5  # Q-01
+    assert {row["window"]: row["application_count"] for row in summary["application_windows"]} == {
+        "week": 0,
+        "month": 4,
+        "year": 4,
+    }  # Q-02
+    assert summary["distinct_company_count"] == 3  # Q-03
+    assert response_silence == {
+        "question_id": "Q-04",
+        "total_applications": 5,
+        "human_response_count": 4,
+        "silent_count": 1,
+    }
+    assert summary["rejected_applications"] == 1  # Q-05
+    assert summary["ghosted_applications"] == 1  # Q-06
+    assert summary["interview_invitation_count"] == 2  # Q-07
+    assert summary["offers_received"] == 1  # Q-08
+    assert len(applications) == 5  # Q-09
+    assert summary["live_applications"] == 3  # Q-10
+    assert rates["overall_response_rate"] == {
+        "numerator": 4,
+        "denominator": 5,
+        "rate": 0.8,
+    }  # Q-11
+    assert rates["rejection_rate"] == {
+        "numerator": 1,
+        "denominator": 5,
+        "rate": 0.2,
+    }  # Q-12
+    assert rates["ghost_rate"] == {
+        "numerator": 1,
+        "denominator": 5,
+        "rate": 0.2,
+    }  # Q-13
+    assert rates["application_to_interview_rate"] == {
+        "numerator": 2,
+        "denominator": 5,
+        "rate": 0.4,
+    }  # Q-14
+    assert rates["interview_to_offer_rate"] == {
+        "numerator": 1,
+        "denominator": 2,
+        "rate": 0.5,
+    }  # Q-15
+    assert funnel["stages"] == [
+        {"stage": "applied", "count": 5},
+        {"stage": "screen", "count": 4},
+        {"stage": "interview", "count": 2},
+        {"stage": "final", "count": 0},
+        {"stage": "offer", "count": 1},
+    ]  # Q-16
+    assert summary["average_time_to_first_response"] == {
+        "application_count": 4,
+        "average_hours": 24.0,
+    }  # Q-17
+    assert summary["average_time_to_rejection"] == {
+        "application_count": 1,
+        "average_hours": 24.0,
+    }  # Q-18
+    assert summary["personal_ghost_threshold"]["threshold_days"] == 30  # Q-19
+    assert volume["points"] == [
+        {"period_start": "2020-01-01", "application_count": 1},
+        {"period_start": "2026-07-01", "application_count": 4},
+    ]  # Q-20
+    assert response_trend["points"] == [
+        {
+            "period_start": "2020-01-01",
+            "response_count": 0,
+            "application_count": 1,
+            "response_rate": 0.0,
+        },
+        {
+            "period_start": "2026-07-01",
+            "response_count": 4,
+            "application_count": 4,
+            "response_rate": 1.0,
+        },
+    ]  # Q-21
+
+
+def test_rejection_count_uses_distinct_evidence_not_current_status(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application_with_events(
+            connection,
+            application_id="rejected-then-reopened",
+            company="Evidence Co",
+            current_status="in_review",
+            event_types=("applied", "rejection", "response"),
+        )
+        insert_application_with_events(
+            connection,
+            application_id="status-only-rejected",
+            company="Status Co",
+            current_status="rejected",
+            event_types=("applied",),
+        )
+
+    summary = create_test_client(database_path).get("/metrics/summary").json()
+
+    assert summary["total_applications"] == 2
+    assert summary["rejected_applications"] == 1
+
+
 def assert_reconciles(*, field: str, displayed_value: int, query_value: int) -> None:
     assert displayed_value == query_value, f"{field} did not reconcile with repository query"
 
@@ -259,9 +377,9 @@ def seed_reconciliation_fixture(connection: sqlite3.Connection) -> None:
         connection,
         application_id="app-silent-old",
         company="Gamma Inc",
-        current_status="applied",
+        current_status="ghosted",
         event_date_prefix="2020-01",
-        event_types=("applied",),
+        event_types=("applied", "ghost_inferred"),
     )
 
 
