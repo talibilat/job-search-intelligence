@@ -9,6 +9,7 @@ from .company_profile import CompanyProfileRepository
 from .connection import EmailConnectionRepository
 from .correction import CorrectionConflictRepository, CorrectionRepository
 from .email import EmailRepository
+from .email_chunk import EmailChunkRepository
 from .event import EventRepository
 from .filter_decision import EmailFilterDecisionRepository
 from .insight import InsightRepository
@@ -28,6 +29,7 @@ __all__ = [
     "CorrectionConflictRepository",
     "CorrectionRepository",
     "EmailRepository",
+    "EmailChunkRepository",
     "EmailConnectionRepository",
     "EmailFilterDecisionRepository",
     "EventRepository",

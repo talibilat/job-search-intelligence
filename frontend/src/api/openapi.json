@@ -1152,6 +1152,99 @@
         "title": "CapabilityReadiness",
         "type": "object"
       },
+      "ChatCitation": {
+        "properties": {
+          "application_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Id"
+          },
+          "citation_id": {
+            "minLength": 1,
+            "title": "Citation Id",
+            "type": "string"
+          },
+          "email_public_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Public Id"
+          },
+          "metric_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Template"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snippet"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ChatCitationSource"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "citation_id",
+          "source"
+        ],
+        "title": "ChatCitation",
+        "type": "object"
+      },
+      "ChatCitationSource": {
+        "enum": [
+          "email",
+          "application",
+          "metric"
+        ],
+        "type": "string"
+      },
       "ChatHistoryResponse": {
         "properties": {
           "messages": {
@@ -1166,6 +1259,30 @@
           "messages"
         ],
         "title": "ChatHistoryResponse",
+        "type": "object"
+      },
+      "ChatIncrement": {
+        "description": "Ordered event in the non-streaming incremental response contract.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "route",
+              "tool",
+              "answer"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "content"
+        ],
+        "title": "ChatIncrement",
         "type": "object"
       },
       "ChatMessageRecord": {
@@ -1215,6 +1332,93 @@
           "assistant",
           "tool",
           "system"
+        ],
+        "type": "string"
+      },
+      "ChatRequest": {
+        "additionalProperties": false,
+        "description": "One local grounded chat turn.",
+        "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "message": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "retrieval_limit": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Retrieval Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
+      "ChatResponse": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/ChatCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "increments": {
+            "items": {
+              "$ref": "#/components/schemas/ChatIncrement"
+            },
+            "title": "Increments",
+            "type": "array"
+          },
+          "route": {
+            "$ref": "#/components/schemas/ChatRoute"
+          },
+          "tool_outputs": {
+            "$ref": "#/components/schemas/JsonObjectList"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "route",
+          "answer",
+          "citations",
+          "tool_outputs",
+          "increments"
+        ],
+        "title": "ChatResponse",
+        "type": "object"
+      },
+      "ChatRoute": {
+        "enum": [
+          "quantitative",
+          "content",
+          "mixed"
         ],
         "type": "string"
       },
@@ -6267,6 +6471,68 @@
         "summary": "Gmail Auth Callback",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/chat": {
+      "post": {
+        "description": "Routes one question through constrained deterministic metrics, cited semantic retrieval, or both. Returns ordered route, tool, and answer increments after the complete turn is persisted.",
+        "operationId": "post_chat_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "AI provider response failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "AI provider unavailable."
+          }
+        },
+        "summary": "Run Grounded Chat Turn",
+        "tags": [
+          "chat"
         ]
       }
     },

@@ -352,6 +352,27 @@ export interface CapabilityReadiness {
   state: ReadinessState;
 }
 
+export type ChatCitationSource =
+  (typeof ChatCitationSource)[keyof typeof ChatCitationSource];
+
+export const ChatCitationSource = {
+  email: "email",
+  application: "application",
+  metric: "metric",
+} as const;
+
+export interface ChatCitation {
+  application_id?: string | null;
+  /** @minLength 1 */
+  citation_id: string;
+  email_public_id?: string | null;
+  metric_template?: string | null;
+  sent_at?: string | null;
+  snippet?: string | null;
+  source: ChatCitationSource;
+  subject?: string | null;
+}
+
 export type JsonObjectList = JsonObject[];
 
 export type ChatMessageRole =
@@ -376,6 +397,57 @@ export interface ChatMessageRecord {
 
 export interface ChatHistoryResponse {
   messages: ChatMessageRecord[];
+}
+
+export type ChatIncrementType =
+  (typeof ChatIncrementType)[keyof typeof ChatIncrementType];
+
+export const ChatIncrementType = {
+  route: "route",
+  tool: "tool",
+  answer: "answer",
+} as const;
+
+/**
+ * Ordered event in the non-streaming incremental response contract.
+ */
+export interface ChatIncrement {
+  content: string;
+  type: ChatIncrementType;
+}
+
+/**
+ * One local grounded chat turn.
+ */
+export interface ChatRequest {
+  conversation_id?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 4000
+   */
+  message: string;
+  /**
+   * @minimum 1
+   * @maximum 20
+   */
+  retrieval_limit?: number;
+}
+
+export type ChatRoute = (typeof ChatRoute)[keyof typeof ChatRoute];
+
+export const ChatRoute = {
+  quantitative: "quantitative",
+  content: "content",
+  mixed: "mixed",
+} as const;
+
+export interface ChatResponse {
+  answer: string;
+  citations: ChatCitation[];
+  conversation_id: string;
+  increments: ChatIncrement[];
+  route: ChatRoute;
+  tool_outputs: JsonObjectList;
 }
 
 export type ClassificationMode =
@@ -2815,6 +2887,69 @@ export const gmailAuthCallbackAuthGmailCallbackGet = async (
     status: res.status,
     headers: res.headers,
   } as gmailAuthCallbackAuthGmailCallbackGetResponse;
+};
+
+export type postChatChatPostResponse200 = {
+  data: ChatResponse;
+  status: 200;
+};
+
+export type postChatChatPostResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
+export type postChatChatPostResponse502 = {
+  data: ApiErrorResponse;
+  status: 502;
+};
+
+export type postChatChatPostResponse503 = {
+  data: ApiErrorResponse;
+  status: 503;
+};
+
+export type postChatChatPostResponseSuccess = postChatChatPostResponse200 & {
+  headers: Headers;
+};
+export type postChatChatPostResponseError = (
+  | postChatChatPostResponse422
+  | postChatChatPostResponse502
+  | postChatChatPostResponse503
+) & {
+  headers: Headers;
+};
+
+export type postChatChatPostResponse =
+  postChatChatPostResponseSuccess | postChatChatPostResponseError;
+
+export const getPostChatChatPostUrl = () => {
+  return `/chat`;
+};
+
+/**
+ * Routes one question through constrained deterministic metrics, cited semantic retrieval, or both. Returns ordered route, tool, and answer increments after the complete turn is persisted.
+ * @summary Run Grounded Chat Turn
+ */
+export const postChatChatPost = async (
+  chatRequest: ChatRequest,
+  options?: RequestInit,
+): Promise<postChatChatPostResponse> => {
+  const res = await fetch(getPostChatChatPostUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(chatRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: postChatChatPostResponse["data"] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as postChatChatPostResponse;
 };
 
 export type getChatHistoryChatHistoryGetResponse200 = {

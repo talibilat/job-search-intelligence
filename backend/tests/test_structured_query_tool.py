@@ -114,6 +114,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "rates",
         "funnel",
         "breakdown",
+        "live_applications",
     }
 
 

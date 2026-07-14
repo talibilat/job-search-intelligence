@@ -50,11 +50,7 @@ class ProviderReadinessService:
     async def check(self) -> ProviderReadinessResponse:
         gmail = await self._gmail_readiness()
         classification, embedding = await self._llm_readiness()
-        chat = CapabilityReadiness(
-            state=ReadinessState.NOT_IMPLEMENTED,
-            message="Chat generation is planned for Phase 5 and is not implemented.",
-            action=None,
-        )
+        chat = _chat_readiness(classification, embedding)
         return ProviderReadinessResponse(
             ready_to_sync=gmail.state is ReadinessState.READY,
             ready_to_classify=classification.state is ReadinessState.READY,
@@ -182,3 +178,20 @@ class ProviderReadinessService:
             message=f"The configured {label} model is unavailable.",
             action="Start the provider or install/check the configured model, then retry.",
         )
+
+
+def _chat_readiness(
+    generation: CapabilityReadiness,
+    embedding: CapabilityReadiness,
+) -> CapabilityReadiness:
+    if generation.state is ReadinessState.READY and embedding.state is ReadinessState.READY:
+        return CapabilityReadiness(
+            state=ReadinessState.READY,
+            message="Grounded chat generation and semantic retrieval are available.",
+        )
+    blocking = generation if generation.state is not ReadinessState.READY else embedding
+    return CapabilityReadiness(
+        state=blocking.state,
+        message="Chat requires both the configured chat and embedding models.",
+        action=blocking.action,
+    )
