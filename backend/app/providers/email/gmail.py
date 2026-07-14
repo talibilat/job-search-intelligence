@@ -407,10 +407,8 @@ class GmailEmailProvider:
         if self._secret_store is not None:
             try:
                 stored = await self._secret_store.get_secret(GMAIL_OAUTH_CLIENT_REF)
-            except SecretStoreUnavailableError as error:
-                raise EmailProviderAuthError(
-                    public_message="Google OAuth client storage is unavailable."
-                ) from error
+            except SecretStoreUnavailableError:
+                stored = None
             if stored is not None:
                 try:
                     payload = json.loads(stored.get_secret_value())
