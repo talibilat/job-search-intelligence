@@ -7,10 +7,7 @@ from .processing import (
     ProcessingRunState,
     ProcessingStatus,
 )
-from .provider_config import (
-    ProviderConfigurationRecord,
-    ReadinessState,
-)
+from .provider_config import ReadinessState
 from .records import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
@@ -57,7 +54,6 @@ from .synthetic_fixture import (
 
 __all__ = [
     "MetricsFilter",
-    "ProviderConfigurationRecord",
     "ProcessingRunRequest",
     "ProcessingRunResult",
     "ProcessingRunState",

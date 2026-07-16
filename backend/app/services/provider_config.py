@@ -9,13 +9,13 @@ from pydantic import SecretStr
 
 from app.config import AppSettings, normalize_azure_openai_endpoint
 from app.db.repositories.provider_config import ProviderConfigurationRepository
-from app.models import ProviderConfigurationRecord
 from app.models.provider_config import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
     ProviderConfigRequirementResponse,
     ProviderConfigResponse,
     ProviderConfigUpdateRequest,
+    ProviderConfigurationRecord,
     ProviderConfigValues,
     ProviderSecretRequirementResponse,
     ProviderSelection,

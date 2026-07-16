@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from app.config import AppSettings
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
-from app.models import ProviderConfigurationRecord
+from app.models.provider_config import ProviderConfigurationRecord
 
 
 class ProviderConfigurationRepository(BaseRepository[ProviderConfigurationRecord]):
