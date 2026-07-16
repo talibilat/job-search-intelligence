@@ -100,27 +100,6 @@ export const EVENT_LABELS: Record<ApplicationEventType, string> = {
   ghost_inferred: "Marked no response",
 };
 
-export const EVENT_FEED_TEXT: Record<ApplicationEventType, string> = {
-  applied: "application sent",
-  response: "recruiter replied to your application",
-  assessment: "assessment received",
-  interview_scheduled: "interview scheduled",
-  feedback: "feedback received",
-  rejection: "application rejected",
-  offer: "offer received",
-  ghost_inferred: "marked as no response",
-};
-
-export function eventKind(eventType: ApplicationEventType): "good" | "bad" | "offer" {
-  if (eventType === "offer") {
-    return "offer";
-  }
-  if (eventType === "rejection" || eventType === "ghost_inferred") {
-    return "bad";
-  }
-  return "good";
-}
-
 export function formatShortDate(iso: string | null | undefined): string {
   if (!iso) {
     return "";
