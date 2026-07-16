@@ -13,7 +13,6 @@ from app.models import (
     ProviderConfigUpdateRequest,
     ProviderConfigurationRecord,
     ProviderConfigValues,
-    ProviderSecretRequirementResponse,
     ProviderSelection,
 )
 from app.models.provider_config import (
@@ -21,6 +20,7 @@ from app.models.provider_config import (
     LLMProviderConfigResponse,
     ProviderConfigRequirementResponse,
     ProviderConfigResponse,
+    ProviderSecretRequirementResponse,
 )
 from app.providers import (
     EmailProviderRegistration,

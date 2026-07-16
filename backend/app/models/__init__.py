@@ -12,7 +12,6 @@ from .provider_config import (
     ProviderConfigUpdateRequest,
     ProviderConfigurationRecord,
     ProviderConfigValues,
-    ProviderSecretRequirementResponse,
     ProviderSelection,
     ReadinessState,
 )
@@ -66,7 +65,6 @@ __all__ = [
     "ProviderConfigUpdateRequest",
     "ProviderConfigValues",
     "ProviderConfigurationRecord",
-    "ProviderSecretRequirementResponse",
     "ProviderSelection",
     "ProcessingRunRequest",
     "ProcessingRunResult",
