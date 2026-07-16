@@ -317,9 +317,6 @@ class EmailCandidateQuery(BaseModel):
         normalized_text = (text or "").lower()
         return any(term in normalized_text for term in self.keyword_terms)
 
-    def _matches_sender_domain(self, metadata: EmailMessageMetadata) -> bool:
-        return self._matching_sender_domain(metadata) is not None
-
     def _matching_sender_domain(self, metadata: EmailMessageMetadata) -> str | None:
         if metadata.from_addr is None:
             return None
@@ -331,9 +328,6 @@ class EmailCandidateQuery(BaseModel):
             if domain == term or domain.endswith(f".{term}"):
                 return term
         return None
-
-    def _matches_subject_keyword(self, metadata: EmailMessageMetadata) -> bool:
-        return self._matching_subject_keyword(metadata) is not None
 
     def _matching_subject_keyword(self, metadata: EmailMessageMetadata) -> str | None:
         subject = (metadata.subject or "").lower()
