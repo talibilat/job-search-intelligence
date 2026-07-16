@@ -308,7 +308,10 @@ def _upsert_application(
     application_id = make_application_id(key)
     existing_application = application_repository.get_application(application_id)
     existing_events = event_repository.list_by_application_id(application_id)
-    timestamps = _collect_timestamps(group, existing_events)
+    timestamps = sorted(
+        [event.event_at for event in existing_events]
+        + [_event_at_for_result(result) for result in group],
+    )
     # Prefer the extraction with company/role data for display fields
     best_result = _pick_best_extraction(group)
 
@@ -547,16 +550,6 @@ def _evidence_key(email_ids: list[str]) -> str:
 
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
     return result.extraction.event_at or result.email_sent_at or result.classification_classified_at
-
-
-def _collect_timestamps(
-    group: list[_EnrichedExtraction],
-    existing_events: list[ApplicationEventRecord],
-) -> list[datetime]:
-    return sorted(
-        [event.event_at for event in existing_events]
-        + [_event_at_for_result(result) for result in group],
-    )
 
 
 def _derive_current_status(
