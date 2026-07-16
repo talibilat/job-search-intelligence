@@ -5,8 +5,8 @@ from uuid import uuid4
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
 from app.db.repositories import ChatRepository
-from app.models import ChatCitation, ChatIncrement, ChatRequest, ChatResponse
-from app.models.chat import ChatRoute, SemanticSearchResult
+from app.models import ChatIncrement, ChatRequest, ChatResponse
+from app.models.chat import ChatCitation, ChatRoute, SemanticSearchResult
 from app.services.chat_index import ChatIndexService
 
 _QUANTITATIVE_TERMS = (
