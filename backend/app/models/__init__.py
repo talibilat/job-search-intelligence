@@ -18,7 +18,6 @@ from .classification import (
 from .correction import (
     ApplicationResetLockRequest,
     ApplicationResetLockResponse,
-    ApplicationSplitRequest,
 )
 from .diagnostics import MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
@@ -140,7 +139,6 @@ __all__ = [
     "ApplicationResetLockResponse",
     "ApplicationStatusEditRequest",
     "ApplicationStatusEditResponse",
-    "ApplicationSplitRequest",
     "ChatMessageRecord",
     "ChatHistoryResponse",
     "ChatCitation",

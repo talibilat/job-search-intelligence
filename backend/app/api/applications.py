@@ -25,7 +25,6 @@ from app.models import (
     ApplicationRecord,
     ApplicationResetLockRequest,
     ApplicationResetLockResponse,
-    ApplicationSplitRequest,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
     GhostInferenceRunApiRequest,
@@ -33,7 +32,7 @@ from app.models import (
 )
 from app.models.application import ApplicationStatusCountsResponse
 from app.models.application_merge import ApplicationMergeRequest, ApplicationMergeResponse
-from app.models.correction import ApplicationSplitResponse
+from app.models.correction import ApplicationSplitRequest, ApplicationSplitResponse
 from app.models.records import (
     ApplicationEventTimelineRecord,
     ApplicationSource,
