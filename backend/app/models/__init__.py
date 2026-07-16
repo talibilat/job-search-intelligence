@@ -1,7 +1,6 @@
 """Pydantic DTOs used at application boundaries."""
 
 from .application_edit import (
-    ApplicationEventEditRequest,
     ApplicationEventEditResponse,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
@@ -127,7 +126,6 @@ __all__ = [
     "ReadinessState",
     "ApplicationCorrectionConflictRecord",
     "ApplicationCorrectionRecord",
-    "ApplicationEventEditRequest",
     "ApplicationEventEditResponse",
     "ApplicationEventRecord",
     "ApplicationRecord",
