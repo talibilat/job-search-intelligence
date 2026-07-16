@@ -1100,7 +1100,8 @@ class GmailMessageLister:
         try:
             raw_metadata = await self._transport.get_json(
                 f"{_MESSAGES_PATH}/{message.id}",
-                query=_metadata_query(),
+                query=(("fields", _MESSAGE_METADATA_FIELDS), ("format", "metadata"))
+                + tuple(("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS),
                 access_token=access_token,
             )
         except GmailApiRequestError as error:
@@ -1243,12 +1244,6 @@ def _history_added_messages(response: GmailHistoryListResponse) -> tuple[GmailMe
             seen_message_ids.add(message.id)
             messages.append(message)
     return tuple(messages)
-
-
-def _metadata_query() -> tuple[tuple[str, str], ...]:
-    return (("fields", _MESSAGE_METADATA_FIELDS), ("format", "metadata")) + tuple(
-        ("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS
-    )
 
 
 def _metadata_headers(metadata: GmailMessageMetadataResponse) -> dict[str, tuple[str, ...]]:
