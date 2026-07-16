@@ -57,7 +57,6 @@ from .metrics import (
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
-    SilenceAgeBucketMetric,
 )
 from .pipeline import (
     BackfillProgressState,
@@ -271,7 +270,6 @@ __all__ = [
     "RawEmailReaderRecord",
     "RawEmailRecord",
     "ResponseSilenceMetric",
-    "SilenceAgeBucketMetric",
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",
