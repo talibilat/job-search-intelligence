@@ -354,25 +354,26 @@ def _upsert_application(
         _collect_status_timeline(group, existing_events),
     )
 
-    proposed_application = _proposed_application_json(
-        id=application_id,
-        company=company,
-        role_title=role_title,
-        source=source,
-        first_seen_at=first_seen_at,
-        current_status=current_status,
-        last_activity_at=last_activity_at,
-        created_at=created_at,
-        updated_at=updated_at,
-        salary_min=salary_min,
-        salary_max=salary_max,
-        currency=currency,
-        location=location,
-        work_mode=work_mode,
-        seniority=seniority,
-        sponsorship=sponsorship,
-        tech_stack=tech_stack,
-    )
+    proposed_application: JsonObject = {
+        "id": application_id,
+        "company": company,
+        "role_title": role_title,
+        "source": source,
+        "first_seen_at": first_seen_at,
+        "current_status": current_status,
+        "salary_min": salary_min,
+        "salary_max": salary_max,
+        "currency": currency,
+        "location": location,
+        "work_mode": work_mode,
+        "seniority": seniority,
+        "sponsorship": sponsorship,
+        "tech_stack": tech_stack,
+        "last_activity_at": last_activity_at,
+        "manual_lock": False,
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
 
     outcome = application_repository.upsert_application(
         id=application_id,
@@ -484,48 +485,6 @@ def _upsert_events(
             continue
         events_upserted += 1
     return events_upserted, conflicts
-
-
-def _proposed_application_json(
-    *,
-    id: str,
-    company: str,
-    role_title: str,
-    source: str,
-    first_seen_at: str,
-    current_status: ApplicationStatus,
-    last_activity_at: str,
-    created_at: str,
-    updated_at: str,
-    salary_min: int | None,
-    salary_max: int | None,
-    currency: str | None,
-    location: str | None,
-    work_mode: str | None,
-    seniority: str | None,
-    sponsorship: str,
-    tech_stack: list[str],
-) -> JsonObject:
-    return {
-        "id": id,
-        "company": company,
-        "role_title": role_title,
-        "source": source,
-        "first_seen_at": first_seen_at,
-        "current_status": current_status,
-        "salary_min": salary_min,
-        "salary_max": salary_max,
-        "currency": currency,
-        "location": location,
-        "work_mode": work_mode,
-        "seniority": seniority,
-        "sponsorship": sponsorship,
-        "tech_stack": tech_stack,
-        "last_activity_at": last_activity_at,
-        "manual_lock": False,
-        "created_at": created_at,
-        "updated_at": updated_at,
-    }
 
 
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
