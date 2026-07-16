@@ -616,7 +616,7 @@ class EmailSyncService:
         self._page_size = page_size
         self._email_repository = email_repository
         self._sync_service = sync_service
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._status_callback = status_callback
         self._filter_decision_repository = filter_decision_repository
         self._status = EmailSyncStatus(state=EmailSyncRunState.IDLE)
@@ -1323,10 +1323,6 @@ def build_backfill_reconciliation_metrics(
         extra_local_message_count=extra_local_message_count,
         reconciled=(missing_local_message_count == 0 and extra_local_message_count == 0),
     )
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def _public_sync_error_message(error: Exception) -> str:
