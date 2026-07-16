@@ -28,7 +28,6 @@ from .records import (
 )
 from .sync import (
     SyncJobCounts,
-    SyncJobError,
     SyncJobPhase,
     SyncJobStatus,
 )
@@ -57,7 +56,6 @@ __all__ = [
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
     "SyncJobCounts",
-    "SyncJobError",
     "SyncJobPhase",
     "SyncJobStatus",
 ]
