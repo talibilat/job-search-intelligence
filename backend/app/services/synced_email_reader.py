@@ -68,19 +68,19 @@ class SyncedEmailReaderService:
 
         batch = await self._provider.fetch_message_bodies(
             self._connection,
-            EmailBodyFetchRequest(refs=(_message_ref(record, self._connection),)),
+            EmailBodyFetchRequest(
+                refs=(
+                    EmailMessageRef(
+                        account=self._connection.account,
+                        message_id=record.provider_message_id,
+                        thread_id=record.thread_id,
+                    ),
+                )
+            ),
         )
         if not batch.bodies:
             raise SyncedEmailContentUnavailableError
         return _detail_from_record(record, body_text=batch.bodies[0].body_text)
-
-
-def _message_ref(record: RawEmailReaderRecord, connection: EmailConnection) -> EmailMessageRef:
-    return EmailMessageRef(
-        account=connection.account,
-        message_id=record.provider_message_id,
-        thread_id=record.thread_id,
-    )
 
 
 def _detail_from_record(record: RawEmailReaderRecord, *, body_text: str) -> RawEmailDetail:
