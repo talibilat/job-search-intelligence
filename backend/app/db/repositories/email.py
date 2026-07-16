@@ -832,12 +832,6 @@ def _email_address_domains(value: object) -> list[str]:
     return sorted(domains)
 
 
-def _format_datetime(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.isoformat()
-
-
 def _empty_classification_reprocessing_stats() -> ClassificationReprocessingStats:
     return ClassificationReprocessingStats(
         retained_candidate_count=0,
