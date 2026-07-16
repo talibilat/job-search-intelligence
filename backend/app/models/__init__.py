@@ -27,7 +27,7 @@ from .correction import (
     ApplicationSplitResponse,
     ApplicationSplitSourceApplication,
 )
-from .diagnostics import DiagnosticSegmentComparison, MetricsDiagnosticsResponse
+from .diagnostics import MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
 from .health import HealthResponse
 from .insight import (
@@ -151,7 +151,6 @@ __all__ = [
     "CompanyProfileRecord",
     "CompanyProfileSource",
     "CompanyType",
-    "DiagnosticSegmentComparison",
     "EmailProviderConfigResponse",
     "CapabilityReadiness",
     "GhostInferenceRunResponse",
