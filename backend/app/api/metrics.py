@@ -22,13 +22,13 @@ from app.models import (
     MetricsRatesResponse,
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
-    MetricsTimeseriesResponse,
 )
 from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.models.diagnostics import MetricsDiagnosticsResponse
 from app.models.metrics import (
     MetricsBreakdownResponse,
     MetricsFunnelResponse,
+    MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )
 from app.services.diagnostics import DiagnosticsService

@@ -6,7 +6,6 @@ from .metrics import (
     MetricsRatesResponse,
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
-    MetricsTimeseriesResponse,
 )
 from .processing import (
     ProcessingRunRequest,
@@ -85,7 +84,6 @@ __all__ = [
     "MetricsRatesResponse",
     "MetricsResponseRateTrendResponse",
     "MetricsSummaryResponse",
-    "MetricsTimeseriesResponse",
     "ProviderConfigRequirementResponse",
     "ProviderConfigResponse",
     "ProviderConfigUpdateRequest",
