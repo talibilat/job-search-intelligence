@@ -232,7 +232,7 @@ export function Alert({
   );
 }
 
-export interface TabItem {
+interface TabItem {
   content: ReactNode;
   disabled?: boolean;
   id: string;
