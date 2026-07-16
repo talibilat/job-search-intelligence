@@ -69,7 +69,6 @@ from .provider_config import (
 )
 from .raw_email import (
     RawEmailDetail,
-    RawEmailPreviewOrder,
     RawEmailPreviewPage,
     RawEmailPreviewRecord,
     RawEmailReaderRecord,
@@ -217,7 +216,6 @@ __all__ = [
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailDetail",
-    "RawEmailPreviewOrder",
     "RawEmailPreviewPage",
     "RawEmailPreviewRecord",
     "RawEmailReaderRecord",
