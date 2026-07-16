@@ -1,9 +1,9 @@
-export interface SetupWizardOption {
+interface SetupWizardOption {
   label: string;
   body: string;
 }
 
-export interface SetupWizardSection {
+interface SetupWizardSection {
   title: string;
   body: string;
   options: readonly SetupWizardOption[];
