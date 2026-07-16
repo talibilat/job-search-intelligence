@@ -97,12 +97,14 @@ class ManualApplicationMergeService:
                 source_application_id,
             )
 
-            before_json = _build_before_snapshot(
-                target=target,
-                source=source,
-                source_events=source_events,
-                source_corrections=source_corrections,
-            )
+            before_json: JsonObject = {
+                "target_application": _json_object(target),
+                "source_application": _json_object(source),
+                "source_events": [_json_object(event) for event in source_events],
+                "source_corrections": [
+                    _json_object(correction) for correction in source_corrections
+                ],
+            }
             merged = _merge_application_summary(
                 target=target,
                 source=source,
@@ -236,21 +238,6 @@ def _merge_tech_stack(target: list[str], source: list[str]) -> list[str]:
         if item not in merged:
             merged.append(item)
     return merged
-
-
-def _build_before_snapshot(
-    *,
-    target: ApplicationRecord,
-    source: ApplicationRecord,
-    source_events: list[ApplicationEventRecord],
-    source_corrections: list[ApplicationCorrectionRecord],
-) -> JsonObject:
-    return {
-        "target_application": _json_object(target),
-        "source_application": _json_object(source),
-        "source_events": [_json_object(event) for event in source_events],
-        "source_corrections": [_json_object(correction) for correction in source_corrections],
-    }
 
 
 def _json_object(
