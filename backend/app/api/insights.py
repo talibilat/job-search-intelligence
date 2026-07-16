@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies import get_insight_generation_service, get_insight_read_service
 from app.api.errors import ApiErrorResponse
-from app.models import (
+from app.models.insight import (
     InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,

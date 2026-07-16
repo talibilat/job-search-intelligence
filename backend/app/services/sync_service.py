@@ -14,14 +14,6 @@ from app.db.repositories import (
     EmailRepository,
 )
 from app.db.repositories.sync_state import SyncStateRepository
-from app.models import (
-    SyncJobCounts,
-    SyncJobPhase,
-    SyncJobStatus,
-    SyncLocalStats,
-    SyncScopeEstimate,
-    SyncScopeEstimateBasis,
-)
 from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import (
     EmailBackfillStateRecord,
@@ -30,6 +22,11 @@ from app.models.records import (
     EmailSyncStateRecord,
     RawEmailBodyRetentionState,
     RawEmailPreviewRecord,
+)
+from app.models.sync import (
+    SyncLocalStats,
+    SyncScopeEstimate,
+    SyncScopeEstimateBasis,
 )
 from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import (
@@ -87,10 +84,6 @@ def create_apscheduler() -> ScheduledJobScheduler:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
 
     return cast(ScheduledJobScheduler, AsyncIOScheduler())
-
-
-async def noop_sync_job() -> None:
-    """Safe placeholder until the concrete Gmail sync runner is wired in."""
 
 
 class SyncScheduler:
@@ -353,31 +346,6 @@ class SyncService:
     def get_sync_state(self, account: EmailAccountRef) -> EmailSyncStateRecord | None:
         return self._sync_state_repository.fetch_state(account)
 
-    def get_sync_status(self, account: EmailAccountRef) -> EmailSyncStateStatus | None:
-        state = self._sync_state_repository.fetch_state(account)
-        if state is None:
-            return None
-
-        cursor = None
-        if state.sync_cursor is not None and state.cursor_issued_at is not None:
-            cursor = EmailProviderCursor(
-                account=EmailAccountRef(
-                    provider=EmailProviderName(state.provider),
-                    account_id=state.account_id,
-                ),
-                value=state.sync_cursor,
-                issued_at=state.cursor_issued_at,
-            )
-
-        return EmailSyncStateStatus(
-            account=EmailAccountRef(
-                provider=EmailProviderName(state.provider),
-                account_id=state.account_id,
-            ),
-            cursor=cursor,
-            last_state_update_at=state.updated_at,
-        )
-
     def store_sync_cursor(
         self,
         cursor: EmailProviderCursor,
@@ -436,16 +404,6 @@ class EmailSyncPreviewService:
             limit=_bounded_preview_limit(limit),
             order_by=order,
         )
-
-
-class EmailSyncStateStatus(BaseModel):
-    """Persisted sync cursor snapshot for service-level status checks."""
-
-    model_config = ConfigDict(frozen=True)
-
-    account: EmailAccountRef
-    cursor: EmailProviderCursor | None
-    last_state_update_at: datetime
 
 
 class BackfillStateService:
@@ -658,7 +616,7 @@ class EmailSyncService:
         self._page_size = page_size
         self._email_repository = email_repository
         self._sync_service = sync_service
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._status_callback = status_callback
         self._filter_decision_repository = filter_decision_repository
         self._status = EmailSyncStatus(state=EmailSyncRunState.IDLE)
@@ -1027,14 +985,12 @@ class EmailSyncService:
 
         bodies: list[EmailMessageBody] = []
         failures: list[EmailBodyFetchFailure] = []
-        for ref_chunk in _chunk_refs(
-            selected_refs,
-            chunk_size=_retained_body_batch_size(self._body_provider) or len(selected_refs),
-        ):
+        chunk_size = _retained_body_batch_size(self._body_provider) or len(selected_refs)
+        for index in range(0, len(selected_refs), chunk_size):
             batch = await self._body_provider.fetch_message_bodies(
                 connection,
                 EmailBodyFetchRequest(
-                    refs=ref_chunk,
+                    refs=tuple(selected_refs[index : index + chunk_size]),
                     max_body_bytes=max_body_bytes,
                 ),
             )
@@ -1271,16 +1227,6 @@ def _remaining_options(
     return options.model_copy(update={"max_messages": remaining_messages})
 
 
-def _chunk_refs(
-    refs: list[EmailMessageRef],
-    *,
-    chunk_size: int,
-) -> tuple[tuple[EmailMessageRef, ...], ...]:
-    return tuple(
-        tuple(refs[index : index + chunk_size]) for index in range(0, len(refs), chunk_size)
-    )
-
-
 def _bounded_preview_limit(limit: int) -> int:
     return min(max(limit, 1), 50)
 
@@ -1322,17 +1268,6 @@ def _metadata_matches_date_bounds(
     if since_date is not None and message_date < since_date:
         return False
     return before_date is None or message_date < before_date
-
-
-def build_idle_sync_status(*, now: datetime | None = None) -> SyncJobStatus:
-    """Build the public status snapshot before any sync job is running."""
-
-    return SyncJobStatus(
-        phase=SyncJobPhase.IDLE,
-        counts=SyncJobCounts(),
-        updated_at=now or datetime.now(UTC),
-        progress=0,
-    )
 
 
 class BackfillReconciliationMetrics(BaseModel):
@@ -1388,10 +1323,6 @@ def build_backfill_reconciliation_metrics(
         extra_local_message_count=extra_local_message_count,
         reconciled=(missing_local_message_count == 0 and extra_local_message_count == 0),
     )
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def _public_sync_error_message(error: Exception) -> str:

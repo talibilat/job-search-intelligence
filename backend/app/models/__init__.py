@@ -134,15 +134,7 @@ from .records import (
     RecentApplicationEventRecord,
 )
 from .setup import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
-from .sync import (
-    SyncJobCounts,
-    SyncJobError,
-    SyncJobPhase,
-    SyncJobStatus,
-    SyncLocalStats,
-    SyncScopeEstimate,
-    SyncScopeEstimateBasis,
-)
+from .sync import SyncLocalStats, SyncScopeEstimate, SyncScopeEstimateBasis
 from .synthetic_fixture import (
     SyntheticApplication,
     SyntheticApplicationEvent,
@@ -287,10 +279,6 @@ __all__ = [
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",
-    "SyncJobCounts",
-    "SyncJobError",
-    "SyncJobPhase",
-    "SyncJobStatus",
     "SyntheticApplication",
     "SyntheticApplicationEvent",
     "SyntheticApplicationSource",

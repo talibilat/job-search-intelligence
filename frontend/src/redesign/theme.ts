@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 import type { ApplicationEventType, ApplicationStatus } from "../api";
 
-export type StatusVisualKey =
+type StatusVisualKey =
   | "applied"
   | "screening"
   | "interview"
@@ -10,7 +10,7 @@ export type StatusVisualKey =
   | "rejected"
   | "ghosted";
 
-export const STATUS: Record<StatusVisualKey, { label: string; fg: string; bg: string }> = {
+const STATUS: Record<StatusVisualKey, { label: string; fg: string; bg: string }> = {
   applied: { label: "Applied", fg: "#5C6660", bg: "#EEF0ED" },
   screening: { label: "In review", fg: "#8A6A14", bg: "#F7EFDB" },
   interview: { label: "Interview", fg: "#1E5136", bg: "#E3EFE6" },
@@ -19,7 +19,7 @@ export const STATUS: Record<StatusVisualKey, { label: string; fg: string; bg: st
   ghosted: { label: "No response", fg: "#6B7268", bg: "#EFEFEC" },
 };
 
-export function statusVisualKey(status: ApplicationStatus): StatusVisualKey {
+function statusVisualKey(status: ApplicationStatus): StatusVisualKey {
   switch (status) {
     case "in_review":
     case "assessment":
@@ -99,27 +99,6 @@ export const EVENT_LABELS: Record<ApplicationEventType, string> = {
   offer: "Offer received",
   ghost_inferred: "Marked no response",
 };
-
-export const EVENT_FEED_TEXT: Record<ApplicationEventType, string> = {
-  applied: "application sent",
-  response: "recruiter replied to your application",
-  assessment: "assessment received",
-  interview_scheduled: "interview scheduled",
-  feedback: "feedback received",
-  rejection: "application rejected",
-  offer: "offer received",
-  ghost_inferred: "marked as no response",
-};
-
-export function eventKind(eventType: ApplicationEventType): "good" | "bad" | "offer" {
-  if (eventType === "offer") {
-    return "offer";
-  }
-  if (eventType === "rejection" || eventType === "ghost_inferred") {
-    return "bad";
-  }
-  return "good";
-}
 
 export function formatShortDate(iso: string | null | undefined): string {
   if (!iso) {

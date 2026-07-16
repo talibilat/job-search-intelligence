@@ -102,6 +102,7 @@ def test_repository_execute_many_runs_parameterized_bulk_statements(
 
 
 def test_repository_package_exports_shared_sql_parameter_type() -> None:
+    assert repositories.BaseRepository is BaseRepository
     assert hasattr(repositories, "SqlParameters")
 
 

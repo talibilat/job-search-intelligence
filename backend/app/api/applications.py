@@ -18,23 +18,25 @@ from app.api.dependencies import (
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.models import (
-    ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
+    ApplicationRecord,
+)
+from app.models.application import ApplicationStatusCountsResponse
+from app.models.application_edit import (
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
-    ApplicationMergeRequest,
-    ApplicationMergeResponse,
-    ApplicationRecord,
+    ApplicationStatusEditRequest,
+    ApplicationStatusEditResponse,
+)
+from app.models.application_merge import ApplicationMergeRequest, ApplicationMergeResponse
+from app.models.correction import (
+    ApplicationCorrectionConflictRecord,
     ApplicationResetLockRequest,
     ApplicationResetLockResponse,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
-    ApplicationStatusCountsResponse,
-    ApplicationStatusEditRequest,
-    ApplicationStatusEditResponse,
-    GhostInferenceRunApiRequest,
-    GhostInferenceRunResponse,
 )
+from app.models.ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
 from app.models.records import (
     ApplicationEventTimelineRecord,
     ApplicationSource,

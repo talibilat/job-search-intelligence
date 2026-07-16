@@ -16,12 +16,14 @@ from app.db.repositories import (
 )
 from app.main import create_app
 from app.models import (
+    RawEmailBodyRetentionState,
+    RawEmailRecord,
+)
+from app.models.metrics import (
     MetricRate,
     MetricRateRow,
     MetricsRatesResponse,
     MetricsSummaryResponse,
-    RawEmailBodyRetentionState,
-    RawEmailRecord,
 )
 from fastapi.testclient import TestClient
 

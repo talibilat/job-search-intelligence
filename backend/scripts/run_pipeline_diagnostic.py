@@ -27,6 +27,8 @@ from app.models import (
     EmailFilterDecisionOutcome,
     EmailFilterDecisionRecord,
     RawEmailRecord,
+)
+from app.models.synthetic_fixture import (
     SyntheticApplication,
     SyntheticApplicationEvent,
     SyntheticEmailClassification,
@@ -339,7 +341,22 @@ def _filter_decisions(
         provider=EmailProviderName.GMAIL,
         account_id="pipeline-diagnostic@example.test",
     )
-    metadata = tuple(_metadata_from_email(email, account) for email in emails)
+    metadata = tuple(
+        EmailMessageMetadata(
+            ref=EmailMessageRef(
+                account=account,
+                message_id=email.id,
+                thread_id=email.thread_id,
+            ),
+            from_addr=(
+                EmailAddress(address=email.from_addr) if email.from_addr is not None else None
+            ),
+            subject=email.subject,
+            sent_at=email.sent_at,
+            labels=email.labels,
+        )
+        for email in emails
+    )
     decisions = build_broad_candidate_query().evaluate_metadata_batch(metadata)
     return tuple(
         EmailFilterDecisionRecord(
@@ -350,23 +367,6 @@ def _filter_decisions(
             decided_at=DIAGNOSTIC_NOW,
         )
         for message, decision in zip(metadata, decisions, strict=True)
-    )
-
-
-def _metadata_from_email(
-    email: SyntheticRawEmail,
-    account: EmailAccountRef,
-) -> EmailMessageMetadata:
-    return EmailMessageMetadata(
-        ref=EmailMessageRef(
-            account=account,
-            message_id=email.id,
-            thread_id=email.thread_id,
-        ),
-        from_addr=EmailAddress(address=email.from_addr) if email.from_addr is not None else None,
-        subject=email.subject,
-        sent_at=email.sent_at,
-        labels=email.labels,
     )
 
 

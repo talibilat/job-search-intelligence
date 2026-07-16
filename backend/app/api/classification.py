@@ -13,7 +13,7 @@ from app.api.dependencies import (
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.config import AppSettings, get_settings
 from app.db.repositories import EmailRepository
-from app.models import (
+from app.models.classification import (
     ClassificationPreRunEstimate,
     ClassificationReprocessingPlan,
     ClassificationRunApiRequest,

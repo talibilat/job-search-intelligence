@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.models import HealthResponse
+from app.models.health import HealthResponse
 
 router = APIRouter(tags=["health"])
 

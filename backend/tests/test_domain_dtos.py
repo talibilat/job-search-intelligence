@@ -21,10 +21,16 @@ def test_domain_dtos_are_exported_from_model_package() -> None:
         "InsightRecord",
         "EmailChunkRecord",
         "ApplicationCorrectionRecord",
+        "HealthResponse",
+        "MetricsSummaryResponse",
+        "ProviderConfigUpdateRequest",
+        "WipeDataRequest",
     ]
 
     for name in expected_model_names:
         assert isinstance(getattr(models, name, None), type), name
+
+    assert models.WIPE_DATA_CONFIRMATION == "wipe-local-data"
 
 
 def test_email_classification_record_validates_category_and_confidence() -> None:

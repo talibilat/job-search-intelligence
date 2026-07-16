@@ -9,7 +9,7 @@ from pydantic import SecretStr
 
 from app.config import AppSettings, normalize_azure_openai_endpoint
 from app.db.repositories.provider_config import ProviderConfigurationRepository
-from app.models import (
+from app.models.provider_config import (
     EmailProviderConfigResponse,
     LLMProviderConfigResponse,
     ProviderConfigRequirementResponse,
@@ -21,8 +21,6 @@ from app.models import (
     ProviderSelection,
 )
 from app.providers import (
-    EmailProviderRegistration,
-    LLMProviderRegistration,
     ProviderConfigRequirement,
     ProviderRegistry,
     ProviderSecretRequirement,
@@ -94,9 +92,32 @@ def build_provider_config_response(
             ollama_embedding_model=settings.ollama_embedding_model,
         ),
         email_providers=tuple(
-            _email_provider_response(item) for item in registry.email_providers()
+            EmailProviderConfigResponse(
+                name=provider.name,
+                display_name=provider.display_name,
+                config_requirements=tuple(
+                    _config_requirement_response(item) for item in provider.config_requirements
+                ),
+                secret_requirements=tuple(
+                    _secret_requirement_response(item) for item in provider.secret_requirements
+                ),
+            )
+            for provider in registry.email_providers()
         ),
-        llm_providers=tuple(_llm_provider_response(item) for item in registry.llm_providers()),
+        llm_providers=tuple(
+            LLMProviderConfigResponse(
+                name=provider.name,
+                display_name=provider.display_name,
+                is_local=provider.is_local,
+                config_requirements=tuple(
+                    _config_requirement_response(item) for item in provider.config_requirements
+                ),
+                secret_requirements=tuple(
+                    _secret_requirement_response(item) for item in provider.secret_requirements
+                ),
+            )
+            for provider in registry.llm_providers()
+        ),
     )
 
 
@@ -170,9 +191,7 @@ async def import_azure_openai_api_key_from_environment(secret_store: SecretStore
             from dotenv import dotenv_values
 
             backend_env_file = Path(__file__).resolve().parents[2] / ".env"
-            api_key = str(
-                dotenv_values(backend_env_file).get("AZURE_OPENAI_API_KEY") or ""
-            ).strip()
+            api_key = str(dotenv_values(backend_env_file).get("AZURE_OPENAI_API_KEY") or "").strip()
         except ImportError:
             return
     if api_key:
@@ -182,14 +201,15 @@ async def import_azure_openai_api_key_from_environment(secret_store: SecretStore
 def _updated_settings(settings: AppSettings, updates: dict[str, Any]) -> AppSettings:
     values = settings.model_dump()
     values.update(updates)
-    if _llm_provider_changed(settings, updates) and "classification_mode" not in updates:
+    if (
+        "llm_provider" in updates
+        and updates["llm_provider"] != settings.llm_provider
+        and "classification_mode" not in updates
+    ):
         candidate_settings = AppSettings(_env_file=None, **values)
         values["classification_mode"] = recommend_classification_mode(candidate_settings)
     return AppSettings(_env_file=None, **values)
 
-
-def _llm_provider_changed(settings: AppSettings, updates: dict[str, Any]) -> bool:
-    return "llm_provider" in updates and updates["llm_provider"] != settings.llm_provider
 
 def _config_requirement_response(
     requirement: ProviderConfigRequirement,
@@ -210,31 +230,4 @@ def _secret_requirement_response(
         label=requirement.label,
         required=requirement.required,
         enforcement=requirement.enforcement,
-    )
-
-
-def _email_provider_response(provider: EmailProviderRegistration) -> EmailProviderConfigResponse:
-    return EmailProviderConfigResponse(
-        name=provider.name,
-        display_name=provider.display_name,
-        config_requirements=tuple(
-            _config_requirement_response(item) for item in provider.config_requirements
-        ),
-        secret_requirements=tuple(
-            _secret_requirement_response(item) for item in provider.secret_requirements
-        ),
-    )
-
-
-def _llm_provider_response(provider: LLMProviderRegistration) -> LLMProviderConfigResponse:
-    return LLMProviderConfigResponse(
-        name=provider.name,
-        display_name=provider.display_name,
-        is_local=provider.is_local,
-        config_requirements=tuple(
-            _config_requirement_response(item) for item in provider.config_requirements
-        ),
-        secret_requirements=tuple(
-            _secret_requirement_response(item) for item in provider.secret_requirements
-        ),
     )

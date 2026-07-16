@@ -6,8 +6,8 @@ import sqlite3
 from datetime import datetime
 
 from app.db.repositories.base import BaseRepository
-from app.models import EmailTextChunk
 from app.models.chat import SemanticSearchResult
+from app.models.chunk import EmailTextChunk
 
 
 class EmailChunkRepository(BaseRepository[SemanticSearchResult]):

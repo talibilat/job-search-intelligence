@@ -4,11 +4,13 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from app.db.repositories.metrics import MetricsRepository
-from app.models import (
+from app.models import MetricsFilter
+from app.models.metrics import (
+    ApplicationWindowMetric,
     MetricRate,
+    MetricsApplicationWindow,
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
-    MetricsFilter,
     MetricsFunnelResponse,
     MetricsRatesResponse,
     MetricsResponseRateTrendResponse,
@@ -16,7 +18,6 @@ from app.models import (
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )
-from app.models.metrics import ApplicationWindowMetric, MetricsApplicationWindow
 
 type Clock = Callable[[], datetime]
 

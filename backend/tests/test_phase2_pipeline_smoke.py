@@ -23,6 +23,8 @@ from app.models import (
     EmailFilterDecisionOutcome,
     EmailFilterDecisionRecord,
     RawEmailRecord,
+)
+from app.models.synthetic_fixture import (
     SyntheticApplication,
     SyntheticApplicationEvent,
     SyntheticEmailClassification,

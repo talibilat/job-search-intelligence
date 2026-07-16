@@ -837,7 +837,10 @@ class GmailMessageLister:
         list_query: tuple[tuple[str, str], ...],
         access_token: SecretStr,
     ) -> EmailMetadataPage:
-        page_token = _query_value(list_query, "pageToken")
+        page_token = next(
+            (value for key, value in list_query if key == "pageToken"),
+            None,
+        )
         if page_token is None:
             sync_cursor = await self._fetch_current_history_cursor(
                 connection=connection,
@@ -845,7 +848,9 @@ class GmailMessageLister:
             )
         else:
             page_token, sync_cursor = _decode_full_backfill_page_token(page_token)
-            list_query = _replace_query_value(list_query, "pageToken", page_token)
+            list_query = tuple(
+                (key, page_token if key == "pageToken" else value) for key, value in list_query
+            )
 
         list_response = _validate_gmail_response(
             GmailMessageListResponse,
@@ -931,7 +936,7 @@ class GmailMessageLister:
             GmailProfileResponse,
             await self._get_metadata_json(
                 _PROFILE_PATH,
-                query=_profile_query(),
+                query=(("fields", _PROFILE_HISTORY_FIELDS),),
                 access_token=access_token,
             ),
         )
@@ -966,7 +971,7 @@ class GmailMessageLister:
                     GmailMessageBodyResponse,
                     await self._get_body_json(
                         f"{_MESSAGES_PATH}/{ref.message_id}",
-                        query=_body_query(),
+                        query=(("fields", _MESSAGE_BODY_FIELDS), ("format", "full")),
                         access_token=access_token,
                     ),
                     public_message=_INVALID_BODY_DATA_MESSAGE,
@@ -1100,7 +1105,8 @@ class GmailMessageLister:
         try:
             raw_metadata = await self._transport.get_json(
                 f"{_MESSAGES_PATH}/{message.id}",
-                query=_metadata_query(),
+                query=(("fields", _MESSAGE_METADATA_FIELDS), ("format", "metadata"))
+                + tuple(("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS),
                 access_token=access_token,
             )
         except GmailApiRequestError as error:
@@ -1158,21 +1164,6 @@ def _gmail_date_query(request: EmailMetadataListRequest) -> str | None:
     if not terms:
         return None
     return " ".join(terms)
-
-
-def _query_value(query: tuple[tuple[str, str], ...], name: str) -> str | None:
-    for key, value in query:
-        if key == name:
-            return value
-    return None
-
-
-def _replace_query_value(
-    query: tuple[tuple[str, str], ...],
-    name: str,
-    replacement: str,
-) -> tuple[tuple[str, str], ...]:
-    return tuple((key, replacement if key == name else value) for key, value in query)
 
 
 def _encode_full_backfill_page_token(
@@ -1245,20 +1236,6 @@ def _history_added_messages(response: GmailHistoryListResponse) -> tuple[GmailMe
     return tuple(messages)
 
 
-def _metadata_query() -> tuple[tuple[str, str], ...]:
-    return (("fields", _MESSAGE_METADATA_FIELDS), ("format", "metadata")) + tuple(
-        ("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS
-    )
-
-
-def _profile_query() -> tuple[tuple[str, str], ...]:
-    return (("fields", _PROFILE_HISTORY_FIELDS),)
-
-
-def _body_query() -> tuple[tuple[str, str], ...]:
-    return (("fields", _MESSAGE_BODY_FIELDS), ("format", "full"))
-
-
 def _metadata_headers(metadata: GmailMessageMetadataResponse) -> dict[str, tuple[str, ...]]:
     headers: dict[str, list[str]] = {}
     for header in metadata.payload.headers if metadata.payload is not None else ():
@@ -1273,7 +1250,7 @@ def _first_header(headers: dict[str, tuple[str, ...]], name: str) -> str | None:
     values = headers.get(name)
     if values is None:
         return None
-    return _normalize_optional_header(values[0])
+    return values[0].strip() or None
 
 
 def _first_email_address(headers: dict[str, tuple[str, ...]], name: str) -> EmailAddress | None:
@@ -1295,7 +1272,7 @@ def _email_addresses(headers: dict[str, tuple[str, ...]], name: str) -> tuple[Em
         addresses.append(
             EmailAddress(
                 address=normalized_address,
-                display_name=_normalize_optional_display_name(display_name),
+                display_name=" ".join(display_name.strip().split()) or None,
             )
         )
     return tuple(addresses)
@@ -1324,16 +1301,6 @@ def _normalize_optional_id(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip()
-    return normalized or None
-
-
-def _normalize_optional_header(value: str) -> str | None:
-    normalized = value.strip()
-    return normalized or None
-
-
-def _normalize_optional_display_name(value: str) -> str | None:
-    normalized = " ".join(value.strip().split())
     return normalized or None
 
 

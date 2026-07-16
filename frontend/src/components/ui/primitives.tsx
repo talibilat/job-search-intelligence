@@ -21,7 +21,7 @@ function cx(...values: ClassValue[]) {
   return values.filter(Boolean).join(" ");
 }
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost";
 }
 
@@ -41,7 +41,7 @@ export function Button({
   );
 }
 
-export interface InfoDisclosureProps {
+interface InfoDisclosureProps {
   ariaLabel: string;
   buttonClassName: string;
   children: ReactNode;
@@ -117,7 +117,7 @@ export function InfoDisclosure({
   );
 }
 
-export interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean;
 }
 
@@ -143,7 +143,7 @@ interface DescribedControlProps {
   id?: string;
 }
 
-export interface FormFieldProps {
+interface FormFieldProps {
   children: ReactElement<DescribedControlProps>;
   error?: ReactNode;
   hint?: ReactNode;
@@ -201,7 +201,7 @@ export function FormField({
   );
 }
 
-export interface AlertProps extends Omit<
+interface AlertProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
   "title"
 > {
@@ -232,14 +232,14 @@ export function Alert({
   );
 }
 
-export interface TabItem {
+interface TabItem {
   content: ReactNode;
   disabled?: boolean;
   id: string;
   label: ReactNode;
 }
 
-export interface TabsProps {
+interface TabsProps {
   activeItemId?: string;
   className?: string;
   defaultItemId?: string;
@@ -398,7 +398,7 @@ type ResolvedDataTableColumn<TRow extends object> = DataTableColumnBase & {
   render?: (row: TRow) => ReactNode;
 };
 
-export interface DataTableProps<TRow extends object> {
+interface DataTableProps<TRow extends object> {
   caption: ReactNode;
   columns: readonly DataTableColumn<TRow>[];
   emptyMessage?: ReactNode;

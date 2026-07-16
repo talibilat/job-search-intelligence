@@ -12,7 +12,7 @@ import {
   type RawEmailDetail,
 } from "../../api";
 
-export interface EmailReaderDialogProps {
+interface EmailReaderDialogProps {
   publicId: string | null;
   triggerRef?: RefObject<HTMLElement | null>;
   onClose: () => void;

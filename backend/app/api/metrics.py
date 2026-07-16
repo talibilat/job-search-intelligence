@@ -16,11 +16,12 @@ from app.api.dependencies import (
     get_metrics_timeseries_service,
 )
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
-from app.models import (
+from app.models import MetricsFilter
+from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.diagnostics import MetricsDiagnosticsResponse
+from app.models.metrics import (
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
-    MetricsDiagnosticsResponse,
-    MetricsFilter,
     MetricsFunnelResponse,
     MetricsRatesResponse,
     MetricsResponseRateTrendResponse,
@@ -28,7 +29,6 @@ from app.models import (
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )
-from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.services.diagnostics import DiagnosticsService
 from app.services.metrics import (
     MetricsBreakdownService,

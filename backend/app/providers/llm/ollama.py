@@ -332,7 +332,14 @@ class OllamaLLMProvider:
                     ) from error
                 raise LLMProviderRequestError(public_message="Ollama request failed.") from error
 
-        return _embedding_response(response, default_model=transport_request.payload.model)
+        return LLMEmbeddingResponse(
+            model=response.model or transport_request.payload.model,
+            embeddings=tuple(
+                LLMEmbedding(index=index, embedding=embedding)
+                for index, embedding in enumerate(response.embeddings)
+            ),
+            usage=_embedding_token_usage(response),
+        )
 
     async def health_check(
         self,
@@ -384,23 +391,19 @@ def _chat_request_payload(
             for message in request.messages
         ),
         stream=False,
-        format=_response_format(request.response_format),
-        options=_request_options(request.options),
-    )
-
-
-def _response_format(response_format: LLMResponseFormat) -> str | None:
-    if response_format is LLMResponseFormat.JSON_OBJECT:
-        return _OLLAMA_JSON_FORMAT
-    return None
-
-
-def _request_options(options: LLMGenerationOptions) -> OllamaRequestOptions | None:
-    if options.temperature is None and options.max_output_tokens is None:
-        return None
-    return OllamaRequestOptions(
-        temperature=options.temperature,
-        num_predict=options.max_output_tokens,
+        format=(
+            _OLLAMA_JSON_FORMAT
+            if request.response_format is LLMResponseFormat.JSON_OBJECT
+            else None
+        ),
+        options=(
+            None
+            if request.options.temperature is None and request.options.max_output_tokens is None
+            else OllamaRequestOptions(
+                temperature=request.options.temperature,
+                num_predict=request.options.max_output_tokens,
+            )
+        ),
     )
 
 
@@ -413,21 +416,6 @@ def _generation_response(response: OllamaChatResponse) -> LLMGenerationResponse:
         model=response.model,
         finish_reason=_finish_reason(response.done_reason),
         usage=_token_usage(response),
-    )
-
-
-def _embedding_response(
-    response: OllamaEmbeddingResponse,
-    *,
-    default_model: str,
-) -> LLMEmbeddingResponse:
-    return LLMEmbeddingResponse(
-        model=response.model or default_model,
-        embeddings=tuple(
-            LLMEmbedding(index=index, embedding=embedding)
-            for index, embedding in enumerate(response.embeddings)
-        ),
-        usage=_embedding_token_usage(response),
     )
 
 

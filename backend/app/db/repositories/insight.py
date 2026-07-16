@@ -31,7 +31,10 @@ class InsightRepository(BaseRepository[InsightRecord]):
         citations: Sequence[InsightCitation] = (),
     ) -> InsightRecord:
         existing = self.get_latest_insight(insight_type, include_stale=True)
-        citations_json = _format_citations_json(citations)
+        citations_json = json.dumps(
+            [citation.model_dump(mode="json") for citation in citations],
+            ensure_ascii=False,
+        )
         should_commit = not self.connection.in_transaction
         with self.transaction():
             if existing is None:
@@ -52,7 +55,7 @@ class InsightRepository(BaseRepository[InsightRecord]):
                         content,
                         inputs_hash,
                         model,
-                        _format_datetime(generated_at),
+                        generated_at.isoformat(),
                         citations_json,
                     ),
                 )
@@ -74,7 +77,7 @@ class InsightRepository(BaseRepository[InsightRecord]):
                         content,
                         inputs_hash,
                         model,
-                        _format_datetime(generated_at),
+                        generated_at.isoformat(),
                         citations_json,
                         insight_id,
                     ),
@@ -324,17 +327,6 @@ class InsightRepository(BaseRepository[InsightRecord]):
         data = row_to_dict(row)
         data["citations"] = data.pop("citations_json", "[]")
         return InsightRecord.model_validate(data)
-
-
-def _format_datetime(value: datetime) -> str:
-    return value.isoformat()
-
-
-def _format_citations_json(citations: Sequence[InsightCitation]) -> str:
-    return json.dumps(
-        [citation.model_dump(mode="json") for citation in citations],
-        ensure_ascii=False,
-    )
 
 
 def _map_input_evidence(row: sqlite3.Row) -> InsightInputEvidence:

@@ -7,7 +7,8 @@ from typing import Literal, Protocol, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.repositories import MetricsRepository
-from app.models import MetricsBreakdownDimension, MetricsFilter
+from app.models import MetricsFilter
+from app.models.metrics import MetricsBreakdownDimension
 from app.models.records import ApplicationRecord
 
 StructuredQueryTemplate = Literal[
@@ -76,7 +77,7 @@ class StructuredQueryTool:
         self._metrics_repository = metrics_repository
         self._ghost_threshold_days = ghost_threshold_days
         self._application_reader = application_reader
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     def run(self, request: StructuredQueryRequest) -> StructuredQueryResult:
         if request.template == "total_applications":
@@ -226,10 +227,6 @@ class StructuredQueryTool:
 
     def _ghost_cutoff_at(self) -> datetime:
         return self._clock().astimezone(UTC) - timedelta(days=self._ghost_threshold_days)
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 class LiveApplicationReader(Protocol):

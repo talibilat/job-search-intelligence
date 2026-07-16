@@ -5,8 +5,14 @@ from uuid import uuid4
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
 from app.db.repositories import ChatRepository
-from app.models import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
-from app.models.chat import SemanticSearchResult
+from app.models.chat import (
+    ChatCitation,
+    ChatIncrement,
+    ChatRequest,
+    ChatResponse,
+    ChatRoute,
+    SemanticSearchResult,
+)
 from app.services.chat_index import ChatIndexService
 
 _QUANTITATIVE_TERMS = (
@@ -75,7 +81,18 @@ class ChatService:
                 ],
             }
             tool_outputs.append(semantic_output)
-            citations.extend(_semantic_citations(content_results))
+            citations.extend(
+                ChatCitation(
+                    citation_id=f"email:{item.email_public_id}:{item.chunk_index}",
+                    source="email",
+                    email_public_id=item.email_public_id,
+                    application_id=item.application_ids[0] if item.application_ids else None,
+                    subject=item.subject,
+                    sent_at=item.sent_at,
+                    snippet=" ".join(item.content.split())[:280],
+                )
+                for item in content_results
+            )
 
         answer = synthesize_grounded_answer(route, tool_outputs, content_results, citations)
         increments = [
@@ -201,19 +218,4 @@ def _structured_citations(template: str, output: dict[str, object]) -> list[Chat
             source="metric",
             metric_template=template,
         )
-    ]
-
-
-def _semantic_citations(results: tuple[SemanticSearchResult, ...]) -> list[ChatCitation]:
-    return [
-        ChatCitation(
-            citation_id=f"email:{item.email_public_id}:{item.chunk_index}",
-            source="email",
-            email_public_id=item.email_public_id,
-            application_id=item.application_ids[0] if item.application_ids else None,
-            subject=item.subject,
-            sent_at=item.sent_at,
-            snippet=" ".join(item.content.split())[:280],
-        )
-        for item in results
     ]

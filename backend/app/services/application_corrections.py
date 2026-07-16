@@ -56,7 +56,7 @@ class ApplicationCorrectionService:
         self._application_repository = application_repository
         self._event_repository = event_repository
         self._correction_repository = correction_repository
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     def reset_application_lock(
         self,
@@ -403,7 +403,3 @@ def _merge_source_application_fields(
         raise ApplicationSplitConflictError(
             "Source application correction fields are invalid.",
         ) from error
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)

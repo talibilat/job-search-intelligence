@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
-from decimal import Decimal
 
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
@@ -49,14 +47,14 @@ class ClassificationRunRepository(BaseRepository[ClassificationRunRecord]):
                     record.provider,
                     record.model,
                     record.prompt_version,
-                    _format_datetime(record.started_at),
-                    _format_datetime(record.completed_at),
+                    record.started_at.isoformat(),
+                    record.completed_at.isoformat(),
                     record.candidate_count,
                     record.classified_count,
                     record.prompt_tokens,
                     record.completion_tokens,
                     record.total_tokens,
-                    _format_decimal(record.estimated_cost_usd),
+                    format(record.estimated_cost_usd, "f"),
                 ),
             )
 
@@ -70,11 +68,3 @@ class ClassificationRunRepository(BaseRepository[ClassificationRunRecord]):
         data = row_to_dict(row)
         data["estimated_cost_usd"] = str(data["estimated_cost_usd"])
         return ClassificationRunRecord.model_validate(data)
-
-
-def _format_datetime(value: datetime) -> str:
-    return value.isoformat()
-
-
-def _format_decimal(value: Decimal) -> str:
-    return format(value, "f")

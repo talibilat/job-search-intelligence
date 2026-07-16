@@ -172,16 +172,12 @@ def _validate_safe_target(target: Path) -> None:
         raise UnsafeWipeTargetError(f"Unsafe wipe target: {resolved}")
 
 
-def _absolute_path(path: Path) -> Path:
-    return path.expanduser().absolute()
-
-
 def _canonical_path(path: Path) -> Path:
     return path.expanduser().resolve(strict=False)
 
 
 def _target_path(path: Path) -> Path:
-    absolute = _absolute_path(path)
+    absolute = path.expanduser().absolute()
     if absolute.exists() and absolute.is_symlink():
         return absolute
     return _canonical_path(path)

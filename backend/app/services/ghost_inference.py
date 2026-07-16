@@ -4,8 +4,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from app.db.repositories import ApplicationRepository, EventRepository
-from app.models import ApplicationEventRecord, GhostInferenceRunResponse
+from app.models import ApplicationEventRecord
 from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES, ApplicationEventType
+from app.models.ghost_inference import GhostInferenceRunResponse
 from app.pipeline.aggregate import make_event_id
 from app.services.aggregation import derive_current_status_from_events
 
@@ -26,7 +27,7 @@ class GhostInferenceService:
         self._application_repository = application_repository
         self._event_repository = event_repository
         self._threshold_days = threshold_days
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     def run(self) -> GhostInferenceRunResponse:
         evaluated_at = self._clock()
@@ -177,23 +178,16 @@ class GhostInferenceService:
     ) -> None:
         events = self._event_repository.list_by_application_id(application_id)
         current_status = derive_current_status_from_events(events)
-        last_activity_at = _last_event_at(events, fallback=fallback_last_activity_at)
+        last_activity_at = max(
+            (event.event_at for event in events),
+            default=fallback_last_activity_at,
+        )
         self._application_repository.update_timeline_status(
             application_id=application_id,
             current_status=current_status,
             last_activity_at=last_activity_at.isoformat(),
             updated_at=evaluated_at.isoformat(),
         )
-
-
-def _last_event_at(
-    events: list[ApplicationEventRecord],
-    *,
-    fallback: datetime,
-) -> datetime:
-    if not events:
-        return fallback
-    return max(event.event_at for event in events)
 
 
 def _latest_event(
@@ -228,7 +222,3 @@ def _event_ordering_key(
     email_sent_at = event.email_sent_at or event.event_at
     classified_at = event.classification_classified_at or email_sent_at
     return event.event_at, email_sent_at, classified_at, event.id
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)

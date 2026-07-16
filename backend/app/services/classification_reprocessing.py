@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.config import AppSettings
 from app.db.repositories import EmailRepository
-from app.models import ClassificationReprocessingPlan
+from app.models.classification import ClassificationReprocessingPlan
 from app.services.classification_target import (
     has_configured_classification_model,
     resolve_classification_model,

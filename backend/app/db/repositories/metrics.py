@@ -200,7 +200,7 @@ class MetricsRepository(BaseRepository[int]):
     ) -> PersonalGhostThresholdMetric:
         response_days = self._first_response_days(filters=filters)
 
-        distribution = _empty_silence_age_distribution()
+        distribution = {bucket: 0 for bucket, _min_days, _max_days in _SILENCE_AGE_BUCKETS}
         for silence_days in self._silent_application_ages(
             evaluated_at=evaluated_at,
             filters=filters,
@@ -555,23 +555,6 @@ class MetricsRepository(BaseRepository[int]):
             first_event_type="interview_scheduled",
             later_event_type="offer",
             filters=filters,
-        )
-
-    def _count_applications_with_current_status(
-        self,
-        status: str,
-        filters: MetricsFilter | None = None,
-    ) -> int:
-        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
-        filter_clause = where_clause.replace("WHERE", "AND", 1)
-        return self._fetch_count(
-            f"""
-            SELECT COUNT(*)
-            FROM applications
-            WHERE current_status = ?
-              {filter_clause}
-            """,
-            (status, *filter_parameters),
         )
 
     def _count_applications_with_event(
@@ -1031,10 +1014,6 @@ _SILENCE_AGE_BUCKETS: tuple[tuple[SilenceAgeBucketName, int, int | None], ...] =
     ("31_60", 31, 60),
     ("61_plus", 61, None),
 )
-
-
-def _empty_silence_age_distribution() -> dict[SilenceAgeBucketName, int]:
-    return {bucket: 0 for bucket, _min_days, _max_days in _SILENCE_AGE_BUCKETS}
 
 
 def _silence_age_bucket(silence_days: int) -> SilenceAgeBucketName:

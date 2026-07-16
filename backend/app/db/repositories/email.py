@@ -118,7 +118,8 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                 id=message.ref.message_id,
                 thread_id=message.ref.thread_id,
                 from_addr=_format_email_address(message.from_addr),
-                to_addr=_format_email_addresses(message.to_addrs),
+                to_addr=", ".join(filter(None, map(_format_email_address, message.to_addrs)))
+                or None,
                 subject=message.subject,
                 sent_at=message.sent_at or message.received_at,
                 body_text=None,
@@ -795,14 +796,6 @@ def _format_email_address(address: EmailAddress | None) -> str | None:
     return f"{address.display_name} <{address.address}>"
 
 
-def _format_email_addresses(addresses: tuple[EmailAddress, ...]) -> str | None:
-    if not addresses:
-        return None
-    return ", ".join(
-        address for address in (_format_email_address(item) for item in addresses) if address
-    )
-
-
 def _raw_email_preview_from_row(row: sqlite3.Row) -> RawEmailPreviewRecord:
     row_data = row_to_dict(row)
     from_addr = row_data.pop("from_addr")
@@ -830,16 +823,6 @@ def _email_address_domains(value: object) -> list[str]:
         if domain is not None
     }
     return sorted(domains)
-
-
-def _format_datetime(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.isoformat()
-
-
-def _format_json_array(values: tuple[str, ...]) -> str:
-    return json.dumps(list(values), separators=(",", ":"))
 
 
 def _empty_classification_reprocessing_stats() -> ClassificationReprocessingStats:

@@ -65,10 +65,18 @@ def build_pipeline_status(
         last_error=last_error,
     )
 
+    account_display = None
+    if connection is not None:
+        account_display = (
+            connection.display_email.address
+            if connection.display_email is not None
+            else connection.account.account_id
+        )
+
     return PipelineStatus(
         generated_at=generated_at,
         gmail_connected=connection is not None,
-        account_display=_connection_display(connection),
+        account_display=account_display,
         reauth_required=connection.reauth_required if connection is not None else False,
         sync_running=sync_running,
         sync_mode=sync_status.mode.value if sync_status.mode is not None else None,
@@ -87,14 +95,6 @@ def build_pipeline_status(
         next_action=next_action,
         next_action_reason=next_action_reason,
     )
-
-
-def _connection_display(connection: EmailConnection | None) -> str | None:
-    if connection is None:
-        return None
-    if connection.display_email is not None:
-        return connection.display_email.address
-    return connection.account.account_id
 
 
 def _resolve_next_action(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from app.config import AppSettings, LLMProviderName
-from app.models import (
+from app.models.provider_config import (
     CapabilityReadiness,
     ProviderReadinessResponse,
     ReadinessState,

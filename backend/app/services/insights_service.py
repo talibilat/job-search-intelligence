@@ -12,17 +12,21 @@ from pydantic import BaseModel, ConfigDict
 
 from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
-from app.models import (
+from app.models import InsightRecord
+from app.models.insight import (
     InsightCitation,
+    InsightRegenerationCost,
+    InsightRegenerationEstimate,
+)
+from app.models.records import (
+    ApplicationEventType,
+    ApplicationStatus,
     InsightInput,
     InsightInputEvidence,
     InsightInputFact,
-    InsightRecord,
-    InsightRegenerationCost,
-    InsightRegenerationEstimate,
     InsightRoleOutcomeSummary,
+    InsightType,
 )
-from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
 from app.providers.llm import (
     LLMFinishReason,
     LLMGenerationOptions,
@@ -138,7 +142,7 @@ class InsightGenerationService:
         self._insight_repository = insight_repository
         self._llm_provider = llm_provider
         self._input_builder = input_builder or InsightInputBuilder(insight_repository)
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     async def generate_insight(
         self,
@@ -738,10 +742,6 @@ def _configured_chat_model(settings: AppSettings) -> str:
             public_message="Configured LLM provider chat model is missing.",
         )
     return model
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def _hash_insight_input(insight_input: InsightInput) -> str:

@@ -13,7 +13,7 @@ from app.db.repositories import (
     EventRepository,
 )
 from app.db.repositories.application import ApplicationUpsertOutcome
-from app.models.application import ApplicationRecord, ApplicationStatus
+from app.models.application import ApplicationStatus
 from app.models.classification import JobEmailCategory
 from app.models.event import ApplicationEventRecord, ApplicationEventType
 from app.models.records import CorrectionConflictType, JsonObject
@@ -94,8 +94,8 @@ class AggregationService:
         self._event_repository = event_repository
         self._email_repository = email_repository
         self._correction_conflict_repository = correction_conflict_repository
-        self._clock = clock or _utcnow
-        self._run_id_factory = run_id_factory or _new_run_id
+        self._clock = clock or (lambda: datetime.now(UTC))
+        self._run_id_factory = run_id_factory or (lambda: uuid4().hex)
 
     def run(
         self,
@@ -308,7 +308,10 @@ def _upsert_application(
     application_id = make_application_id(key)
     existing_application = application_repository.get_application(application_id)
     existing_events = event_repository.list_by_application_id(application_id)
-    timestamps = _collect_timestamps(group, existing_events)
+    timestamps = sorted(
+        [event.event_at for event in existing_events]
+        + [_event_at_for_result(result) for result in group],
+    )
     # Prefer the extraction with company/role data for display fields
     best_result = _pick_best_extraction(group)
 
@@ -347,27 +350,30 @@ def _upsert_application(
 
     company = best_result.extraction.company or ""
     role_title = best_result.extraction.role_title or ""
-    current_status = _derive_current_status(group, existing_events)
-
-    proposed_application = _proposed_application_json(
-        id=application_id,
-        company=company,
-        role_title=role_title,
-        source=source,
-        first_seen_at=first_seen_at,
-        current_status=current_status,
-        last_activity_at=last_activity_at,
-        created_at=created_at,
-        updated_at=updated_at,
-        salary_min=salary_min,
-        salary_max=salary_max,
-        currency=currency,
-        location=location,
-        work_mode=work_mode,
-        seniority=seniority,
-        sponsorship=sponsorship,
-        tech_stack=tech_stack,
+    current_status = derive_current_status_from_event_timeline(
+        _collect_status_timeline(group, existing_events),
     )
+
+    proposed_application: JsonObject = {
+        "id": application_id,
+        "company": company,
+        "role_title": role_title,
+        "source": source,
+        "first_seen_at": first_seen_at,
+        "current_status": current_status,
+        "salary_min": salary_min,
+        "salary_max": salary_max,
+        "currency": currency,
+        "location": location,
+        "work_mode": work_mode,
+        "seniority": seniority,
+        "sponsorship": sponsorship,
+        "tech_stack": tech_stack,
+        "last_activity_at": last_activity_at,
+        "manual_lock": False,
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
 
     outcome = application_repository.upsert_application(
         id=application_id,
@@ -391,12 +397,17 @@ def _upsert_application(
     if outcome != "manual_conflict" or existing_application is None:
         return outcome, None
 
-    evidence_email_ids = _evidence_email_ids(group)
+    evidence_email_ids: list[str] = []
+    for result in group:
+        if result.classification_email_id not in evidence_email_ids:
+            evidence_email_ids.append(result.classification_email_id)
     return outcome, _CorrectionConflict(
         application_id=application_id,
-        conflict_key=f"application_summary:{application_id}:{_evidence_key(evidence_email_ids)}",
+        conflict_key=f"application_summary:{application_id}:{','.join(sorted(evidence_email_ids))}",
         conflict_type="application_summary",
-        existing_json={"application": _application_json(existing_application)},
+        existing_json={
+            "application": dict(existing_application.model_dump(mode="json")),
+        },
         proposed_json={
             "application": proposed_application,
             "evidence_email_ids": evidence_email_ids,
@@ -439,10 +450,13 @@ def _upsert_events(
             existing_event = event_repository.get_by_application_and_id(
                 application_id=application_id,
                 event_id=event_id,
-            ) or _find_existing_event_for_email(
-                event_repository=event_repository,
-                application_id=application_id,
-                email_id=email_id,
+            ) or next(
+                (
+                    event
+                    for event in event_repository.list_by_application_id(application_id)
+                    if event.email_id == email_id
+                ),
+                None,
             )
             conflicts.append(
                 _CorrectionConflict(
@@ -450,18 +464,20 @@ def _upsert_events(
                     conflict_key=(f"application_event:{application_id}:{email_id or event_id}"),
                     conflict_type="application_event",
                     existing_json={
-                        "event": _event_json(existing_event) if existing_event else None,
+                        "event": (
+                            dict(existing_event.model_dump(mode="json")) if existing_event else None
+                        ),
                     },
                     proposed_json={
-                        "event": _proposed_event_json(
-                            id=event_id,
-                            application_id=application_id,
-                            email_id=email_id,
-                            event_type=event_type,
-                            event_at=event_at_str,
-                            extract_note=ext.rejection_reason,
-                            extracted_status=ext.status,
-                        ),
+                        "event": {
+                            "id": event_id,
+                            "application_id": application_id,
+                            "email_id": email_id,
+                            "event_type": event_type,
+                            "event_at": event_at_str,
+                            "extract_note": ext.rejection_reason,
+                            "extracted_status": ext.status,
+                        },
                     },
                     evidence_email_id=email_id,
                 )
@@ -471,126 +487,8 @@ def _upsert_events(
     return events_upserted, conflicts
 
 
-def _find_existing_event_for_email(
-    *,
-    event_repository: EventRepository,
-    application_id: str,
-    email_id: str | None,
-) -> ApplicationEventRecord | None:
-    if email_id is None:
-        return None
-    for event in event_repository.list_by_application_id(application_id):
-        if event.email_id == email_id:
-            return event
-    return None
-
-
-def _application_json(application: ApplicationRecord) -> JsonObject:
-    return dict(application.model_dump(mode="json"))
-
-
-def _event_json(event: ApplicationEventRecord) -> JsonObject:
-    return dict(event.model_dump(mode="json"))
-
-
-def _proposed_application_json(
-    *,
-    id: str,
-    company: str,
-    role_title: str,
-    source: str,
-    first_seen_at: str,
-    current_status: ApplicationStatus,
-    last_activity_at: str,
-    created_at: str,
-    updated_at: str,
-    salary_min: int | None,
-    salary_max: int | None,
-    currency: str | None,
-    location: str | None,
-    work_mode: str | None,
-    seniority: str | None,
-    sponsorship: str,
-    tech_stack: list[str],
-) -> JsonObject:
-    return {
-        "id": id,
-        "company": company,
-        "role_title": role_title,
-        "source": source,
-        "first_seen_at": first_seen_at,
-        "current_status": current_status,
-        "salary_min": salary_min,
-        "salary_max": salary_max,
-        "currency": currency,
-        "location": location,
-        "work_mode": work_mode,
-        "seniority": seniority,
-        "sponsorship": sponsorship,
-        "tech_stack": tech_stack,
-        "last_activity_at": last_activity_at,
-        "manual_lock": False,
-        "created_at": created_at,
-        "updated_at": updated_at,
-    }
-
-
-def _proposed_event_json(
-    *,
-    id: str,
-    application_id: str,
-    email_id: str | None,
-    event_type: ApplicationEventType,
-    event_at: str,
-    extract_note: str | None,
-    extracted_status: ApplicationStatus | None,
-) -> JsonObject:
-    return {
-        "id": id,
-        "application_id": application_id,
-        "email_id": email_id,
-        "event_type": event_type,
-        "event_at": event_at,
-        "extract_note": extract_note,
-        "extracted_status": extracted_status,
-    }
-
-
-def _evidence_email_ids(group: list[_EnrichedExtraction]) -> list[str]:
-    email_ids: list[str] = []
-    for result in group:
-        if result.classification_email_id not in email_ids:
-            email_ids.append(result.classification_email_id)
-    return email_ids
-
-
-def _evidence_key(email_ids: list[str]) -> str:
-    if not email_ids:
-        return "unknown"
-    return ",".join(sorted(email_ids))
-
-
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
     return result.extraction.event_at or result.email_sent_at or result.classification_classified_at
-
-
-def _collect_timestamps(
-    group: list[_EnrichedExtraction],
-    existing_events: list[ApplicationEventRecord],
-) -> list[datetime]:
-    return sorted(
-        [event.event_at for event in existing_events]
-        + [_event_at_for_result(result) for result in group],
-    )
-
-
-def _derive_current_status(
-    group: list[_EnrichedExtraction],
-    existing_events: list[ApplicationEventRecord],
-) -> ApplicationStatus:
-    return derive_current_status_from_event_timeline(
-        _collect_status_timeline(group, existing_events),
-    )
 
 
 def derive_current_status_from_events(
@@ -691,11 +589,3 @@ def _pick_best_extraction(
             best = result
             continue
     return best
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
-def _new_run_id() -> str:
-    return uuid4().hex

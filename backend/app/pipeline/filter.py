@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 from app.providers.email.provider import (
     EmailCandidateQuery,
     EmailCandidateQueryStrategy,
-)
-from app.providers.email.provider import (
-    sender_matches_domain_terms as _sender_matches_domain_terms,
 )
 
 HEURISTIC_ATS_SENDER_DOMAIN_TERMS: tuple[str, ...] = (
@@ -46,21 +41,6 @@ HEURISTIC_SENDER_DOMAIN_TERMS: tuple[str, ...] = tuple(
         HEURISTIC_ATS_SENDER_DOMAIN_TERMS + HEURISTIC_RECRUITER_SENDER_DOMAIN_TERMS,
     ),
 )
-
-
-def sender_matches_heuristic_sender_domain(sender_address: str | None) -> bool:
-    """Return whether a sender belongs to a known ATS or recruiter domain."""
-
-    return sender_matches_domain_terms(sender_address, HEURISTIC_SENDER_DOMAIN_TERMS)
-
-
-def sender_matches_domain_terms(
-    sender_address: str | None,
-    domain_terms: Iterable[str],
-) -> bool:
-    """Match exact sender domains or subdomains, not arbitrary suffixes."""
-
-    return _sender_matches_domain_terms(sender_address, domain_terms)
 
 
 def build_broad_candidate_query() -> EmailCandidateQuery:

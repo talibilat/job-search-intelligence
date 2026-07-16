@@ -65,7 +65,7 @@ class ManualApplicationMergeService:
         self._application_repository = application_repository
         self._event_repository = event_repository
         self._correction_repository = correction_repository
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     def merge_applications(
         self,
@@ -97,12 +97,14 @@ class ManualApplicationMergeService:
                 source_application_id,
             )
 
-            before_json = _build_before_snapshot(
-                target=target,
-                source=source,
-                source_events=source_events,
-                source_corrections=source_corrections,
-            )
+            before_json: JsonObject = {
+                "target_application": _json_object(target),
+                "source_application": _json_object(source),
+                "source_events": [_json_object(event) for event in source_events],
+                "source_corrections": [
+                    _json_object(correction) for correction in source_corrections
+                ],
+            }
             merged = _merge_application_summary(
                 target=target,
                 source=source,
@@ -128,12 +130,12 @@ class ManualApplicationMergeService:
                 application_id=target_application_id,
                 correction_type="merge",
                 before_json=before_json,
-                after_json=_build_after_snapshot(
-                    target=updated_target,
-                    deleted_source_application_id=source_application_id,
-                    moved_event_ids=[event.id for event in source_events],
-                    moved_correction_ids=[correction.id for correction in source_corrections],
-                ),
+                after_json={
+                    "target_application": _json_object(updated_target),
+                    "deleted_source_application_id": source_application_id,
+                    "moved_event_ids": [event.id for event in source_events],
+                    "moved_correction_ids": [correction.id for correction in source_corrections],
+                },
                 reason=reason,
                 created_at=now.isoformat(),
             )
@@ -238,41 +240,7 @@ def _merge_tech_stack(target: list[str], source: list[str]) -> list[str]:
     return merged
 
 
-def _build_before_snapshot(
-    *,
-    target: ApplicationRecord,
-    source: ApplicationRecord,
-    source_events: list[ApplicationEventRecord],
-    source_corrections: list[ApplicationCorrectionRecord],
-) -> JsonObject:
-    return {
-        "target_application": _json_object(target),
-        "source_application": _json_object(source),
-        "source_events": [_json_object(event) for event in source_events],
-        "source_corrections": [_json_object(correction) for correction in source_corrections],
-    }
-
-
-def _build_after_snapshot(
-    *,
-    target: ApplicationRecord,
-    deleted_source_application_id: str,
-    moved_event_ids: list[str],
-    moved_correction_ids: list[int],
-) -> JsonObject:
-    return {
-        "target_application": _json_object(target),
-        "deleted_source_application_id": deleted_source_application_id,
-        "moved_event_ids": moved_event_ids,
-        "moved_correction_ids": moved_correction_ids,
-    }
-
-
 def _json_object(
     model: ApplicationRecord | ApplicationEventRecord | ApplicationCorrectionRecord,
 ) -> JsonObject:
     return cast(JsonObject, model.model_dump(mode="json"))
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
