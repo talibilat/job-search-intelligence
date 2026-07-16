@@ -21,7 +21,6 @@ from app.models.provider_config import (
     ProviderSelection,
 )
 from app.providers import (
-    LLMProviderRegistration,
     ProviderConfigRequirement,
     ProviderRegistry,
     ProviderSecretRequirement,
@@ -105,7 +104,20 @@ def build_provider_config_response(
             )
             for provider in registry.email_providers()
         ),
-        llm_providers=tuple(_llm_provider_response(item) for item in registry.llm_providers()),
+        llm_providers=tuple(
+            LLMProviderConfigResponse(
+                name=provider.name,
+                display_name=provider.display_name,
+                is_local=provider.is_local,
+                config_requirements=tuple(
+                    _config_requirement_response(item) for item in provider.config_requirements
+                ),
+                secret_requirements=tuple(
+                    _secret_requirement_response(item) for item in provider.secret_requirements
+                ),
+            )
+            for provider in registry.llm_providers()
+        ),
     )
 
 
@@ -218,18 +230,4 @@ def _secret_requirement_response(
         label=requirement.label,
         required=requirement.required,
         enforcement=requirement.enforcement,
-    )
-
-
-def _llm_provider_response(provider: LLMProviderRegistration) -> LLMProviderConfigResponse:
-    return LLMProviderConfigResponse(
-        name=provider.name,
-        display_name=provider.display_name,
-        is_local=provider.is_local,
-        config_requirements=tuple(
-            _config_requirement_response(item) for item in provider.config_requirements
-        ),
-        secret_requirements=tuple(
-            _secret_requirement_response(item) for item in provider.secret_requirements
-        ),
     )
