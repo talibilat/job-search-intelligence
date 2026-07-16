@@ -444,10 +444,13 @@ def _upsert_events(
             existing_event = event_repository.get_by_application_and_id(
                 application_id=application_id,
                 event_id=event_id,
-            ) or _find_existing_event_for_email(
-                event_repository=event_repository,
-                application_id=application_id,
-                email_id=email_id,
+            ) or next(
+                (
+                    event
+                    for event in event_repository.list_by_application_id(application_id)
+                    if event.email_id == email_id
+                ),
+                None,
             )
             conflicts.append(
                 _CorrectionConflict(
@@ -476,20 +479,6 @@ def _upsert_events(
             continue
         events_upserted += 1
     return events_upserted, conflicts
-
-
-def _find_existing_event_for_email(
-    *,
-    event_repository: EventRepository,
-    application_id: str,
-    email_id: str | None,
-) -> ApplicationEventRecord | None:
-    if email_id is None:
-        return None
-    for event in event_repository.list_by_application_id(application_id):
-        if event.email_id == email_id:
-            return event
-    return None
 
 
 def _proposed_application_json(
