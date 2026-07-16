@@ -350,7 +350,9 @@ def _upsert_application(
 
     company = best_result.extraction.company or ""
     role_title = best_result.extraction.role_title or ""
-    current_status = _derive_current_status(group, existing_events)
+    current_status = derive_current_status_from_event_timeline(
+        _collect_status_timeline(group, existing_events),
+    )
 
     proposed_application = _proposed_application_json(
         id=application_id,
@@ -539,15 +541,6 @@ def _evidence_key(email_ids: list[str]) -> str:
 
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
     return result.extraction.event_at or result.email_sent_at or result.classification_classified_at
-
-
-def _derive_current_status(
-    group: list[_EnrichedExtraction],
-    existing_events: list[ApplicationEventRecord],
-) -> ApplicationStatus:
-    return derive_current_status_from_event_timeline(
-        _collect_status_timeline(group, existing_events),
-    )
 
 
 def derive_current_status_from_events(
