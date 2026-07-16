@@ -35,7 +35,6 @@ from .insight import (
 )
 from .metrics import (
     MetricRate,
-    MetricRateRow,
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
     MetricsFilter,
@@ -129,7 +128,6 @@ __all__ = [
     "MetricsBreakdownResponse",
     "MetricsDiagnosticsResponse",
     "MetricRate",
-    "MetricRateRow",
     "MetricsBreakdownDimension",
     "MetricsFilter",
     "MetricsFunnelResponse",
