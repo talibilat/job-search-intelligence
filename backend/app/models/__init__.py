@@ -66,7 +66,6 @@ from .synthetic_fixture import (
     SyntheticSponsorship,
     SyntheticWorkMode,
 )
-from .wipe_data import WipeDataResponse
 
 __all__ = [
     "EmailProviderConfigResponse",
@@ -127,5 +126,4 @@ __all__ = [
     "SyntheticRawEmail",
     "SyntheticSponsorship",
     "SyntheticWorkMode",
-    "WipeDataResponse",
 ]
