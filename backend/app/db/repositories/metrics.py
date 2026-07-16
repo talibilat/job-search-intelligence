@@ -557,23 +557,6 @@ class MetricsRepository(BaseRepository[int]):
             filters=filters,
         )
 
-    def _count_applications_with_current_status(
-        self,
-        status: str,
-        filters: MetricsFilter | None = None,
-    ) -> int:
-        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
-        filter_clause = where_clause.replace("WHERE", "AND", 1)
-        return self._fetch_count(
-            f"""
-            SELECT COUNT(*)
-            FROM applications
-            WHERE current_status = ?
-              {filter_clause}
-            """,
-            (status, *filter_parameters),
-        )
-
     def _count_applications_with_event(
         self,
         event_type: str,
