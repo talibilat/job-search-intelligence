@@ -15,7 +15,6 @@ from app.db.repositories import InsightRepository
 from app.models import (
     InsightCitation,
     InsightInput,
-    InsightInputEvidence,
     InsightInputFact,
     InsightRecord,
     InsightRegenerationCost,
@@ -24,6 +23,7 @@ from app.models import (
 from app.models.records import (
     ApplicationEventType,
     ApplicationStatus,
+    InsightInputEvidence,
     InsightRoleOutcomeSummary,
     InsightType,
 )
