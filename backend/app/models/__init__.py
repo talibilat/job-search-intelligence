@@ -1,7 +1,6 @@
 """Pydantic DTOs used at application boundaries."""
 
 from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
-from .chat_history import ChatHistoryResponse
 from .classification import (
     ClassificationCandidateStats,
     ClassificationPreRunEstimate,
@@ -124,7 +123,6 @@ __all__ = [
     "ApplicationEventRecord",
     "ApplicationRecord",
     "ChatMessageRecord",
-    "ChatHistoryResponse",
     "ChatCitation",
     "ChatIncrement",
     "ChatRequest",

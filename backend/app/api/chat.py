@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import get_chat_history_service, get_chat_service
 from app.api.errors import ApiErrorResponse
-from app.models import ChatHistoryResponse, ChatRequest, ChatResponse
+from app.models import ChatRequest, ChatResponse
+from app.models.chat_history import ChatHistoryResponse
 from app.services.chat_history import ChatHistoryService
 from app.services.chat_service import ChatService
 
