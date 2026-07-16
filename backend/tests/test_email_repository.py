@@ -10,7 +10,8 @@ from alembic import command
 from alembic.config import Config
 from app.config import EmailProviderName
 from app.db.repositories import EmailRepository
-from app.models import RawEmailBodyRetentionState, RawEmailPreviewPage
+from app.models import RawEmailBodyRetentionState
+from app.models.raw_email import RawEmailPreviewPage
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,
