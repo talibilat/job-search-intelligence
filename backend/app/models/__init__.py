@@ -44,7 +44,6 @@ from .synthetic_fixture import (
     SyntheticJobEmailCategory,
     SyntheticRawEmail,
     SyntheticSponsorship,
-    SyntheticWorkMode,
 )
 
 __all__ = [
@@ -85,5 +84,4 @@ __all__ = [
     "SyntheticJobEmailCategory",
     "SyntheticRawEmail",
     "SyntheticSponsorship",
-    "SyntheticWorkMode",
 ]
