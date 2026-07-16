@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app.models import EmailChunkSource, EmailTextChunk
+from app.models import EmailTextChunk
+from app.models.chunk import EmailChunkSource
 
 
 class ChunkableEmailRepository(Protocol):
