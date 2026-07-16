@@ -1,7 +1,6 @@
 /** Describes how one logical route filter maps to one URL query parameter key. */
 interface RouteQueryParam<TValue> {
   readonly key: string;
-  readonly defaultValue: TValue;
   parse(values: readonly string[]): TValue;
   serialize(value: TValue): readonly string[];
 }
@@ -81,7 +80,6 @@ export function updateRouteQuery<const TSchema extends RouteQuerySchema>(
 export function stringQueryParam(key: string, defaultValue = ""): RouteQueryParam<string> {
   return {
     key,
-    defaultValue,
     parse(values) {
       return values.at(-1) ?? defaultValue;
     },
@@ -95,7 +93,6 @@ export function stringQueryParam(key: string, defaultValue = ""): RouteQueryPara
 export function stringListQueryParam(key: string): RouteQueryParam<readonly string[]> {
   return {
     key,
-    defaultValue: [],
     parse(values) {
       return values.filter((value) => value.length > 0);
     },
@@ -115,7 +112,6 @@ export function enumQueryParam<const TValue extends string>(
 
   return {
     key,
-    defaultValue,
     parse(values) {
       const value = values.at(-1);
       if (value !== undefined && allowedValueSet.has(value)) {
