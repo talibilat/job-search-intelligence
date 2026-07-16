@@ -9,7 +9,6 @@ from .processing import (
 )
 from .provider_config import (
     LLMProviderHealthCheckApiRequest,
-    ProviderConfigRequirementResponse,
     ProviderConfigResponse,
     ProviderConfigUpdateRequest,
     ProviderConfigurationRecord,
@@ -65,7 +64,6 @@ from .synthetic_fixture import (
 __all__ = [
     "LLMProviderHealthCheckApiRequest",
     "MetricsFilter",
-    "ProviderConfigRequirementResponse",
     "ProviderConfigResponse",
     "ProviderConfigUpdateRequest",
     "ProviderConfigValues",
