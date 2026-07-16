@@ -14,7 +14,6 @@ from .classification import (
     ClassificationCandidateStats,
     ClassificationPreRunEstimate,
     ClassificationReprocessingPlan,
-    ClassificationReprocessingStats,
     ClassificationRunApiRequest,
     ClassificationRunResponse,
 )
@@ -207,7 +206,6 @@ __all__ = [
     "ClassificationCandidateStats",
     "ClassificationPreRunEstimate",
     "ClassificationReprocessingPlan",
-    "ClassificationReprocessingStats",
     "ClassificationRunResponse",
     "ApplicationMergeRequest",
     "ApplicationMergeResponse",
