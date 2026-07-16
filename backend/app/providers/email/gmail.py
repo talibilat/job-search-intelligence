@@ -931,7 +931,7 @@ class GmailMessageLister:
             GmailProfileResponse,
             await self._get_metadata_json(
                 _PROFILE_PATH,
-                query=_profile_query(),
+                query=(("fields", _PROFILE_HISTORY_FIELDS),),
                 access_token=access_token,
             ),
         )
@@ -1249,10 +1249,6 @@ def _metadata_query() -> tuple[tuple[str, str], ...]:
     return (("fields", _MESSAGE_METADATA_FIELDS), ("format", "metadata")) + tuple(
         ("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS
     )
-
-
-def _profile_query() -> tuple[tuple[str, str], ...]:
-    return (("fields", _PROFILE_HISTORY_FIELDS),)
 
 
 def _body_query() -> tuple[tuple[str, str], ...]:
