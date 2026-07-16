@@ -27,7 +27,6 @@ from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunRespo
 from .health import HealthResponse
 from .insight import (
     InsightRegenerateRequest,
-    InsightRegenerateResponse,
 )
 from .metrics import (
     MetricsBreakdownDimension,
@@ -175,7 +174,6 @@ __all__ = [
     "EmailTextChunk",
     "InsightRecord",
     "InsightRegenerateRequest",
-    "InsightRegenerateResponse",
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
