@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from app.config import AppSettings
-from app.models import ProviderReadinessResponse, ReadinessState
+from app.models import ReadinessState
+from app.models.provider_config import ProviderReadinessResponse
 from app.models.setup import SetupStatusResponse
 from app.services.classification_mode_config import recommend_classification_mode
 

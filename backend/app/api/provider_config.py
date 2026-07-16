@@ -18,8 +18,8 @@ from app.models import (
     LLMProviderHealthCheckApiRequest,
     ProviderConfigResponse,
     ProviderConfigUpdateRequest,
-    ProviderReadinessResponse,
 )
+from app.models.provider_config import ProviderReadinessResponse
 from app.providers import ProviderConfigurationError, ProviderRegistry, provider_registry
 from app.providers.llm import (
     LLMProvider,
