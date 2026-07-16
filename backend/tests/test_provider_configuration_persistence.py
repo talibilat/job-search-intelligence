@@ -10,7 +10,8 @@ from alembic import command
 from alembic.config import Config
 from app.config import AppSettings, ClassificationMode, EmailProviderName, LLMProviderName
 from app.db.repositories import ProviderConfigurationRepository
-from app.models import ProviderConfigUpdateRequest, ReadinessState
+from app.models import ReadinessState
+from app.models.provider_config import ProviderConfigUpdateRequest
 from app.providers import provider_registry
 from app.providers.email import EmailAccountRef, EmailConnection
 from app.providers.llm import (

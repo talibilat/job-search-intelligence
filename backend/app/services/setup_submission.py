@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from app.config import AppSettings
 from app.db.repositories.provider_config import ProviderConfigurationRepository
-from app.models import ProviderConfigUpdateRequest
+from app.models.provider_config import ProviderConfigUpdateRequest
 from app.models.setup import SetupSubmitRequest, SetupSubmitResponse
 from app.providers import ProviderConfigurationError, ProviderRegistry
 from app.security import SecretStore
