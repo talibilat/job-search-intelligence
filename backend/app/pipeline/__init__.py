@@ -9,7 +9,6 @@ from .classify import (
     ClassificationPromptEmail,
     JobApplicationExtraction,
     build_classification_prompt_request,
-    parse_classification_prompt_output,
 )
 
 __all__ = [
@@ -19,5 +18,4 @@ __all__ = [
     "JobApplicationExtraction",
     "build_classification_prompt_request",
     "build_application_grouping_key",
-    "parse_classification_prompt_output",
 ]
