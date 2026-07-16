@@ -398,7 +398,7 @@ type ResolvedDataTableColumn<TRow extends object> = DataTableColumnBase & {
   render?: (row: TRow) => ReactNode;
 };
 
-export interface DataTableProps<TRow extends object> {
+interface DataTableProps<TRow extends object> {
   caption: ReactNode;
   columns: readonly DataTableColumn<TRow>[];
   emptyMessage?: ReactNode;
