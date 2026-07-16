@@ -14,10 +14,7 @@ from app.db.repositories import (
     EmailRepository,
 )
 from app.db.repositories.sync_state import SyncStateRepository
-from app.models import (
-    SyncJobPhase,
-    SyncJobStatus,
-)
+from app.models import SyncJobPhase
 from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import (
     EmailBackfillStateRecord,
@@ -29,6 +26,7 @@ from app.models.records import (
 )
 from app.models.sync import (
     SyncJobCounts,
+    SyncJobStatus,
     SyncLocalStats,
     SyncScopeEstimate,
     SyncScopeEstimateBasis,

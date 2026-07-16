@@ -26,10 +26,7 @@ from .records import (
     RawEmailBodyRetentionState,
     RawEmailRecord,
 )
-from .sync import (
-    SyncJobPhase,
-    SyncJobStatus,
-)
+from .sync import SyncJobPhase
 
 __all__ = [
     "MetricsFilter",
@@ -55,5 +52,4 @@ __all__ = [
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
     "SyncJobPhase",
-    "SyncJobStatus",
 ]

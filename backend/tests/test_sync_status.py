@@ -5,8 +5,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from app.config import EmailProviderName
 from app.main import create_app
-from app.models import SyncJobPhase, SyncJobStatus
-from app.models.sync import SyncJobCounts, SyncJobError
+from app.models import SyncJobPhase
+from app.models.sync import SyncJobCounts, SyncJobError, SyncJobStatus
 from app.services.sync_service import build_idle_sync_status
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
