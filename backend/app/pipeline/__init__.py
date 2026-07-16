@@ -6,7 +6,6 @@ from .aggregate import (
 )
 from .classify import (
     CLASSIFICATION_PROMPT_VERSION,
-    AcceptedLLMExtraction,
     ClassificationPromptEmail,
     JobApplicationExtraction,
     MalformedLLMExtraction,
@@ -19,7 +18,6 @@ from .classify import (
 __all__ = [
     "ApplicationGroupingKey",
     "CLASSIFICATION_PROMPT_VERSION",
-    "AcceptedLLMExtraction",
     "ClassificationPromptEmail",
     "JobApplicationExtraction",
     "MalformedLLMExtraction",
