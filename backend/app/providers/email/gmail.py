@@ -966,7 +966,7 @@ class GmailMessageLister:
                     GmailMessageBodyResponse,
                     await self._get_body_json(
                         f"{_MESSAGES_PATH}/{ref.message_id}",
-                        query=_body_query(),
+                        query=(("fields", _MESSAGE_BODY_FIELDS), ("format", "full")),
                         access_token=access_token,
                     ),
                     public_message=_INVALID_BODY_DATA_MESSAGE,
@@ -1249,10 +1249,6 @@ def _metadata_query() -> tuple[tuple[str, str], ...]:
     return (("fields", _MESSAGE_METADATA_FIELDS), ("format", "metadata")) + tuple(
         ("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS
     )
-
-
-def _body_query() -> tuple[tuple[str, str], ...]:
-    return (("fields", _MESSAGE_BODY_FIELDS), ("format", "full"))
 
 
 def _metadata_headers(metadata: GmailMessageMetadataResponse) -> dict[str, tuple[str, ...]]:
