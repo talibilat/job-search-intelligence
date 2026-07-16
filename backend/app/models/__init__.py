@@ -18,7 +18,6 @@ from .chat_history import ChatHistoryResponse
 from .classification import (
     ClassificationCandidateStats,
     ClassificationPreRunEstimate,
-    ClassificationPromptOutput,
     ClassificationReprocessingPlan,
     ClassificationReprocessingStats,
     ClassificationRunApiRequest,
@@ -157,7 +156,6 @@ __all__ = [
     "InterviewTaskCompletionResponse",
     "ApplicationEventTimelineRecord",
     "ApplicationStatusCountsResponse",
-    "ClassificationPromptOutput",
     "CompanyProfileRecord",
     "CompanyProfileSource",
     "CompanyType",
