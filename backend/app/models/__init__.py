@@ -1,6 +1,5 @@
 """Pydantic DTOs used at application boundaries."""
 
-from .diagnostics import MetricsDiagnosticsResponse
 from .metrics import (
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
@@ -84,7 +83,6 @@ __all__ = [
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
     "MetricsBreakdownResponse",
-    "MetricsDiagnosticsResponse",
     "MetricsBreakdownDimension",
     "MetricsFilter",
     "MetricsFunnelResponse",
