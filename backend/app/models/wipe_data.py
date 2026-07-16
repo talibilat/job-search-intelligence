@@ -4,8 +4,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-WIPE_DATA_CONFIRMATION = "wipe-local-data"
-
 
 class WipeDataRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
