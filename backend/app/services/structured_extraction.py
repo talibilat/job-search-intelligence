@@ -53,7 +53,7 @@ class StructuredExtractionService:
         self._email_repository = email_repository
         self._classification_run_repository = classification_run_repository
         self._llm_provider = llm_provider
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._run_id_factory = run_id_factory or _new_run_id
 
     async def run_batch(
@@ -198,10 +198,6 @@ def _estimated_cost_usd(
         (Decimal(prompt_tokens) / Decimal(1000) * input_rate)
         + (Decimal(completion_tokens) / Decimal(1000) * output_rate)
     ).quantize(Decimal("0.000001"))
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def _new_run_id() -> str:
