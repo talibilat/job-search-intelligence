@@ -41,7 +41,6 @@ from .synthetic_fixture import (
     SyntheticEmailClassification,
     SyntheticFixtureFile,
     SyntheticFixtureLoadResult,
-    SyntheticJobEmailCategory,
     SyntheticRawEmail,
 )
 
@@ -80,6 +79,5 @@ __all__ = [
     "SyntheticEmailClassification",
     "SyntheticFixtureFile",
     "SyntheticFixtureLoadResult",
-    "SyntheticJobEmailCategory",
     "SyntheticRawEmail",
 ]
