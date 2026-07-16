@@ -67,7 +67,6 @@ from .records import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
     ApplicationEventRecord,
-    ApplicationEventTimelineRecord,
     ApplicationRecord,
     ChatMessageRecord,
     ClassificationRunRecord,
@@ -112,7 +111,6 @@ from .synthetic_fixture import (
 from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
-    "ApplicationEventTimelineRecord",
     "EmailProviderConfigResponse",
     "CapabilityReadiness",
     "GhostInferenceRunResponse",
