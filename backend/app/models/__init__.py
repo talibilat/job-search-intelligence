@@ -3,7 +3,6 @@
 from .metrics import (
     MetricsBreakdownDimension,
     MetricsFilter,
-    MetricsResponseRateTrendResponse,
 )
 from .processing import (
     ProcessingRunRequest,
@@ -79,7 +78,6 @@ __all__ = [
     "LLMProviderHealthCheckApiRequest",
     "MetricsBreakdownDimension",
     "MetricsFilter",
-    "MetricsResponseRateTrendResponse",
     "ProviderConfigRequirementResponse",
     "ProviderConfigResponse",
     "ProviderConfigUpdateRequest",
