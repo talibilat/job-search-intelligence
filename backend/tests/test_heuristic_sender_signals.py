@@ -6,9 +6,8 @@ from app.pipeline.filter import (
     HEURISTIC_RECRUITER_SENDER_DOMAIN_TERMS,
     HEURISTIC_SENDER_DOMAIN_TERMS,
     build_broad_candidate_query,
-    sender_matches_domain_terms,
-    sender_matches_heuristic_sender_domain,
 )
+from app.providers.email.provider import sender_matches_domain_terms
 
 
 def test_heuristic_sender_domains_cover_ats_and_recruiter_families() -> None:
@@ -51,7 +50,7 @@ def test_heuristic_sender_domains_cover_ats_and_recruiter_families() -> None:
     ],
 )
 def test_heuristic_sender_signal_matches_ats_and_recruiter_domains(sender: str) -> None:
-    assert sender_matches_heuristic_sender_domain(sender)
+    assert sender_matches_domain_terms(sender, HEURISTIC_SENDER_DOMAIN_TERMS)
 
 
 @pytest.mark.parametrize(
@@ -70,7 +69,7 @@ def test_heuristic_sender_signal_matches_ats_and_recruiter_domains(sender: str) 
 def test_heuristic_sender_signal_rejects_missing_or_impostor_domains(
     sender: str | None,
 ) -> None:
-    assert not sender_matches_heuristic_sender_domain(sender)
+    assert not sender_matches_domain_terms(sender, HEURISTIC_SENDER_DOMAIN_TERMS)
 
 
 def test_sender_domain_terms_match_exact_domains_and_subdomains_only() -> None:
