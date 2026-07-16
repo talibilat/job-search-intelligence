@@ -21,7 +21,6 @@ from .classification import (
 from .correction import (
     ApplicationResetLockRequest,
     ApplicationResetLockResponse,
-    ApplicationSplitNewApplication,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
     ApplicationSplitSourceApplication,
@@ -193,7 +192,6 @@ __all__ = [
     "ApplicationResetLockResponse",
     "ApplicationStatusEditRequest",
     "ApplicationStatusEditResponse",
-    "ApplicationSplitNewApplication",
     "ApplicationSplitRequest",
     "ApplicationSplitResponse",
     "ApplicationSplitSourceApplication",
