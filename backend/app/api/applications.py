@@ -21,7 +21,6 @@ from app.models import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
     ApplicationRecord,
-    ApplicationStatusEditResponse,
     GhostInferenceRunApiRequest,
     GhostInferenceRunResponse,
 )
@@ -30,6 +29,7 @@ from app.models.application_edit import (
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
     ApplicationStatusEditRequest,
+    ApplicationStatusEditResponse,
 )
 from app.models.application_merge import ApplicationMergeRequest, ApplicationMergeResponse
 from app.models.correction import (
