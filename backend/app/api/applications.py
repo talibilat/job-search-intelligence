@@ -21,13 +21,16 @@ from app.models import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
     ApplicationRecord,
-    ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
     GhostInferenceRunApiRequest,
     GhostInferenceRunResponse,
 )
 from app.models.application import ApplicationStatusCountsResponse
-from app.models.application_edit import ApplicationEventEditRequest, ApplicationEventEditResponse
+from app.models.application_edit import (
+    ApplicationEventEditRequest,
+    ApplicationEventEditResponse,
+    ApplicationStatusEditRequest,
+)
 from app.models.application_merge import ApplicationMergeRequest, ApplicationMergeResponse
 from app.models.correction import (
     ApplicationResetLockRequest,
