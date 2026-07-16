@@ -1,10 +1,6 @@
 """Pydantic DTOs used at application boundaries."""
 
-from .application_edit import (
-    ApplicationEventEditResponse,
-    ApplicationStatusEditRequest,
-    ApplicationStatusEditResponse,
-)
+from .application_edit import ApplicationStatusEditRequest, ApplicationStatusEditResponse
 from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
 from .chat_history import ChatHistoryResponse
 from .classification import (
@@ -126,7 +122,6 @@ __all__ = [
     "ReadinessState",
     "ApplicationCorrectionConflictRecord",
     "ApplicationCorrectionRecord",
-    "ApplicationEventEditResponse",
     "ApplicationEventRecord",
     "ApplicationRecord",
     "ApplicationStatusEditRequest",

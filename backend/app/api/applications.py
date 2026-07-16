@@ -20,7 +20,6 @@ from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorRespo
 from app.models import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
-    ApplicationEventEditResponse,
     ApplicationRecord,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
@@ -28,7 +27,7 @@ from app.models import (
     GhostInferenceRunResponse,
 )
 from app.models.application import ApplicationStatusCountsResponse
-from app.models.application_edit import ApplicationEventEditRequest
+from app.models.application_edit import ApplicationEventEditRequest, ApplicationEventEditResponse
 from app.models.application_merge import ApplicationMergeRequest, ApplicationMergeResponse
 from app.models.correction import (
     ApplicationResetLockRequest,
