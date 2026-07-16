@@ -27,12 +27,11 @@ from app.models import (
     EmailFilterDecisionOutcome,
     EmailFilterDecisionRecord,
     RawEmailRecord,
-    SyntheticApplicationEvent,
     SyntheticEmailClassification,
     SyntheticFixtureFile,
     SyntheticRawEmail,
 )
-from app.models.synthetic_fixture import SyntheticApplication
+from app.models.synthetic_fixture import SyntheticApplication, SyntheticApplicationEvent
 from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import EmailAccountRef, EmailAddress, EmailMessageMetadata, EmailMessageRef
 from app.providers.llm import (
