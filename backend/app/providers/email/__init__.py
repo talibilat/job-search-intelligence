@@ -1,7 +1,6 @@
 """Email provider Strategy interface and implementations."""
 
 from .gmail import GmailEmailProvider
-from .html_normalization import normalize_email_html_to_text
 from .provider import (
     EmailAccountRef,
     EmailAddress,
@@ -69,5 +68,4 @@ __all__ = [
     "EmailSyncCursorExpiredError",
     "EmailSyncMode",
     "GmailEmailProvider",
-    "normalize_email_html_to_text",
 ]
