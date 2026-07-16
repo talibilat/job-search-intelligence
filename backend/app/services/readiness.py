@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Protocol
 
 from app.config import AppSettings, LLMProviderName
-from app.models import (
+from app.models import ProviderReadinessResponse, ReadinessState
+from app.models.provider_config import (
     CapabilityReadiness,
-    ProviderReadinessResponse,
-    ReadinessState,
 )
 from app.providers import ProviderConfigurationError, ProviderRegistry
 from app.providers.email import EmailConnection
