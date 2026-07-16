@@ -52,7 +52,7 @@ class InsightRepository(BaseRepository[InsightRecord]):
                         content,
                         inputs_hash,
                         model,
-                        _format_datetime(generated_at),
+                        generated_at.isoformat(),
                         citations_json,
                     ),
                 )
@@ -74,7 +74,7 @@ class InsightRepository(BaseRepository[InsightRecord]):
                         content,
                         inputs_hash,
                         model,
-                        _format_datetime(generated_at),
+                        generated_at.isoformat(),
                         citations_json,
                         insight_id,
                     ),
@@ -324,10 +324,6 @@ class InsightRepository(BaseRepository[InsightRecord]):
         data = row_to_dict(row)
         data["citations"] = data.pop("citations_json", "[]")
         return InsightRecord.model_validate(data)
-
-
-def _format_datetime(value: datetime) -> str:
-    return value.isoformat()
 
 
 def _format_citations_json(citations: Sequence[InsightCitation]) -> str:
