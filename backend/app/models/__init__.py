@@ -25,9 +25,6 @@ from .correction import (
 from .diagnostics import MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
 from .health import HealthResponse
-from .insight import (
-    InsightRegenerateRequest,
-)
 from .metrics import (
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
@@ -173,7 +170,6 @@ __all__ = [
     "EmailFilterDecisionRecord",
     "EmailTextChunk",
     "InsightRecord",
-    "InsightRegenerateRequest",
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
