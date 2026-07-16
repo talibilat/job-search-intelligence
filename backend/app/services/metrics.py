@@ -8,7 +8,6 @@ from app.models import (
     MetricsBreakdownDimension,
     MetricsFilter,
     MetricsResponseRateTrendResponse,
-    MetricsSummaryResponse,
 )
 from app.models.metrics import (
     ApplicationWindowMetric,
@@ -17,6 +16,7 @@ from app.models.metrics import (
     MetricsBreakdownResponse,
     MetricsFunnelResponse,
     MetricsRatesResponse,
+    MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )

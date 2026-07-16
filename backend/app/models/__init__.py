@@ -4,7 +4,6 @@ from .metrics import (
     MetricsBreakdownDimension,
     MetricsFilter,
     MetricsResponseRateTrendResponse,
-    MetricsSummaryResponse,
 )
 from .processing import (
     ProcessingRunRequest,
@@ -81,7 +80,6 @@ __all__ = [
     "MetricsBreakdownDimension",
     "MetricsFilter",
     "MetricsResponseRateTrendResponse",
-    "MetricsSummaryResponse",
     "ProviderConfigRequirementResponse",
     "ProviderConfigResponse",
     "ProviderConfigUpdateRequest",

@@ -20,7 +20,6 @@ from app.models import (
     MetricsBreakdownDimension,
     MetricsFilter,
     MetricsResponseRateTrendResponse,
-    MetricsSummaryResponse,
 )
 from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.models.diagnostics import MetricsDiagnosticsResponse
@@ -28,6 +27,7 @@ from app.models.metrics import (
     MetricsBreakdownResponse,
     MetricsFunnelResponse,
     MetricsRatesResponse,
+    MetricsSummaryResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )

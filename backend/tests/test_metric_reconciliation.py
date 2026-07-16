@@ -16,11 +16,15 @@ from app.db.repositories import (
 )
 from app.main import create_app
 from app.models import (
-    MetricsSummaryResponse,
     RawEmailBodyRetentionState,
     RawEmailRecord,
 )
-from app.models.metrics import MetricRate, MetricRateRow, MetricsRatesResponse
+from app.models.metrics import (
+    MetricRate,
+    MetricRateRow,
+    MetricsRatesResponse,
+    MetricsSummaryResponse,
+)
 from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
