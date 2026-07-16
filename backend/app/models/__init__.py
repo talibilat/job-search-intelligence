@@ -44,7 +44,6 @@ from .insight import (
     InsightRegenerationEstimate,
 )
 from .metrics import (
-    ApplicationWindowMetric,
     MetricBreakdownRow,
     MetricFunnelStage,
     MetricRate,
@@ -222,7 +221,6 @@ __all__ = [
     "ApplicationResetLockResponse",
     "ApplicationStatusEditRequest",
     "ApplicationStatusEditResponse",
-    "ApplicationWindowMetric",
     "ApplicationSplitNewApplication",
     "ApplicationSplitRequest",
     "ApplicationSplitResponse",
