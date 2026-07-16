@@ -298,18 +298,11 @@ def test_gmail_auth_callback_completes_authorization_without_echoing_code() -> N
     response = client.get(
         "/auth/gmail/callback",
         params={"code": "authorization-code", "state": state},
+        follow_redirects=False,
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["account"] == {"provider": "gmail", "account_id": "me@example.com"}
-    assert payload["display_email"] == {"address": "me@example.com", "display_name": None}
-    assert payload["credential_ref"] == {
-        "kind": "oauth_token",
-        "provider": "gmail",
-        "name": "me-example-com",
-    }
-    assert payload["granted_scopes"] == [GMAIL_READONLY_SCOPE]
+    assert response.status_code == 303
+    assert response.headers["location"] == "http://127.0.0.1:5173/settings?gmail=connected"
     assert "authorization-code" not in response.text
     assert state not in response.text
 
@@ -343,13 +336,10 @@ def test_gmail_auth_callback_persists_connection_with_real_repository_dependency
     response = client.get(
         "/auth/gmail/callback",
         params={"code": "authorization-code", "state": state},
+        follow_redirects=False,
     )
 
-    assert response.status_code == 200
-    assert response.json()["account"] == {
-        "provider": "gmail",
-        "account_id": "me@example.com",
-    }
+    assert response.status_code == 303
     with sqlite3.connect(database_path) as connection:
         rows = connection.execute(
             """
@@ -405,13 +395,14 @@ def test_gmail_auth_callback_consumes_state_once() -> None:
     first_response = client.get(
         "/auth/gmail/callback",
         params={"code": "authorization-code", "state": state},
+        follow_redirects=False,
     )
     second_response = client.get(
         "/auth/gmail/callback",
         params={"code": "authorization-code", "state": state},
     )
 
-    assert first_response.status_code == 200
+    assert first_response.status_code == 303
     assert second_response.status_code == 400
     assert second_response.json()["error"]["message"] == (
         "Gmail authorization state is invalid or expired."

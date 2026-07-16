@@ -858,13 +858,13 @@ class GmailMessageLister:
 
         metadata_messages: list[EmailMessageMetadata] = []
         for list_item in list_response.messages:
-            metadata_messages.append(
-                await self._fetch_message_metadata(
-                    connection=connection,
-                    message=list_item,
-                    access_token=access_token,
-                )
+            message_metadata = await self._fetch_message_metadata(
+                connection=connection,
+                message=list_item,
+                access_token=access_token,
             )
+            if message_metadata is not None:
+                metadata_messages.append(message_metadata)
 
         next_page_token = None
         next_sync_cursor: EmailProviderCursor | None = sync_cursor
@@ -899,13 +899,13 @@ class GmailMessageLister:
 
         metadata_messages: list[EmailMessageMetadata] = []
         for list_item in _history_added_messages(history_response):
-            metadata_messages.append(
-                await self._fetch_message_metadata(
-                    connection=connection,
-                    message=list_item,
-                    access_token=access_token,
-                )
+            message_metadata = await self._fetch_message_metadata(
+                connection=connection,
+                message=list_item,
+                access_token=access_token,
             )
+            if message_metadata is not None:
+                metadata_messages.append(message_metadata)
 
         next_sync_cursor = None
         if history_response.next_page_token is None:
@@ -1096,14 +1096,24 @@ class GmailMessageLister:
         connection: EmailConnection,
         message: GmailMessageListItem,
         access_token: SecretStr,
-    ) -> EmailMessageMetadata:
-        gmail_metadata = _validate_gmail_response(
-            GmailMessageMetadataResponse,
-            await self._get_metadata_json(
+    ) -> EmailMessageMetadata | None:
+        try:
+            raw_metadata = await self._transport.get_json(
                 f"{_MESSAGES_PATH}/{message.id}",
                 query=_metadata_query(),
                 access_token=access_token,
-            ),
+            )
+        except GmailApiRequestError as error:
+            if error.status_code == 404:
+                return None
+            _raise_gmail_api_request_error(
+                path=f"{_MESSAGES_PATH}/{message.id}",
+                error=error,
+            )
+
+        gmail_metadata = _validate_gmail_response(
+            GmailMessageMetadataResponse,
+            raw_metadata,
         )
         headers = _metadata_headers(gmail_metadata)
         return EmailMessageMetadata(

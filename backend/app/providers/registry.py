@@ -150,6 +150,7 @@ class ProviderRegistry:
                         ProviderConfigRequirement(
                             setting_name="azure_openai_embedding_deployment",
                             label="Azure OpenAI embedding deployment",
+                            required=False,
                         ),
                     ),
                     secret_requirements=(

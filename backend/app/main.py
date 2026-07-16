@@ -12,7 +12,11 @@ from .api.sync import create_configured_sync_job
 from .config import AppSettings, get_settings
 from .db.repositories import ProviderConfigurationRepository
 from .db.sqlite_url import sqlite_database_path
-from .services.provider_config import apply_persisted_provider_config
+from .security import create_secret_store
+from .services.provider_config import (
+    apply_persisted_provider_config,
+    import_azure_openai_api_key_from_environment,
+)
 from .services.sync_service import (
     ScheduledJobScheduler,
     SyncJob,
@@ -30,6 +34,7 @@ def create_lifespan(
 ) -> Lifespan:
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI) -> AsyncIterator[None]:
+        await import_azure_openai_api_key_from_environment(create_secret_store(settings))
         sync_scheduler = SyncScheduler(
             sync_on_open=settings.sync_on_open,
             interval_seconds=settings.sync_interval_seconds,

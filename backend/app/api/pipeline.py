@@ -13,6 +13,7 @@ from app.api.sync import (
     get_sync_status_store,
 )
 from app.config import AppSettings, get_settings
+from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.repositories.pipeline_status import PipelineStatusRepository
 from app.db.sqlite_url import sqlite_database_path
@@ -55,10 +56,22 @@ def pipeline_status(
     ],
     status_store: Annotated[EmailSyncStatusStore, Depends(get_sync_status_store)],
 ) -> PipelineStatus:
+    connection = connection_resolver()
+    if connection is None:
+        connection = next(
+            (
+                item
+                for item in EmailConnectionRepository(
+                    pipeline_status_repository.connection
+                ).list_connections_metadata()
+                if item.account.provider is settings.email_provider
+            ),
+            None,
+        )
     return build_pipeline_status(
         settings=settings,
         pipeline_status_repository=pipeline_status_repository,
         email_repository=EmailRepository(pipeline_status_repository.connection),
-        connection=connection_resolver(),
+        connection=connection,
         sync_status=status_store.current_status(),
     )

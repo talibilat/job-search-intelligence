@@ -79,6 +79,7 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
                 application_events.*,
                 raw_emails.sent_at AS email_sent_at,
                 raw_emails.subject AS email_subject,
+                raw_emails.public_id AS email_public_id,
                 email_classifications.classified_at AS classification_classified_at,
                 email_classifications.confidence AS classification_confidence
             FROM application_events

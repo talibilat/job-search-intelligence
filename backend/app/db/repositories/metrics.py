@@ -379,7 +379,7 @@ class MetricsRepository(BaseRepository[int]):
             ),
             MetricFunnelStage(
                 stage="interview",
-                count=self._count_applications_with_event(
+                count=self._count_distinct_companies_with_event(
                     "interview_scheduled",
                     filters=filters,
                 ),
@@ -504,7 +504,9 @@ class MetricsRepository(BaseRepository[int]):
             return 0
         return int(row[0])
 
-    def count_live_applications(self, filters: MetricsFilter | None = None) -> int:
+    def count_live_applications(
+        self, *, active_after: str, filters: MetricsFilter | None = None
+    ) -> int:
         where_clause, filter_parameters = _metrics_filter_where_clause(filters)
         return self._fetch_count(
             f"""
@@ -513,8 +515,9 @@ class MetricsRepository(BaseRepository[int]):
             {where_clause}
             {"WHERE" if not where_clause else "AND"}
                 current_status IN ('applied', 'in_review', 'assessment', 'interview', 'offer')
+                AND last_activity_at >= ?
             """,
-            filter_parameters,
+            (*filter_parameters, active_after),
         )
 
     def count_rejected_applications(self, filters: MetricsFilter | None = None) -> int:
@@ -584,6 +587,25 @@ class MetricsRepository(BaseRepository[int]):
             INNER JOIN applications
                 ON applications.id = application_events.application_id
             WHERE application_events.event_type = ?
+              {where_clause.replace("WHERE", "AND", 1)}
+            """,
+            (event_type, *filter_parameters),
+        )
+
+    def _count_distinct_companies_with_event(
+        self,
+        event_type: str,
+        filters: MetricsFilter | None = None,
+    ) -> int:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        return self._fetch_count(
+            f"""
+            SELECT COUNT(DISTINCT LOWER(TRIM(applications.company)))
+            FROM application_events
+            INNER JOIN applications
+                ON applications.id = application_events.application_id
+            WHERE application_events.event_type = ?
+              AND TRIM(applications.company) != ''
               {where_clause.replace("WHERE", "AND", 1)}
             """,
             (event_type, *filter_parameters),

@@ -450,6 +450,23 @@ function mockFetchResponses(responses: Record<string, MockResponseConfig>) {
         );
       }
 
+      if (path === "/attention") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              unique_interviewed_company_count: 0,
+              prepare: [],
+              interviewed: [],
+              follow_up: [],
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
+        );
+      }
+
       if (path === "/metrics/funnel") {
         return Promise.resolve(
           new Response(JSON.stringify(metricsFunnelResponse()), {
@@ -5312,22 +5329,22 @@ describe("App", () => {
   it("redesign developer derives truthful statuses from the feature registry", () => {
     renderAtPath("/dev");
 
-    expect(screen.getByText("Gmail sync").parentElement?.textContent).toContain(
+    expect(screen.getByText("Gmail sync").closest("div")?.textContent).toContain(
       "Completed",
     );
     expect(
-      screen.getByText("Email classification").parentElement?.textContent,
+      screen.getByText("Email classification").closest("div")?.textContent,
     ).toContain("Completed");
     expect(
-      screen.getByText("Applications & timeline").parentElement?.textContent,
+      screen.getByText("Applications & timeline").closest("div")?.textContent,
     ).toContain("Completed");
     expect(
-      screen.getByText("Manual corrections").parentElement?.textContent,
+      screen.getByText("Manual corrections").closest("div")?.textContent,
     ).toContain("Completed");
     expect(
-      screen.getByText("Cached insights").parentElement?.textContent,
+      screen.getByText("Cached insights").closest("div")?.textContent,
     ).toContain("Completed");
-    const chatRow = screen.getByText("Chat agent (RAG)").parentElement;
+    const chatRow = screen.getByText("Chat agent (RAG)").closest("div");
     expect(chatRow?.textContent).toContain("Phase 5");
     expect(chatRow?.textContent).toContain("Completed");
     expect(screen.queryByText("Live")).toBeNull();

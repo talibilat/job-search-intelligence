@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from .applications import router as applications_router
+from .attention import router as attention_router
 from .auth import router as auth_router
 from .chat import router as chat_router
 from .classification import router as classification_router
@@ -18,6 +19,7 @@ from .wipe_data import router as wipe_data_router
 
 api_router = APIRouter()
 api_router.include_router(applications_router)
+api_router.include_router(attention_router)
 api_router.include_router(auth_router)
 api_router.include_router(chat_router)
 api_router.include_router(classification_router)

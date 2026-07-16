@@ -173,3 +173,14 @@ export function daysSince(iso: string | null | undefined): number | null {
 export function formatCount(value: number): string {
   return value.toLocaleString("en-US");
 }
+
+export function formatHoursAsDuration(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined) {
+    return "—";
+  }
+  if (hours < 24) {
+    return `${Math.round(hours)}h`;
+  }
+  const days = hours / 24;
+  return `${days < 10 ? Math.round(days * 10) / 10 : Math.round(days)}d`;
+}

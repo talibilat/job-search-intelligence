@@ -222,7 +222,7 @@ def test_q01_through_q21_reconcile_from_one_canonical_fixture(tmp_path: Path) ->
     assert funnel["stages"] == [
         {"stage": "applied", "count": 5},
         {"stage": "screen", "count": 4},
-        {"stage": "interview", "count": 2},
+        {"stage": "interview", "count": 1},
         {"stage": "final", "count": 0},
         {"stage": "offer", "count": 1},
     ]  # Q-16

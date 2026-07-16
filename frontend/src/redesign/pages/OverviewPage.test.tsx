@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OverviewPage } from "./OverviewPage";
@@ -24,6 +24,60 @@ afterEach(() => {
 });
 
 describe("OverviewPage request states", () => {
+  it("renders unique interview tasks and persists Done through the backend", async () => {
+    let attentionReads = 0;
+    const item = {
+      application_id: "app-aviva",
+      interview_event_id: "event-aviva",
+      company: "Aviva",
+      role_title: "Lead AI Developer",
+      interview_at: "2026-07-17T09:00:00Z",
+      last_activity_at: "2026-07-17T09:00:00Z",
+      current_status: "interview",
+      completed_at: null,
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const pathname = new URL(path, "http://localhost").pathname;
+      if (pathname === "/attention") {
+        attentionReads += 1;
+        return Promise.resolve(response({
+          unique_interviewed_company_count: 1,
+          prepare: attentionReads === 1 ? [item] : [],
+          interviewed: [{ ...item, completed_at: attentionReads === 1 ? null : "2026-07-17T12:00:00Z" }],
+          follow_up: [],
+        }));
+      }
+      if (pathname === "/attention/interviews/event-aviva/complete") {
+        return Promise.resolve(response({ interview_event_id: "event-aviva", application_id: "app-aviva", completed_at: "2026-07-17T12:00:00Z" }));
+      }
+      if (pathname === "/metrics/summary") return Promise.resolve(response({ total_applications: 1, offers_received: 0 }));
+      if (pathname === "/metrics/rates") return Promise.resolve(response({}));
+      if (pathname === "/metrics/funnel") return Promise.resolve(response({ stages: [{ stage: "interview", count: 1 }] }));
+      if (pathname === "/applications") return Promise.resolve(response([]));
+      if (pathname === "/metrics/timeseries") return Promise.resolve(response({ points: [] }));
+      if (pathname.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OverviewPage go={() => undefined} openApp={() => undefined} reloadKey={0} />);
+
+    expect(await screen.findByText("Prepare")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Aviva Lead AI Developer" }).textContent).toContain("Aviva · Lead AI Developer · Jul 17");
+    expect(screen.getByText("1 unique companies")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Mark Aviva interview done" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Mark Aviva interview done" })).toBeNull();
+    });
+    expect(fetchMock.mock.calls.some(([input]) => new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://localhost").pathname === "/attention/interviews/event-aviva/complete")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Interview 1" }));
+    expect(await screen.findByRole("dialog", { name: "Interviewed companies" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Aviva Lead AI Developer" })).toBeTruthy();
+  });
+
   it("marks zero metrics pending while the pipeline still needs processing", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -264,5 +318,58 @@ describe("OverviewPage request states", () => {
     expect(new URL(emailRequest!, "http://localhost").searchParams.get("sent_after")).toBe(
       "2026-07-05T00:00:00Z",
     );
+  });
+
+  it("defaults to the Overview tab and switches to the Question catalog and Visualized tabs without losing loaded data", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/metrics/summary") return Promise.resolve(response({ total_applications: 4, offers_received: 0 }));
+      if (path === "/metrics/rates") return Promise.resolve(response({}));
+      if (path === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
+      if (path === "/applications") return Promise.resolve(response([]));
+      if (path.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
+      if (path === "/metrics/timeseries") return Promise.resolve(response({ points: [] }));
+      if (path.startsWith("/metrics/breakdown")) return Promise.resolve(response({ dimension: "role", rows: [] }));
+      if (path === "/metrics/diagnostics") {
+        return Promise.resolve(
+          response({
+            adjacent_role_suggestions: [],
+            baseline_negative_count: 0,
+            baseline_response_count: 0,
+            baseline_success_count: 0,
+            dead_weight_skill_segments: [],
+            negative_outcome_segments: [],
+            segments: [],
+            selling_skill_segments: [],
+            strongest_response_segments: [],
+            successful_application_segments: [],
+            total_applications: 0,
+            wasted_effort_segments: [],
+            weakest_response_segments: [],
+          }),
+        );
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OverviewPage go={() => undefined} openApp={() => undefined} reloadKey={0} />);
+
+    expect(await screen.findByText("Your search at a glance")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Question catalog" }));
+    expect(await screen.findByText("Everything your search can answer")).toBeTruthy();
+    expect(screen.queryByText("Your search at a glance")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Visualized" }));
+    expect(await screen.findByText("Your search, visualized")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    expect(await screen.findByText("Your search at a glance")).toBeTruthy();
+
+    expect(fetchMock.mock.calls.some(([input]) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      return path === "/metrics/timeseries";
+    })).toBe(true);
   });
 });

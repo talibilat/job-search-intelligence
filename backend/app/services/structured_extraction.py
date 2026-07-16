@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -9,15 +10,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import AppSettings, ClassificationMode, LLMProviderName
 from app.db.repositories import ClassificationRunRepository, EmailRepository
-from app.models import ClassificationRunRecord
+from app.models import ClassificationRunRecord, EmailClassificationCandidate
 from app.pipeline.classify import (
     AcceptedLLMExtraction,
     ClassificationPromptEmail,
     MalformedLLMExtraction,
+    MalformedLLMExtractionReason,
     build_classification_prompt_request,
     parse_llm_extraction_response,
 )
 from app.providers.llm import LLMProvider, LLMTokenUsage
+from app.providers.llm.errors import LLMProviderError
 
 type Clock = Callable[[], datetime]
 type RunIdFactory = Callable[[], str]
@@ -74,11 +77,11 @@ class StructuredExtractionService:
             ),
             excluded_email_ids=excluded_email_ids,
         )
-        accepted_results: list[AcceptedLLMExtraction] = []
-        malformed_results: list[MalformedLLMExtraction] = []
-        token_usage = _TokenUsageAccumulator()
+        semaphore = asyncio.Semaphore(self._settings.classification_concurrency)
 
-        for candidate in candidates:
+        async def classify(
+            candidate: EmailClassificationCandidate,
+        ) -> tuple[AcceptedLLMExtraction | MalformedLLMExtraction, LLMTokenUsage | None]:
             request = build_classification_prompt_request(
                 ClassificationPromptEmail(
                     email_id=candidate.email_id,
@@ -90,14 +93,30 @@ class StructuredExtractionService:
                 prompt_version=prompt_version,
                 model=model,
             )
-            response = await self._llm_provider.generate(request)
-            token_usage.add(response.usage)
-            extraction_result = parse_llm_extraction_response(
+            async with semaphore:
+                try:
+                    response = await self._llm_provider.generate(request)
+                except LLMProviderError:
+                    return MalformedLLMExtraction(
+                        email_id=candidate.email_id,
+                        model=model,
+                        prompt_version=prompt_version,
+                        reason=MalformedLLMExtractionReason.PROVIDER_ERROR,
+                        message="LLM provider could not classify this email.",
+                    ), None
+            return parse_llm_extraction_response(
                 email_id=candidate.email_id,
-                response=response,
+                response=response.model_copy(update={"model": model}),
                 prompt_version=prompt_version,
                 classified_at=self._clock(),
-            )
+            ), response.usage
+
+        outcomes = await asyncio.gather(*(classify(candidate) for candidate in candidates))
+        accepted_results: list[AcceptedLLMExtraction] = []
+        malformed_results: list[MalformedLLMExtraction] = []
+        token_usage = _TokenUsageAccumulator()
+        for extraction_result, usage in outcomes:
+            token_usage.add(usage)
             if isinstance(extraction_result, AcceptedLLMExtraction):
                 accepted_results.append(extraction_result)
             else:

@@ -12,6 +12,21 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 CommaSeparatedTuple = Annotated[tuple[str, ...], NoDecode]
 GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 LOCAL_SQLITE_SCHEMES = {"sqlite", "sqlite+aiosqlite"}
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DATABASE_PATH = REPOSITORY_ROOT / "jobtracker.sqlite3"
+DEFAULT_DATABASE_URL = f"sqlite+aiosqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+
+
+def normalize_azure_openai_endpoint(endpoint: str) -> str:
+    """Accept a pasted Azure operation URL but use its resource endpoint only."""
+
+    value = endpoint.strip().rstrip("/")
+    if not value:
+        return ""
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Azure OpenAI endpoint must be an absolute HTTPS resource URL.")
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 class RuntimeEnvironment(StrEnum):
@@ -65,10 +80,11 @@ class AppSettings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://localhost:5173",
     )
+    frontend_url: str = "http://127.0.0.1:5173"
     log_level: LogLevel = LogLevel.INFO
 
     data_dir: Path = Path("./.jobtracker")
-    database_url: str = "sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3"
+    database_url: str = DEFAULT_DATABASE_URL
     sqlite_vec_extension_path: Path | None = None
 
     secret_store_backend: SecretStoreBackend = SecretStoreBackend.KEYRING
@@ -87,6 +103,7 @@ class AppSettings(BaseSettings):
     retain_debug_email_bodies: bool = False
 
     classification_batch_size: int = Field(default=25, ge=1)
+    classification_concurrency: int = Field(default=5, ge=1, le=25)
     processing_max_candidates_per_run: int = Field(default=500, ge=1, le=10_000)
     classification_prompt_version: str = Field(default="v1", min_length=1)
     classification_estimate_chars_per_unit: int = Field(default=4, ge=1)
@@ -110,7 +127,7 @@ class AppSettings(BaseSettings):
     ollama_chat_model: str = Field(default="llama3.1", min_length=1)
     ollama_embedding_model: str = Field(default="nomic-embed-text", min_length=1)
 
-    ghost_threshold_days: int = Field(default=30, ge=1)
+    ghost_threshold_days: int = Field(default=60, ge=1)
 
     def __init__(self, *, _env_file: str | Path | None = ".env", **values: Any) -> None:
         super().__init__(_env_file=_env_file, **values)

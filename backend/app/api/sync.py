@@ -29,7 +29,12 @@ from app.models.raw_email import (
 )
 from app.models.records import EmailBackfillStatus, RawEmailPreviewRecord
 from app.models.sync import SyncLocalStats, SyncScopeEstimate
-from app.providers.email import EmailConnection, EmailProvider
+from app.providers.email import (
+    EmailConnection,
+    EmailProvider,
+    EmailProviderAuthError,
+    EmailProviderError,
+)
 from app.providers.email.gmail import GmailEmailProvider
 from app.security import SecretStore
 from app.services.sync_service import (
@@ -123,16 +128,25 @@ class ConfiguredEmailSyncRuntime:
                     or backfill_state is None
                     or backfill_state.status is not EmailBackfillStatus.COMPLETED
                 )
-                if should_run_full_backfill:
-                    return await sync_service.run_full_backfill(
+                try:
+                    if should_run_full_backfill:
+                        return await sync_service.run_full_backfill(
+                            connection=connection,
+                            backfill_state_service=BackfillStateService(
+                                backfill_state_repository=backfill_state_repository,
+                                sync_state_repository=sync_state_repository,
+                            ),
+                            options=EmailSyncOptions(),
+                        )
+                    return await sync_service.run_manual_sync(
                         connection=connection,
-                        backfill_state_service=BackfillStateService(
-                            backfill_state_repository=backfill_state_repository,
-                            sync_state_repository=sync_state_repository,
-                        ),
-                        options=EmailSyncOptions(),
+                        options=options,
                     )
-                return await sync_service.run_manual_sync(connection=connection, options=options)
+                except EmailProviderAuthError:
+                    EmailConnectionRepository(sqlite_connection).mark_reauth_required(
+                        connection.account
+                    )
+                    raise
         finally:
             self._status_store.release_run()
 
@@ -214,7 +228,7 @@ def create_configured_sync_job(settings: AppSettings) -> SyncJob:
         runtime = build_configured_email_sync_runtime(settings)
         try:
             await runtime.run_manual_sync()
-        except SyncConnectionNotConfiguredError:
+        except (EmailProviderError, SyncConnectionNotConfiguredError):
             return
 
     return run_configured_sync

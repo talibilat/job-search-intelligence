@@ -81,8 +81,9 @@ class ProcessingOrchestrationService:
             )
 
         while len(attempted_email_ids) < candidate_limit:
+            remaining = candidate_limit - len(attempted_email_ids)
             batch = await self._extraction_service.run_batch(
-                limit=candidate_limit - len(attempted_email_ids),
+                limit=min(self._settings.classification_batch_size, remaining),
                 excluded_email_ids=tuple(attempted_email_ids),
             )
             if batch.run_record.candidate_count == 0:
@@ -105,6 +106,30 @@ class ProcessingOrchestrationService:
             applications_upserted += aggregation.applications_upserted
             events_upserted += aggregation.events_upserted
             manual_conflict_count += aggregation.manual_conflict_count
+            if status_callback is not None:
+                status_callback(
+                    self._empty_status(
+                        state=ProcessingRunState.RUNNING,
+                        run_id=run_id,
+                        started_at=started_at,
+                        pending_candidate_count=self._pending_count(),
+                        candidate_limit=candidate_limit,
+                    ).model_copy(
+                        update={
+                            "processed_count": len(attempted_email_ids),
+                            "accepted_count": accepted_count,
+                            "malformed_count": malformed_count,
+                            "skipped_not_job_count": skipped_not_job_count,
+                            "applications_upserted": applications_upserted,
+                            "events_upserted": events_upserted,
+                            "manual_conflict_count": manual_conflict_count,
+                            "prompt_tokens": prompt_tokens,
+                            "completion_tokens": completion_tokens,
+                            "total_tokens": total_tokens,
+                            "estimated_cost_usd": estimated_cost_usd,
+                        }
+                    )
+                )
             if not batch_email_ids:
                 break
 

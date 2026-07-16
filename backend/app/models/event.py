@@ -57,6 +57,7 @@ class ApplicationEventTimelineRecord(ApplicationEventRecord):
     """
 
     email_subject: str | None = None
+    email_public_id: str | None = None
     classification_confidence: float | None = Field(default=None, ge=0, le=1)
 
 

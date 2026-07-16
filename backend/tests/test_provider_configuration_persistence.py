@@ -5,6 +5,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from app.config import AppSettings, ClassificationMode, EmailProviderName, LLMProviderName
@@ -25,7 +26,10 @@ from app.security import (
     SecretKind,
     SecretRef,
 )
-from app.services.provider_config import apply_provider_config_update
+from app.services.provider_config import (
+    apply_provider_config_update,
+    import_azure_openai_api_key_from_environment,
+)
 from app.services.readiness import ProviderReadinessService
 from pydantic import SecretStr
 
@@ -50,6 +54,18 @@ class MemorySecretStore:
 class NoopScheduler:
     def reconfigure(self, *, sync_on_open: bool, interval_seconds: int) -> None:
         return None
+
+
+def test_environment_azure_key_replaces_a_stale_saved_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_store = MemorySecretStore()
+    secret_store.values[AZURE_OPENAI_API_KEY_REF] = SecretStr("stale-key")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "current-key")
+
+    asyncio.run(import_azure_openai_api_key_from_environment(secret_store))
+
+    assert secret_store.values[AZURE_OPENAI_API_KEY_REF].get_secret_value() == "current-key"
 
 
 class HealthyProvider:

@@ -216,6 +216,7 @@ def test_get_application_events_returns_ordered_timeline(tmp_path: Path) -> None
             "email_sent_at": "2026-07-01T09:00:00Z",
             "classification_classified_at": None,
             "email_subject": "Application update",
+            "email_public_id": "public-email-1",
             "classification_confidence": None,
         },
         {
@@ -229,6 +230,7 @@ def test_get_application_events_returns_ordered_timeline(tmp_path: Path) -> None
             "email_sent_at": "2026-07-01T09:00:00Z",
             "classification_classified_at": None,
             "email_subject": "Application update",
+            "email_public_id": "public-email-2",
             "classification_confidence": None,
         },
     ]
@@ -618,12 +620,13 @@ def insert_raw_email(connection: sqlite3.Connection, *, email_id: str) -> None:
     connection.execute(
         """
         INSERT INTO raw_emails (
-            id, thread_id, from_addr, to_addr, subject, sent_at, body_text,
+            id, public_id, thread_id, from_addr, to_addr, subject, sent_at, body_text,
             body_retention_state, labels, provider, ingested_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             email_id,
+            f"public-{email_id}",
             "thread-42",
             "jobs@example.test",
             "applicant@example.test",

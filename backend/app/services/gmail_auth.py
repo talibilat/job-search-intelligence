@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from typing import Protocol
 
 from pydantic import SecretStr
 
 from app.config import EmailProviderName
+from app.db.repositories.oauth_state import OAuthStateRepository
 from app.providers.email import (
     EmailAuthorizationCallbackRequest,
     EmailAuthorizationStartRequest,
@@ -44,6 +46,27 @@ class InMemoryOAuthStateStore:
             return False
         self._pending_states.remove(state)
         return True
+
+
+class SQLiteOAuthStateStore:
+    """Durable, single-use OAuth state store with a short local expiry."""
+
+    def __init__(
+        self,
+        repository: OAuthStateRepository,
+        *,
+        ttl: timedelta = timedelta(minutes=10),
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._repository = repository
+        self._ttl = ttl
+        self._clock = clock or (lambda: datetime.now(UTC))
+
+    def save_state(self, state: str) -> None:
+        self._repository.save_state(state, expires_at=self._clock() + self._ttl)
+
+    def consume_state(self, state: str) -> bool:
+        return self._repository.consume_state(state, now=self._clock())
 
 
 def generate_oauth_state() -> str:

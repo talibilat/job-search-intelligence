@@ -1,0 +1,75 @@
+version: 1
+status: active
+scope: stabilization-debug-and-chat
+generated_at: 2026-07-14
+notes:
+  - This manifest supersedes the old broad phase backlog.
+  - Existing closed GitHub issues are historical implementation records.
+  - Existing open GitHub issues are to be closed as superseded, not deleted.
+  - Active work is intentionally consolidated into larger debugging and repair tickets.
+  - Every ticket preserves the local-first architecture and the applications plus application_events source-of-truth invariant.
+tickets:
+  - id: JT-224
+    issue: 441
+    url: https://github.com/talibilat/job-search-intelligence/issues/441
+    title: Stabilize end-to-end diagnostic baseline
+    body_file: tickets/active/JT-224.md
+    milestone: Stabilization - Debug and Chat
+    labels: [type:bug, type:test, area:testing, area:frontend, area:api, priority:P0, size:L]
+    deps: []
+  - id: JT-225
+    issue: 442
+    url: https://github.com/talibilat/job-search-intelligence/issues/442
+    title: Repair setup, provider configuration, and credential readiness
+    body_file: tickets/active/JT-225.md
+    milestone: Stabilization - Debug and Chat
+    labels: [type:bug, type:feature, area:setup, area:config, area:security, area:frontend, priority:P0, size:L]
+    deps: [JT-224]
+  - id: JT-226
+    issue: 443
+    url: https://github.com/talibilat/job-search-intelligence/issues/443
+    title: Operationalize processing from sync to applications
+    body_file: tickets/active/JT-226.md
+    milestone: Stabilization - Debug and Chat
+    labels: [type:bug, type:feature, area:ingestion, area:classification, area:aggregation, area:frontend, priority:P0, size:L]
+    deps: [JT-224, JT-225]
+  - id: JT-227
+    issue: 444
+    url: https://github.com/talibilat/job-search-intelligence/issues/444
+    title: Correct metric truth and reconciliation
+    body_file: tickets/active/JT-227.md
+    milestone: Stabilization - Debug and Chat
+    labels: [type:bug, area:metrics, area:aggregation, area:testing, priority:P0, size:L]
+    deps: [JT-224, JT-226]
+  - id: JT-228
+    issue: 445
+    url: https://github.com/talibilat/job-search-intelligence/issues/445
+    title: Make the primary frontend operational
+    body_file: tickets/active/JT-228.md
+    milestone: Stabilization - Debug and Chat
+    labels: [type:bug, type:feature, area:frontend, area:metrics, area:aggregation, priority:P0, size:L]
+    deps: [JT-224, JT-226, JT-227]
+  - id: JT-229
+    issue: 446
+    url: https://github.com/talibilat/job-search-intelligence/issues/446
+    title: Expose corrections, conflicts, and data repair workflows
+    body_file: tickets/active/JT-229.md
+    milestone: Stabilization - Debug and Chat
+    labels: [type:bug, type:feature, area:frontend, area:aggregation, area:api, priority:P1, size:L]
+    deps: [JT-224, JT-226, JT-228]
+  - id: JT-230
+    issue: 447
+    url: https://github.com/talibilat/job-search-intelligence/issues/447
+    title: Build grounded chat backend and retrieval pipeline
+    body_file: tickets/active/JT-230.md
+    milestone: Stabilization - Debug and Chat
+    labels: [type:feature, area:agent, area:api, area:db, area:metrics, phase:5, tier:6, priority:P0, size:L]
+    deps: [JT-224, JT-225, JT-227]
+  - id: JT-231
+    issue: 448
+    url: https://github.com/talibilat/job-search-intelligence/issues/448
+    title: Ship chat UI and release hardening
+    body_file: tickets/active/JT-231.md
+    milestone: Stabilization - Debug and Chat
+    labels: [type:feature, type:test, area:agent, area:frontend, area:testing, phase:5, tier:6, priority:P0, size:L]
+    deps: [JT-228, JT-230]

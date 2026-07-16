@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 from typing import Any
 
 from pydantic import SecretStr
 
-from app.config import AppSettings
+from app.config import AppSettings, normalize_azure_openai_endpoint
 from app.db.repositories.provider_config import ProviderConfigurationRepository
 from app.models import (
     EmailProviderConfigResponse,
@@ -65,6 +67,7 @@ def apply_persisted_provider_config(
         return
     for field_name in _PERSISTED_FIELDS:
         setattr(settings, field_name, getattr(record, field_name))
+    settings.azure_openai_endpoint = normalize_azure_openai_endpoint(settings.azure_openai_endpoint)
 
 
 def build_provider_config_response(
@@ -110,6 +113,10 @@ async def apply_provider_config_update(
 
     request_values = request.model_dump(exclude_none=True, exclude_unset=True)
     updates = {key: value for key, value in request_values.items() if key not in _SECRET_FIELDS}
+    if "azure_openai_endpoint" in updates:
+        updates["azure_openai_endpoint"] = normalize_azure_openai_endpoint(
+            str(updates["azure_openai_endpoint"])
+        )
     updated_settings = _updated_settings(settings, updates)
     registry.validate_settings(updated_settings)
     await _store_credentials(request, secret_store)
@@ -148,6 +155,30 @@ async def _store_credentials(
         await secret_store.set_secret(AZURE_OPENAI_API_KEY_REF, SecretStr(api_key))
 
 
+async def import_azure_openai_api_key_from_environment(secret_store: SecretStore) -> None:
+    """Synchronize a local Azure bootstrap key into encrypted secret storage.
+
+    ``AZURE_OPENAI_API_KEY`` is the authoritative source for a local backend
+    bootstrap.  Runtime provider calls continue to read exclusively from the
+    encrypted local SecretStore, so updating the environment value takes effect
+    after the next backend startup without exposing it through the API.
+    """
+
+    api_key = os.getenv("AZURE_OPENAI_API_KEY", "").strip()
+    if not api_key:
+        try:
+            from dotenv import dotenv_values
+
+            backend_env_file = Path(__file__).resolve().parents[2] / ".env"
+            api_key = str(
+                dotenv_values(backend_env_file).get("AZURE_OPENAI_API_KEY") or ""
+            ).strip()
+        except ImportError:
+            return
+    if api_key:
+        await secret_store.set_secret(AZURE_OPENAI_API_KEY_REF, SecretStr(api_key))
+
+
 def _updated_settings(settings: AppSettings, updates: dict[str, Any]) -> AppSettings:
     values = settings.model_dump()
     values.update(updates)
@@ -159,7 +190,6 @@ def _updated_settings(settings: AppSettings, updates: dict[str, Any]) -> AppSett
 
 def _llm_provider_changed(settings: AppSettings, updates: dict[str, Any]) -> bool:
     return "llm_provider" in updates and updates["llm_provider"] != settings.llm_provider
-
 
 def _config_requirement_response(
     requirement: ProviderConfigRequirement,

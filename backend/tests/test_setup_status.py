@@ -318,11 +318,6 @@ def test_setup_submit_endpoint_rejects_incomplete_selected_provider_metadata(
                     "message": "Required for selected provider.",
                     "type": "missing_provider_setting",
                 },
-                {
-                    "field": "azure_openai_embedding_deployment",
-                    "message": "Required for selected provider.",
-                    "type": "missing_provider_setting",
-                },
             ],
         },
     }

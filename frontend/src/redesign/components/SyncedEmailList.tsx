@@ -26,9 +26,22 @@ function formattedSentDate(sentAt: string | null): string {
   }
   return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     month: "short",
-    year: "numeric",
   }).format(date);
+}
+
+function companyName(domain: string | null): string {
+  if (!domain) return "Unknown company";
+  const aliases: Record<string, string> = {
+    "mail.tsenta.com": "Tsenta",
+    "smartrecruiters.com": "SmartRecruiters",
+  };
+  if (aliases[domain]) return aliases[domain];
+  const labels = domain.toLowerCase().split(".");
+  const meaningful = labels.length > 2 && ["mail", "jobs", "careers", "www"].includes(labels[0] ?? "") ? labels[1] : labels[0];
+  return (meaningful ?? domain).split("-").map((part) => part ? part[0]?.toUpperCase() + part.slice(1) : "").join(" ");
 }
 
 function visiblePages(currentPage: number, totalPages: number): number[] {
@@ -136,7 +149,7 @@ export function SyncedEmailList({
                     type="button"
                   >
                     <span className="synced-email-list-sender">
-                      {item.from_domain ?? "Unknown sender"}
+                      {companyName(item.from_domain)}
                     </span>
                     <span className="synced-email-list-subject">{subject}</span>
                     <span className="synced-email-list-date">

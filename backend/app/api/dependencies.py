@@ -12,6 +12,7 @@ from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.engine import load_sqlite_vec_sync, verify_sqlite_vec
 from app.db.repositories import (
     ApplicationRepository,
+    AttentionRepository,
     ChatRepository,
     CorrectionConflictRepository,
     CorrectionRepository,
@@ -37,6 +38,7 @@ from app.services.applications import (
     ApplicationDetailService,
     ApplicationEventsService,
 )
+from app.services.attention import AttentionService
 from app.services.chat_history import ChatHistoryService
 from app.services.chat_index import ChatIndexService
 from app.services.chat_service import ChatService
@@ -259,10 +261,6 @@ def get_structured_extraction_service(
         EmailRepository,
         Depends(get_writable_email_repository),
     ],
-    classification_run_repository: Annotated[
-        ClassificationRunRepository,
-        Depends(get_classification_run_repository),
-    ],
     llm_provider: Annotated[
         LLMProvider,
         Depends(get_llm_provider),
@@ -271,7 +269,7 @@ def get_structured_extraction_service(
     return StructuredExtractionService(
         settings=settings,
         email_repository=email_repository,
-        classification_run_repository=classification_run_repository,
+        classification_run_repository=ClassificationRunRepository(email_repository.connection),
         llm_provider=llm_provider,
     )
 
@@ -394,6 +392,18 @@ def get_metrics_summary_service(
             metrics_repository=MetricsRepository(connection),
             ghost_threshold_days=settings.ghost_threshold_days,
         )
+    finally:
+        connection.close()
+
+
+def get_attention_service(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Iterator[AttentionService]:
+    database_path = sqlite_database_path(settings.database_url)
+    connection_target = str(database_path) if database_path.exists() else ":memory:"
+    connection = sqlite3.connect(connection_target, check_same_thread=False)
+    try:
+        yield AttentionService(repository=AttentionRepository(connection))
     finally:
         connection.close()
 

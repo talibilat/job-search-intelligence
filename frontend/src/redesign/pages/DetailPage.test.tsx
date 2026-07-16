@@ -409,6 +409,26 @@ describe("DetailPage timeline evidence", () => {
     expectBefore("tie-second", "oldest");
   });
 
+  it("renders deterministic stats computed from the loaded application and its own events, without a fabricated narrative card", async () => {
+    stubDetailFetch(
+      application({ first_seen_at: "2026-07-01T00:00:00Z", last_activity_at: "2026-07-03T00:00:00Z" }),
+      [
+        timelineEvent("applied", "2026-07-01T00:00:00Z", { event_type: "applied", email_id: "email-applied" }),
+        timelineEvent("response", "2026-07-04T00:00:00Z", { event_type: "response", email_id: "email-response" }),
+      ],
+    );
+    renderDetail();
+
+    await screen.findByText("Timeline events");
+    expect(screen.getByText("2")).toBeTruthy();
+    expect(screen.getByText("Time to first update")).toBeTruthy();
+    expect(screen.getByText("3d")).toBeTruthy();
+    expect(screen.getByText("Days open")).toBeTruthy();
+    expect(screen.getByText("Last activity")).toBeTruthy();
+    expect(screen.queryByText("The read on this one")).toBeNull();
+    expect(screen.queryByText(/GET \/pipeline\/velocity/)).toBeNull();
+  });
+
   it("sorts offset-bearing timestamps by chronological instant on initial load", async () => {
     stubDetailFetch(application(), [
       timelineEvent("lexically-later", "2026-07-01T10:00:00+02:00"),

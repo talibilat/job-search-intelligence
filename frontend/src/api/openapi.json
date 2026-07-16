@@ -405,6 +405,17 @@
             ],
             "title": "Email Id"
           },
+          "email_public_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Public Id"
+          },
           "email_sent_at": {
             "anyOf": [
               {
@@ -1111,6 +1122,44 @@
           "application_count"
         ],
         "title": "ApplicationWindowMetric",
+        "type": "object"
+      },
+      "AttentionOverviewResponse": {
+        "properties": {
+          "follow_up": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewAttentionItem"
+            },
+            "title": "Follow Up",
+            "type": "array"
+          },
+          "interviewed": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewAttentionItem"
+            },
+            "title": "Interviewed",
+            "type": "array"
+          },
+          "prepare": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewAttentionItem"
+            },
+            "title": "Prepare",
+            "type": "array"
+          },
+          "unique_interviewed_company_count": {
+            "minimum": 0.0,
+            "title": "Unique Interviewed Company Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unique_interviewed_company_count",
+          "prepare",
+          "interviewed",
+          "follow_up"
+        ],
+        "title": "AttentionOverviewResponse",
         "type": "object"
       },
       "BackfillProgressState": {
@@ -2731,6 +2780,86 @@
           "story"
         ],
         "type": "string"
+      },
+      "InterviewAttentionItem": {
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "current_status": {
+            "$ref": "#/components/schemas/ApplicationStatus"
+          },
+          "interview_at": {
+            "format": "date-time",
+            "title": "Interview At",
+            "type": "string"
+          },
+          "interview_event_id": {
+            "title": "Interview Event Id",
+            "type": "string"
+          },
+          "last_activity_at": {
+            "format": "date-time",
+            "title": "Last Activity At",
+            "type": "string"
+          },
+          "role_title": {
+            "title": "Role Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "interview_event_id",
+          "company",
+          "role_title",
+          "interview_at",
+          "last_activity_at",
+          "current_status"
+        ],
+        "title": "InterviewAttentionItem",
+        "type": "object"
+      },
+      "InterviewTaskCompletionResponse": {
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "interview_event_id": {
+            "title": "Interview Event Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "interview_event_id",
+          "application_id",
+          "completed_at"
+        ],
+        "title": "InterviewTaskCompletionResponse",
+        "type": "object"
       },
       "JsonObject": {
         "additionalProperties": true,
@@ -6278,6 +6407,79 @@
         "summary": "List Application Events",
         "tags": [
           "applications"
+        ]
+      }
+    },
+    "/attention": {
+      "get": {
+        "operationId": "get_attention_attention_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttentionOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Interview Attention",
+        "tags": [
+          "attention"
+        ]
+      }
+    },
+    "/attention/interviews/{interview_event_id}/complete": {
+      "put": {
+        "operationId": "complete_interview_task_attention_interviews__interview_event_id__complete_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "interview_event_id",
+            "required": true,
+            "schema": {
+              "title": "Interview Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewTaskCompletionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Interview Preparation Task",
+        "tags": [
+          "attention"
         ]
       }
     },

@@ -56,6 +56,7 @@ def build_pipeline_status(
 
     next_action, next_action_reason = _resolve_next_action(
         connected=connection is not None,
+        reauth_required=connection.reauth_required if connection is not None else False,
         sync_running=sync_running,
         sync_failed=sync_status.state is EmailSyncRunState.FAILED,
         backfill_state=backfill_state,
@@ -99,6 +100,7 @@ def _connection_display(connection: EmailConnection | None) -> str | None:
 def _resolve_next_action(
     *,
     connected: bool,
+    reauth_required: bool,
     sync_running: bool,
     sync_failed: bool,
     backfill_state: BackfillProgressState,
@@ -106,6 +108,11 @@ def _resolve_next_action(
     unclassified_retained_count: int,
     last_error: str | None,
 ) -> tuple[PipelineNextAction, str]:
+    if reauth_required:
+        return (
+            PipelineNextAction.CONNECT_GMAIL,
+            "Gmail authorization needs to be renewed. Reconnect Gmail in Settings to resume sync.",
+        )
     if not connected:
         return (
             PipelineNextAction.CONNECT_GMAIL,

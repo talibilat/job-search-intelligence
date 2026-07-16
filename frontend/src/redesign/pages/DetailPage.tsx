@@ -21,7 +21,8 @@ import {
 } from "../../api";
 import { Alert, Button, FormField, TextInput } from "../../components/ui";
 import type { RedesignPage, StatusChipKey } from "../RedesignApp";
-import { EVENT_LABELS, formatShortDate, logoStyle } from "../theme";
+import { EmailReaderDialog } from "../components/EmailReaderDialog";
+import { EVENT_LABELS, daysSince, formatShortDate, logoStyle } from "../theme";
 import { publicApiError } from "../apiError";
 
 interface DetailPageProps {
@@ -115,7 +116,9 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
   const [splitRole, setSplitRole] = useState("");
   const [splitReason, setSplitReason] = useState("");
   const [resetReason, setResetReason] = useState("");
+  const [openEmailPublicId, setOpenEmailPublicId] = useState<string | null>(null);
   const savingRef = useRef(false);
+  const emailTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -380,6 +383,38 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
       ? `This record was assembled by AI from ${sourceEmailCount} source ${sourceEmailCount === 1 ? "email" : "emails"} in your inbox. Source subjects are shown as metadata so you can identify the evidence used.`
       : `This record has ${events.length} timeline ${events.length === 1 ? "event" : "events"}. No source emails are attached to this timeline. Inferred events are timeline evidence, not inbox emails.`;
 
+  const daysOpen = daysSince(application.first_seen_at);
+  const daysSinceActivity = daysSince(application.last_activity_at);
+  const firstNonAppliedEvent = events
+    .filter((event) => event.event_type !== "applied")
+    .slice()
+    .sort((a, b) => Date.parse(a.event_at) - Date.parse(b.event_at))[0];
+  const daysToFirstUpdate =
+    firstNonAppliedEvent && application.first_seen_at
+      ? Math.max(
+          0,
+          Math.round(
+            (Date.parse(firstNonAppliedEvent.event_at) - Date.parse(application.first_seen_at)) /
+              86_400_000,
+          ),
+        )
+      : null;
+
+  const detailStats: { label: string; value: string; note: string }[] = [
+    { label: "Days open", value: daysOpen === null ? "—" : String(daysOpen), note: `Since applied ${formatShortDate(application.first_seen_at)}` },
+    { label: "Timeline events", value: String(events.length), note: `${sourceEmailCount} from source emails` },
+    {
+      label: "Time to first update",
+      value: daysToFirstUpdate === null ? "—" : `${daysToFirstUpdate}d`,
+      note: daysToFirstUpdate === null ? "No update yet" : "After applying",
+    },
+    {
+      label: "Last activity",
+      value: daysSinceActivity === null ? "—" : daysSinceActivity === 0 ? "Today" : `${daysSinceActivity}d ago`,
+      note: formatShortDate(application.last_activity_at),
+    },
+  ];
+
   return (
     <section
       style={{
@@ -509,6 +544,29 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
         />
         <span style={{ flex: 1 }}>{sourceEvidenceCopy}</span>
       </div> : null}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: "10px" }}>
+        {detailStats.map((stat) => (
+          <div
+            key={stat.label}
+            style={{
+              padding: "14px 16px",
+              border: "1px solid #E4E2DA",
+              borderRadius: "14px",
+              background: "#fff",
+              boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
+            }}
+          >
+            <div style={{ fontSize: "11.5px", fontWeight: 600, color: "#666D66" }}>{stat.label}</div>
+            <div style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "-0.02em", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
+              {stat.value}
+            </div>
+            <div style={{ fontSize: "11px", color: "#9A9F96", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {stat.note}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {error ? (
         <Alert
@@ -748,7 +806,29 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
                     flexWrap: "wrap",
                   }}
                 >
-                  {event.email_subject ? (
+                  {event.email_subject && event.email_public_id ? (
+                    <button
+                      onClick={(clickEvent) => {
+                        emailTriggerRef.current = clickEvent.currentTarget;
+                        setOpenEmailPublicId(event.email_public_id ?? null);
+                      }}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "11.5px",
+                        color: "#666D66",
+                        border: "1px solid #E4E2DA",
+                        borderRadius: "999px",
+                        padding: "3px 10px",
+                        background: "#FAFAF7",
+                        cursor: "pointer",
+                      }}
+                      type="button"
+                    >
+                      ✉ {event.email_subject}
+                    </button>
+                  ) : event.email_subject ? (
                     <span
                       style={{
                         display: "inline-flex",
@@ -963,6 +1043,11 @@ export function DetailPage({ applicationId, go, onChanged }: DetailPageProps) {
           ))}
         </div>
       </div>
+      <EmailReaderDialog
+        onClose={() => setOpenEmailPublicId(null)}
+        publicId={openEmailPublicId}
+        triggerRef={emailTriggerRef}
+      />
     </section>
   );
 }

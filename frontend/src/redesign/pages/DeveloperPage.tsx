@@ -39,6 +39,7 @@ const DEV_ROWS = DEV_FEATURES.map((row) => {
     ...row,
     phase: "phase" in row ? row.phase : null,
     status: record ? featureStatusLabels[record.status] : "Status unavailable",
+    wiredTo: record && record.screens.length > 0 ? record.screens.join(", ") : null,
   };
 });
 
@@ -66,7 +67,8 @@ export function DeveloperPage() {
           For developers
         </h1>
         <p style={{ margin: "6px 0 0", color: "#666D66", fontSize: "13.5px" }}>
-          Implementation status of each surface. Not shown to regular users.
+          Implementation status of each surface. The "Wired to" line shows where it's actually
+          surfaced in the product. Not shown to regular users.
         </p>
       </div>
       <div
@@ -90,7 +92,12 @@ export function DeveloperPage() {
               fontSize: "13px",
             }}
           >
-            <span style={{ fontWeight: 600 }}>{row.name}</span>
+            <span>
+              <span style={{ display: "block", fontWeight: 600 }}>{row.name}</span>
+              <span style={{ display: "block", fontSize: "11px", color: "#9A9F96", marginTop: "1px" }}>
+                {row.wiredTo ? `Wired to ${row.wiredTo}` : "Not wired to a screen yet"}
+              </span>
+            </span>
             <span
               style={{ display: "flex", alignItems: "center", gap: "10px" }}
             >

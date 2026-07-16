@@ -11,6 +11,10 @@ from app.models import (
 from app.providers import ProviderConfigurationError, ProviderRegistry
 from app.providers.email import EmailConnection
 from app.providers.llm import (
+    LLMGenerationOptions,
+    LLMGenerationRequest,
+    LLMMessage,
+    LLMMessageRole,
     LLMModelHealthStatus,
     LLMModelKind,
     LLMProvider,
@@ -141,6 +145,8 @@ class ProviderReadinessService:
                     action="Enter your Azure OpenAI API key.",
                 )
                 return missing, missing.model_copy()
+            if not self._settings.azure_openai_embedding_deployment.strip():
+                return await self._azure_classification_readiness_without_embeddings()
 
         try:
             response = await check_configured_llm_provider_health(
@@ -159,6 +165,38 @@ class ProviderReadinessService:
         return (
             self._model_readiness(response.checks, LLMModelKind.CHAT, "classification"),
             self._model_readiness(response.checks, LLMModelKind.EMBEDDING, "embedding"),
+        )
+
+    async def _azure_classification_readiness_without_embeddings(
+        self,
+    ) -> tuple[CapabilityReadiness, CapabilityReadiness]:
+        """Validate Azure chat classification without requiring later-phase embeddings."""
+
+        try:
+            await self._llm_provider.generate(
+                LLMGenerationRequest(
+                    messages=(LLMMessage(role=LLMMessageRole.USER, content="Health check."),),
+                    model=self._settings.azure_openai_chat_deployment,
+                    options=LLMGenerationOptions(max_output_tokens=64),
+                )
+            )
+        except LLMProviderError:
+            unavailable = CapabilityReadiness(
+                state=ReadinessState.UNAVAILABLE,
+                message="The selected AI provider could not be reached.",
+                action="Check the provider service and configured chat deployment, then retry.",
+            )
+            return unavailable, unavailable.model_copy()
+        return (
+            CapabilityReadiness(
+                state=ReadinessState.READY,
+                message="Azure OpenAI chat classification is ready.",
+            ),
+            CapabilityReadiness(
+                state=ReadinessState.MISSING_CONFIG,
+                message="Azure OpenAI embedding deployment is not configured.",
+                action="Configure an embedding deployment before using chat retrieval.",
+            ),
         )
 
     @staticmethod

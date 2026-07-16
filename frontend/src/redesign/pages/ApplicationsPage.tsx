@@ -25,6 +25,7 @@ import {
 } from "../theme";
 
 interface ApplicationsPageProps {
+  processingActive?: boolean;
   openApp: (id: string) => void;
   reloadKey: number;
   onProcessed?: () => void;
@@ -104,6 +105,7 @@ function latestUpdateText(application: ApplicationRecord): string {
 }
 
 export function ApplicationsPage({
+  processingActive = false,
   openApp,
   reloadKey,
   onProcessed = () => undefined,
@@ -360,7 +362,7 @@ export function ApplicationsPage({
         </div>
       </div>
 
-      <ProcessingPanel onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
+      <ProcessingPanel externalProcessingActive={processingActive} onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
       <DashboardFilterPanel filters={filters} onApply={applyFilters} />
 
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>

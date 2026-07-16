@@ -56,8 +56,11 @@ def test_processing_runs_multiple_batches_and_integrates_ghosts() -> None:
         aggregation=aggregation,
         ghosts=_GhostService(updates=1, conflicts=2),
     )
+    statuses = []
 
-    result = asyncio.run(service.run(ProcessingRunRequest()))
+    result = asyncio.run(
+        service.run(ProcessingRunRequest(), status_callback=statuses.append)
+    )
 
     assert result.processed_count == 3
     assert result.accepted_count == 3
@@ -69,6 +72,14 @@ def test_processing_runs_multiple_batches_and_integrates_ghosts() -> None:
     assert result.prompt_tokens == 30
     assert result.total_tokens == 45
     assert len(extraction.calls) == 3
+    assert [call[0] for call in extraction.calls] == [2, 2, 2]
+    assert [status.processed_count for status in statuses] == [0, 1, 3, 3]
+    assert [status.state for status in statuses] == [
+        "running",
+        "running",
+        "running",
+        "succeeded",
+    ]
 
 
 def test_processing_skips_malformed_candidate_within_run_and_honors_limit() -> None:

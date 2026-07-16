@@ -422,11 +422,6 @@ def test_provider_config_update_reports_missing_provider_settings(
                     "message": "Required provider setting is missing.",
                     "type": "missing",
                 },
-                {
-                    "field": "azure_openai_embedding_deployment",
-                    "message": "Required provider setting is missing.",
-                    "type": "missing",
-                },
             ],
         },
     }

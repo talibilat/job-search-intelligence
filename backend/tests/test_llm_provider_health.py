@@ -310,11 +310,6 @@ def test_llm_provider_health_endpoint_rejects_missing_selected_provider_settings
                     "message": "Required provider setting is missing.",
                     "type": "missing",
                 },
-                {
-                    "field": "azure_openai_embedding_deployment",
-                    "message": "Required provider setting is missing.",
-                    "type": "missing",
-                },
             ],
         }
     }
@@ -349,11 +344,6 @@ def test_llm_health_endpoint_validates_settings_before_adapter_resolution() -> N
                 },
                 {
                     "field": "azure_openai_chat_deployment",
-                    "message": "Required provider setting is missing.",
-                    "type": "missing",
-                },
-                {
-                    "field": "azure_openai_embedding_deployment",
                     "message": "Required provider setting is missing.",
                     "type": "missing",
                 },

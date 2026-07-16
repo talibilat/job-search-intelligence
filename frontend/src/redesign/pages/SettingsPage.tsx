@@ -84,6 +84,7 @@ export function SettingsPage({
   const [providerHealthPending, setProviderHealthPending] = useState(false);
   const [providerHealthError, setProviderHealthError] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<ClassificationPreRunEstimate | null>(null);
+  const [scanMathOpen, setScanMathOpen] = useState(false);
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null);
   const [gmailAuthPending, setGmailAuthPending] = useState(false);
   const [wipeStage, setWipeStage] = useState(0);
@@ -775,7 +776,42 @@ export function SettingsPage({
         <div style={{ fontSize: "12px", color: "#9A9F96" }}>
           Estimated cost of your next full scan:{" "}
           <strong style={{ color: "#1B201C" }}>{scanCost}</strong>
+          {estimate ? (
+            <>
+              {" · "}
+              <button
+                onClick={() => setScanMathOpen((value) => !value)}
+                style={{ border: "none", background: "none", color: "#1E5136", fontSize: "12px", fontWeight: 600, cursor: "pointer", padding: 0 }}
+                type="button"
+              >
+                {scanMathOpen ? "hide the math" : "see the math"}
+              </button>
+            </>
+          ) : null}
         </div>
+        {scanMathOpen && estimate ? (
+          <div
+            style={{
+              fontFamily: "'JetBrains Mono',monospace",
+              fontSize: "12px",
+              color: "#4A5049",
+              background: "#FAFAF7",
+              border: "1px solid #E4E2DA",
+              borderRadius: "8px",
+              padding: "10px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "3px",
+            }}
+          >
+            <span>{formatCount(estimate.candidate_count)} candidate emails × {estimate.model} ({estimate.llm_provider})</span>
+            <span>
+              ~{formatCount(estimate.estimated_prompt_tokens)} prompt + {formatCount(estimate.estimated_completion_tokens)} completion
+              = {formatCount(estimate.estimated_total_tokens)} tokens
+            </span>
+            <span>Estimate method: {estimate.token_estimate_method}</span>
+          </div>
+        ) : null}
       </div>
 
       <div

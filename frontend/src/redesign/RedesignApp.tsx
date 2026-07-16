@@ -6,8 +6,13 @@ import {
   syncEstimateSyncEstimateGet,
   syncNowSyncPost,
   syncStatusSyncStatusGet,
+  providerReadinessConfigProvidersReadinessGet,
+  processingRunProcessingRunPost,
+  processingStatusProcessingStatusGet,
   type EmailConnection,
   type EmailSyncOptions,
+  type EmailSyncStatus,
+  type ProcessingStatus,
   type SyncLocalStats,
   syncStatsSyncStatsGet,
 } from "../api";
@@ -236,6 +241,12 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
   const [syncEstimateLabel, setSyncEstimateLabel] = useState("");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [syncFlowOpen, setSyncFlowOpen] = useState(false);
+  const [syncFlowStage, setSyncFlowStage] = useState<"syncing" | "filtering" | "retaining" | "classifying" | "complete" | "failed">("syncing");
+  const [syncFlowEmailCount, setSyncFlowEmailCount] = useState(0);
+  const [syncFlowTotalEmailCount, setSyncFlowTotalEmailCount] = useState(0);
+  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
   const syncingRef = useRef(false);
   const customRangeInvalid =
     syncScope === "custom" && (!customFrom || !customTo || customFrom >= customTo);
@@ -410,19 +421,41 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
     syncingRef.current = true;
     setSyncing(true);
     setSyncError(null);
+    setSyncFlowOpen(true);
+    setSyncFlowStage("syncing");
+    setSyncFlowEmailCount(0);
+    setSyncFlowTotalEmailCount(syncStats?.total_raw_emails ?? 0);
+    setProcessingStatus(null);
     try {
       const options = syncOptionsForScope(syncScope, customFrom, customTo, lastCount);
       const response = await syncNowSyncPost(options);
-      if (response.status !== 200) {
+      let state: EmailSyncStatus;
+      if (response.status === 200) {
+        state = response.data;
+      } else if (response.status === 409) {
+        const current = await syncStatusSyncStatusGet().catch(() => null);
+        if (current?.status === 200 && current.data.state === "running") {
+          state = current.data;
+          setSyncFlowEmailCount(state.message_count ?? 0);
+          const stats = await syncStatsSyncStatsGet().catch(() => null);
+          if (stats?.status === 200) setSyncFlowTotalEmailCount(stats.data.total_raw_emails);
+        } else {
+          setSyncError(publicApiError({ response }, "Sync could not start. Try again."));
+          setSyncFlowStage("failed");
+          return;
+        }
+      } else {
         setSyncError(publicApiError({ response }, "Sync could not start. Try again."));
+        setSyncFlowStage("failed");
         return;
       }
-
-      let state = response.data;
       if (state.state === "running") {
         for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
           const status = await syncStatusSyncStatusGet();
           state = status.data;
+          setSyncFlowEmailCount(state.message_count ?? 0);
+          const stats = await syncStatsSyncStatsGet().catch(() => null);
+          if (stats?.status === 200) setSyncFlowTotalEmailCount(stats.data.total_raw_emails);
           if (state.state !== "running") {
             break;
           }
@@ -436,9 +469,69 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         case "succeeded":
           setCompletedScope(completedSyncScope(syncScope, customFrom, customTo));
           setSyncMenuOpen(false);
+          setSyncFlowEmailCount(state.message_count ?? 0);
+          {
+            const stats = await syncStatsSyncStatsGet().catch(() => null);
+            if (stats?.status === 200) setSyncFlowTotalEmailCount(stats.data.total_raw_emails);
+          }
+          setSyncFlowStage("filtering");
+          await new Promise((resolve) => setTimeout(resolve, 650));
+          setSyncFlowStage("retaining");
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          setSyncFlowStage("classifying");
+          {
+            const readiness = await providerReadinessConfigProvidersReadinessGet().catch(() => null);
+            if (!readiness?.data.ready_to_classify) {
+              setSyncError(
+                readiness?.data.classification_generation.action
+                  ?? readiness?.data.classification_generation.message
+                  ?? "Azure OpenAI is not ready for classification. Check its settings and retry.",
+              );
+              setSyncFlowStage("failed");
+              return;
+            }
+            let processingRequestError: unknown = null;
+            const runPromise = processingRunProcessingRunPost({ max_candidates: 500 }).catch((error) => {
+              processingRequestError = error;
+              return null;
+            });
+            for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
+              await new Promise((resolve) => setTimeout(resolve, 700));
+              const status = await processingStatusProcessingStatusGet().catch(() => null);
+              if (processingRequestError !== null) {
+                setSyncError(publicApiError(processingRequestError, "Classification failed. Check Azure OpenAI and retry."));
+                setSyncFlowStage("failed");
+                return;
+              }
+              if (status === null) continue;
+              if (status.status === 200) {
+                setProcessingStatus(status.data);
+                if (status.data.state === "failed") {
+                  setSyncError(status.data.last_error ?? "Classification failed. Try again.");
+                  setSyncFlowStage("failed");
+                  return;
+                }
+                if (status.data.state === "succeeded") break;
+              }
+            }
+            const result = await runPromise;
+            if (result === null) {
+              setSyncError(publicApiError(processingRequestError, "Classification failed. Check Azure OpenAI and retry."));
+              setSyncFlowStage("failed");
+              return;
+            }
+            if (result.status !== 200) {
+              setSyncError(publicApiError({ response: result }, "Classification failed. Check Azure OpenAI and retry."));
+              setSyncFlowStage("failed");
+              return;
+            }
+            setProcessingStatus({ ...result.data, state: "succeeded" });
+            setSyncFlowStage("complete");
+          }
           return;
         case "failed":
           setSyncError(state.last_error ?? "Sync failed. Try again.");
+          setSyncFlowStage("failed");
           return;
         case "idle":
           setSyncError("Sync did not start. Try again.");
@@ -453,20 +546,31 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
       }
     } catch (error) {
       setSyncError(publicApiError(error, "Sync could not start. Check the local backend."));
+      setSyncFlowStage("failed");
     } finally {
       syncingRef.current = false;
       setSyncing(false);
       refresh();
     }
-  }, [syncScope, customFrom, customTo, lastCount, customRangeInvalid, refresh]);
+  }, [syncScope, customFrom, customTo, lastCount, customRangeInvalid, refresh, syncStats]);
+
+  const progressPercent = syncFlowStage === "syncing"
+    ? 12
+    : syncFlowStage === "filtering"
+      ? 38
+      : syncFlowStage === "retaining"
+        ? 52
+        : syncFlowStage === "classifying"
+          ? 55 + Math.round(42 * ((processingStatus?.processed_count ?? 0) / Math.max(processingStatus?.candidate_limit ?? 500, 1)))
+          : 100;
 
   const navItems = useMemo(
     () =>
       [
-        { key: "overview" as const, label: "Overview" },
-        { key: "applications" as const, label: "Applications" },
-        { key: "insights" as const, label: "Insights" },
-        { key: "settings" as const, label: "Settings" },
+        { key: "overview" as const, label: "Overview", icon: "⌂" },
+        { key: "applications" as const, label: "Applications", icon: "▤" },
+        { key: "insights" as const, label: "Insights", icon: "◫" },
+        { key: "settings" as const, label: "Settings", icon: "⚙" },
       ].map((item) => {
         const active =
           route.page === item.key || (route.page === "detail" && item.key === "applications");
@@ -474,7 +578,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           display: "block",
           width: "100%",
           textAlign: "left",
-          padding: "9px 12px",
+          padding: navCollapsed ? "9px" : "9px 12px",
           border: "none",
           borderRadius: "9px",
           cursor: "pointer",
@@ -486,13 +590,18 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         };
         return { ...item, style };
       }),
-    [route.page],
+    [navCollapsed, route.page],
   );
+
+  const gmailName = connections.find((connection) => connection.display_email)?.display_email?.display_name
+    ?? connections.find((connection) => connection.display_email)?.display_email?.address.split("@")[0];
 
   const inboxLabel = connectionsLoadState === "loading"
     ? "Checking inbox connection"
     : connectionsLoadState === "error"
       ? "Inbox connection unavailable"
+      : connections.some((connection) => connection.reauth_required)
+        ? "Gmail needs reconnecting"
       : connections.length === 0
       ? "No inbox connected"
       : connections.length === 1
@@ -506,8 +615,10 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
       ? connectionsError
       : syncStatsLoadState === "loading"
         ? "Loading sync statistics"
-        : syncStatsLoadState === "error"
+    : syncStatsLoadState === "error"
           ? syncStatsError
+          : connections.some((connection) => connection.reauth_required)
+            ? "Reconnect Gmail in Settings to resume sync"
           : connections.length === 0
             ? "Connect Gmail in Settings"
             : `Synced ${syncedRelative} · ${syncedCount} emails read`;
@@ -527,12 +638,13 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
       <nav
         aria-label="Primary"
         style={{
-          width: "224px",
+          width: navCollapsed ? "68px" : "224px",
           flex: "none",
           display: "flex",
           flexDirection: "column",
           gap: "4px",
           padding: "20px 12px 16px",
+          transition: "width 180ms ease",
           borderRight: "1px solid #E4E2DA",
           background: "#EFEEE8",
         }}
@@ -553,23 +665,24 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           >
             J
           </div>
-          <div>
+          {!navCollapsed ? <div>
             <div style={{ fontWeight: 700, fontSize: "14.5px", letterSpacing: "-0.01em" }}>
               JobTracker
             </div>
             <div style={{ fontSize: "10.5px", color: "#8B9189" }}>Your inbox, decoded</div>
-          </div>
+          </div> : null}
+          <button aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} onClick={() => setNavCollapsed((value) => !value)} style={{ marginLeft: "auto", border: "none", background: "transparent", cursor: "pointer", color: "#666D66" }} type="button">{navCollapsed ? "›" : "‹"}</button>
         </div>
 
         {navItems.map((item) => (
           <button key={item.key} onClick={() => go(item.key)} style={item.style} type="button">
-            {item.label}
+            <span aria-hidden="true" style={{ display: "inline-block", width: navCollapsed ? "100%" : "22px", textAlign: "center" }}>{item.icon}</span>{navCollapsed ? <span className="rd-sr-only">{item.label}</span> : item.label}
           </button>
         ))}
 
         <div style={{ flex: 1 }} />
 
-        <div
+        {!navCollapsed ? <div
           style={{
             padding: "10px 12px",
             borderRadius: "10px",
@@ -602,9 +715,9 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           {syncStatsLoadState === "error" ? (
             <button aria-label="Retry sync statistics" onClick={() => void loadSyncStats()} style={{ border: "none", background: "none", color: "#1E5136", cursor: "pointer", fontSize: "11px", fontWeight: 700, padding: "4px 0 0" }} type="button">Retry</button>
           ) : null}
-        </div>
+        </div> : null}
 
-        <button
+        {!navCollapsed ? <button
           onClick={() => go("dev")}
           style={{
             marginTop: "8px",
@@ -619,7 +732,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           type="button"
         >
           For developers →
-        </button>
+        </button> : null}
       </nav>
 
       <main style={{ flex: 1, minWidth: 0, overflowY: "auto", position: "relative" }}>
@@ -666,9 +779,18 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
                 }}
                 type="button"
               >
-                {syncing ? "Checking inboxes…" : "Sync"}{" "}
+                {syncing ? "Processing..." : "Sync"}{" "}
                 <span style={{ fontSize: "10px", color: "#9A9F96" }}>▾</span>
               </button>
+              {syncing ? (
+                <button
+                  onClick={() => setSyncFlowOpen(true)}
+                  style={{ marginLeft: "8px", padding: "8px 12px", border: "1px solid #1E5136", borderRadius: "999px", background: "#F3F8F4", color: "#1E5136", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}
+                  type="button"
+                >
+                  View progress
+                </button>
+              ) : null}
               {syncMenuOpen ? (
                 <div
                   style={{
@@ -844,6 +966,8 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
 
         {route.page === "overview" || route.page === "chat" ? (
           <OverviewPage
+            processingActive={syncing}
+            userName={gmailName}
             go={go}
             openApp={openApp}
             onProcessed={refresh}
@@ -854,6 +978,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         ) : null}
         {route.page === "applications" ? (
           <ApplicationsPage
+            processingActive={syncing}
             openApp={openApp}
             onProcessed={refresh}
             reloadKey={reloadKey}
@@ -931,6 +1056,55 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           onOpenSettings={() => go("settings")}
         />
       ) : null}
+      {syncFlowOpen ? (
+        <div
+          aria-modal="true"
+          role="dialog"
+          aria-labelledby="sync-progress-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            display: "grid",
+            placeItems: "center",
+            padding: "24px",
+            background: "rgba(20, 25, 20, 0.34)",
+          }}
+        >
+          <section style={{ width: "min(510px, 100%)", padding: "26px", borderRadius: "18px", background: "#fff", boxShadow: "0 24px 70px rgba(20,25,20,0.25)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "20px" }}>
+              <div>
+                <div style={{ color: "#1E5136", fontSize: "11px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>Inbox processing</div>
+                <h2 id="sync-progress-title" style={{ margin: "4px 0 0", fontSize: "22px", letterSpacing: "-0.03em" }}>
+                  {syncFlowStage === "complete" ? "Your inbox is up to date" : syncFlowStage === "failed" ? "Processing needs attention" : "Building your application history"}
+                </h2>
+              </div>
+              <button onClick={() => setSyncFlowOpen(false)} style={{ border: "1px solid #E4E2DA", borderRadius: "999px", background: "#fff", padding: "6px 11px", cursor: "pointer", fontWeight: 700 }} type="button">
+                {syncFlowStage === "complete" || syncFlowStage === "failed" ? "Close" : "Continue in background"}
+              </button>
+            </div>
+            <div style={{ height: "8px", margin: "22px 0 20px", overflow: "hidden", borderRadius: "999px", background: "#EEEDE7" }}>
+              <div style={{ width: `${progressPercent}%`, height: "100%", borderRadius: "inherit", background: "linear-gradient(90deg, #1E5136, #5E9A71)", transition: "width 500ms ease" }} />
+            </div>
+            <ol style={{ display: "grid", gap: "14px", margin: 0, padding: 0, listStyle: "none" }}>
+              <SyncFlowStep active={syncFlowStage === "syncing"} complete={!["syncing", "failed"].includes(syncFlowStage)} title="Syncing emails" detail={`${formatCount(syncFlowEmailCount)} new for this run · ${formatCount(syncFlowTotalEmailCount)} total emails synced`} />
+              <SyncFlowStep active={syncFlowStage === "filtering"} complete={["retaining", "classifying", "complete"].includes(syncFlowStage)} title="Applying job-search filters" detail="Filtering runs locally against sender, subject, and message metadata." />
+              <SyncFlowStep active={syncFlowStage === "retaining"} complete={["classifying", "complete"].includes(syncFlowStage)} title="Candidate bodies retained" detail="Only broad job-search candidates keep body text for classification and reconciliation." />
+              <SyncFlowStep active={syncFlowStage === "classifying"} complete={syncFlowStage === "complete"} title="Classifying with Azure OpenAI" detail={processingStatus ? `${formatCount(processingStatus.processed_count)} of ${formatCount(processingStatus.candidate_limit)} candidate emails classified in parallel.` : "Preparing the first bounded classification run."} />
+            </ol>
+            {syncFlowStage === "complete" && processingStatus ? <p role="status" style={{ margin: "20px 0 0", color: "#1E5136", fontSize: "13px", fontWeight: 600 }}>Saved {formatCount(processingStatus.accepted_count)} classifications and updated {formatCount(processingStatus.applications_upserted)} applications.</p> : null}
+            {syncFlowStage === "syncing" || syncFlowStage === "classifying" ? <p role="status" style={{ margin: "18px 0 0", color: "#666D66", fontSize: "11.5px" }}>Live backend updates are polling every second.</p> : null}
+            {syncFlowStage === "failed" ? <p role="status" style={{ margin: "20px 0 0", color: "#96403C", fontSize: "13px" }}>{syncError ?? "The current step did not finish. No uncommitted classification results were shown as complete."}</p> : null}
+          </section>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function SyncFlowStep({ active, complete, title, detail }: { active: boolean; complete: boolean; title: string; detail: string }) {
+  return <li style={{ display: "grid", gridTemplateColumns: "24px 1fr", gap: "10px", alignItems: "start", opacity: active || complete ? 1 : 0.52 }}>
+    <span aria-hidden="true" style={{ width: "22px", height: "22px", display: "grid", placeItems: "center", borderRadius: "50%", background: complete ? "#1E5136" : active ? "#E6F0E8" : "#F0EFEA", color: complete ? "#fff" : "#1E5136", fontSize: "12px", fontWeight: 800 }}>{complete ? "✓" : active ? "…" : ""}</span>
+    <span><strong style={{ display: "block", fontSize: "13.5px" }}>{title}</strong><span style={{ display: "block", marginTop: "2px", color: "#666D66", fontSize: "12px" }}>{detail}</span></span>
+  </li>;
 }

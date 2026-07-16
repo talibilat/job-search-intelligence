@@ -74,6 +74,26 @@ def test_metrics_funnel_composes_dashboard_filters(tmp_path: Path) -> None:
     }
 
 
+def test_metrics_funnel_interview_stage_counts_unique_companies(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application_with_events(
+            connection,
+            "app-acme-one",
+            ("applied", "interview_scheduled"),
+            company="Acme",
+        )
+        insert_application_with_events(
+            connection,
+            "app-acme-two",
+            ("applied", "interview_scheduled"),
+            company="ACME",
+        )
+
+    stages = create_test_client(database_path).get("/metrics/funnel").json()["stages"]
+    assert stages[2] == {"stage": "interview", "count": 1}
+
+
 def test_metrics_funnel_endpoint_is_documented_in_openapi() -> None:
     response = TestClient(create_app()).get("/openapi.json")
 
@@ -109,11 +129,12 @@ def insert_application_with_events(
     application_id: str,
     event_types: tuple[str, ...],
     *,
+    company: str | None = None,
     source: str = "linkedin",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
-        company=f"{application_id} Corp",
+        company=company or f"{application_id} Corp",
         role_title="Software Engineer",
         source=source,
         first_seen_at="2026-07-01T09:00:00+00:00",

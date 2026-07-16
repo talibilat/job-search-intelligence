@@ -6,6 +6,8 @@ import sqlite3
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
+from pydantic import ValidationError
+
 from app.config import EmailProviderName
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
@@ -656,7 +658,13 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             """,
             tuple(parameters),
         ).fetchall()
-        return [EmailClassificationCandidate.model_validate(row_to_dict(row)) for row in rows]
+        candidates: list[EmailClassificationCandidate] = []
+        for row in rows:
+            try:
+                candidates.append(EmailClassificationCandidate.model_validate(row_to_dict(row)))
+            except ValidationError:
+                continue
+        return candidates
 
     def list_chunkable_retained_emails(self, *, limit: int) -> list[EmailChunkSource]:
         """Return retained job-related email bodies eligible for chunking."""

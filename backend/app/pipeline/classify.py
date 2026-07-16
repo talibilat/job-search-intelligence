@@ -64,6 +64,7 @@ class MalformedLLMExtractionReason(StrEnum):
     INVALID_SCHEMA = "invalid_schema"
     INCOMPLETE_GENERATION = "incomplete_generation"
     DUPLICATE_JSON_KEY = "duplicate_json_key"
+    PROVIDER_ERROR = "provider_error"
 
 
 class _DuplicateJSONKeyError(ValueError):

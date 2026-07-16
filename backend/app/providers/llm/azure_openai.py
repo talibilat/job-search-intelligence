@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
-from app.config import AppSettings, LLMProviderName
+from app.config import AppSettings, LLMProviderName, normalize_azure_openai_endpoint
 from app.providers.llm.errors import (
     LLMProviderError,
     LLMProviderRequestError,
@@ -188,7 +188,7 @@ class AzureOpenAIProvider:
         secret_store: SecretStore | None,
         transport: AzureOpenAITransport | None = None,
     ) -> None:
-        self._endpoint = settings.azure_openai_endpoint.strip().rstrip("/")
+        self._endpoint = normalize_azure_openai_endpoint(settings.azure_openai_endpoint)
         self._api_version = settings.azure_openai_api_version.strip()
         self._chat_deployment = settings.azure_openai_chat_deployment.strip()
         self._embedding_deployment = settings.azure_openai_embedding_deployment.strip()
@@ -204,6 +204,7 @@ class AzureOpenAIProvider:
             )
 
         api_key = await self._read_api_key()
+        uses_completion_token_limit = _uses_completion_token_limit(deployment)
         try:
             response_payload = await self._transport.post_json(
                 _chat_completions_url(
@@ -212,7 +213,11 @@ class AzureOpenAIProvider:
                     api_version=self._api_version,
                 ),
                 api_key=api_key,
-                payload=_chat_completion_payload(request),
+                payload=_chat_completion_payload(
+                    request,
+                    use_completion_token_limit=uses_completion_token_limit,
+                    supports_temperature=not uses_completion_token_limit,
+                ),
                 timeout_seconds=self._timeout_seconds,
             )
         except AzureOpenAITransportError as error:
@@ -287,7 +292,7 @@ class AzureOpenAIProvider:
                 LLMGenerationRequest(
                     messages=(LLMMessage(role=LLMMessageRole.USER, content=_HEALTH_CHECK_PROMPT),),
                     model=model,
-                    options=LLMGenerationOptions(max_output_tokens=1),
+                    options=LLMGenerationOptions(max_output_tokens=64),
                 )
             )
         except LLMProviderError as error:
@@ -344,17 +349,30 @@ class AzureOpenAIProvider:
         return SecretStr(api_key.get_secret_value().strip())
 
 
-def _chat_completion_payload(request: LLMGenerationRequest) -> dict[str, object]:
+def _chat_completion_payload(
+    request: LLMGenerationRequest,
+    *,
+    use_completion_token_limit: bool = False,
+    supports_temperature: bool = True,
+) -> dict[str, object]:
     payload: dict[str, object] = {
         "messages": [message.model_dump(mode="json") for message in request.messages]
     }
-    if request.options.temperature is not None:
+    if request.options.temperature is not None and supports_temperature:
         payload["temperature"] = request.options.temperature
     if request.options.max_output_tokens is not None:
-        payload["max_tokens"] = request.options.max_output_tokens
+        payload[
+            "max_completion_tokens" if use_completion_token_limit else "max_tokens"
+        ] = request.options.max_output_tokens
     if request.response_format is LLMResponseFormat.JSON_OBJECT:
         payload["response_format"] = {"type": "json_object"}
     return payload
+
+
+def _uses_completion_token_limit(deployment: str) -> bool:
+    """Use the required token-limit field for GPT-5 and reasoning deployments."""
+
+    return deployment.strip().lower().startswith(("gpt-5", "o1", "o3", "o4"))
 
 
 def _chat_completions_url(*, endpoint: str, deployment: str, api_version: str) -> str:

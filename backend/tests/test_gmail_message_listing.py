@@ -21,6 +21,7 @@ from app.providers.email import (
 )
 from app.providers.email.gmail import (
     GMAIL_METADATA_HEADERS,
+    GmailApiRequestError,
     GmailMessageLister,
     UrllibGmailApiTransport,
 )
@@ -478,6 +479,80 @@ def test_gmail_message_lister_uses_history_for_incremental_metadata_sync() -> No
     }
     assert history_token == "access-token"
     assert [call[0] for call in transport.calls[1:]] == ["/gmail/v1/users/me/messages/msg-3"]
+
+
+def test_gmail_message_lister_skips_missing_incremental_message_metadata() -> None:
+    class MissingMessageTransport(FakeGmailTransport):
+        async def get_json(
+            self,
+            path: str,
+            *,
+            query: tuple[tuple[str, str], ...],
+            access_token: SecretStr,
+        ) -> dict[str, object]:
+            self.calls.append((path, query, access_token.get_secret_value()))
+            if path == "/gmail/v1/users/me/history":
+                return {
+                    "history": [
+                        {
+                            "id": "1002",
+                            "messagesAdded": [
+                                {"message": {"id": "msg-missing", "threadId": "thread-1"}},
+                                {"message": {"id": "msg-present", "threadId": "thread-2"}},
+                            ],
+                        }
+                    ],
+                    "historyId": "1003",
+                }
+            if path == "/gmail/v1/users/me/messages/msg-missing":
+                raise GmailApiRequestError(status_code=404)
+            if path == "/gmail/v1/users/me/messages/msg-present":
+                return {
+                    "id": "msg-present",
+                    "threadId": "thread-2",
+                    "labelIds": ["INBOX"],
+                    "payload": {
+                        "headers": [
+                            {"name": "From", "value": "Jobs <jobs@example.com>"},
+                            {"name": "Subject", "value": "Application update"},
+                            {"name": "Date", "value": "Sun, 05 Jul 2026 12:01:00 +0000"},
+                        ]
+                    },
+                    "sizeEstimate": 1024,
+                }
+            raise AssertionError(f"unexpected Gmail path: {path}")
+
+    transport = MissingMessageTransport()
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=transport,
+    )
+    cursor = EmailProviderCursor(
+        account=_connection().account,
+        value="1001",
+        issued_at=NOW,
+    )
+
+    page = asyncio.run(
+        lister.list_message_metadata(
+            _connection(),
+            EmailMetadataListRequest(
+                mode=EmailSyncMode.INCREMENTAL,
+                page_size=2,
+                sync_cursor=cursor,
+            ),
+        )
+    )
+
+    assert [message.ref.message_id for message in page.messages] == ["msg-present"]
+    assert page.next_page_token is None
+    assert page.next_sync_cursor is not None
+    assert page.next_sync_cursor.value == "1003"
+    assert [call[0] for call in transport.calls] == [
+        "/gmail/v1/users/me/history",
+        "/gmail/v1/users/me/messages/msg-missing",
+        "/gmail/v1/users/me/messages/msg-present",
+    ]
 
 
 def test_gmail_message_lister_returns_history_cursor_after_final_incremental_page() -> None:

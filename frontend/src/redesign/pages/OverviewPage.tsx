@@ -1,27 +1,45 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 import {
+  completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePut,
+  getAttentionAttentionGet,
   getMetricsFunnelMetricsFunnelGet,
   getMetricsRatesMetricsRatesGet,
   getMetricsSummaryMetricsSummaryGet,
+  getMetricsTimeseriesMetricsTimeseriesGet,
   listApplicationsApplicationsGet,
   type ApplicationRecord,
+  type AttentionOverviewResponse,
+  type InterviewAttentionItem,
   type MetricsRatesResponse,
   type MetricsFunnelResponse,
   type MetricsSummaryResponse,
   type PipelineStatus,
+  type MetricsTimeseriesResponse,
 } from "../../api";
 import type { RedesignPage, StatusChipKey } from "../RedesignApp";
 import { publicApiError } from "../apiError";
 import { EmailReaderDialog } from "../components/EmailReaderDialog";
 import { ProcessingPanel } from "../components/ProcessingPanel";
 import { DashboardAnalytics } from "../components/DashboardAnalytics";
-import { DashboardFilterPanel } from "../components/DashboardFilterPanel";
 import { SyncedEmailList } from "../components/SyncedEmailList";
-import { apiParamsFromFilters, filtersFromSearch, searchFromFilters, type DashboardFilters } from "../dashboardFilters";
-import { daysSince, formatShortDate } from "../theme";
+import { apiParamsFromFilters, filtersFromSearch, type DashboardFilters } from "../dashboardFilters";
+import { daysSince, formatHoursAsDuration, formatShortDate } from "../theme";
+import { QuestionCatalogTab } from "./overview/QuestionCatalogTab";
+import { VisualizedTab } from "./overview/VisualizedTab";
+
+type OverviewTabKey = "overview" | "catalog" | "visualized";
+
+const OVERVIEW_TABS: { key: OverviewTabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "catalog", label: "Question catalog" },
+  { key: "visualized", label: "Visualized" },
+];
 
 interface OverviewPageProps {
+  processingActive?: boolean;
+  userName?: string;
   go: (page: RedesignPage, extra?: { statusFilter?: StatusChipKey }) => void;
   openApp: (id: string) => void;
   reloadKey: number;
@@ -51,9 +69,15 @@ interface MetricCard {
 interface ActionCard {
   tag: string;
   color: string;
-  title: string;
-  body: string;
-  onClick: () => void;
+  items: ActionItem[];
+}
+
+interface ActionItem {
+  applicationId: string;
+  company: string;
+  date: string;
+  interviewEventId?: string;
+  role: string;
 }
 
 function timeGreeting(): string {
@@ -71,7 +95,19 @@ function ratePercent(rate: number): string {
   return `${Math.round(rate * 1_000) / 10}%`;
 }
 
+function attentionActionItem(item: InterviewAttentionItem): ActionItem {
+  return {
+    applicationId: item.application_id,
+    company: item.company,
+    date: item.interview_at,
+    interviewEventId: item.interview_event_id,
+    role: item.role_title,
+  };
+}
+
 export function OverviewPage({
+  processingActive = false,
+  userName,
   go,
   openApp,
   reloadKey,
@@ -79,6 +115,7 @@ export function OverviewPage({
   sentBefore,
   onProcessed = () => undefined,
 }: OverviewPageProps) {
+  const [tab, setTab] = useState<OverviewTabKey>("overview");
   const [summary, setSummary] = useState<MetricsSummaryResponse | null>(null);
   const [rates, setRates] = useState<MetricsRatesResponse | null>(null);
   const [funnel, setFunnel] = useState<MetricsFunnelResponse | null>(null);
@@ -91,10 +128,21 @@ export function OverviewPage({
   const [ratesLoading, setRatesLoading] = useState(true);
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
+  const [timeseries, setTimeseries] = useState<MetricsTimeseriesResponse | null>(null);
+  const [timeseriesError, setTimeseriesError] = useState<string | null>(null);
+  const [timeseriesLoading, setTimeseriesLoading] = useState(true);
   const [explainKey, setExplainKey] = useState<string | null>(null);
   const [openEmailPublicId, setOpenEmailPublicId] = useState<string | null>(null);
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
-  const [filters, setFilters] = useState<DashboardFilters>(() => filtersFromSearch(window.location.search));
+  const [attention, setAttention] = useState<AttentionOverviewResponse | null>(null);
+  const [attentionError, setAttentionError] = useState<string | null>(null);
+  const [attentionReloadKey, setAttentionReloadKey] = useState(0);
+  const [completingEventId, setCompletingEventId] = useState<string | null>(null);
+  const [interviewHistoryOpen, setInterviewHistoryOpen] = useState(false);
+  const [momentumOffset, setMomentumOffset] = useState(0);
+  const [momentumFrom, setMomentumFrom] = useState("");
+  const [momentumTo, setMomentumTo] = useState("");
+  const [filters] = useState<DashboardFilters>(() => filtersFromSearch(window.location.search));
   const emailTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -105,14 +153,19 @@ export function OverviewPage({
       setSummaryLoading(true);
       setRatesLoading(true);
       setApplicationsLoading(true);
+      setTimeseriesLoading(true);
       setSummaryError(null);
       setRatesError(null);
       setApplicationsError(null);
+      setTimeseriesError(null);
+      setAttentionError(null);
       const [
         summaryResponse,
         ratesResponse,
         funnelResponse,
         applicationsResponse,
+        timeseriesResponse,
+        attentionResponse,
       ] = await Promise.all([
         getMetricsSummaryMetricsSummaryGet(apiParamsFromFilters(filters)).catch((error: unknown) => ({ error })),
         getMetricsRatesMetricsRatesGet(apiParamsFromFilters(filters)).catch((error: unknown) => ({ error })),
@@ -120,6 +173,8 @@ export function OverviewPage({
           error,
         })),
         listApplicationsApplicationsGet(apiParamsFromFilters(filters)).catch((error: unknown) => ({ error })),
+        getMetricsTimeseriesMetricsTimeseriesGet(apiParamsFromFilters(filters)).catch((error: unknown) => ({ error })),
+        getAttentionAttentionGet().catch((error: unknown) => ({ error })),
       ]);
       if (cancelled) {
         return;
@@ -159,16 +214,42 @@ export function OverviewPage({
         setApplicationsError(publicApiError("status" in applicationsResponse ? { response: applicationsResponse } : applicationsResponse.error, "Applications could not be loaded."));
       }
       setApplicationsLoading(false);
+      if ("status" in timeseriesResponse && timeseriesResponse.status === 200) {
+        setTimeseries(timeseriesResponse.data);
+      } else {
+        setTimeseries(null);
+        setTimeseriesError(publicApiError("status" in timeseriesResponse ? { response: timeseriesResponse } : timeseriesResponse.error, "Momentum could not be loaded."));
+      }
+      setTimeseriesLoading(false);
+      if ("status" in attentionResponse && attentionResponse.status === 200) {
+        setAttention(attentionResponse.data);
+      } else {
+        setAttention(null);
+        setAttentionError(publicApiError("status" in attentionResponse ? { response: attentionResponse } : attentionResponse.error, "Interview tasks could not be loaded."));
+      }
     };
     void load();
     return () => {
       cancelled = true;
     };
-  }, [filters, reloadKey]);
+  }, [attentionReloadKey, filters, reloadKey]);
 
-  const applyFilters = (next: DashboardFilters) => {
-    window.history.pushState(null, "", `/${searchFromFilters(next)}`);
-    setFilters(next);
+  const completeInterviewTask = async (item: ActionItem) => {
+    if (!item.interviewEventId || completingEventId) return;
+    setCompletingEventId(item.interviewEventId);
+    setAttentionError(null);
+    try {
+      const response = await completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePut(item.interviewEventId);
+      if (response.status !== 200) {
+        setAttentionError(publicApiError({ response }, "Interview task could not be completed."));
+        return;
+      }
+      setAttentionReloadKey((value) => value + 1);
+    } catch (error) {
+      setAttentionError(publicApiError(error, "Interview task could not be completed."));
+    } finally {
+      setCompletingEventId(null);
+    }
   };
 
   const publishable = pipeline?.next_action === "review_dashboard";
@@ -181,10 +262,10 @@ export function OverviewPage({
 
   const greeting =
     offers === 1
-      ? `${timeGreeting()} — one offer on the table.`
+      ? `${timeGreeting()}${userName ? `, ${userName}` : ""} — one offer on the table.`
       : offers !== undefined && offers > 1
-        ? `${timeGreeting()} — ${offers} offers on the table.`
-        : `${timeGreeting()}.`;
+        ? `${timeGreeting()}${userName ? `, ${userName}` : ""} — ${offers} offers on the table.`
+        : `${timeGreeting()}${userName ? `, ${userName}` : ""}.`;
 
   const metrics: MetricCard[] = [
     {
@@ -301,57 +382,40 @@ export function OverviewPage({
 
   const actions = useMemo<ActionCard[]>(() => {
     const cards: ActionCard[] = [];
-    const offerApps = applications.filter(
+    const activeApplications = applications.filter(
+      (application) => (daysSince(application.last_activity_at) ?? 0) <= 60,
+    );
+    const offerApps = activeApplications.filter(
       (application) => application.current_status === "offer",
     );
     if (offerApps.length > 0) {
-      const first = offerApps[0];
       cards.push({
         tag: "Respond",
         color: "#96403C",
-        title: `${first.company} offer needs an answer`,
-        body: `Offer received — last activity ${formatShortDate(first.last_activity_at)}.`,
-        onClick: () => openApp(first.id),
+        items: offerApps.slice(0, 5).map((application) => ({
+          applicationId: application.id,
+          company: application.company,
+          date: application.last_activity_at,
+          role: application.role_title || application.current_status,
+        })),
       });
     }
-    const interviewApps = applications.filter(
-      (application) => application.current_status === "interview",
-    );
-    if (interviewApps.length > 0) {
-      const first = interviewApps[0];
+    if ((attention?.prepare.length ?? 0) > 0) {
       cards.push({
         tag: "Prepare",
         color: "#1E5136",
-        title: `${first.company} interview in progress`,
-        body: `Latest activity ${formatShortDate(first.last_activity_at)} — review the timeline.`,
-        onClick: () => openApp(first.id),
+        items: (attention?.prepare ?? []).slice(0, 5).map(attentionActionItem),
       });
     }
-    const quietApps = applications
-      .filter(
-        (application) =>
-          application.current_status === "applied" &&
-          (daysSince(application.last_activity_at) ?? 0) >= 7,
-      )
-      .sort(
-        (a, b) =>
-          (daysSince(b.last_activity_at) ?? 0) -
-          (daysSince(a.last_activity_at) ?? 0),
-      );
-    if (quietApps.length > 0) {
-      const names = quietApps
-        .slice(0, 3)
-        .map((application) => application.company);
+    if ((attention?.follow_up.length ?? 0) > 0) {
       cards.push({
         tag: "Follow up",
         color: "#8A6A14",
-        title: `${quietApps.length} application${quietApps.length === 1 ? "" : "s"} gone quiet`,
-        body: `${names.join(", ")} ${quietApps.length === 1 ? "is" : "are"} past your usual reply window.`,
-        onClick: () => go("applications", { statusFilter: "applied" }),
+        items: (attention?.follow_up ?? []).slice(0, 5).map(attentionActionItem),
       });
     }
     return cards.slice(0, 3);
-  }, [applications, go, openApp]);
+  }, [applications, attention]);
 
   return (
     <section
@@ -384,9 +448,7 @@ export function OverviewPage({
         </p>
       </div>
 
-      <ProcessingPanel onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
-
-      <DashboardFilterPanel filters={filters} onApply={applyFilters} />
+      <ProcessingPanel externalProcessingActive={processingActive} onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
 
       {pipeline && !publishable ? (
         <div className="rd-incomplete" role="status">
@@ -395,7 +457,50 @@ export function OverviewPage({
         </div>
       ) : null}
 
-      {actions.length > 0 ? (
+      <div
+        style={{
+          display: "flex",
+          gap: "2px",
+          padding: "3px",
+          border: "1px solid #E4E2DA",
+          borderRadius: "10px",
+          background: "#fff",
+          alignSelf: "flex-start",
+        }}
+      >
+        {OVERVIEW_TABS.map((item) => {
+          const tabButtonStyle: CSSProperties = {
+            padding: "6px 14px",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontSize: "12.5px",
+            fontWeight: 600,
+            background: tab === item.key ? "#1B201C" : "transparent",
+            color: tab === item.key ? "#fff" : "#666D66",
+          };
+          return (
+            <button
+              key={item.key}
+              onClick={() => setTab(item.key)}
+              style={tabButtonStyle}
+              type="button"
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "catalog" ? (
+        <QuestionCatalogTab go={go} rates={rates} summary={summary} />
+      ) : null}
+
+      {tab === "visualized" ? (
+        <VisualizedTab funnel={funnel} rates={rates} summary={summary} timeseries={timeseries} />
+      ) : null}
+
+      {tab === "overview" && actions.length > 0 ? (
         <div
           style={{
             display: "grid",
@@ -404,10 +509,9 @@ export function OverviewPage({
           }}
         >
           {actions.map((action) => (
-            <button
+            <div
               className="rd-hover-green-border"
               key={action.tag}
-              onClick={action.onClick}
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -416,11 +520,10 @@ export function OverviewPage({
                 border: "1px solid #E4E2DA",
                 borderRadius: "14px",
                 background: "#fff",
-                cursor: "pointer",
                 textAlign: "left",
+                minHeight: "210px",
                 boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
               }}
-              type="button"
             >
               <span
                 style={{
@@ -433,19 +536,36 @@ export function OverviewPage({
               >
                 {action.tag}
               </span>
-              <span
-                style={{ fontWeight: 600, fontSize: "14px", color: "#1B201C" }}
-              >
-                {action.title}
-              </span>
-              <span style={{ fontSize: "12.5px", color: "#666D66" }}>
-                {action.body}
-              </span>
-            </button>
+              {action.items.map((item) => (
+                <div key={item.interviewEventId ?? item.applicationId} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "8px", alignItems: "center", padding: "8px 0", borderTop: "1px solid #F0EEE7" }}>
+                  <button aria-label={`Open ${item.company} ${item.role}`} onClick={() => openApp(item.applicationId)} style={{ minWidth: 0, overflow: "hidden", border: "none", background: "transparent", cursor: "pointer", textAlign: "left", textOverflow: "ellipsis", whiteSpace: "nowrap" }} type="button">
+                    <strong>{item.company}</strong><span style={{ color: "#666D66" }}> · {item.role} · {formatShortDate(item.date)}</span>
+                  </button>
+                  {action.tag === "Prepare" && item.interviewEventId ? (
+                    <button aria-label={`Mark ${item.company} interview done`} disabled={completingEventId !== null} onClick={() => void completeInterviewTask(item)} style={{ width: "26px", height: "26px", border: "1px solid #B9CDBE", borderRadius: "50%", background: "#F3F8F4", color: "#1E5136", cursor: completingEventId ? "wait" : "pointer", fontWeight: 800 }} type="button">✓</button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           ))}
         </div>
       ) : null}
 
+      {tab === "overview" && attentionError ? (
+        <p role="status" style={{ margin: 0, color: "#96403C", fontSize: "12.5px" }}>{attentionError}</p>
+      ) : null}
+
+      {tab === "overview" && attention && attention.interviewed.length > 0 ? (
+        <section style={{ padding: "14px 16px", border: "1px solid #D8DED7", borderRadius: "14px", background: "#F8FBF8" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+            <div><strong style={{ color: "#1E5136" }}>Interviewed</strong><span style={{ marginLeft: "8px", color: "#666D66", fontSize: "12px" }}>{attention.unique_interviewed_company_count} unique companies</span></div>
+            <button onClick={() => setInterviewHistoryOpen(true)} style={{ border: "1px solid #B9CDBE", borderRadius: "999px", background: "#fff", padding: "6px 11px", color: "#1E5136", cursor: "pointer", fontWeight: 700 }} type="button">View all</button>
+          </div>
+        </section>
+      ) : null}
+
+      {tab === "overview" ? (
+      <>
       <div>
         <div
           style={{
@@ -707,9 +827,13 @@ export function OverviewPage({
               ? funnelStages.map((stage) => (
                   <button
                     key={stage.label}
-                    onClick={() =>
-                      go("applications", { statusFilter: stage.filter })
-                    }
+                    onClick={() => {
+                      if (stage.stage === "interview") {
+                        setInterviewHistoryOpen(true);
+                        return;
+                      }
+                      go("applications", { statusFilter: stage.filter });
+                    }}
                     style={{
                       display: "grid",
                       gridTemplateColumns: "110px 1fr 40px",
@@ -803,17 +927,155 @@ export function OverviewPage({
           />
         </div>
       </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
+          gap: "12px",
+        }}
+      >
+        <div
+          style={{
+            padding: "20px",
+            border: "1px solid #E4E2DA",
+            borderRadius: "14px",
+            background: "#fff",
+            boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
+          }}
+        >
+          <h2 style={{ margin: "0 0 2px", fontSize: "15px", fontWeight: 700 }}>
+            How fast companies reply
+          </h2>
+          <p style={{ margin: "0 0 12px", fontSize: "11.5px", color: "#9A9F96" }}>
+            Averaged across every application with a recorded response.
+          </p>
+          {summaryLoading ? (
+            <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>Loading…</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#1B201C" }}>
+                  Time to first response
+                </span>
+                <span style={{ fontSize: "16px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                  {formatHoursAsDuration(summary?.average_time_to_first_response?.average_hours)}
+                </span>
+              </div>
+              <span style={{ fontSize: "11px", color: "#9A9F96" }}>
+                Based on {summary?.average_time_to_first_response?.application_count ?? 0} applications with a response.
+              </span>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#1B201C" }}>
+                  Time to rejection
+                </span>
+                <span style={{ fontSize: "16px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                  {formatHoursAsDuration(summary?.average_time_to_rejection?.average_hours)}
+                </span>
+              </div>
+              <span style={{ fontSize: "11px", color: "#9A9F96" }}>
+                Based on {summary?.average_time_to_rejection?.application_count ?? 0} rejected applications.
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            padding: "20px",
+            border: "1px solid #E4E2DA",
+            borderRadius: "14px",
+            background: "#fff",
+            boxShadow: "0 1px 2px rgba(20,25,20,0.04)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "10px" }}><h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>Your momentum</h2><div style={{ display: "flex", gap: "6px" }}><button aria-label="Move momentum back two months" onClick={() => setMomentumOffset((value) => value + 2)} type="button">← 2m</button><button aria-label="Move momentum forward two months" disabled={momentumOffset === 0} onClick={() => setMomentumOffset((value) => Math.max(0, value - 2))} type="button">2m →</button></div></div>
+          <div style={{ display: "flex", gap: "6px", marginBottom: "12px" }}><input aria-label="Momentum from" onChange={(event) => setMomentumFrom(event.target.value)} type="month" value={momentumFrom} /><input aria-label="Momentum to" onChange={(event) => setMomentumTo(event.target.value)} type="month" value={momentumTo} /><button onClick={() => { setMomentumFrom(""); setMomentumTo(""); setMomentumOffset(0); }} type="button">Reset</button></div>
+          {timeseriesLoading ? (
+            <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>Loading…</p>
+          ) : null}
+          {!timeseriesLoading && timeseriesError ? (
+            <p role="alert" style={{ margin: 0, fontSize: "12.5px", color: "#96403C" }}>
+              {timeseriesError}
+            </p>
+          ) : null}
+          {!timeseriesLoading && !timeseriesError && (timeseries?.points.length ?? 0) === 0 ? (
+            <p style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>No application volume yet.</p>
+          ) : null}
+          {!timeseriesLoading && !timeseriesError && timeseries && timeseries.points.length > 0 ? (
+            (() => {
+              const rangedPoints = timeseries.points.filter((point) => (!momentumFrom || point.period_start.slice(0, 7) >= momentumFrom) && (!momentumTo || point.period_start.slice(0, 7) <= momentumTo));
+              const visiblePoints = rangedPoints.slice(Math.max(0, rangedPoints.length - 12 - momentumOffset), Math.max(0, rangedPoints.length - momentumOffset));
+              const maxCount = Math.max(...visiblePoints.map((point) => point.application_count), 1);
+              return (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "grid",
+                    gridAutoFlow: "column",
+                    gridAutoColumns: "1fr",
+                    gap: "8px",
+                    alignItems: "end",
+                    minHeight: "96px",
+                  }}
+                >
+                  {visiblePoints.map((point) => (
+                    <div
+                      key={point.period_start}
+                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", height: "100%" }}
+                    >
+                      <div style={{ flex: 1, width: "100%", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                        <span
+                          style={{
+                            width: "14px",
+                            height: `${Math.max(4, (point.application_count / maxCount) * 100)}%`,
+                            background: "#1E5136",
+                            borderRadius: "3px",
+                            display: "block",
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontSize: "9.5px", color: "#9A9F96", whiteSpace: "nowrap" }}>
+                        {new Intl.DateTimeFormat("en-US", { month: "short" }).format(new Date(point.period_start))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()
+          ) : null}
+        </div>
+      </div>
+
       {applicationsLoading ? (
         <p role="status" style={{ margin: 0, fontSize: "12.5px", color: "#9A9F96" }}>Loading applications…</p>
       ) : null}
       {!applicationsLoading && applicationsError ? (
         <p role="status" style={{ margin: 0, fontSize: "12.5px", color: "#96403C" }}>{applicationsError}</p>
       ) : null}
+      </>
+      ) : null}
       <EmailReaderDialog
         onClose={() => setOpenEmailPublicId(null)}
         publicId={openEmailPublicId}
         triggerRef={emailTriggerRef}
       />
+      {interviewHistoryOpen && attention ? (
+        <div className="email-reader-overlay">
+          <section aria-modal="true" className="email-reader-dialog" role="dialog" aria-label="Interviewed companies">
+            <header className="email-reader-header"><div className="email-reader-heading-group"><h2>Interviewed</h2><p className="email-reader-metadata">{attention.unique_interviewed_company_count} unique companies</p></div><button aria-label="Close interviewed companies" className="email-reader-close" onClick={() => setInterviewHistoryOpen(false)} type="button">×</button></header>
+            <div className="email-reader-content">
+              {attention.interviewed.map((item) => (
+                <button aria-label={`Open ${item.company} ${item.role_title}`} key={item.interview_event_id} onClick={() => openApp(item.application_id)} style={{ display: "block", width: "100%", minHeight: "42px", overflow: "hidden", padding: "10px 0", border: "none", borderBottom: "1px solid #F0EEE7", background: "transparent", cursor: "pointer", textAlign: "left", textOverflow: "ellipsis", whiteSpace: "nowrap" }} type="button">
+                  <strong>{item.company}</strong><span style={{ color: "#666D66" }}> · {item.role_title} · {formatShortDate(item.interview_at)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

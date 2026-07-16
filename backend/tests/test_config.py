@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 from app.config import (
+    DEFAULT_DATABASE_PATH,
+    DEFAULT_DATABASE_URL,
     AppSettings,
     ClassificationMode,
     EmailProviderName,
@@ -46,7 +48,8 @@ def test_settings_defaults_match_phase_zero_config_shell(
         "http://localhost:5173",
     )
     assert settings.data_dir == Path("./.jobtracker")
-    assert settings.database_url == "sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3"
+    assert settings.database_url == DEFAULT_DATABASE_URL
+    assert Path(__file__).resolve().parents[2] / "jobtracker.sqlite3" == DEFAULT_DATABASE_PATH
     assert settings.sqlite_vec_extension_path is None
     assert settings.secret_store_backend is SecretStoreBackend.KEYRING
     assert settings.email_provider is EmailProviderName.GMAIL

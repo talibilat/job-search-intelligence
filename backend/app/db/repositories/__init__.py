@@ -1,6 +1,7 @@
 """Repository interfaces and shared base classes."""
 
 from .application import ApplicationRepository
+from .attention import AttentionRepository
 from .backfill_state import BackfillStateRepository
 from .base import BaseRepository, SqlParameters
 from .chat import ChatRepository
@@ -21,6 +22,7 @@ from .synthetic_fixture import SyntheticFixtureRepository
 
 __all__ = [
     "ApplicationRepository",
+    "AttentionRepository",
     "BackfillStateRepository",
     "BaseRepository",
     "ChatRepository",

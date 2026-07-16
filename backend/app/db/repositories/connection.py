@@ -13,6 +13,20 @@ from app.security import SecretKind, SecretRef
 
 
 class EmailConnectionRepository(BaseRepository[EmailConnectionRecord]):
+    def mark_reauth_required(self, account: EmailAccountRef) -> None:
+        """Prevent repeated refresh attempts after the provider rejects credentials."""
+
+        updated_at = datetime.now(UTC).isoformat()
+        self.execute(
+            """
+            UPDATE email_connections
+            SET reauth_required = 1, updated_at = ?
+            WHERE provider = ? AND account_id = ?
+            """,
+            (updated_at, account.provider.value, account.account_id),
+        )
+        self.connection.commit()
+
     def save_connection(self, connection: EmailConnection) -> EmailConnectionRecord:
         updated_at = datetime.now(UTC)
         should_commit = not self.connection.in_transaction

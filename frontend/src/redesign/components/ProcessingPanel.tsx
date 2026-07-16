@@ -17,12 +17,14 @@ import { publicApiError } from "../apiError";
 type WorkflowState =
   | "waiting-for-sync"
   | "waiting-for-classification"
+  | "reauth-required"
   | "processing"
   | "blocked-config"
   | "provider-failure"
   | "ready";
 
 interface ProcessingPanelProps {
+  externalProcessingActive?: boolean;
   onPipelineStatus?: (pipeline: PipelineStatus) => void;
   onProcessed: () => void;
   reloadKey: number;
@@ -35,6 +37,7 @@ function resolveWorkflowState(
 ): WorkflowState {
   if (processing.state === "running") return "processing";
   if (processing.state === "failed") return "provider-failure";
+  if (pipeline.reauth_required) return "reauth-required";
   if (pipeline.next_action !== "run_classification") {
     return pipeline.next_action === "review_dashboard" ? "ready" : "waiting-for-sync";
   }
@@ -48,13 +51,14 @@ function resolveWorkflowState(
 const STATE_COPY: Record<WorkflowState, { label: string; title: string }> = {
   "waiting-for-sync": { label: "Waiting for sync", title: "Finish reading your inbox" },
   "waiting-for-classification": { label: "Ready to process", title: "Turn synced email into applications" },
+  "reauth-required": { label: "Gmail needs reconnecting", title: "Reconnect Gmail to resume sync" },
   processing: { label: "Processing", title: "Building your application history" },
   "blocked-config": { label: "Setup needed", title: "Configure classification first" },
   "provider-failure": { label: "Provider unavailable", title: "Classification cannot start" },
   ready: { label: "Up to date", title: "Your dashboard is ready" },
 };
 
-export function ProcessingPanel({ onPipelineStatus, onProcessed, reloadKey }: ProcessingPanelProps) {
+export function ProcessingPanel({ externalProcessingActive = false, onPipelineStatus, onProcessed, reloadKey }: ProcessingPanelProps) {
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
   const [processing, setProcessing] = useState<ProcessingStatus | null>(null);
   const [readiness, setReadiness] = useState<ProviderReadinessResponse | null>(null);
@@ -128,7 +132,7 @@ export function ProcessingPanel({ onPipelineStatus, onProcessed, reloadKey }: Pr
     return <div role="status" style={{ color: "#666D66", fontSize: "13px" }}>Checking processing status...</div>;
   }
 
-  const workflowState: WorkflowState = running
+  const workflowState: WorkflowState = running || externalProcessingActive
     ? "processing"
     : runFailed
       ? "provider-failure"
@@ -137,8 +141,10 @@ export function ProcessingPanel({ onPipelineStatus, onProcessed, reloadKey }: Pr
   const providerMessage = readiness.classification_generation.action ?? readiness.classification_generation.message;
   const body = workflowState === "waiting-for-sync"
     ? pipeline.next_action_reason
+    : workflowState === "reauth-required"
+      ? "Gmail rejected the saved authorization. Reconnect the account in Settings, then run Sync again."
     : workflowState === "waiting-for-classification"
-      ? `${estimate.candidate_count} retained candidate email${estimate.candidate_count === 1 ? "" : "s"} can be processed with ${estimate.model}. This only starts when you click below.`
+      ? `${estimate.candidate_count} retained candidate email${estimate.candidate_count === 1 ? "" : "s"} remain unprocessed or were skipped by an earlier run. Process them with ${estimate.model}.`
       : workflowState === "processing"
         ? "Classification, application grouping, and ghost inference are running in controlled batches."
         : workflowState === "blocked-config" || workflowState === "provider-failure"
@@ -158,8 +164,8 @@ export function ProcessingPanel({ onPipelineStatus, onProcessed, reloadKey }: Pr
         {error ? <p role="alert" style={{ margin: "5px 0 0", color: "#96403C", fontSize: "11.5px" }}>{error}</p> : null}
       </div>
       {workflowState === "waiting-for-classification" || workflowState === "processing" || runFailed ? (
-        <button disabled={running || workflowState === "processing"} onClick={() => void runProcessing()} style={{ flex: "none", padding: "9px 16px", border: "none", borderRadius: "999px", background: "#1E5136", color: "#F6F4EC", fontSize: "12.5px", fontWeight: 700, cursor: running ? "wait" : "pointer" }} type="button">
-          {running ? "Processing..." : runFailed ? "Retry processing" : `Process ${Math.min(estimate.candidate_count, processing.candidate_limit)} emails`}
+        <button disabled={running || workflowState === "processing"} onClick={() => void runProcessing()} style={{ flex: "none", padding: "9px 16px", border: "none", borderRadius: "999px", background: "#1E5136", color: "#F6F4EC", fontSize: "12.5px", fontWeight: 700, cursor: workflowState === "processing" ? "wait" : "pointer" }} type="button">
+          {workflowState === "processing" ? "Processing..." : runFailed ? "Retry processing" : `Process ${Math.min(estimate.candidate_count, processing.candidate_limit)} emails`}
         </button>
       ) : null}
     </section>

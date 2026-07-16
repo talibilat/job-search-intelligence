@@ -663,6 +663,37 @@ def test_bounded_first_sync_runs_complete_unbounded_backfill(tmp_path: Path) -> 
     assert row == ("replacement-cursor",)
 
 
+def test_sync_marks_connection_for_reauthorization_after_provider_auth_failure(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    connection = email_connection()
+    with sqlite3.connect(database_path) as sqlite_connection:
+        EmailConnectionRepository(sqlite_connection).save_connection(connection)
+
+    class AuthFailureProvider:
+        async def list_message_metadata(self, *_: object) -> object:
+            raise EmailProviderAuthError(public_message="Gmail token exchange failed.")
+
+    runtime = ConfiguredEmailSyncRuntime(
+        settings=AppSettings(_env_file=None, database_url=f"sqlite+aiosqlite:///{database_path}"),
+        email_provider=cast(EmailProvider, AuthFailureProvider()),
+        connection_resolver=lambda: connection,
+        status_store=EmailSyncStatusStore(),
+    )
+
+    with pytest.raises(EmailProviderAuthError):
+        asyncio.run(runtime.run_manual_sync())
+
+    with sqlite3.connect(database_path) as sqlite_connection:
+        marked = EmailConnectionRepository(sqlite_connection).fetch_connection_metadata(
+            connection.account
+        )
+    assert marked is not None
+    assert marked.reauth_required is True
+
+
 def test_cursor_without_completed_backfill_runs_lifetime_backfill(tmp_path: Path) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
     create_sync_tables(database_path)
@@ -846,6 +877,24 @@ def test_configured_sync_job_skips_when_gmail_connection_is_not_configured(
     asyncio.run(run_sync_job())
 
     assert status_store.current_status().state is EmailSyncRunState.IDLE
+
+
+def test_configured_sync_job_absorbs_provider_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingSyncRuntime:
+        async def run_manual_sync(self) -> None:
+            raise EmailProviderAuthError(
+                public_message="Reconnect Gmail to continue syncing."
+            )
+
+    monkeypatch.setattr(
+        sync_api,
+        "build_configured_email_sync_runtime",
+        lambda settings: FailingSyncRuntime(),
+    )
+
+    asyncio.run(sync_api.create_configured_sync_job(AppSettings(_env_file=None))())
 
 
 def test_get_paginated_sync_emails_returns_stable_page(tmp_path: Path) -> None:

@@ -204,6 +204,7 @@ export interface ApplicationEventTimelineRecord {
   classification_classified_at?: string | null;
   classification_confidence?: number | null;
   email_id: string | null;
+  email_public_id?: string | null;
   email_sent_at?: string | null;
   email_subject?: string | null;
   event_at: string;
@@ -319,6 +320,25 @@ export interface ApplicationWindowMetric {
   end_at: string;
   start_at: string;
   window: MetricsApplicationWindow;
+}
+
+export interface InterviewAttentionItem {
+  application_id: string;
+  company: string;
+  completed_at?: string | null;
+  current_status: ApplicationStatus;
+  interview_at: string;
+  interview_event_id: string;
+  last_activity_at: string;
+  role_title: string;
+}
+
+export interface AttentionOverviewResponse {
+  follow_up: InterviewAttentionItem[];
+  interviewed: InterviewAttentionItem[];
+  prepare: InterviewAttentionItem[];
+  /** @minimum 0 */
+  unique_interviewed_company_count: number;
 }
 
 /**
@@ -924,6 +944,12 @@ export interface InsightRegenerateResponse {
   cost: InsightRegenerationCost;
   evidence_citation_ids: string[];
   insight: InsightRecord;
+}
+
+export interface InterviewTaskCompletionResponse {
+  application_id: string;
+  completed_at: string;
+  interview_event_id: string;
 }
 
 export type LLMModelKind = (typeof LLMModelKind)[keyof typeof LLMModelKind];
@@ -2648,6 +2674,113 @@ export const getApplicationEventsApplicationsIdEventsGet = async (
     headers: res.headers,
   } as getApplicationEventsApplicationsIdEventsGetResponse;
 };
+
+export type getAttentionAttentionGetResponse200 = {
+  data: AttentionOverviewResponse;
+  status: 200;
+};
+
+export type getAttentionAttentionGetResponseSuccess =
+  getAttentionAttentionGetResponse200 & {
+    headers: Headers;
+  };
+export type getAttentionAttentionGetResponse =
+  getAttentionAttentionGetResponseSuccess;
+
+export const getGetAttentionAttentionGetUrl = () => {
+  return `/attention`;
+};
+
+/**
+ * @summary Get Interview Attention
+ */
+export const getAttentionAttentionGet = async (
+  options?: RequestInit,
+): Promise<getAttentionAttentionGetResponse> => {
+  const res = await fetch(getGetAttentionAttentionGetUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAttentionAttentionGetResponse["data"] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAttentionAttentionGetResponse;
+};
+
+export type completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse200 =
+  {
+    data: InterviewTaskCompletionResponse;
+    status: 200;
+  };
+
+export type completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse404 =
+  {
+    data: ApiErrorResponse;
+    status: 404;
+  };
+
+export type completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponseSuccess =
+  completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse200 & {
+    headers: Headers;
+  };
+export type completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponseError =
+  (
+    | completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse404
+    | completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse422
+  ) & {
+    headers: Headers;
+  };
+
+export type completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse =
+  | completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponseSuccess
+  | completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponseError;
+
+export const getCompleteInterviewTaskAttentionInterviewsInterviewEventIdCompletePutUrl =
+  (interviewEventId: string) => {
+    return `/attention/interviews/${interviewEventId}/complete`;
+  };
+
+/**
+ * @summary Complete Interview Preparation Task
+ */
+export const completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePut =
+  async (
+    interviewEventId: string,
+    options?: RequestInit,
+  ): Promise<completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse> => {
+    const res = await fetch(
+      getCompleteInterviewTaskAttentionInterviewsInterviewEventIdCompletePutUrl(
+        interviewEventId,
+      ),
+      {
+        ...options,
+        method: "PUT",
+      },
+    );
+
+    const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+    const data: completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse["data"] =
+      body ? JSON.parse(body) : {};
+    return {
+      data,
+      status: res.status,
+      headers: res.headers,
+    } as completeInterviewTaskAttentionInterviewsInterviewEventIdCompletePutResponse;
+  };
 
 export type listEmailConnectionsAuthConnectionsGetResponse200 = {
   data: EmailConnection[];
