@@ -15,11 +15,11 @@ from app.main import create_app
 from app.models import (
     ClassificationRunRecord,
     EmailClassificationRecord,
-    GhostInferenceRunResponse,
     JobEmailCategory,
     ProcessingRunRequest,
 )
 from app.models.classification import ClassificationCandidateStats
+from app.models.ghost_inference import GhostInferenceRunResponse
 from app.pipeline.classify import (
     AcceptedLLMExtraction,
     JobApplicationExtraction,
@@ -58,9 +58,7 @@ def test_processing_runs_multiple_batches_and_integrates_ghosts() -> None:
     )
     statuses = []
 
-    result = asyncio.run(
-        service.run(ProcessingRunRequest(), status_callback=statuses.append)
-    )
+    result = asyncio.run(service.run(ProcessingRunRequest(), status_callback=statuses.append))
 
     assert result.processed_count == 3
     assert result.accepted_count == 3

@@ -21,7 +21,6 @@ from app.models import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
     ApplicationRecord,
-    GhostInferenceRunResponse,
 )
 from app.models.application import ApplicationStatusCountsResponse
 from app.models.application_edit import (
@@ -37,7 +36,7 @@ from app.models.correction import (
     ApplicationSplitRequest,
     ApplicationSplitResponse,
 )
-from app.models.ghost_inference import GhostInferenceRunApiRequest
+from app.models.ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
 from app.models.records import (
     ApplicationEventTimelineRecord,
     ApplicationSource,

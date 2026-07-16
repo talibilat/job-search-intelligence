@@ -4,8 +4,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from app.db.repositories import ApplicationRepository, EventRepository
-from app.models import ApplicationEventRecord, GhostInferenceRunResponse
+from app.models import ApplicationEventRecord
 from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES, ApplicationEventType
+from app.models.ghost_inference import GhostInferenceRunResponse
 from app.pipeline.aggregate import make_event_id
 from app.services.aggregation import derive_current_status_from_events
 
