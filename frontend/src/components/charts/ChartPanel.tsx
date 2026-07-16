@@ -119,7 +119,7 @@ export function ChartPanel({
   );
 }
 
-export function ChartEmptyState({ title, description, action }: ChartEmptyStateProps) {
+function ChartEmptyState({ title, description, action }: ChartEmptyStateProps) {
   const emptyStateId = useId();
   const titleId = `${emptyStateId}-title`;
   const descriptionId = `${emptyStateId}-description`;

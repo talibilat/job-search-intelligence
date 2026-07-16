@@ -44,7 +44,7 @@ import {
   type SponsorshipStatus as SponsorshipStatusValue,
   type WorkMode as WorkModeValue,
 } from "../api";
-import { ChartPanel } from "../components/charts";
+import { ChartPanel } from "../components/charts/ChartPanel";
 import { Alert, Button, FormField, TextInput } from "../components/ui";
 
 type BreakdownLoadState = "loading" | "loaded" | "error";
