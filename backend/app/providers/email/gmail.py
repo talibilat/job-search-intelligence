@@ -837,7 +837,10 @@ class GmailMessageLister:
         list_query: tuple[tuple[str, str], ...],
         access_token: SecretStr,
     ) -> EmailMetadataPage:
-        page_token = _query_value(list_query, "pageToken")
+        page_token = next(
+            (value for key, value in list_query if key == "pageToken"),
+            None,
+        )
         if page_token is None:
             sync_cursor = await self._fetch_current_history_cursor(
                 connection=connection,
@@ -1161,13 +1164,6 @@ def _gmail_date_query(request: EmailMetadataListRequest) -> str | None:
     if not terms:
         return None
     return " ".join(terms)
-
-
-def _query_value(query: tuple[tuple[str, str], ...], name: str) -> str | None:
-    for key, value in query:
-        if key == name:
-            return value
-    return None
 
 
 def _encode_full_backfill_page_token(
