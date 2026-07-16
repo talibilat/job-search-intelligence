@@ -117,7 +117,7 @@ export function InfoDisclosure({
   );
 }
 
-export interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean;
 }
 
