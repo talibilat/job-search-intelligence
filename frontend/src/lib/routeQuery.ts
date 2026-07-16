@@ -1,5 +1,5 @@
 /** Describes how one logical route filter maps to one URL query parameter key. */
-export interface RouteQueryParam<TValue> {
+interface RouteQueryParam<TValue> {
   readonly key: string;
   readonly defaultValue: TValue;
   parse(values: readonly string[]): TValue;
