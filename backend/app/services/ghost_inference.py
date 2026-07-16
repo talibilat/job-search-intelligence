@@ -27,7 +27,7 @@ class GhostInferenceService:
         self._application_repository = application_repository
         self._event_repository = event_repository
         self._threshold_days = threshold_days
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     def run(self) -> GhostInferenceRunResponse:
         evaluated_at = self._clock()
@@ -229,7 +229,3 @@ def _event_ordering_key(
     email_sent_at = event.email_sent_at or event.event_at
     classified_at = event.classification_classified_at or email_sent_at
     return event.event_at, email_sent_at, classified_at, event.id
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
