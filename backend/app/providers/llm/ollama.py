@@ -385,7 +385,14 @@ def _chat_request_payload(
         ),
         stream=False,
         format=_response_format(request.response_format),
-        options=_request_options(request.options),
+        options=(
+            None
+            if request.options.temperature is None and request.options.max_output_tokens is None
+            else OllamaRequestOptions(
+                temperature=request.options.temperature,
+                num_predict=request.options.max_output_tokens,
+            )
+        ),
     )
 
 
@@ -393,15 +400,6 @@ def _response_format(response_format: LLMResponseFormat) -> str | None:
     if response_format is LLMResponseFormat.JSON_OBJECT:
         return _OLLAMA_JSON_FORMAT
     return None
-
-
-def _request_options(options: LLMGenerationOptions) -> OllamaRequestOptions | None:
-    if options.temperature is None and options.max_output_tokens is None:
-        return None
-    return OllamaRequestOptions(
-        temperature=options.temperature,
-        num_predict=options.max_output_tokens,
-    )
 
 
 def _generation_response(response: OllamaChatResponse) -> LLMGenerationResponse:
