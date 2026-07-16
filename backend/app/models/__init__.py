@@ -36,7 +36,6 @@ from .sync import (
     SyncJobStatus,
 )
 from .synthetic_fixture import (
-    SyntheticFixtureFile,
     SyntheticFixtureLoadResult,
     SyntheticRawEmail,
 )
@@ -71,7 +70,6 @@ __all__ = [
     "SyncJobError",
     "SyncJobPhase",
     "SyncJobStatus",
-    "SyntheticFixtureFile",
     "SyntheticFixtureLoadResult",
     "SyntheticRawEmail",
 ]
