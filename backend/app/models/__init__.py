@@ -15,10 +15,7 @@ from .classification import (
     ClassificationRunApiRequest,
     ClassificationRunResponse,
 )
-from .correction import (
-    ApplicationResetLockRequest,
-    ApplicationResetLockResponse,
-)
+from .correction import ApplicationResetLockResponse
 from .diagnostics import MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
 from .health import HealthResponse
@@ -135,7 +132,6 @@ __all__ = [
     "ApplicationEventEditResponse",
     "ApplicationEventRecord",
     "ApplicationRecord",
-    "ApplicationResetLockRequest",
     "ApplicationResetLockResponse",
     "ApplicationStatusEditRequest",
     "ApplicationStatusEditResponse",
