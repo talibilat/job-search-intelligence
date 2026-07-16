@@ -148,18 +148,15 @@ def _error_response(
     )
 
 
-def _field_from_location(location: object) -> str:
-    if isinstance(location, list | tuple):
-        return ".".join(str(part) for part in location)
-    return str(location)
-
-
 def _validation_details(errors: Sequence[dict[str, Any]]) -> list[ApiErrorDetail]:
     details: list[ApiErrorDetail] = []
     for error in errors:
+        location = error.get("loc", "request")
         details.append(
             ApiErrorDetail(
-                field=_field_from_location(error.get("loc", "request")),
+                field=".".join(str(part) for part in location)
+                if isinstance(location, list | tuple)
+                else str(location),
                 message=str(error.get("msg", "Invalid request value.")),
                 type=str(error.get("type", "value_error")),
             ),
