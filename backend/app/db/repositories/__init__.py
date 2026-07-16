@@ -3,7 +3,7 @@
 from .application import ApplicationRepository
 from .attention import AttentionRepository
 from .backfill_state import BackfillStateRepository
-from .base import BaseRepository, SqlParameters
+from .base import SqlParameters
 from .chat import ChatRepository
 from .classification_run import ClassificationRunRepository
 from .company_profile import CompanyProfileRepository
@@ -23,7 +23,6 @@ __all__ = [
     "ApplicationRepository",
     "AttentionRepository",
     "BackfillStateRepository",
-    "BaseRepository",
     "ChatRepository",
     "ClassificationRunRepository",
     "CompanyProfileRepository",
