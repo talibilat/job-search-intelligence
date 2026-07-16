@@ -4,7 +4,7 @@ from math import ceil
 
 from app.config import AppSettings, ClassificationMode
 from app.db.repositories import EmailRepository
-from app.models import ClassificationPreRunEstimate
+from app.models.classification import ClassificationPreRunEstimate
 from app.services.classification_target import resolve_classification_model
 from app.services.llm_costs import calculate_llm_cost_usd
 
