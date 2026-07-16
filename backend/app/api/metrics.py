@@ -19,7 +19,6 @@ from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorRespo
 from app.models import (
     MetricsBreakdownDimension,
     MetricsFilter,
-    MetricsRatesResponse,
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
 )
@@ -28,6 +27,7 @@ from app.models.diagnostics import MetricsDiagnosticsResponse
 from app.models.metrics import (
     MetricsBreakdownResponse,
     MetricsFunnelResponse,
+    MetricsRatesResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )

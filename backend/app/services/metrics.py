@@ -7,7 +7,6 @@ from app.db.repositories.metrics import MetricsRepository
 from app.models import (
     MetricsBreakdownDimension,
     MetricsFilter,
-    MetricsRatesResponse,
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
 )
@@ -17,6 +16,7 @@ from app.models.metrics import (
     MetricsApplicationWindow,
     MetricsBreakdownResponse,
     MetricsFunnelResponse,
+    MetricsRatesResponse,
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )

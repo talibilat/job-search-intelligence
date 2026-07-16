@@ -3,7 +3,6 @@
 from .metrics import (
     MetricsBreakdownDimension,
     MetricsFilter,
-    MetricsRatesResponse,
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
 )
@@ -81,7 +80,6 @@ __all__ = [
     "LLMProviderHealthCheckApiRequest",
     "MetricsBreakdownDimension",
     "MetricsFilter",
-    "MetricsRatesResponse",
     "MetricsResponseRateTrendResponse",
     "MetricsSummaryResponse",
     "ProviderConfigRequirementResponse",
