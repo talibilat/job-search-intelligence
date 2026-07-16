@@ -1,7 +1,6 @@
 """Pydantic DTOs used at application boundaries."""
 
 from .diagnostics import MetricsDiagnosticsResponse
-from .health import HealthResponse
 from .metrics import (
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
@@ -82,7 +81,6 @@ from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 __all__ = [
     "EmailProviderConfigResponse",
     "CapabilityReadiness",
-    "HealthResponse",
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
     "MetricsBreakdownResponse",
