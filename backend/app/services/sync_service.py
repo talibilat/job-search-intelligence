@@ -20,7 +20,6 @@ from app.models import (
     SyncJobStatus,
     SyncLocalStats,
     SyncScopeEstimate,
-    SyncScopeEstimateBasis,
 )
 from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import (
@@ -31,6 +30,7 @@ from app.models.records import (
     RawEmailBodyRetentionState,
     RawEmailPreviewRecord,
 )
+from app.models.sync import SyncScopeEstimateBasis
 from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import (
     EmailAccountRef,

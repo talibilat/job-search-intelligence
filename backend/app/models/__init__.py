@@ -100,7 +100,6 @@ from .sync import (
     SyncJobStatus,
     SyncLocalStats,
     SyncScopeEstimate,
-    SyncScopeEstimateBasis,
 )
 from .synthetic_fixture import (
     SyntheticApplication,
@@ -130,7 +129,6 @@ __all__ = [
     "InsightCitation",
     "SyncLocalStats",
     "SyncScopeEstimate",
-    "SyncScopeEstimateBasis",
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
     "MetricsBreakdownResponse",
