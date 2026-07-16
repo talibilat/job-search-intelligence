@@ -32,8 +32,10 @@ def build_classification_pre_run_estimate(
         stats.candidate_count * settings.classification_estimate_completion_units_per_candidate
     )
     total_tokens = prompt_tokens + completion_tokens
-    estimated_cost_usd, cost_estimate_available = _estimate_cost_usd(
-        settings=settings,
+    estimated_cost_usd, cost_estimate_available = calculate_llm_cost_usd(
+        is_local_provider=settings.classification_mode is ClassificationMode.LOCAL,
+        input_rate_per_1k_units_usd=settings.classification_input_cost_per_1k_units_usd,
+        output_rate_per_1k_units_usd=settings.classification_output_cost_per_1k_units_usd,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
     )
@@ -58,19 +60,4 @@ def build_classification_pre_run_estimate(
             f"{settings.classification_estimate_completion_units_per_candidate} completion tokens "
             "per candidate"
         ),
-    )
-
-
-def _estimate_cost_usd(
-    *,
-    settings: AppSettings,
-    prompt_tokens: int,
-    completion_tokens: int,
-) -> tuple[float | None, bool]:
-    return calculate_llm_cost_usd(
-        is_local_provider=settings.classification_mode is ClassificationMode.LOCAL,
-        input_rate_per_1k_units_usd=settings.classification_input_cost_per_1k_units_usd,
-        output_rate_per_1k_units_usd=settings.classification_output_cost_per_1k_units_usd,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
     )
