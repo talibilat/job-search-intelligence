@@ -44,7 +44,6 @@ from .insight import (
     InsightRegenerationEstimate,
 )
 from .metrics import (
-    MetricBreakdownRow,
     MetricFunnelStage,
     MetricRate,
     MetricRateRow,
@@ -182,7 +181,6 @@ __all__ = [
     "SyncScopeEstimateBasis",
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
-    "MetricBreakdownRow",
     "MetricsBreakdownResponse",
     "MetricsDiagnosticsResponse",
     "MetricFunnelStage",
