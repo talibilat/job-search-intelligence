@@ -6,7 +6,6 @@ from .application_edit import (
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
 )
-from .application_merge import ApplicationMergeResponse
 from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
 from .chat_history import ChatHistoryResponse
 from .classification import (
@@ -157,7 +156,6 @@ __all__ = [
     "ClassificationPreRunEstimate",
     "ClassificationReprocessingPlan",
     "ClassificationRunResponse",
-    "ApplicationMergeResponse",
     "EmailCandidateQueryStrategy",
     "EmailChunkRecord",
     "EmailChunkSource",
