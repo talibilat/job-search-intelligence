@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 from app.config import EmailProviderName
-from app.models import RawEmailBodyRetentionState, RawEmailReaderRecord
+from app.models import RawEmailBodyRetentionState
+from app.models.raw_email import RawEmailReaderRecord
 from app.providers.email import (
     EmailAccountRef,
     EmailAddress,

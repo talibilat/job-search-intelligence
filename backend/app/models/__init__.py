@@ -70,7 +70,6 @@ from .provider_config import (
 from .raw_email import (
     RawEmailPreviewPage,
     RawEmailPreviewRecord,
-    RawEmailReaderRecord,
 )
 from .records import (
     ApplicationCorrectionConflictRecord,
@@ -216,7 +215,6 @@ __all__ = [
     "RawEmailBodyRetentionState",
     "RawEmailPreviewPage",
     "RawEmailPreviewRecord",
-    "RawEmailReaderRecord",
     "RawEmailRecord",
     "ResponseSilenceMetric",
     "SetupStatusResponse",
