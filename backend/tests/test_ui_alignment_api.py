@@ -19,7 +19,7 @@ from app.config import AppSettings, get_settings
 from app.db.repositories import ApplicationRepository, InsightRepository
 from app.db.repositories.event import EventRepository
 from app.main import create_app
-from app.models import InsightCitation
+from app.models.insight import InsightCitation
 from app.security import SecretRef
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
