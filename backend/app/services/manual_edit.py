@@ -64,7 +64,7 @@ class ManualApplicationEditService:
         self._application_repository = application_repository
         self._event_repository = event_repository
         self._correction_repository = correction_repository
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     def edit_status(
         self,
@@ -339,7 +339,3 @@ def _json_object(
     model: ApplicationRecord | ApplicationEventRecord | ApplicationCorrectionRecord,
 ) -> JsonObject:
     return cast(JsonObject, model.model_dump(mode="json"))
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
