@@ -18,7 +18,6 @@ from .classification import (
     ClassificationRunApiRequest,
     ClassificationRunResponse,
 )
-from .company_profile import CompanyProfileRecord
 from .correction import (
     ApplicationResetLockRequest,
     ApplicationResetLockResponse,
@@ -148,7 +147,6 @@ from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 __all__ = [
     "ApplicationEventTimelineRecord",
     "ApplicationStatusCountsResponse",
-    "CompanyProfileRecord",
     "EmailProviderConfigResponse",
     "CapabilityReadiness",
     "GhostInferenceRunResponse",
