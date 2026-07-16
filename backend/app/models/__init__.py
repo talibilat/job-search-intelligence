@@ -42,7 +42,6 @@ from .metrics import (
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
-    ResponseSilenceMetric,
 )
 from .processing import (
     ProcessingRunRequest,
@@ -192,7 +191,6 @@ __all__ = [
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
-    "ResponseSilenceMetric",
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",

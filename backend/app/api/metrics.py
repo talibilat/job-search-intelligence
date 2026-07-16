@@ -26,9 +26,9 @@ from app.models import (
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
-    ResponseSilenceMetric,
 )
 from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.metrics import ResponseSilenceMetric
 from app.services.diagnostics import DiagnosticsService
 from app.services.metrics import (
     MetricsBreakdownService,

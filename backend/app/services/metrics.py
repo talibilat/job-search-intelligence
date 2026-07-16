@@ -13,9 +13,13 @@ from app.models import (
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
+)
+from app.models.metrics import (
+    ApplicationWindowMetric,
+    MetricRate,
+    MetricsApplicationWindow,
     ResponseSilenceMetric,
 )
-from app.models.metrics import ApplicationWindowMetric, MetricRate, MetricsApplicationWindow
 
 type Clock = Callable[[], datetime]
 
