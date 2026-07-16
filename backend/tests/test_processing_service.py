@@ -13,13 +13,13 @@ from app.config import AppSettings, get_settings
 from app.db.repositories import EmailRepository
 from app.main import create_app
 from app.models import (
-    ClassificationCandidateStats,
     ClassificationRunRecord,
     EmailClassificationRecord,
     GhostInferenceRunResponse,
     JobEmailCategory,
     ProcessingRunRequest,
 )
+from app.models.classification import ClassificationCandidateStats
 from app.pipeline.classify import (
     AcceptedLLMExtraction,
     JobApplicationExtraction,

@@ -2,7 +2,6 @@
 
 from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
 from .classification import (
-    ClassificationCandidateStats,
     ClassificationPreRunEstimate,
     ClassificationReprocessingPlan,
     ClassificationRunApiRequest,
@@ -130,7 +129,6 @@ __all__ = [
     "ChatRoute",
     "ClassificationRunRecord",
     "ClassificationRunApiRequest",
-    "ClassificationCandidateStats",
     "ClassificationPreRunEstimate",
     "ClassificationReprocessingPlan",
     "ClassificationRunResponse",
