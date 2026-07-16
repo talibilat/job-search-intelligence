@@ -47,7 +47,6 @@ from .metrics import (
     ResponseSilenceMetric,
 )
 from .pipeline import (
-    PipelineNextAction,
     PipelineStatus,
 )
 from .processing import (
@@ -231,7 +230,6 @@ __all__ = [
     "InsightRegenerateResponse",
     "InsightRoleOutcomeSummary",
     "JobEmailCategory",
-    "PipelineNextAction",
     "PipelineStatus",
     "RawEmailBodyRetentionState",
     "RawEmailDetail",
