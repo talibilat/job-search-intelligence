@@ -1,6 +1,5 @@
 """Pydantic DTOs used at application boundaries."""
 
-from .chat import ChatResponse
 from .diagnostics import MetricsDiagnosticsResponse
 from .health import HealthResponse
 from .metrics import (
@@ -113,7 +112,6 @@ __all__ = [
     "ApplicationEventRecord",
     "ApplicationRecord",
     "ChatMessageRecord",
-    "ChatResponse",
     "ClassificationRunRecord",
     "EmailCandidateQueryStrategy",
     "EmailChunkRecord",

@@ -5,11 +5,11 @@ from uuid import uuid4
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
 from app.db.repositories import ChatRepository
-from app.models import ChatResponse
 from app.models.chat import (
     ChatCitation,
     ChatIncrement,
     ChatRequest,
+    ChatResponse,
     ChatRoute,
     SemanticSearchResult,
 )
