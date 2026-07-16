@@ -10,7 +10,6 @@ from .classify import (
     JobApplicationExtraction,
     build_classification_prompt_request,
     parse_classification_prompt_output,
-    parse_llm_extraction_response,
 )
 
 __all__ = [
@@ -21,5 +20,4 @@ __all__ = [
     "build_classification_prompt_request",
     "build_application_grouping_key",
     "parse_classification_prompt_output",
-    "parse_llm_extraction_response",
 ]
