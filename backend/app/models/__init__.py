@@ -48,7 +48,6 @@ from .metrics import (
 )
 from .pipeline import (
     PipelineNextAction,
-    PipelineStageCounts,
     PipelineStatus,
 )
 from .processing import (
@@ -233,7 +232,6 @@ __all__ = [
     "InsightRoleOutcomeSummary",
     "JobEmailCategory",
     "PipelineNextAction",
-    "PipelineStageCounts",
     "PipelineStatus",
     "RawEmailBodyRetentionState",
     "RawEmailDetail",
