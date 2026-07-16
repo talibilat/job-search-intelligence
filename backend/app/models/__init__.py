@@ -59,7 +59,6 @@ from .metrics import (
     PersonalGhostThresholdMetric,
     ResponseSilenceMetric,
     SilenceAgeBucketMetric,
-    TimeToRejectionMetric,
 )
 from .pipeline import (
     BackfillProgressState,
@@ -275,7 +274,6 @@ __all__ = [
     "PersonalGhostThresholdMetric",
     "ResponseSilenceMetric",
     "SilenceAgeBucketMetric",
-    "TimeToRejectionMetric",
     "SetupStatusResponse",
     "SetupSubmitRequest",
     "SetupSubmitResponse",
