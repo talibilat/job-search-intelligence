@@ -396,7 +396,10 @@ def _upsert_application(
     if outcome != "manual_conflict" or existing_application is None:
         return outcome, None
 
-    evidence_email_ids = _evidence_email_ids(group)
+    evidence_email_ids: list[str] = []
+    for result in group:
+        if result.classification_email_id not in evidence_email_ids:
+            evidence_email_ids.append(result.classification_email_id)
     return outcome, _CorrectionConflict(
         application_id=application_id,
         conflict_key=f"application_summary:{application_id}:{','.join(sorted(evidence_email_ids))}",
@@ -523,14 +526,6 @@ def _proposed_application_json(
         "created_at": created_at,
         "updated_at": updated_at,
     }
-
-
-def _evidence_email_ids(group: list[_EnrichedExtraction]) -> list[str]:
-    email_ids: list[str] = []
-    for result in group:
-        if result.classification_email_id not in email_ids:
-            email_ids.append(result.classification_email_id)
-    return email_ids
 
 
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
