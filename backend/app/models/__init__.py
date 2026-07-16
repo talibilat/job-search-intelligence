@@ -38,7 +38,6 @@ from .sync import (
 from .synthetic_fixture import (
     SyntheticApplication,
     SyntheticApplicationEvent,
-    SyntheticBodyRetentionState,
     SyntheticEmailClassification,
     SyntheticEventType,
     SyntheticFixtureFile,
@@ -81,7 +80,6 @@ __all__ = [
     "SyncJobStatus",
     "SyntheticApplication",
     "SyntheticApplicationEvent",
-    "SyntheticBodyRetentionState",
     "SyntheticEmailClassification",
     "SyntheticEventType",
     "SyntheticFixtureFile",
