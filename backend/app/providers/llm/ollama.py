@@ -332,7 +332,14 @@ class OllamaLLMProvider:
                     ) from error
                 raise LLMProviderRequestError(public_message="Ollama request failed.") from error
 
-        return _embedding_response(response, default_model=transport_request.payload.model)
+        return LLMEmbeddingResponse(
+            model=response.model or transport_request.payload.model,
+            embeddings=tuple(
+                LLMEmbedding(index=index, embedding=embedding)
+                for index, embedding in enumerate(response.embeddings)
+            ),
+            usage=_embedding_token_usage(response),
+        )
 
     async def health_check(
         self,
@@ -409,21 +416,6 @@ def _generation_response(response: OllamaChatResponse) -> LLMGenerationResponse:
         model=response.model,
         finish_reason=_finish_reason(response.done_reason),
         usage=_token_usage(response),
-    )
-
-
-def _embedding_response(
-    response: OllamaEmbeddingResponse,
-    *,
-    default_model: str,
-) -> LLMEmbeddingResponse:
-    return LLMEmbeddingResponse(
-        model=response.model or default_model,
-        embeddings=tuple(
-            LLMEmbedding(index=index, embedding=embedding)
-            for index, embedding in enumerate(response.embeddings)
-        ),
-        usage=_embedding_token_usage(response),
     )
 
 
