@@ -18,7 +18,6 @@ from app.api.dependencies import (
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorDetail, ApiErrorResponse
 from app.models import (
     MetricsBreakdownDimension,
-    MetricsBreakdownResponse,
     MetricsFilter,
     MetricsFunnelResponse,
     MetricsRatesResponse,
@@ -28,7 +27,7 @@ from app.models import (
 )
 from app.models.application import ApplicationSource, ApplicationStatus, SponsorshipStatus, WorkMode
 from app.models.diagnostics import MetricsDiagnosticsResponse
-from app.models.metrics import ResponseSilenceMetric
+from app.models.metrics import MetricsBreakdownResponse, ResponseSilenceMetric
 from app.services.diagnostics import DiagnosticsService
 from app.services.metrics import (
     MetricsBreakdownService,

@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 from app.db.repositories.metrics import MetricsRepository
 from app.models import (
     MetricsBreakdownDimension,
-    MetricsBreakdownResponse,
     MetricsFilter,
     MetricsFunnelResponse,
     MetricsRatesResponse,
@@ -18,6 +17,7 @@ from app.models.metrics import (
     ApplicationWindowMetric,
     MetricRate,
     MetricsApplicationWindow,
+    MetricsBreakdownResponse,
     ResponseSilenceMetric,
 )
 
