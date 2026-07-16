@@ -2,7 +2,7 @@
 
 from .factory import build_secret_store
 from .fernet_secret_store import FernetSecretStore
-from .keyring_store import KeyringBackend, KeyringSecretStore, create_secret_store
+from .keyring_store import KeyringSecretStore, create_secret_store
 from .provider_refs import AZURE_OPENAI_API_KEY_REF, GMAIL_OAUTH_CLIENT_REF
 from .redaction import (
     EMAIL_CONTENT_REDACTED,
@@ -24,7 +24,6 @@ __all__ = [
     "EMAIL_CONTENT_REDACTED",
     "AZURE_OPENAI_API_KEY_REF",
     "FernetSecretStore",
-    "KeyringBackend",
     "KeyringSecretStore",
     "GMAIL_OAUTH_CLIENT_REF",
     "REDACTED",
