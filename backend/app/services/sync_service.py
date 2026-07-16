@@ -346,31 +346,6 @@ class SyncService:
     def get_sync_state(self, account: EmailAccountRef) -> EmailSyncStateRecord | None:
         return self._sync_state_repository.fetch_state(account)
 
-    def get_sync_status(self, account: EmailAccountRef) -> EmailSyncStateStatus | None:
-        state = self._sync_state_repository.fetch_state(account)
-        if state is None:
-            return None
-
-        cursor = None
-        if state.sync_cursor is not None and state.cursor_issued_at is not None:
-            cursor = EmailProviderCursor(
-                account=EmailAccountRef(
-                    provider=EmailProviderName(state.provider),
-                    account_id=state.account_id,
-                ),
-                value=state.sync_cursor,
-                issued_at=state.cursor_issued_at,
-            )
-
-        return EmailSyncStateStatus(
-            account=EmailAccountRef(
-                provider=EmailProviderName(state.provider),
-                account_id=state.account_id,
-            ),
-            cursor=cursor,
-            last_state_update_at=state.updated_at,
-        )
-
     def store_sync_cursor(
         self,
         cursor: EmailProviderCursor,
@@ -429,16 +404,6 @@ class EmailSyncPreviewService:
             limit=_bounded_preview_limit(limit),
             order_by=order,
         )
-
-
-class EmailSyncStateStatus(BaseModel):
-    """Persisted sync cursor snapshot for service-level status checks."""
-
-    model_config = ConfigDict(frozen=True)
-
-    account: EmailAccountRef
-    cursor: EmailProviderCursor | None
-    last_state_update_at: datetime
 
 
 class BackfillStateService:
