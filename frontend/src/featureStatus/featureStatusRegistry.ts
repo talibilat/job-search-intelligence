@@ -3,7 +3,7 @@ export type FeatureArea = "frontend" | "backend";
 export type FeatureStatus =
   "blocked" | "completed" | "in_progress" | "not_started" | "planned";
 
-export interface FeatureRelationshipStep {
+interface FeatureRelationshipStep {
   label: string;
   type:
     | "api"
@@ -22,7 +22,7 @@ export interface FeatureRelationshipStep {
     | "worker";
 }
 
-export interface FeatureHowToUse {
+interface FeatureHowToUse {
   prerequisites: readonly string[];
   navigationPath: string;
   steps: readonly string[];
@@ -31,7 +31,7 @@ export interface FeatureHowToUse {
   qaValidationPoints: readonly string[];
 }
 
-export interface FeatureTestingInfo {
+interface FeatureTestingInfo {
   canTestNow: boolean;
   entryPoint: string;
   requiredSetup: readonly string[];
