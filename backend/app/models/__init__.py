@@ -29,7 +29,6 @@ from .insight import (
     InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,
-    InsightRegenerationCost,
     InsightRegenerationEstimate,
 )
 from .metrics import (
@@ -178,7 +177,6 @@ __all__ = [
     "EmailTextChunk",
     "InsightListResponse",
     "InsightRecord",
-    "InsightRegenerationCost",
     "InsightRegenerationEstimate",
     "InsightRegenerateRequest",
     "InsightRegenerateResponse",

@@ -14,10 +14,9 @@ from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
 from app.models import (
     InsightRecord,
-    InsightRegenerationCost,
     InsightRegenerationEstimate,
 )
-from app.models.insight import InsightCitation
+from app.models.insight import InsightCitation, InsightRegenerationCost
 from app.models.records import (
     ApplicationEventType,
     ApplicationStatus,
