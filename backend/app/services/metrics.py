@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 
 from app.db.repositories.metrics import MetricsRepository
 from app.models import (
-    MetricRate,
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
     MetricsFilter,
@@ -16,7 +15,7 @@ from app.models import (
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )
-from app.models.metrics import ApplicationWindowMetric, MetricsApplicationWindow
+from app.models.metrics import ApplicationWindowMetric, MetricRate, MetricsApplicationWindow
 
 type Clock = Callable[[], datetime]
 

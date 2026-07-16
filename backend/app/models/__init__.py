@@ -34,7 +34,6 @@ from .insight import (
     InsightRegenerationEstimate,
 )
 from .metrics import (
-    MetricRate,
     MetricsBreakdownDimension,
     MetricsBreakdownResponse,
     MetricsFilter,
@@ -127,7 +126,6 @@ __all__ = [
     "LLMProviderHealthCheckApiRequest",
     "MetricsBreakdownResponse",
     "MetricsDiagnosticsResponse",
-    "MetricRate",
     "MetricsBreakdownDimension",
     "MetricsFilter",
     "MetricsFunnelResponse",
