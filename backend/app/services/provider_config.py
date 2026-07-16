@@ -201,14 +201,14 @@ async def import_azure_openai_api_key_from_environment(secret_store: SecretStore
 def _updated_settings(settings: AppSettings, updates: dict[str, Any]) -> AppSettings:
     values = settings.model_dump()
     values.update(updates)
-    if _llm_provider_changed(settings, updates) and "classification_mode" not in updates:
+    if (
+        "llm_provider" in updates
+        and updates["llm_provider"] != settings.llm_provider
+        and "classification_mode" not in updates
+    ):
         candidate_settings = AppSettings(_env_file=None, **values)
         values["classification_mode"] = recommend_classification_mode(candidate_settings)
     return AppSettings(_env_file=None, **values)
-
-
-def _llm_provider_changed(settings: AppSettings, updates: dict[str, Any]) -> bool:
-    return "llm_provider" in updates and updates["llm_provider"] != settings.llm_provider
 
 
 def _config_requirement_response(
