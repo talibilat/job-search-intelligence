@@ -10,7 +10,6 @@ from pydantic import SecretStr
 from app.config import AppSettings, normalize_azure_openai_endpoint
 from app.db.repositories.provider_config import ProviderConfigurationRepository
 from app.models import (
-    EmailProviderConfigResponse,
     LLMProviderConfigResponse,
     ProviderConfigRequirementResponse,
     ProviderConfigResponse,
@@ -20,6 +19,7 @@ from app.models import (
     ProviderSecretRequirementResponse,
     ProviderSelection,
 )
+from app.models.provider_config import EmailProviderConfigResponse
 from app.providers import (
     EmailProviderRegistration,
     LLMProviderRegistration,
@@ -170,9 +170,7 @@ async def import_azure_openai_api_key_from_environment(secret_store: SecretStore
             from dotenv import dotenv_values
 
             backend_env_file = Path(__file__).resolve().parents[2] / ".env"
-            api_key = str(
-                dotenv_values(backend_env_file).get("AZURE_OPENAI_API_KEY") or ""
-            ).strip()
+            api_key = str(dotenv_values(backend_env_file).get("AZURE_OPENAI_API_KEY") or "").strip()
         except ImportError:
             return
     if api_key:
@@ -190,6 +188,7 @@ def _updated_settings(settings: AppSettings, updates: dict[str, Any]) -> AppSett
 
 def _llm_provider_changed(settings: AppSettings, updates: dict[str, Any]) -> bool:
     return "llm_provider" in updates and updates["llm_provider"] != settings.llm_provider
+
 
 def _config_requirement_response(
     requirement: ProviderConfigRequirement,

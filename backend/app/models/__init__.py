@@ -8,7 +8,6 @@ from .processing import (
     ProcessingStatus,
 )
 from .provider_config import (
-    EmailProviderConfigResponse,
     LLMProviderConfigResponse,
     LLMProviderHealthCheckApiRequest,
     ProviderConfigRequirementResponse,
@@ -65,7 +64,6 @@ from .synthetic_fixture import (
 )
 
 __all__ = [
-    "EmailProviderConfigResponse",
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
     "MetricsFilter",
