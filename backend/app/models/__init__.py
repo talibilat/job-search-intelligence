@@ -2,7 +2,7 @@
 
 from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
 from .diagnostics import MetricsDiagnosticsResponse
-from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
+from .ghost_inference import GhostInferenceRunResponse
 from .health import HealthResponse
 from .metrics import (
     MetricsBreakdownDimension,
@@ -85,7 +85,6 @@ __all__ = [
     "EmailProviderConfigResponse",
     "CapabilityReadiness",
     "GhostInferenceRunResponse",
-    "GhostInferenceRunApiRequest",
     "HealthResponse",
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
