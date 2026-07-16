@@ -128,12 +128,12 @@ class ManualApplicationMergeService:
                 application_id=target_application_id,
                 correction_type="merge",
                 before_json=before_json,
-                after_json=_build_after_snapshot(
-                    target=updated_target,
-                    deleted_source_application_id=source_application_id,
-                    moved_event_ids=[event.id for event in source_events],
-                    moved_correction_ids=[correction.id for correction in source_corrections],
-                ),
+                after_json={
+                    "target_application": _json_object(updated_target),
+                    "deleted_source_application_id": source_application_id,
+                    "moved_event_ids": [event.id for event in source_events],
+                    "moved_correction_ids": [correction.id for correction in source_corrections],
+                },
                 reason=reason,
                 created_at=now.isoformat(),
             )
@@ -250,21 +250,6 @@ def _build_before_snapshot(
         "source_application": _json_object(source),
         "source_events": [_json_object(event) for event in source_events],
         "source_corrections": [_json_object(correction) for correction in source_corrections],
-    }
-
-
-def _build_after_snapshot(
-    *,
-    target: ApplicationRecord,
-    deleted_source_application_id: str,
-    moved_event_ids: list[str],
-    moved_correction_ids: list[int],
-) -> JsonObject:
-    return {
-        "target_application": _json_object(target),
-        "deleted_source_application_id": deleted_source_application_id,
-        "moved_event_ids": moved_event_ids,
-        "moved_correction_ids": moved_correction_ids,
     }
 
 
