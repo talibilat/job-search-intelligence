@@ -94,7 +94,7 @@ class AggregationService:
         self._event_repository = event_repository
         self._email_repository = email_repository
         self._correction_conflict_repository = correction_conflict_repository
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._run_id_factory = run_id_factory or _new_run_id
 
     def run(
@@ -589,10 +589,6 @@ def _pick_best_extraction(
             best = result
             continue
     return best
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def _new_run_id() -> str:
