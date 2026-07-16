@@ -44,7 +44,6 @@ from .records import (
     RawEmailBodyRetentionState,
     RawEmailRecord,
 )
-from .setup import SetupSubmitResponse
 from .sync import (
     SyncJobCounts,
     SyncJobError,
@@ -106,7 +105,6 @@ __all__ = [
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailRecord",
-    "SetupSubmitResponse",
     "SyncJobCounts",
     "SyncJobError",
     "SyncJobPhase",

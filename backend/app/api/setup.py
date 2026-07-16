@@ -16,8 +16,7 @@ from app.api.provider_config import get_active_sync_scheduler, get_provider_regi
 from app.config import AppSettings, get_settings
 from app.db.repositories import ProviderConfigurationRepository
 from app.db.repositories.connection import EmailConnectionRepository
-from app.models import SetupSubmitResponse
-from app.models.setup import SetupStatusResponse, SetupSubmitRequest
+from app.models.setup import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
 from app.providers import ProviderRegistry
 from app.security import SecretStore, SecretStoreError
 from app.services.provider_config import SyncSchedulerConfigurationError
