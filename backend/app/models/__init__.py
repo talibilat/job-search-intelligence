@@ -67,10 +67,7 @@ from .provider_config import (
     ProviderSelection,
     ReadinessState,
 )
-from .raw_email import (
-    RawEmailPreviewPage,
-    RawEmailPreviewRecord,
-)
+from .raw_email import RawEmailPreviewPage
 from .records import (
     ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
@@ -214,7 +211,6 @@ __all__ = [
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
     "RawEmailPreviewPage",
-    "RawEmailPreviewRecord",
     "RawEmailRecord",
     "ResponseSilenceMetric",
     "SetupStatusResponse",
