@@ -9,7 +9,8 @@ from app.api.dependencies import get_email_connection_secret_refs
 from app.api.errors import ApiError, ApiErrorCode, ApiErrorResponse
 from app.api.sync import EmailSyncStatusStore, get_sync_status_store
 from app.config import AppSettings, get_settings
-from app.models import WipeDataRequest, WipeDataResponse
+from app.models import WipeDataResponse
+from app.models.wipe_data import WipeDataRequest
 from app.security import SecretRef, SecretStore, create_secret_store
 from app.services.wipe_data import (
     UnsafeWipeTargetError,
