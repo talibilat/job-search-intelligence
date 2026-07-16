@@ -178,23 +178,16 @@ class GhostInferenceService:
     ) -> None:
         events = self._event_repository.list_by_application_id(application_id)
         current_status = derive_current_status_from_events(events)
-        last_activity_at = _last_event_at(events, fallback=fallback_last_activity_at)
+        last_activity_at = max(
+            (event.event_at for event in events),
+            default=fallback_last_activity_at,
+        )
         self._application_repository.update_timeline_status(
             application_id=application_id,
             current_status=current_status,
             last_activity_at=last_activity_at.isoformat(),
             updated_at=evaluated_at.isoformat(),
         )
-
-
-def _last_event_at(
-    events: list[ApplicationEventRecord],
-    *,
-    fallback: datetime,
-) -> datetime:
-    if not events:
-        return fallback
-    return max(event.event_at for event in events)
 
 
 def _latest_event(
