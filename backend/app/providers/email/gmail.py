@@ -1250,7 +1250,7 @@ def _first_header(headers: dict[str, tuple[str, ...]], name: str) -> str | None:
     values = headers.get(name)
     if values is None:
         return None
-    return _normalize_optional_header(values[0])
+    return values[0].strip() or None
 
 
 def _first_email_address(headers: dict[str, tuple[str, ...]], name: str) -> EmailAddress | None:
@@ -1300,11 +1300,6 @@ def _normalize_required_id(value: str) -> str:
 def _normalize_optional_id(value: str | None) -> str | None:
     if value is None:
         return None
-    normalized = value.strip()
-    return normalized or None
-
-
-def _normalize_optional_header(value: str) -> str | None:
     normalized = value.strip()
     return normalized or None
 
