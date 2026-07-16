@@ -94,7 +94,6 @@ from .records import (
     JobEmailCategory,
     RawEmailBodyRetentionState,
     RawEmailRecord,
-    RecentApplicationEventRecord,
 )
 from .setup import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
 from .sync import (
@@ -132,7 +131,6 @@ __all__ = [
     "GhostInferenceRunApiRequest",
     "HealthResponse",
     "InsightCitation",
-    "RecentApplicationEventRecord",
     "SyncLocalStats",
     "SyncScopeEstimate",
     "SyncScopeEstimateBasis",
