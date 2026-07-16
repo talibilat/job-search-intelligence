@@ -838,10 +838,6 @@ def _format_datetime(value: datetime | None) -> str | None:
     return value.isoformat()
 
 
-def _format_json_array(values: tuple[str, ...]) -> str:
-    return json.dumps(list(values), separators=(",", ":"))
-
-
 def _empty_classification_reprocessing_stats() -> ClassificationReprocessingStats:
     return ClassificationReprocessingStats(
         retained_candidate_count=0,
