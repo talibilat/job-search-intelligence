@@ -845,7 +845,9 @@ class GmailMessageLister:
             )
         else:
             page_token, sync_cursor = _decode_full_backfill_page_token(page_token)
-            list_query = _replace_query_value(list_query, "pageToken", page_token)
+            list_query = tuple(
+                (key, page_token if key == "pageToken" else value) for key, value in list_query
+            )
 
         list_response = _validate_gmail_response(
             GmailMessageListResponse,
@@ -1166,14 +1168,6 @@ def _query_value(query: tuple[tuple[str, str], ...], name: str) -> str | None:
         if key == name:
             return value
     return None
-
-
-def _replace_query_value(
-    query: tuple[tuple[str, str], ...],
-    name: str,
-    replacement: str,
-) -> tuple[tuple[str, str], ...]:
-    return tuple((key, replacement if key == name else value) for key, value in query)
 
 
 def _encode_full_backfill_page_token(
