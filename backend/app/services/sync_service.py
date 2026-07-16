@@ -89,10 +89,6 @@ def create_apscheduler() -> ScheduledJobScheduler:
     return cast(ScheduledJobScheduler, AsyncIOScheduler())
 
 
-async def noop_sync_job() -> None:
-    """Safe placeholder until the concrete Gmail sync runner is wired in."""
-
-
 class SyncScheduler:
     """Own APScheduler lifetime for sync jobs while the backend process runs."""
 
