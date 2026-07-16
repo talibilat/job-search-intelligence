@@ -14,8 +14,8 @@ from app.models import (
     ApplicationCorrectionRecord,
     ApplicationEventRecord,
     ApplicationRecord,
-    ApplicationStatusCountsResponse,
 )
+from app.models.application import ApplicationStatusCountsResponse
 from app.models.records import (
     ApplicationEventTimelineRecord,
     ApplicationSource,

@@ -1,6 +1,5 @@
 """Pydantic DTOs used at application boundaries."""
 
-from .application import ApplicationStatusCountsResponse
 from .application_edit import (
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
@@ -114,7 +113,6 @@ from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
     "ApplicationEventTimelineRecord",
-    "ApplicationStatusCountsResponse",
     "EmailProviderConfigResponse",
     "CapabilityReadiness",
     "GhostInferenceRunResponse",

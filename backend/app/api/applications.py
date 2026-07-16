@@ -29,12 +29,12 @@ from app.models import (
     ApplicationResetLockResponse,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
-    ApplicationStatusCountsResponse,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
     GhostInferenceRunApiRequest,
     GhostInferenceRunResponse,
 )
+from app.models.application import ApplicationStatusCountsResponse
 from app.models.records import (
     ApplicationEventTimelineRecord,
     ApplicationSource,
