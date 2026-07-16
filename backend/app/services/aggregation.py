@@ -457,15 +457,15 @@ def _upsert_events(
                         ),
                     },
                     proposed_json={
-                        "event": _proposed_event_json(
-                            id=event_id,
-                            application_id=application_id,
-                            email_id=email_id,
-                            event_type=event_type,
-                            event_at=event_at_str,
-                            extract_note=ext.rejection_reason,
-                            extracted_status=ext.status,
-                        ),
+                        "event": {
+                            "id": event_id,
+                            "application_id": application_id,
+                            "email_id": email_id,
+                            "event_type": event_type,
+                            "event_at": event_at_str,
+                            "extract_note": ext.rejection_reason,
+                            "extracted_status": ext.status,
+                        },
                     },
                     evidence_email_id=email_id,
                 )
@@ -528,27 +528,6 @@ def _proposed_application_json(
         "manual_lock": False,
         "created_at": created_at,
         "updated_at": updated_at,
-    }
-
-
-def _proposed_event_json(
-    *,
-    id: str,
-    application_id: str,
-    email_id: str | None,
-    event_type: ApplicationEventType,
-    event_at: str,
-    extract_note: str | None,
-    extracted_status: ApplicationStatus | None,
-) -> JsonObject:
-    return {
-        "id": id,
-        "application_id": application_id,
-        "email_id": email_id,
-        "event_type": event_type,
-        "event_at": event_at,
-        "extract_note": extract_note,
-        "extracted_status": extracted_status,
     }
 
 
