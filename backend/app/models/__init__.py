@@ -18,7 +18,7 @@ from .classification import (
     ClassificationRunApiRequest,
     ClassificationRunResponse,
 )
-from .company_profile import CompanyProfileRecord, CompanyType
+from .company_profile import CompanyProfileRecord
 from .correction import (
     ApplicationResetLockRequest,
     ApplicationResetLockResponse,
@@ -149,7 +149,6 @@ __all__ = [
     "ApplicationEventTimelineRecord",
     "ApplicationStatusCountsResponse",
     "CompanyProfileRecord",
-    "CompanyType",
     "EmailProviderConfigResponse",
     "CapabilityReadiness",
     "GhostInferenceRunResponse",
