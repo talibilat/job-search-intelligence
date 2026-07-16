@@ -98,7 +98,6 @@ from .sync import (
     SyncJobError,
     SyncJobPhase,
     SyncJobStatus,
-    SyncLocalStats,
 )
 from .synthetic_fixture import (
     SyntheticApplication,
@@ -126,7 +125,6 @@ __all__ = [
     "GhostInferenceRunApiRequest",
     "HealthResponse",
     "InsightCitation",
-    "SyncLocalStats",
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
     "MetricsBreakdownResponse",
