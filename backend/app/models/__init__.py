@@ -1,6 +1,6 @@
 """Pydantic DTOs used at application boundaries."""
 
-from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
+from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse
 from .diagnostics import MetricsDiagnosticsResponse
 from .health import HealthResponse
 from .metrics import (
@@ -117,7 +117,6 @@ __all__ = [
     "ChatIncrement",
     "ChatRequest",
     "ChatResponse",
-    "ChatRoute",
     "ClassificationRunRecord",
     "EmailCandidateQueryStrategy",
     "EmailChunkRecord",
