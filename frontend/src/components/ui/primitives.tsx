@@ -201,7 +201,7 @@ export function FormField({
   );
 }
 
-export interface AlertProps extends Omit<
+interface AlertProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
   "title"
 > {
