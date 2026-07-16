@@ -450,7 +450,9 @@ def _upsert_events(
                     conflict_key=(f"application_event:{application_id}:{email_id or event_id}"),
                     conflict_type="application_event",
                     existing_json={
-                        "event": _event_json(existing_event) if existing_event else None,
+                        "event": (
+                            dict(existing_event.model_dump(mode="json")) if existing_event else None
+                        ),
                     },
                     proposed_json={
                         "event": _proposed_event_json(
@@ -487,10 +489,6 @@ def _find_existing_event_for_email(
 
 def _application_json(application: ApplicationRecord) -> JsonObject:
     return dict(application.model_dump(mode="json"))
-
-
-def _event_json(event: ApplicationEventRecord) -> JsonObject:
-    return dict(event.model_dump(mode="json"))
 
 
 def _proposed_application_json(
