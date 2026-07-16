@@ -985,14 +985,12 @@ class EmailSyncService:
 
         bodies: list[EmailMessageBody] = []
         failures: list[EmailBodyFetchFailure] = []
-        for ref_chunk in _chunk_refs(
-            selected_refs,
-            chunk_size=_retained_body_batch_size(self._body_provider) or len(selected_refs),
-        ):
+        chunk_size = _retained_body_batch_size(self._body_provider) or len(selected_refs)
+        for index in range(0, len(selected_refs), chunk_size):
             batch = await self._body_provider.fetch_message_bodies(
                 connection,
                 EmailBodyFetchRequest(
-                    refs=ref_chunk,
+                    refs=tuple(selected_refs[index : index + chunk_size]),
                     max_body_bytes=max_body_bytes,
                 ),
             )
@@ -1227,16 +1225,6 @@ def _remaining_options(
         return options
     remaining_messages = max(options.max_messages - processed_messages, 1)
     return options.model_copy(update={"max_messages": remaining_messages})
-
-
-def _chunk_refs(
-    refs: list[EmailMessageRef],
-    *,
-    chunk_size: int,
-) -> tuple[tuple[EmailMessageRef, ...], ...]:
-    return tuple(
-        tuple(refs[index : index + chunk_size]) for index in range(0, len(refs), chunk_size)
-    )
 
 
 def _bounded_preview_limit(limit: int) -> int:
