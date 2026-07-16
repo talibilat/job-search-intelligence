@@ -50,11 +50,17 @@ class ClassificationPromptEmail(BaseModel):
     body_text: str = Field(min_length=1, repr=False)
 
     def to_prompt_payload(self) -> dict[str, object]:
+        sent_at = self.sent_at
+        if sent_at is not None:
+            sent_at = sent_at if sent_at.tzinfo is None else sent_at.astimezone(UTC)
+
         return {
             "email_id": self.email_id,
             "from_addr": self.from_addr,
             "subject": self.subject,
-            "sent_at": _format_prompt_datetime(self.sent_at),
+            "sent_at": (
+                sent_at.isoformat().replace("+00:00", "Z") if sent_at is not None else None
+            ),
             "body_text": self.body_text,
         }
 
@@ -351,15 +357,6 @@ def _classification_system_prompt(*, prompt_version: str) -> str:
             schema,
         ),
     )
-
-
-def _format_prompt_datetime(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-
-    formatted = value.isoformat() if value.tzinfo is None else value.astimezone(UTC).isoformat()
-
-    return formatted.replace("+00:00", "Z")
 
 
 def _malformed_result(
