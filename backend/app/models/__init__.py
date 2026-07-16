@@ -46,9 +46,6 @@ from .metrics import (
     MetricsTimeseriesResponse,
     ResponseSilenceMetric,
 )
-from .pipeline import (
-    PipelineStatus,
-)
 from .processing import (
     ProcessingRunRequest,
     ProcessingRunResult,
@@ -230,7 +227,6 @@ __all__ = [
     "InsightRegenerateResponse",
     "InsightRoleOutcomeSummary",
     "JobEmailCategory",
-    "PipelineStatus",
     "RawEmailBodyRetentionState",
     "RawEmailDetail",
     "RawEmailPreviewOrder",
