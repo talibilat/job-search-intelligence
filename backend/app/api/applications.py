@@ -23,7 +23,6 @@ from app.models import (
     ApplicationEventEditRequest,
     ApplicationEventEditResponse,
     ApplicationRecord,
-    ApplicationResetLockResponse,
     ApplicationStatusEditRequest,
     ApplicationStatusEditResponse,
     GhostInferenceRunApiRequest,
@@ -33,6 +32,7 @@ from app.models.application import ApplicationStatusCountsResponse
 from app.models.application_merge import ApplicationMergeRequest, ApplicationMergeResponse
 from app.models.correction import (
     ApplicationResetLockRequest,
+    ApplicationResetLockResponse,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
 )
