@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from app.agent.tools.semantic_search import normalize_sqlite_vec_embedding
 from app.db.repositories import EmailChunkRepository, EmailRepository
-from app.models import EmailTextChunk
+from app.models.chunk import EmailTextChunk
 from app.providers.llm import LLMEmbeddingRequest, LLMProvider, LLMProviderResponseError
 from app.services.email_chunking import EmailChunkingService
 
