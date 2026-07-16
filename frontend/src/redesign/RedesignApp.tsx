@@ -38,7 +38,7 @@ export type RedesignPage =
   | "settings"
   | "dev";
 
-export interface RedesignRoute {
+interface RedesignRoute {
   page: RedesignPage;
   detailId: string | null;
   statusFilter: StatusChipKey;
