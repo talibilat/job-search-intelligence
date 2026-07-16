@@ -68,7 +68,6 @@ from .provider_config import (
     ReadinessState,
 )
 from .raw_email import (
-    RawEmailDetail,
     RawEmailPreviewPage,
     RawEmailPreviewRecord,
     RawEmailReaderRecord,
@@ -215,7 +214,6 @@ __all__ = [
     "InsightRegenerateResponse",
     "JobEmailCategory",
     "RawEmailBodyRetentionState",
-    "RawEmailDetail",
     "RawEmailPreviewPage",
     "RawEmailPreviewRecord",
     "RawEmailReaderRecord",
