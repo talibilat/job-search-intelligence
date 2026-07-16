@@ -142,7 +142,7 @@ class InsightGenerationService:
         self._insight_repository = insight_repository
         self._llm_provider = llm_provider
         self._input_builder = input_builder or InsightInputBuilder(insight_repository)
-        self._clock = clock or _utcnow
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     async def generate_insight(
         self,
@@ -742,10 +742,6 @@ def _configured_chat_model(settings: AppSettings) -> str:
             public_message="Configured LLM provider chat model is missing.",
         )
     return model
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def _hash_insight_input(insight_input: InsightInput) -> str:
