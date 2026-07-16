@@ -23,7 +23,6 @@ from .correction import (
     ApplicationResetLockResponse,
     ApplicationSplitRequest,
     ApplicationSplitResponse,
-    ApplicationSplitSourceApplication,
 )
 from .diagnostics import MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
@@ -194,7 +193,6 @@ __all__ = [
     "ApplicationStatusEditResponse",
     "ApplicationSplitRequest",
     "ApplicationSplitResponse",
-    "ApplicationSplitSourceApplication",
     "ChatMessageRecord",
     "ChatMessageRole",
     "ChatHistoryResponse",
