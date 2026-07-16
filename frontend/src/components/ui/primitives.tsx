@@ -143,7 +143,7 @@ interface DescribedControlProps {
   id?: string;
 }
 
-export interface FormFieldProps {
+interface FormFieldProps {
   children: ReactElement<DescribedControlProps>;
   error?: ReactNode;
   hint?: ReactNode;
