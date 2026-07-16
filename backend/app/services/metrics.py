@@ -4,14 +4,12 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from app.db.repositories.metrics import MetricsRepository
-from app.models import (
-    MetricsBreakdownDimension,
-    MetricsFilter,
-)
+from app.models import MetricsFilter
 from app.models.metrics import (
     ApplicationWindowMetric,
     MetricRate,
     MetricsApplicationWindow,
+    MetricsBreakdownDimension,
     MetricsBreakdownResponse,
     MetricsFunnelResponse,
     MetricsRatesResponse,

@@ -7,7 +7,8 @@ from typing import Literal, Protocol, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.repositories import MetricsRepository
-from app.models import MetricsBreakdownDimension, MetricsFilter
+from app.models import MetricsFilter
+from app.models.metrics import MetricsBreakdownDimension
 from app.models.records import ApplicationRecord
 
 StructuredQueryTemplate = Literal[
