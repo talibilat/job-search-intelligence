@@ -80,7 +80,13 @@ class ClassificationService:
         for candidate in candidates:
             response = await self._llm_provider.generate(
                 build_classification_prompt_request(
-                    _classification_prompt_email(candidate),
+                    ClassificationPromptEmail(
+                        email_id=candidate.email_id,
+                        from_addr=candidate.from_addr,
+                        subject=candidate.subject,
+                        sent_at=candidate.sent_at,
+                        body_text=candidate.body_text,
+                    ),
                     prompt_version=self._settings.classification_prompt_version,
                     model=_classification_model(self._settings),
                 )
@@ -115,18 +121,6 @@ class ClassificationService:
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
         )
-
-
-def _classification_prompt_email(
-    candidate: EmailClassificationCandidate,
-) -> ClassificationPromptEmail:
-    return ClassificationPromptEmail(
-        email_id=candidate.email_id,
-        from_addr=candidate.from_addr,
-        subject=candidate.subject,
-        sent_at=candidate.sent_at,
-        body_text=candidate.body_text,
-    )
 
 
 def _classification_model(settings: AppSettings) -> str | None:
