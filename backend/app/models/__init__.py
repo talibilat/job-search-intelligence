@@ -9,7 +9,6 @@ from .application_edit import (
 )
 from .application_merge import ApplicationMergeRequest, ApplicationMergeResponse
 from .attention import (
-    AttentionOverviewResponse,
     InterviewAttentionItem,
     InterviewTaskCompletionResponse,
 )
@@ -151,7 +150,6 @@ from .synthetic_fixture import (
 from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
-    "AttentionOverviewResponse",
     "InterviewAttentionItem",
     "InterviewTaskCompletionResponse",
     "ApplicationEventTimelineRecord",
