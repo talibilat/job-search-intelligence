@@ -8,7 +8,6 @@ from .processing import (
     ProcessingStatus,
 )
 from .records import (
-    ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
     ApplicationEventRecord,
     ApplicationRecord,
@@ -42,7 +41,6 @@ __all__ = [
     "ProcessingRunResult",
     "ProcessingRunState",
     "ProcessingStatus",
-    "ApplicationCorrectionConflictRecord",
     "ApplicationCorrectionRecord",
     "ApplicationEventRecord",
     "ApplicationRecord",

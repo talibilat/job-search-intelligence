@@ -10,12 +10,12 @@ from app.db.repositories import (
     EventRepository,
 )
 from app.models import (
-    ApplicationCorrectionConflictRecord,
     ApplicationCorrectionRecord,
     ApplicationEventRecord,
     ApplicationRecord,
 )
 from app.models.application import ApplicationStatusCountsResponse
+from app.models.correction import ApplicationCorrectionConflictRecord
 from app.models.records import (
     ApplicationEventTimelineRecord,
     ApplicationSource,
