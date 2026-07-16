@@ -12,11 +12,12 @@ from pydantic import BaseModel, ConfigDict
 
 from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
-from app.models import (
-    InsightRecord,
+from app.models import InsightRecord
+from app.models.insight import (
+    InsightCitation,
+    InsightRegenerationCost,
     InsightRegenerationEstimate,
 )
-from app.models.insight import InsightCitation, InsightRegenerationCost
 from app.models.records import (
     ApplicationEventType,
     ApplicationStatus,

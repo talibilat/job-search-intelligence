@@ -29,7 +29,6 @@ from .insight import (
     InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,
-    InsightRegenerationEstimate,
 )
 from .metrics import (
     MetricsBreakdownDimension,
@@ -177,7 +176,6 @@ __all__ = [
     "EmailTextChunk",
     "InsightListResponse",
     "InsightRecord",
-    "InsightRegenerationEstimate",
     "InsightRegenerateRequest",
     "InsightRegenerateResponse",
     "JobEmailCategory",
