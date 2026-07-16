@@ -239,7 +239,7 @@ export interface TabItem {
   label: ReactNode;
 }
 
-export interface TabsProps {
+interface TabsProps {
   activeItemId?: string;
   className?: string;
   defaultItemId?: string;
