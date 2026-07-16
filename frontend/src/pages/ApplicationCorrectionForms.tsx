@@ -95,7 +95,7 @@ interface SplitCorrectionFormProps {
 const statusOptions = Object.values(ApplicationStatus) as ApplicationStatusValue[];
 const eventTypeOptions = Object.values(ApplicationEventType) as ApplicationEventTypeValue[];
 
-export function toTitle(value: string) {
+function toTitle(value: string) {
   const label = value.replaceAll("_", " ");
 
   return label.charAt(0).toUpperCase() + label.slice(1);
