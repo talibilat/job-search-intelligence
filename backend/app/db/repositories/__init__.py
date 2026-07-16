@@ -3,7 +3,7 @@
 from .application import ApplicationRepository
 from .attention import AttentionRepository
 from .backfill_state import BackfillStateRepository
-from .base import SqlParameters
+from .base import BaseRepository, SqlParameters
 from .chat import ChatRepository
 from .classification_run import ClassificationRunRepository
 from .company_profile import CompanyProfileRepository
@@ -15,6 +15,7 @@ from .event import EventRepository
 from .filter_decision import EmailFilterDecisionRepository
 from .insight import InsightRepository
 from .metrics import MetricsRepository
+from .pipeline_status import PipelineStatusRepository
 from .provider_config import ProviderConfigurationRepository
 from .sync_state import SyncStateRepository
 from .synthetic_fixture import SyntheticFixtureRepository
@@ -23,6 +24,7 @@ __all__ = [
     "ApplicationRepository",
     "AttentionRepository",
     "BackfillStateRepository",
+    "BaseRepository",
     "ChatRepository",
     "ClassificationRunRepository",
     "CompanyProfileRepository",
@@ -35,6 +37,7 @@ __all__ = [
     "EventRepository",
     "InsightRepository",
     "MetricsRepository",
+    "PipelineStatusRepository",
     "ProviderConfigurationRepository",
     "SqlParameters",
     "SyncStateRepository",
