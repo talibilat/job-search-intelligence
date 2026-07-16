@@ -13,7 +13,7 @@ from app.db.repositories import (
     EventRepository,
 )
 from app.db.repositories.application import ApplicationUpsertOutcome
-from app.models.application import ApplicationRecord, ApplicationStatus
+from app.models.application import ApplicationStatus
 from app.models.classification import JobEmailCategory
 from app.models.event import ApplicationEventRecord, ApplicationEventType
 from app.models.records import CorrectionConflictType, JsonObject
@@ -396,7 +396,9 @@ def _upsert_application(
         application_id=application_id,
         conflict_key=f"application_summary:{application_id}:{_evidence_key(evidence_email_ids)}",
         conflict_type="application_summary",
-        existing_json={"application": _application_json(existing_application)},
+        existing_json={
+            "application": dict(existing_application.model_dump(mode="json")),
+        },
         proposed_json={
             "application": proposed_application,
             "evidence_email_ids": evidence_email_ids,
@@ -485,10 +487,6 @@ def _find_existing_event_for_email(
         if event.email_id == email_id:
             return event
     return None
-
-
-def _application_json(application: ApplicationRecord) -> JsonObject:
-    return dict(application.model_dump(mode="json"))
 
 
 def _proposed_application_json(
