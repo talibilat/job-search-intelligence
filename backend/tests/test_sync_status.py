@@ -6,7 +6,6 @@ import pytest
 from app.config import EmailProviderName
 from app.main import create_app
 from app.models.sync import SyncJobCounts, SyncJobError, SyncJobPhase, SyncJobStatus
-from app.services.sync_service import build_idle_sync_status
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -66,21 +65,6 @@ def test_sync_job_status_rejects_timestamps_before_start() -> None:
             completed_at=None,
             progress=0,
         )
-
-
-def test_build_idle_sync_status_returns_zero_progress_snapshot() -> None:
-    status = build_idle_sync_status(now=NOW)
-
-    assert status.phase is SyncJobPhase.IDLE
-    assert status.provider is None
-    assert status.account_id is None
-    assert status.counts == SyncJobCounts()
-    assert status.errors == ()
-    assert status.started_at is None
-    assert status.updated_at == NOW
-    assert status.completed_at is None
-    assert status.last_run_at is None
-    assert status.progress == 0
 
 
 def test_sync_status_endpoint_exposes_typed_idle_status() -> None:

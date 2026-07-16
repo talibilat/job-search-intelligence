@@ -24,9 +24,6 @@ from app.models.records import (
     RawEmailPreviewRecord,
 )
 from app.models.sync import (
-    SyncJobCounts,
-    SyncJobPhase,
-    SyncJobStatus,
     SyncLocalStats,
     SyncScopeEstimate,
     SyncScopeEstimateBasis,
@@ -1318,17 +1315,6 @@ def _metadata_matches_date_bounds(
     if since_date is not None and message_date < since_date:
         return False
     return before_date is None or message_date < before_date
-
-
-def build_idle_sync_status(*, now: datetime | None = None) -> SyncJobStatus:
-    """Build the public status snapshot before any sync job is running."""
-
-    return SyncJobStatus(
-        phase=SyncJobPhase.IDLE,
-        counts=SyncJobCounts(),
-        updated_at=now or datetime.now(UTC),
-        progress=0,
-    )
 
 
 class BackfillReconciliationMetrics(BaseModel):
