@@ -35,7 +35,6 @@ from .sync import (
     SyncJobPhase,
     SyncJobStatus,
 )
-from .synthetic_fixture import SyntheticFixtureLoadResult
 
 __all__ = [
     "MetricsFilter",
@@ -67,5 +66,4 @@ __all__ = [
     "SyncJobError",
     "SyncJobPhase",
     "SyncJobStatus",
-    "SyntheticFixtureLoadResult",
 ]
