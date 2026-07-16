@@ -47,7 +47,6 @@ from .metrics import (
     ResponseSilenceMetric,
 )
 from .pipeline import (
-    BackfillProgressState,
     PipelineNextAction,
     PipelineStageCounts,
     PipelineStatus,
@@ -232,7 +231,6 @@ __all__ = [
     "InsightRegenerateRequest",
     "InsightRegenerateResponse",
     "InsightRoleOutcomeSummary",
-    "BackfillProgressState",
     "JobEmailCategory",
     "PipelineNextAction",
     "PipelineStageCounts",
