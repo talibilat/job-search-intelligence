@@ -9,7 +9,6 @@ from .processing import (
 )
 from .provider_config import (
     ProviderConfigurationRecord,
-    ProviderConfigValues,
     ProviderSelection,
     ReadinessState,
 )
@@ -59,7 +58,6 @@ from .synthetic_fixture import (
 
 __all__ = [
     "MetricsFilter",
-    "ProviderConfigValues",
     "ProviderConfigurationRecord",
     "ProviderSelection",
     "ProcessingRunRequest",

@@ -11,7 +11,6 @@ from app.config import AppSettings, normalize_azure_openai_endpoint
 from app.db.repositories.provider_config import ProviderConfigurationRepository
 from app.models import (
     ProviderConfigurationRecord,
-    ProviderConfigValues,
     ProviderSelection,
 )
 from app.models.provider_config import (
@@ -20,6 +19,7 @@ from app.models.provider_config import (
     ProviderConfigRequirementResponse,
     ProviderConfigResponse,
     ProviderConfigUpdateRequest,
+    ProviderConfigValues,
     ProviderSecretRequirementResponse,
 )
 from app.providers import (
