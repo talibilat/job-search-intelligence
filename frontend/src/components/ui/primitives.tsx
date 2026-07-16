@@ -41,7 +41,7 @@ export function Button({
   );
 }
 
-export interface InfoDisclosureProps {
+interface InfoDisclosureProps {
   ariaLabel: string;
   buttonClassName: string;
   children: ReactNode;
