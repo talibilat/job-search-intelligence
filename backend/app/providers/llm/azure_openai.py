@@ -361,9 +361,9 @@ def _chat_completion_payload(
     if request.options.temperature is not None and supports_temperature:
         payload["temperature"] = request.options.temperature
     if request.options.max_output_tokens is not None:
-        payload[
-            "max_completion_tokens" if use_completion_token_limit else "max_tokens"
-        ] = request.options.max_output_tokens
+        payload["max_completion_tokens" if use_completion_token_limit else "max_tokens"] = (
+            request.options.max_output_tokens
+        )
     if request.response_format is LLMResponseFormat.JSON_OBJECT:
         payload["response_format"] = {"type": "json_object"}
     return payload
