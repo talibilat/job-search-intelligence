@@ -21,7 +21,7 @@ function cx(...values: ClassValue[]) {
   return values.filter(Boolean).join(" ");
 }
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost";
 }
 
