@@ -6,7 +6,7 @@ import {
   type RawEmailPreviewRecord,
 } from "../../api";
 
-export interface SyncedEmailListProps {
+interface SyncedEmailListProps {
   refreshToken: number;
   sentAfter?: string;
   sentBefore?: string;
