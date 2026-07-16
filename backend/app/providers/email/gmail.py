@@ -1272,7 +1272,7 @@ def _email_addresses(headers: dict[str, tuple[str, ...]], name: str) -> tuple[Em
         addresses.append(
             EmailAddress(
                 address=normalized_address,
-                display_name=_normalize_optional_display_name(display_name),
+                display_name=" ".join(display_name.strip().split()) or None,
             )
         )
     return tuple(addresses)
@@ -1306,11 +1306,6 @@ def _normalize_optional_id(value: str | None) -> str | None:
 
 def _normalize_optional_header(value: str) -> str | None:
     normalized = value.strip()
-    return normalized or None
-
-
-def _normalize_optional_display_name(value: str) -> str | None:
-    normalized = " ".join(value.strip().split())
     return normalized or None
 
 
