@@ -264,7 +264,7 @@ def test_create_app_uses_configured_sync_job_by_default(
 
 Add a runner test proving that no configured Gmail connection is a safe skipped run rather than a false success or uncaught exception.
 
-- [ ] **Step 2: Run app and sync tests and verify the default remains `noop_sync_job`**
+- [ ] **Step 2: Run app and sync tests and verify the configured-job assertion fails against the existing no-op default**
 
 Run: `uv run pytest tests/test_app_factory.py tests/test_sync_api.py -q`
 
