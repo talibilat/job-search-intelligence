@@ -399,7 +399,7 @@ def _upsert_application(
     evidence_email_ids = _evidence_email_ids(group)
     return outcome, _CorrectionConflict(
         application_id=application_id,
-        conflict_key=f"application_summary:{application_id}:{_evidence_key(evidence_email_ids)}",
+        conflict_key=f"application_summary:{application_id}:{','.join(sorted(evidence_email_ids))}",
         conflict_type="application_summary",
         existing_json={
             "application": dict(existing_application.model_dump(mode="json")),
@@ -531,12 +531,6 @@ def _evidence_email_ids(group: list[_EnrichedExtraction]) -> list[str]:
         if result.classification_email_id not in email_ids:
             email_ids.append(result.classification_email_id)
     return email_ids
-
-
-def _evidence_key(email_ids: list[str]) -> str:
-    if not email_ids:
-        return "unknown"
-    return ",".join(sorted(email_ids))
 
 
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:
