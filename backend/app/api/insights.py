@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends
 from app.api.dependencies import get_insight_generation_service, get_insight_read_service
 from app.api.errors import ApiErrorResponse
 from app.models import (
-    InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,
 )
+from app.models.insight import InsightListResponse
 from app.services.insights_service import InsightGenerationService, InsightReadService
 
 router = APIRouter(prefix="/insights", tags=["insights"])

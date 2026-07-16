@@ -26,7 +26,6 @@ from .diagnostics import MetricsDiagnosticsResponse
 from .ghost_inference import GhostInferenceRunApiRequest, GhostInferenceRunResponse
 from .health import HealthResponse
 from .insight import (
-    InsightListResponse,
     InsightRegenerateRequest,
     InsightRegenerateResponse,
 )
@@ -174,7 +173,6 @@ __all__ = [
     "EmailFilterDecisionOutcome",
     "EmailFilterDecisionRecord",
     "EmailTextChunk",
-    "InsightListResponse",
     "InsightRecord",
     "InsightRegenerateRequest",
     "InsightRegenerateResponse",
