@@ -21,7 +21,6 @@ from app.models.provider_config import (
     ProviderSelection,
 )
 from app.providers import (
-    EmailProviderRegistration,
     LLMProviderRegistration,
     ProviderConfigRequirement,
     ProviderRegistry,
@@ -94,7 +93,17 @@ def build_provider_config_response(
             ollama_embedding_model=settings.ollama_embedding_model,
         ),
         email_providers=tuple(
-            _email_provider_response(item) for item in registry.email_providers()
+            EmailProviderConfigResponse(
+                name=provider.name,
+                display_name=provider.display_name,
+                config_requirements=tuple(
+                    _config_requirement_response(item) for item in provider.config_requirements
+                ),
+                secret_requirements=tuple(
+                    _secret_requirement_response(item) for item in provider.secret_requirements
+                ),
+            )
+            for provider in registry.email_providers()
         ),
         llm_providers=tuple(_llm_provider_response(item) for item in registry.llm_providers()),
     )
@@ -209,19 +218,6 @@ def _secret_requirement_response(
         label=requirement.label,
         required=requirement.required,
         enforcement=requirement.enforcement,
-    )
-
-
-def _email_provider_response(provider: EmailProviderRegistration) -> EmailProviderConfigResponse:
-    return EmailProviderConfigResponse(
-        name=provider.name,
-        display_name=provider.display_name,
-        config_requirements=tuple(
-            _config_requirement_response(item) for item in provider.config_requirements
-        ),
-        secret_requirements=tuple(
-            _secret_requirement_response(item) for item in provider.secret_requirements
-        ),
     )
 
 
