@@ -20,9 +20,13 @@ from app.models import (
     InsightRecord,
     InsightRegenerationCost,
     InsightRegenerationEstimate,
-    InsightRoleOutcomeSummary,
 )
-from app.models.records import ApplicationEventType, ApplicationStatus, InsightType
+from app.models.records import (
+    ApplicationEventType,
+    ApplicationStatus,
+    InsightRoleOutcomeSummary,
+    InsightType,
+)
 from app.providers.llm import (
     LLMFinishReason,
     LLMGenerationOptions,
