@@ -8,7 +8,6 @@ from .application_edit import (
     ApplicationStatusEditResponse,
 )
 from .application_merge import ApplicationMergeRequest, ApplicationMergeResponse
-from .attention import InterviewTaskCompletionResponse
 from .chat import ChatCitation, ChatIncrement, ChatRequest, ChatResponse, ChatRoute
 from .chat_history import ChatHistoryResponse
 from .classification import (
@@ -147,7 +146,6 @@ from .synthetic_fixture import (
 from .wipe_data import WIPE_DATA_CONFIRMATION, WipeDataRequest, WipeDataResponse
 
 __all__ = [
-    "InterviewTaskCompletionResponse",
     "ApplicationEventTimelineRecord",
     "ApplicationStatusCountsResponse",
     "CompanyProfileRecord",
