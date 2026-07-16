@@ -56,7 +56,6 @@ from .metrics import (
     MetricsResponseRateTrendResponse,
     MetricsSummaryResponse,
     MetricsTimeseriesResponse,
-    PersonalGhostThresholdMetric,
     ResponseSilenceMetric,
     SilenceAgeBucketMetric,
 )
@@ -271,7 +270,6 @@ __all__ = [
     "RawEmailPreviewRecord",
     "RawEmailReaderRecord",
     "RawEmailRecord",
-    "PersonalGhostThresholdMetric",
     "ResponseSilenceMetric",
     "SilenceAgeBucketMetric",
     "SetupStatusResponse",
