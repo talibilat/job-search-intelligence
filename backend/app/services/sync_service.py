@@ -15,7 +15,6 @@ from app.db.repositories import (
 )
 from app.db.repositories.sync_state import SyncStateRepository
 from app.models import (
-    SyncJobCounts,
     SyncJobPhase,
     SyncJobStatus,
 )
@@ -28,7 +27,12 @@ from app.models.records import (
     RawEmailBodyRetentionState,
     RawEmailPreviewRecord,
 )
-from app.models.sync import SyncLocalStats, SyncScopeEstimate, SyncScopeEstimateBasis
+from app.models.sync import (
+    SyncJobCounts,
+    SyncLocalStats,
+    SyncScopeEstimate,
+    SyncScopeEstimateBasis,
+)
 from app.pipeline.filter import build_broad_candidate_query
 from app.providers.email import (
     EmailAccountRef,
