@@ -14,7 +14,6 @@ from app.config import AppSettings, LLMProviderName
 from app.db.repositories import InsightRepository
 from app.models import (
     InsightCitation,
-    InsightInput,
     InsightRecord,
     InsightRegenerationCost,
     InsightRegenerationEstimate,
@@ -22,6 +21,7 @@ from app.models import (
 from app.models.records import (
     ApplicationEventType,
     ApplicationStatus,
+    InsightInput,
     InsightInputEvidence,
     InsightInputFact,
     InsightRoleOutcomeSummary,
