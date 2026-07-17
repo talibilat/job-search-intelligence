@@ -78,6 +78,7 @@ class EmptySecretStore(SecretStore):
         ("Show me every rejection email that mentioned experience", "content"),
         ("Who am I waiting on and who is overdue for a follow-up?", "quantitative"),
         ("How many applications and what exactly did recruiters say?", "mixed"),
+        ("How many rejected applications do I have, and why am I getting rejected?", "mixed"),
         ("Tell me anything useful about my Acme search", "content"),
     ),
 )
@@ -181,6 +182,107 @@ def test_q40_chat_reads_cached_cited_insight_without_provider_calls(tmp_path: Pa
         ]
         == "why_rejected"
     )
+
+
+def test_q40_compound_chat_combines_rejection_count_and_cached_insight(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-acme",
+            company="Acme",
+            current_status="rejected",
+        )
+        InsightRepository(connection).save_generated_insight(
+            insight_type="why_rejected",
+            content="The cited rejection evidence repeatedly mentions role-specific experience.",
+            inputs_hash="q40-compound-inputs",
+            model="fixture-model",
+            generated_at=datetime(2026, 7, 17, tzinfo=UTC),
+            citations=[
+                InsightCitation(
+                    citation_id="application:app-acme:event:event-rejection",
+                    application_id="app-acme",
+                    company="Acme",
+                    role_title="Platform Engineer",
+                    event_id="event-rejection",
+                    event_type="rejection",
+                    event_at=datetime(2026, 7, 16, tzinfo=UTC),
+                    email_public_id="public-email-rejection",
+                    email_subject="Application update",
+                )
+            ],
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "q40-compound",
+            "message": "How many rejected applications do I have, and why am I getting rejected?",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "mixed"
+    assert [output["tool"] for output in body["tool_outputs"]] == [
+        "structured_query",
+        "cached_insight",
+    ]
+    assert body["tool_outputs"][0]["rows"][0]["values"]["total_applications"] == 1
+    assert "Deterministic result:" in body["answer"]
+    assert "'total_applications': 1" in body["answer"]
+    assert "role-specific experience" in body["answer"]
+    assert {citation["source"] for citation in body["citations"]} == {"metric", "email"}
+    assert [event.get("tool") for event in response.events if event["type"] == "tool"] == [
+        "structured_query",
+        "cached_insight",
+    ]
+    assert provider.embedding_inputs == []
+
+    history = client.get("/chat/history", params={"conversation_id": "q40-compound"}).json()[
+        "messages"
+    ]
+    assistant = history[-1]
+    assert assistant["content"] == body["answer"]
+    assert [output["tool"] for output in assistant["tool_outputs_json"]] == [
+        "structured_query",
+        "cached_insight",
+    ]
+
+
+def test_q40_compound_chat_preserves_count_when_insight_is_missing(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-acme",
+            company="Acme",
+            current_status="rejected",
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many rejected applications, and why am I getting rejected?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "mixed"
+    assert [output["tool"] for output in body["tool_outputs"]] == [
+        "structured_query",
+        "cached_insight",
+    ]
+    assert "'total_applications': 1" in body["answer"]
+    assert "rejection-themes insight has not been generated" in body["answer"]
+    assert [citation["source"] for citation in body["citations"]] == ["metric"]
+    assert provider.embedding_inputs == []
 
 
 @pytest.mark.parametrize(

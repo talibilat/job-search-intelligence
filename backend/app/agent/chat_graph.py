@@ -37,6 +37,17 @@ _QUANTITATIVE_TERMS = (
     "which roles",
     "which sources",
 )
+_EXPLICIT_QUANTITATIVE_TERMS = (
+    "how many",
+    "count",
+    "rate",
+    "funnel",
+    "conversion",
+    "waiting on",
+    "overdue",
+    "follow-up",
+    "follow up",
+)
 _CONTENT_TERMS = (
     "exactly",
     "email",
@@ -260,7 +271,13 @@ _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ..
     ("work_mode", ("work mode", "remote vs", "hybrid vs", "onsite vs", "on-site vs")),
 )
 type ToolOutput = dict[str, object]
-type ToolBranch = Literal["quantitative", "content", "mixed", "cached_insight"]
+type ToolBranch = Literal[
+    "quantitative",
+    "content",
+    "mixed",
+    "cached_insight",
+    "mixed_cached_insight",
+]
 
 
 class ChatGraphState(TypedDict, total=False):
@@ -294,6 +311,7 @@ class ChatGraph:
         builder.add_node("semantic_search", self._run_semantic_search)
         builder.add_node("cached_insight", self._run_cached_insight)
         builder.add_node("mixed_tools", self._run_mixed_tools)
+        builder.add_node("mixed_cached_insight", self._run_mixed_cached_insight)
         builder.add_node("synthesize", self._synthesize)
         builder.add_edge(START, "route")
         builder.add_conditional_edges(
@@ -304,12 +322,14 @@ class ChatGraph:
                 "content": "semantic_search",
                 "mixed": "mixed_tools",
                 "cached_insight": "cached_insight",
+                "mixed_cached_insight": "mixed_cached_insight",
             },
         )
         builder.add_edge("structured_query", "synthesize")
         builder.add_edge("semantic_search", "synthesize")
         builder.add_edge("cached_insight", "synthesize")
         builder.add_edge("mixed_tools", "synthesize")
+        builder.add_edge("mixed_cached_insight", "synthesize")
         builder.add_edge("synthesize", END)
         self._graph = builder.compile()
 
@@ -330,6 +350,8 @@ class ChatGraph:
 
     def _tool_branch(self, state: ChatGraphState) -> ToolBranch:
         if _cached_insight_type(state["request"].message) is not None:
+            if state["route"] == "mixed":
+                return "mixed_cached_insight"
             return "cached_insight"
         return state["route"]
 
@@ -376,6 +398,15 @@ class ChatGraph:
             "content_results": results,
         }
 
+    def _run_mixed_cached_insight(self, state: ChatGraphState) -> ChatGraphState:
+        structured_output, structured_citations = self._structured_result(state["request"].message)
+        cached_state = self._run_cached_insight(state)
+        return {
+            "tool_outputs": [structured_output, *cached_state["tool_outputs"]],
+            "citations": [*structured_citations, *cached_state["citations"]],
+            "content_results": (),
+        }
+
     def _structured_result(self, question: str) -> tuple[ToolOutput, list[ChatCitation]]:
         result = self._structured_query.run(_structured_request(question))
         output = result.model_dump(mode="json")
@@ -419,8 +450,6 @@ class ChatGraph:
 
 
 def route_question(question: str) -> ChatRoute:
-    if _cached_insight_type(question) is not None:
-        return "content"
     normalized = question.casefold()
     quantitative = (
         any(term in normalized for term in _QUANTITATIVE_TERMS)
@@ -440,6 +469,11 @@ def route_question(question: str) -> ChatRoute:
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
+    cached_insight = _cached_insight_type(question) is not None
+    if cached_insight and any(term in normalized for term in _EXPLICIT_QUANTITATIVE_TERMS):
+        return "mixed"
+    if cached_insight:
+        return "content"
     content = any(term in normalized for term in _CONTENT_TERMS)
     if quantitative and content:
         return "mixed"
@@ -768,35 +802,6 @@ def synthesize_grounded_answer(
         (item for item in tool_outputs if item["tool"] == "cached_insight"),
         None,
     )
-    if cached_insight is not None:
-        status = cached_insight.get("status")
-        content = cached_insight.get("content")
-        if status == "available" and isinstance(content, str):
-            return content
-        insight_type = cached_insight.get("insight_type")
-        if insight_type == "recurring_feedback":
-            insight_label = "recurring-feedback"
-        elif insight_type == "skill_gaps":
-            insight_label = "skill-gaps"
-        elif insight_type == "strongest_weakest_signals":
-            insight_label = "strongest-and-weakest-signals"
-        elif insight_type == "role_fit":
-            insight_label = "role-fit"
-        elif insight_type == "weekly_actions":
-            insight_label = "weekly-actions"
-        elif insight_type == "story":
-            insight_label = "search-story"
-        else:
-            insight_label = "rejection-themes"
-        if status == "stale":
-            return (
-                f"The cached {insight_label} insight is stale because its source data changed. "
-                "Regenerate it on the Insights page before relying on it here."
-            )
-        return (
-            f"The {insight_label} insight has not been generated yet. Generate it on the "
-            "Insights page, then ask again."
-        )
     structured = next((item for item in tool_outputs if item["tool"] == "structured_query"), None)
     if structured is not None:
         rows = structured.get("rows")
@@ -831,6 +836,37 @@ def synthesize_grounded_answer(
                 parts.append("Deterministic result: " + "; ".join(rendered_rows) + ".")
         else:
             parts.append("The deterministic query found no matching applications.")
+    if cached_insight is not None:
+        status = cached_insight.get("status")
+        content = cached_insight.get("content")
+        if status == "available" and isinstance(content, str):
+            parts.append(content)
+        else:
+            insight_type = cached_insight.get("insight_type")
+            if insight_type == "recurring_feedback":
+                insight_label = "recurring-feedback"
+            elif insight_type == "skill_gaps":
+                insight_label = "skill-gaps"
+            elif insight_type == "strongest_weakest_signals":
+                insight_label = "strongest-and-weakest-signals"
+            elif insight_type == "role_fit":
+                insight_label = "role-fit"
+            elif insight_type == "weekly_actions":
+                insight_label = "weekly-actions"
+            elif insight_type == "story":
+                insight_label = "search-story"
+            else:
+                insight_label = "rejection-themes"
+            if status == "stale":
+                parts.append(
+                    f"The cached {insight_label} insight is stale because its source data changed. "
+                    "Regenerate it on the Insights page before relying on it here."
+                )
+            else:
+                parts.append(
+                    f"The {insight_label} insight has not been generated yet. Generate it on the "
+                    "Insights page, then ask again."
+                )
     if content_results:
         if all(result.company is not None for result in content_results):
             email_citations = [item for item in citations if item.source == "email"]
@@ -846,7 +882,7 @@ def synthesize_grounded_answer(
             excerpt = citation.snippet or " ".join(result.content.split())[:280]
             excerpts.append(f'"{excerpt}" [{citation.citation_id}]')
         parts.append("Relevant source email evidence: " + " ".join(excerpts))
-    elif route in {"content", "mixed"}:
+    elif route in {"content", "mixed"} and cached_insight is None:
         parts.append(
             "I cannot answer the email-content portion because no retained job-related "
             "source email was retrieved."

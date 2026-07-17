@@ -53,7 +53,13 @@ class ChatService:
                     conversation_id=conversation_id,
                     route=route,
                 )
-            elif node in {"structured_query", "semantic_search", "cached_insight", "mixed_tools"}:
+            elif node in {
+                "structured_query",
+                "semantic_search",
+                "cached_insight",
+                "mixed_tools",
+                "mixed_cached_insight",
+            }:
                 for output in update.get("tool_outputs", []):
                     tool = output.get("tool")
                     if tool in {"structured_query", "semantic_search", "cached_insight"}:
