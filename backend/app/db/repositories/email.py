@@ -669,11 +669,19 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                 continue
         return candidates
 
-    def list_chunkable_retained_emails(self, *, limit: int) -> list[EmailChunkSource]:
+    def list_chunkable_retained_emails(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+    ) -> list[EmailChunkSource]:
         """Return retained job-related email bodies eligible for chunking."""
 
         if limit < 1:
             msg = "limit must be at least 1"
+            raise ValueError(msg)
+        if offset < 0:
+            msg = "offset must be non-negative"
             raise ValueError(msg)
 
         if not self._table_exists("raw_emails") or not self._table_exists("email_classifications"):
@@ -692,9 +700,9 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                 AND LENGTH(TRIM(raw_emails.body_text)) > 0
                 AND email_classifications.is_job_related = 1
             ORDER BY raw_emails.sent_at, raw_emails.id
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (RawEmailBodyRetentionState.RETAINED.value, limit),
+            (RawEmailBodyRetentionState.RETAINED.value, limit, offset),
         ).fetchall()
         return [EmailChunkSource.model_validate(row_to_dict(row)) for row in rows]
 

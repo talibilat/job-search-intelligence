@@ -388,6 +388,64 @@ def test_q48_every_rejection_returns_all_exact_matches_despite_retrieval_limit(
     ) not in provider.embedding_inputs
 
 
+def test_chat_index_reconciles_all_eligible_emails_across_configured_batches(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    with sqlite3.connect(database_path) as connection:
+        for index in range(2):
+            email_id = f"email-rejection-{index}"
+            insert_raw_email(
+                connection,
+                email_id=email_id,
+                subject=f"Application outcome {index}",
+                body=f"Rejection {index} mentioned distributed systems experience.",
+                retention="retained",
+                sent_at=f"2026-06-0{6 + index}T10:00:00+00:00",
+            )
+            insert_classification(
+                connection,
+                email_id,
+                is_job_related=True,
+                category="rejection",
+            )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider, index_batch_size=1)
+
+    first = post_chat(
+        client,
+        "/chat",
+        json={"message": "Show me every rejection email that mentioned experience."},
+    )
+
+    assert first.status_code == 200
+    assert {citation["subject"] for citation in first.json()["citations"]} == {
+        "Application outcome 0",
+        "Application outcome 1",
+    }
+    with sqlite3.connect(database_path) as connection:
+        load_sqlite_vec_sync(connection, None)
+        assert connection.execute(
+            "SELECT email_id FROM email_chunk_index_state ORDER BY email_id"
+        ).fetchall() == [
+            ("email-job",),
+            ("email-rejection-0",),
+            ("email-rejection-1",),
+        ]
+    first_embedding_calls = len(provider.embedding_inputs)
+
+    second = post_chat(
+        client,
+        "/chat",
+        json={"message": "Show me every rejection email that mentioned experience."},
+    )
+
+    assert second.status_code == 200
+    assert len(provider.embedding_inputs) == first_embedding_calls
+
+
 def test_chat_request_validates_blank_ids_and_openapi_has_incremental_contract(
     tmp_path: Path,
 ) -> None:
@@ -439,8 +497,17 @@ def test_wipe_removes_persisted_chat_and_embeddings(tmp_path: Path) -> None:
     assert not data_dir.exists()
 
 
-def create_chat_client(database_path: Path, provider: FakeChatProvider) -> TestClient:
-    settings = AppSettings(_env_file=None, database_url=f"sqlite:///{database_path}")
+def create_chat_client(
+    database_path: Path,
+    provider: FakeChatProvider,
+    *,
+    index_batch_size: int = 1000,
+) -> TestClient:
+    settings = AppSettings(
+        _env_file=None,
+        database_url=f"sqlite:///{database_path}",
+        chat_index_max_emails=index_batch_size,
+    )
     app = create_app(settings=settings)
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_llm_provider] = lambda: provider

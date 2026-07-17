@@ -14,9 +14,7 @@ from app.models.chunk import EmailTextChunk
 class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
     """Persist and search retained job-email vectors in sqlite-vec."""
 
-    def eligible_email_ids(self, *, limit: int) -> set[str]:
-        if limit < 1:
-            raise ValueError("limit must be at least 1")
+    def eligible_email_ids(self) -> set[str]:
         rows = self.execute(
             """
             SELECT raw_emails.id
@@ -28,9 +26,7 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
               AND LENGTH(TRIM(raw_emails.body_text)) > 0
               AND email_classifications.is_job_related = 1
             ORDER BY raw_emails.sent_at, raw_emails.id
-            LIMIT ?
             """,
-            (limit,),
         ).fetchall()
         return {str(row[0]) for row in rows}
 
