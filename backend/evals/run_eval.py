@@ -26,6 +26,13 @@ MIN_FILTER_PRECISION = 0.90
 MIN_FILTER_RECALL = 0.85
 DEFAULT_FIXTURE_PATH = Path(__file__).with_name("golden_set.jsonl")
 DEFAULT_PROMPT_VERSION = "classification-golden-set-v1"
+_LIFECYCLE_FIELDS: dict[str, tuple[str, str]] = {
+    "application_confirmation": ("applied", "applied"),
+    "rejection": ("rejected", "rejection"),
+    "interview_invite": ("interview", "interview_scheduled"),
+    "assessment": ("assessment", "assessment"),
+    "offer": ("offer", "offer"),
+}
 
 
 class GoldenSetEntry(BaseModel):
@@ -154,6 +161,10 @@ def _golden_set_entry_from_json(raw_entry: object) -> GoldenSetEntry:
 
 
 def _synthetic_llm_response_from_case(case: GoldenSetCase) -> LLMGenerationResponse:
+    application_status, event_type = _LIFECYCLE_FIELDS.get(
+        case.expected.category,
+        (None, None),
+    )
     return LLMGenerationResponse(
         content=json.dumps(
             {
@@ -162,8 +173,8 @@ def _synthetic_llm_response_from_case(case: GoldenSetCase) -> LLMGenerationRespo
                 "confidence": 1.0,
                 "company": None,
                 "role_title": None,
-                "application_status": None,
-                "event_type": None,
+                "application_status": application_status,
+                "event_type": event_type,
                 "event_at": None,
                 "salary_min": None,
                 "salary_max": None,

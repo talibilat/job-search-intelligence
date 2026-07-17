@@ -39,7 +39,7 @@ from app.providers.llm import (
 
 type NonBlankString = Annotated[StrictStr, Field(min_length=1)]
 
-CLASSIFICATION_PROMPT_VERSION = "v4"
+CLASSIFICATION_PROMPT_VERSION = "v5"
 CLASSIFICATION_MAX_OUTPUT_TOKENS = 1200
 
 
@@ -360,6 +360,12 @@ def _classification_system_prompt(*, prompt_version: str) -> str:
             "when unclear, and tech_stack as an array.",
             "For non-job-related messages, set is_job_related false, category other, "
             "nullable extraction fields to null, sponsorship unknown, and tech_stack [].",
+            "Lifecycle categories require their canonical fields: application_confirmation "
+            "uses application_status applied and event_type applied; rejection uses "
+            "application_status rejected and event_type rejection; interview_invite uses "
+            "application_status interview and event_type interview_scheduled; assessment "
+            "uses application_status assessment and event_type assessment; offer uses "
+            "application_status offer and event_type offer.",
             "For recruiter or interviewer feedback about an existing application, use "
             "category follow_up (or other when it does not fit follow_up), event_type "
             "feedback, and application_status null. Do not mark cold recruiter outreach "

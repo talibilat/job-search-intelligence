@@ -42,6 +42,7 @@ def test_classification_prompt_request_is_versioned_json_contract() -> None:
     assert "rejection_reason" in request.messages[0].content
     assert "event_type feedback" in request.messages[0].content
     assert "event_type response" in request.messages[0].content
+    assert "Lifecycle categories require their canonical fields" in request.messages[0].content
 
     assert request.messages[1].role is LLMMessageRole.USER
     payload = json.loads(request.messages[1].content)
@@ -147,6 +148,49 @@ def test_classification_prompt_output_accepts_employer_response() -> None:
     assert output.category is models.JobEmailCategory.FOLLOW_UP
     assert output.application_status is None
     assert output.event_type == "response"
+
+
+@pytest.mark.parametrize(
+    ("category", "application_status", "event_type"),
+    [
+        ("application_confirmation", "applied", "applied"),
+        ("rejection", "rejected", "rejection"),
+        ("interview_invite", "interview", "interview_scheduled"),
+        ("assessment", "assessment", "assessment"),
+        ("offer", "offer", "offer"),
+    ],
+)
+@pytest.mark.parametrize("missing_field", ["application_status", "event_type"])
+def test_classification_prompt_output_requires_canonical_lifecycle_fields(
+    category: str,
+    application_status: str,
+    event_type: str,
+    missing_field: str,
+) -> None:
+    payload: dict[str, object] = {
+        "is_job_related": True,
+        "category": category,
+        "confidence": 0.92,
+        "company": "Example Systems",
+        "role_title": "Backend Engineer",
+        "source": "other",
+        "application_status": application_status,
+        "event_type": event_type,
+        "event_at": "2026-07-05T12:00:00Z",
+        "salary_min": None,
+        "salary_max": None,
+        "currency": None,
+        "location": None,
+        "work_mode": None,
+        "seniority": None,
+        "sponsorship": "unknown",
+        "tech_stack": [],
+        "rejection_reason": None,
+    }
+    payload[missing_field] = None
+
+    with pytest.raises(ValidationError):
+        parse_classification_prompt_output(json.dumps(payload))
 
 
 @pytest.mark.parametrize(
