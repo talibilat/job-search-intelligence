@@ -166,6 +166,32 @@ def test_structured_chat_preserves_unfiltered_work_mode_comparisons() -> None:
     assert request.filters is None
 
 
+@pytest.mark.parametrize(
+    ("question", "expected_sponsorship"),
+    (
+        ("How many applications offered sponsorship?", "offered"),
+        ("How many applications did not offer sponsorship?", "not_offered"),
+        ("How many applications have unknown sponsorship?", "unknown"),
+    ),
+)
+def test_structured_chat_maps_sponsorship_to_typed_metric_filters(
+    question: str,
+    expected_sponsorship: str,
+) -> None:
+    request = _structured_request(question)
+
+    assert request.filters is not None
+    assert request.filters.sponsorship == expected_sponsorship
+
+
+def test_structured_chat_preserves_unfiltered_sponsorship_comparisons() -> None:
+    request = _structured_request("How do offered sponsorship vs non-sponsorship roles convert?")
+
+    assert request.template == "breakdown"
+    assert request.breakdown_dimension == "sponsorship"
+    assert request.filters is None
+
+
 def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     tmp_path: Path,
 ) -> None:
@@ -273,6 +299,43 @@ def test_chat_api_work_mode_count_reconciles_with_filtered_metrics(tmp_path: Pat
         client,
         "/chat",
         json={"message": "How many remote applications have I submitted?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert unfiltered_response.json()["total_applications"] == 2
+    assert chat_response.status_code == 200
+    chat_values = chat_response.json()["tool_outputs"][0]["rows"][0]["values"]
+    assert metric_response.json()["total_applications"] == 1
+    assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_sponsorship_count_reconciles_with_filtered_metrics(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-sponsored",
+            company="Sponsored Company",
+            sponsorship="offered",
+        )
+        insert_application(
+            connection,
+            application_id="app-unknown-sponsorship",
+            company="Unknown Sponsorship Company",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    unfiltered_response = client.get("/metrics/summary")
+    metric_response = client.get("/metrics/summary", params={"sponsorship": "offered"})
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many applications offered sponsorship?"},
     )
 
     assert metric_response.status_code == 200
@@ -1042,6 +1105,7 @@ def insert_application(
     company: str,
     source: str = "company_site",
     work_mode: str = "remote",
+    sponsorship: str = "unknown",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -1056,7 +1120,7 @@ def insert_application(
         location="Remote",
         work_mode=work_mode,
         seniority="senior",
-        sponsorship="unknown",
+        sponsorship=sponsorship,
         tech_stack=["Python"],
         last_activity_at="2026-06-05T10:00:00+00:00",
         created_at="2026-06-01T10:00:00+00:00",

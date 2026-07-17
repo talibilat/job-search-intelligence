@@ -7,7 +7,7 @@ from typing import Literal, TypedDict, cast
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
-from app.models.application import ApplicationSource, WorkMode
+from app.models.application import ApplicationSource, SponsorshipStatus, WorkMode
 from app.models.chat import ChatCitation, ChatRequest, ChatRoute, SemanticSearchResult
 from app.models.metrics import MetricsBreakdownDimension, MetricsFilter
 from app.services.chat_index import ChatIndexService
@@ -47,6 +47,28 @@ _WORK_MODE_FILTER_TERMS: tuple[tuple[WorkMode, tuple[str, ...]], ...] = (
     ("remote", ("remote", "fully remote")),
     ("hybrid", ("hybrid",)),
     ("onsite", ("onsite", "on-site", "on site")),
+)
+_SPONSORSHIP_FILTER_TERMS: tuple[tuple[SponsorshipStatus, tuple[str, ...]], ...] = (
+    (
+        "not_offered",
+        (
+            "didn't offer sponsorship",
+            "did not offer sponsorship",
+            "not offered sponsorship",
+            "without sponsorship",
+            "no sponsorship",
+        ),
+    ),
+    ("unknown", ("sponsorship unknown", "unknown sponsorship")),
+    (
+        "offered",
+        (
+            "offered sponsorship",
+            "offers sponsorship",
+            "offer sponsorship",
+            "with sponsorship",
+        ),
+    ),
 )
 _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ...]], ...] = (
     ("role", ("by role", "which role", "job title")),
@@ -258,9 +280,28 @@ def _structured_filters(
         )
         else None
     )
+    sponsorship = next(
+        (
+            sponsorship
+            for sponsorship, terms in _SPONSORSHIP_FILTER_TERMS
+            if any(term in normalized_question for term in terms)
+        ),
+        None,
+    )
+    if any(
+        term in normalized_question
+        for dimension, terms in _BREAKDOWN_DIMENSION_TERMS
+        if dimension == "sponsorship"
+        for term in terms
+    ):
+        sponsorship = None
     updates = {
         key: value
-        for key, value in (("source", source), ("work_mode", work_mode))
+        for key, value in (
+            ("source", source),
+            ("sponsorship", sponsorship),
+            ("work_mode", work_mode),
+        )
         if value is not None
     }
     if not updates:
