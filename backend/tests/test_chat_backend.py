@@ -2820,7 +2820,7 @@ def test_chat_follow_up_uses_company_context_from_same_conversation(tmp_path: Pa
     assert follow_up.json()["citations"][0]["application_id"] == "app-acme"
     assert provider.embedding_inputs[-1] == (
         "Previous user question: What exactly did the recruiter at Acme say?\n"
-        "Follow-up question: Did they mention Friday?",
+        "Current user question: Did they mention Friday?",
     )
     history = client.get(
         "/chat/history",
@@ -2842,6 +2842,68 @@ def test_chat_follow_up_uses_company_context_from_same_conversation(tmp_path: Pa
     )
     assert separate.status_code == 200
     assert provider.embedding_inputs[-1] == ("Did they mention Friday?",)
+
+
+def test_chat_follow_up_explicit_company_replaces_previous_company_context(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="app-beta", company="Beta")
+        insert_raw_email(
+            connection,
+            email_id="email-beta",
+            subject="Beta interview update",
+            body="Beta recruiter: The interview panel is scheduled for Thursday.",
+            retention="retained",
+            sent_at="2026-06-04T10:00:00+00:00",
+        )
+        insert_classification(connection, "email-beta", is_job_related=True)
+        connection.execute(
+            """
+            INSERT INTO application_events (
+                id, application_id, email_id, event_type, event_at, extract_note
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "event-beta",
+                "app-beta",
+                "email-beta",
+                "response",
+                "2026-06-04T10:00:00+00:00",
+                "Recruiter response",
+            ),
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    first = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "company-switch-chat",
+            "message": "What exactly did the recruiter at Acme say in the last email?",
+        },
+    )
+    follow_up = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "company-switch-chat",
+            "message": "What about Beta's last email?",
+        },
+    )
+
+    assert first.status_code == 200
+    assert follow_up.status_code == 200
+    body = follow_up.json()
+    assert "interview panel is scheduled for Thursday" in body["answer"]
+    assert "Technical interview moved to Friday" not in body["answer"]
+    assert len(body["citations"]) == 1
+    assert body["citations"][0]["application_id"] == "app-beta"
+    assert body["citations"][0]["subject"] == "Beta interview update"
 
 
 def test_q48_every_rejection_returns_all_exact_matches_despite_retrieval_limit(

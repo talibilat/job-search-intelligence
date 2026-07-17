@@ -148,7 +148,7 @@ class ChatService:
             update={
                 "message": (
                     f"Previous user question: {previous_question}\n"
-                    f"Follow-up question: {request.message}"
+                    f"Current user question: {request.message}"
                 )
             }
         )
