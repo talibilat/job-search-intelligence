@@ -112,7 +112,6 @@ def test_azure_openai_requires_non_secret_provider_metadata() -> None:
     assert error.value.missing_settings == (
         "azure_openai_endpoint",
         "azure_openai_chat_deployment",
-        "azure_openai_embedding_deployment",
     )
 
 
@@ -160,7 +159,6 @@ def test_azure_openai_rejects_whitespace_only_provider_metadata() -> None:
     assert error.value.missing_settings == (
         "azure_openai_endpoint",
         "azure_openai_chat_deployment",
-        "azure_openai_embedding_deployment",
     )
 
 

@@ -19,14 +19,18 @@ if config.config_file_name is not None:
 
 target_metadata = None
 DEFAULT_DATABASE_URL = str(AppSettings.model_fields["database_url"].default)
+ALEMBIC_FALLBACK_DATABASE_URL = "sqlite+aiosqlite:///./.jobtracker/jobtracker.sqlite3"
 
 
 def database_url() -> str:
     """Return a synchronous SQLite URL for Alembic's migration engine."""
 
     settings_url = AppSettings().database_url
-    configured_url = config.get_main_option("sqlalchemy.url")
-    if configured_url and configured_url != DEFAULT_DATABASE_URL:
+    configured_url = context.config.get_main_option("sqlalchemy.url")
+    if configured_url and configured_url not in {
+        DEFAULT_DATABASE_URL,
+        ALEMBIC_FALLBACK_DATABASE_URL,
+    }:
         return sqlite_sync_database_url(configured_url)
 
     return sqlite_sync_database_url(settings_url)
@@ -53,7 +57,8 @@ def run_migrations_online() -> None:
     sqlite_path = sqlite_database_path(database_url())
     sqlite_path.parent.mkdir(parents=True, exist_ok=True)
 
-    configuration = config.get_section(config.config_ini_section, {})
+    current_config = context.config
+    configuration = current_config.get_section(current_config.config_ini_section, {})
     configuration["sqlalchemy.url"] = database_url()
     connectable = engine_from_config(
         configuration,
