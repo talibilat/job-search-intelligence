@@ -490,43 +490,77 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
               setSyncFlowStage("failed");
               return;
             }
-            let processingRequestError: unknown = null;
-            const runPromise = processingRunProcessingRunPost({ max_candidates: 500 }).catch((error) => {
-              processingRequestError = error;
-              return null;
-            });
-            for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
-              await new Promise((resolve) => setTimeout(resolve, 700));
-              const status = await processingStatusProcessingStatusGet().catch(() => null);
-              if (processingRequestError !== null) {
+            let cumulativeStatus: ProcessingStatus | null = null;
+            while (true) {
+              let processingRequestError: unknown = null;
+              const runPromise = processingRunProcessingRunPost({ max_candidates: 500 }).catch((error) => {
+                processingRequestError = error;
+                return null;
+              });
+              for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 700));
+                const status = await processingStatusProcessingStatusGet().catch(() => null);
+                if (processingRequestError !== null) {
+                  setSyncError(publicApiError(processingRequestError, "Classification failed. Check Azure OpenAI and retry."));
+                  setSyncFlowStage("failed");
+                  return;
+                }
+                if (status === null) continue;
+                if (status.status === 200) {
+                  setProcessingStatus(status.data);
+                  if (status.data.state === "failed") {
+                    setSyncError(status.data.last_error ?? "Classification failed. Try again.");
+                    setSyncFlowStage("failed");
+                    return;
+                  }
+                  if (status.data.state === "succeeded") break;
+                }
+              }
+              const result = await runPromise;
+              if (result === null) {
                 setSyncError(publicApiError(processingRequestError, "Classification failed. Check Azure OpenAI and retry."));
                 setSyncFlowStage("failed");
                 return;
               }
-              if (status === null) continue;
-              if (status.status === 200) {
-                setProcessingStatus(status.data);
-                if (status.data.state === "failed") {
-                  setSyncError(status.data.last_error ?? "Classification failed. Try again.");
-                  setSyncFlowStage("failed");
-                  return;
-                }
-                if (status.data.state === "succeeded") break;
+              if (result.status !== 200) {
+                setSyncError(publicApiError({ response: result }, "Classification failed. Check Azure OpenAI and retry."));
+                setSyncFlowStage("failed");
+                return;
+              }
+              const batch = result.data;
+              cumulativeStatus = cumulativeStatus === null
+                ? { ...batch, state: "succeeded" }
+                : {
+                    ...batch,
+                    accepted_count: cumulativeStatus.accepted_count + batch.accepted_count,
+                    applications_upserted: cumulativeStatus.applications_upserted + batch.applications_upserted,
+                    candidate_count: cumulativeStatus.candidate_count,
+                    candidate_limit: cumulativeStatus.candidate_limit + Math.min(batch.candidate_limit, batch.candidate_count),
+                    completion_tokens: cumulativeStatus.completion_tokens + batch.completion_tokens,
+                    estimated_cost_usd: cumulativeStatus.estimated_cost_usd + batch.estimated_cost_usd,
+                    events_upserted: cumulativeStatus.events_upserted + batch.events_upserted,
+                    ghost_retractions: cumulativeStatus.ghost_retractions + batch.ghost_retractions,
+                    ghost_updates: cumulativeStatus.ghost_updates + batch.ghost_updates,
+                    malformed_count: cumulativeStatus.malformed_count + batch.malformed_count,
+                    manual_conflict_count: cumulativeStatus.manual_conflict_count + batch.manual_conflict_count,
+                    processed_count: cumulativeStatus.processed_count + batch.processed_count,
+                    prompt_tokens: cumulativeStatus.prompt_tokens + batch.prompt_tokens,
+                    skipped_not_job_count: cumulativeStatus.skipped_not_job_count + batch.skipped_not_job_count,
+                    started_at: cumulativeStatus.started_at,
+                    state: "succeeded",
+                    total_tokens: cumulativeStatus.total_tokens + batch.total_tokens,
+                  };
+              setProcessingStatus(cumulativeStatus);
+              if (batch.pending_candidate_count === 0) {
+                setSyncFlowStage("complete");
+                break;
+              }
+              if (!batch.limit_reached || batch.pending_candidate_count >= batch.candidate_count) {
+                setSyncError(`${formatCount(batch.pending_candidate_count)} candidate emails still need classification. Review the provider output, then retry processing.`);
+                setSyncFlowStage("failed");
+                return;
               }
             }
-            const result = await runPromise;
-            if (result === null) {
-              setSyncError(publicApiError(processingRequestError, "Classification failed. Check Azure OpenAI and retry."));
-              setSyncFlowStage("failed");
-              return;
-            }
-            if (result.status !== 200) {
-              setSyncError(publicApiError({ response: result }, "Classification failed. Check Azure OpenAI and retry."));
-              setSyncFlowStage("failed");
-              return;
-            }
-            setProcessingStatus({ ...result.data, state: "succeeded" });
-            setSyncFlowStage("complete");
           }
           return;
         case "failed":
@@ -1090,7 +1124,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
               <SyncFlowStep active={syncFlowStage === "syncing"} complete={!["syncing", "failed"].includes(syncFlowStage)} title="Syncing emails" detail={`${formatCount(syncFlowEmailCount)} new for this run · ${formatCount(syncFlowTotalEmailCount)} total emails synced`} />
               <SyncFlowStep active={syncFlowStage === "filtering"} complete={["retaining", "classifying", "complete"].includes(syncFlowStage)} title="Applying job-search filters" detail="Filtering runs locally against sender, subject, and message metadata." />
               <SyncFlowStep active={syncFlowStage === "retaining"} complete={["classifying", "complete"].includes(syncFlowStage)} title="Candidate bodies retained" detail="Only broad job-search candidates keep body text for classification and reconciliation." />
-              <SyncFlowStep active={syncFlowStage === "classifying"} complete={syncFlowStage === "complete"} title="Classifying with Azure OpenAI" detail={processingStatus ? `${formatCount(processingStatus.processed_count)} of ${formatCount(processingStatus.candidate_limit)} candidate emails classified in parallel.` : "Preparing the first bounded classification run."} />
+              <SyncFlowStep active={syncFlowStage === "classifying"} complete={syncFlowStage === "complete"} title="Classifying with Azure OpenAI" detail={processingStatus ? `${formatCount(processingStatus.processed_count)} candidate emails processed · ${formatCount(processingStatus.pending_candidate_count)} remaining.` : "Preparing the first bounded classification run."} />
             </ol>
             {syncFlowStage === "complete" && processingStatus ? <p role="status" style={{ margin: "20px 0 0", color: "#1E5136", fontSize: "13px", fontWeight: 600 }}>Saved {formatCount(processingStatus.accepted_count)} classifications and updated {formatCount(processingStatus.applications_upserted)} applications.</p> : null}
             {syncFlowStage === "syncing" || syncFlowStage === "classifying" ? <p role="status" style={{ margin: "18px 0 0", color: "#666D66", fontSize: "11.5px" }}>Live backend updates are polling every second.</p> : null}
