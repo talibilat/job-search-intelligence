@@ -32,7 +32,7 @@ class SemanticSearchTool:
                 return self._repository.find_companies_mentioning(term)
             return self._repository.find_all_mentioning(term, category=category)
         if any(term in question.casefold() for term in _RECENCY_TERMS):
-            latest = self._repository.latest_for_mentioned_company(question, limit=limit)
+            latest = self._repository.latest_for_mentioned_company(question)
             if latest:
                 return latest
         response = await self._llm_provider.embed(

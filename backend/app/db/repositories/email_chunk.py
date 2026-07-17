@@ -226,8 +226,6 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
     def latest_for_mentioned_company(
         self,
         question: str,
-        *,
-        limit: int,
     ) -> tuple[SemanticSearchResult, ...]:
         """Return newest indexed evidence when a question names a known company."""
 
@@ -256,22 +254,31 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
                     ON applications.id = application_events.application_id
                 WHERE applications.company IN ({placeholders})
                   AND application_events.email_id IS NOT NULL
+            ),
+            latest_indexed_email AS (
+                SELECT raw_emails.id
+                FROM matching_emails
+                INNER JOIN raw_emails ON raw_emails.id = matching_emails.email_id
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM email_chunks
+                    WHERE email_chunks.email_id = raw_emails.id
+                )
+                ORDER BY raw_emails.sent_at DESC, raw_emails.id
+                LIMIT 1
             )
             SELECT
-                email_chunks.email_id,
-                email_chunks.chunk_index,
-                email_chunks.content,
+                raw_emails.id AS email_id,
+                0 AS chunk_index,
+                raw_emails.body_text AS content,
                 raw_emails.public_id AS email_public_id,
                 raw_emails.subject,
                 raw_emails.from_addr,
                 raw_emails.sent_at
-            FROM email_chunks
-            INNER JOIN matching_emails ON matching_emails.email_id = email_chunks.email_id
-            INNER JOIN raw_emails ON raw_emails.id = email_chunks.email_id
-            ORDER BY raw_emails.sent_at DESC, email_chunks.chunk_index, email_chunks.email_id
-            LIMIT ?
+            FROM latest_indexed_email
+            INNER JOIN raw_emails ON raw_emails.id = latest_indexed_email.id
             """,
-            (*mentioned, limit),
+            mentioned,
         ).fetchall()
         return tuple(self._semantic_result(row, distance=0.0) for row in rows)
 

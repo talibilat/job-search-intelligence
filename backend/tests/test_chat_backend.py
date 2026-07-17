@@ -295,16 +295,14 @@ def test_q47_last_email_uses_latest_company_evidence_not_nearest_vector(
     response = post_chat(
         client,
         "/chat",
-        json={
-            "message": "What exactly did the recruiter at Acme say in the last email?",
-            "retrieval_limit": 1,
-        },
+        json={"message": "What exactly did the recruiter at Acme say in the last email?"},
     )
 
     assert response.status_code == 200
     body = response.json()
     assert "Technical interview moved to Friday" in body["answer"]
     assert "historical perfect match" not in body["answer"]
+    assert len(body["citations"]) == 1
     assert body["citations"][0]["subject"] == "Interview update"
     assert provider.embedding_inputs == [
         ("Acme recruiter discussed a historical perfect match.",),
