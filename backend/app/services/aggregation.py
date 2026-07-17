@@ -22,8 +22,10 @@ from app.pipeline.aggregate import (
     build_application_grouping_key,
     make_application_id,
     make_event_id,
+    start_new_application_attempt,
 )
 from app.pipeline.classify import AcceptedLLMExtraction, JobApplicationExtraction
+from app.services.normalization import normalize_company_name, normalize_role_title
 
 type Clock = Callable[[], datetime]
 type RunIdFactory = Callable[[], str]
@@ -56,6 +58,10 @@ _APPLICATION_LIFECYCLE_CATEGORIES = frozenset(
         JobEmailCategory.OFFER,
         JobEmailCategory.ASSESSMENT,
     }
+)
+
+_TERMINAL_APPLICATION_STATUSES = frozenset(
+    {"offer", "rejected", "ghosted", "withdrawn"},
 )
 
 
@@ -143,7 +149,11 @@ class AggregationService:
             results=application_results,
         )
 
-        groups = _group_by_key(application_results)
+        groups = _group_by_key(
+            application_results,
+            application_repository=self._application_repository,
+            event_repository=self._event_repository,
+        )
 
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
@@ -281,8 +291,11 @@ def _enrich_extractions_with_email_context(
 
 def _group_by_key(
     results: list[_EnrichedExtraction],
+    *,
+    application_repository: ApplicationRepository,
+    event_repository: EventRepository,
 ) -> dict[ApplicationGroupingKey, list[_EnrichedExtraction]]:
-    groups: dict[ApplicationGroupingKey, list[_EnrichedExtraction]] = {}
+    base_groups: dict[ApplicationGroupingKey, list[_EnrichedExtraction]] = {}
     for result in results:
         extraction = result.extraction
         key = build_application_grouping_key(
@@ -291,10 +304,143 @@ def _group_by_key(
             thread_id=result.thread_id,
             occurred_at=_event_at_for_result(result),
         )
-        if key not in groups:
-            groups[key] = []
-        groups[key].append(result)
+        base_groups.setdefault(key, []).append(result)
+
+    groups: dict[ApplicationGroupingKey, list[_EnrichedExtraction]] = {}
+    for key, group in base_groups.items():
+        if key.thread_id is None:
+            groups[key] = group
+            continue
+        for attempt_key, attempt_group in _partition_thread_attempts(
+            key=key,
+            group=group,
+            application_repository=application_repository,
+            event_repository=event_repository,
+        ).items():
+            groups.setdefault(attempt_key, []).extend(attempt_group)
     return groups
+
+
+class _ApplicationAttempt:
+    def __init__(
+        self,
+        *,
+        key: ApplicationGroupingKey,
+        current_status: ApplicationStatus,
+        first_seen_at: datetime,
+        last_activity_at: datetime,
+        evidence_email_ids: set[str] | None = None,
+    ) -> None:
+        self.key = key
+        self.current_status = current_status
+        self.first_seen_at = first_seen_at
+        self.last_activity_at = last_activity_at
+        self.evidence_email_ids = evidence_email_ids or set()
+
+
+def _partition_thread_attempts(
+    *,
+    key: ApplicationGroupingKey,
+    group: list[_EnrichedExtraction],
+    application_repository: ApplicationRepository,
+    event_repository: EventRepository,
+) -> dict[ApplicationGroupingKey, list[_EnrichedExtraction]]:
+    attempts = _load_existing_attempts(
+        key=key,
+        application_repository=application_repository,
+        event_repository=event_repository,
+    )
+    partitioned: dict[ApplicationGroupingKey, list[_EnrichedExtraction]] = {}
+
+    for result in sorted(group, key=_result_timeline_sort_key):
+        event_at = _event_at_for_result(result)
+        attempt = next(
+            (
+                candidate
+                for candidate in attempts
+                if result.classification_email_id in candidate.evidence_email_ids
+            ),
+            None,
+        )
+        if attempt is None:
+            attempt = max(
+                (candidate for candidate in attempts if candidate.first_seen_at <= event_at),
+                key=lambda candidate: candidate.first_seen_at,
+                default=None,
+            )
+        if attempt is None:
+            attempt = _ApplicationAttempt(
+                key=key,
+                current_status="applied",
+                first_seen_at=event_at,
+                last_activity_at=event_at,
+            )
+            attempts.append(attempt)
+        elif (
+            _event_type_for_result(result) == "applied"
+            and attempt.current_status in _TERMINAL_APPLICATION_STATUSES
+            and event_at > attempt.last_activity_at
+        ):
+            attempt = _ApplicationAttempt(
+                key=start_new_application_attempt(key, occurred_at=event_at),
+                current_status="applied",
+                first_seen_at=event_at,
+                last_activity_at=event_at,
+            )
+            attempts.append(attempt)
+
+        partitioned.setdefault(attempt.key, []).append(result)
+        attempt.evidence_email_ids.add(result.classification_email_id)
+        attempt.last_activity_at = max(attempt.last_activity_at, event_at)
+        event_status = _status_for_event_type(
+            _event_type_for_result(result),
+            result.extraction.status,
+        )
+        if event_status is not None:
+            attempt.current_status = event_status
+
+    return partitioned
+
+
+def _load_existing_attempts(
+    *,
+    key: ApplicationGroupingKey,
+    application_repository: ApplicationRepository,
+    event_repository: EventRepository,
+) -> list[_ApplicationAttempt]:
+    if key.thread_id is None:
+        return []
+
+    attempts: list[_ApplicationAttempt] = []
+    base_application_id = make_application_id(key)
+    for application in application_repository.list_by_email_thread_id(key.thread_id):
+        if normalize_company_name(application.company) != (key.normalized_company or ""):
+            continue
+        if normalize_role_title(application.role_title) != key.normalized_role:
+            continue
+        events = event_repository.list_by_application_id(application.id)
+        attempt_key = key
+        if application.id != base_application_id:
+            attempt_key = start_new_application_attempt(
+                key,
+                occurred_at=application.first_seen_at,
+            )
+        attempts.append(
+            _ApplicationAttempt(
+                key=attempt_key,
+                current_status=application.current_status,
+                first_seen_at=application.first_seen_at,
+                last_activity_at=application.last_activity_at,
+                evidence_email_ids={
+                    event.email_id for event in events if event.email_id is not None
+                },
+            )
+        )
+    return attempts
+
+
+def _result_timeline_sort_key(result: _EnrichedExtraction) -> tuple[datetime, datetime]:
+    return _event_at_for_result(result), result.classification_classified_at
 
 
 def _upsert_application(

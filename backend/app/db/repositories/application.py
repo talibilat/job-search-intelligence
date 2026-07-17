@@ -95,6 +95,23 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         ).fetchall()
         return {str(row["status"]): int(row["count"]) for row in rows}
 
+    def list_by_email_thread_id(self, thread_id: str) -> list[ApplicationRecord]:
+        """Return applications with source evidence in one opaque provider thread."""
+
+        return self.fetch_all(
+            """
+            SELECT DISTINCT applications.*
+            FROM applications
+            INNER JOIN application_events
+                ON application_events.application_id = applications.id
+            INNER JOIN raw_emails
+                ON raw_emails.id = application_events.email_id
+            WHERE raw_emails.thread_id = ?
+            ORDER BY applications.first_seen_at, applications.id
+            """,
+            (thread_id,),
+        )
+
     def list_ghost_inference_candidates(self, *, cutoff_at: str) -> list[ApplicationRecord]:
         """Return applied applications whose timeline has no response evidence."""
 

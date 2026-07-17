@@ -32,6 +32,7 @@ def test_application_grouping_key_combines_normalized_company_role_thread_and_wi
         "thread-123",
         None,
         30,
+        None,
     )
 
 
@@ -104,6 +105,7 @@ def test_application_grouping_key_uses_utc_date_for_time_window() -> None:
         None,
         "2026-07-05",
         7,
+        None,
     )
 
 
@@ -119,7 +121,7 @@ def test_application_grouping_key_keeps_missing_signals_explicit() -> None:
     assert key.normalized_role is None
     assert key.thread_id is None
     assert key.time_window_start is None
-    assert key.as_tuple() == (None, None, None, None, 30)
+    assert key.as_tuple() == (None, None, None, None, 30, None)
 
 
 def test_application_grouping_key_rejects_non_positive_window_days() -> None:
