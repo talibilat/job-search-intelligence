@@ -69,6 +69,12 @@ _ANCHORED_APPLICATION_EVENT_CATEGORIES = frozenset(
 _TERMINAL_APPLICATION_STATUSES = frozenset(
     {"offer", "rejected", "ghosted", "withdrawn"},
 )
+_HARD_TERMINAL_APPLICATION_STATUSES = frozenset(
+    {"offer", "rejected", "withdrawn"},
+)
+_ACTIVE_ATTEMPT_EVENT_TYPES = frozenset(
+    {"assessment", "interview_scheduled", "offer"},
+)
 _STALE_APPLICATION_ATTEMPT_DAYS = 365
 
 
@@ -490,7 +496,8 @@ def _partition_application_attempts(
 
     for result in sorted(group, key=_result_timeline_sort_key):
         event_at = _event_at_for_result(result)
-        attempt = next(
+        event_type = _event_type_for_result(result)
+        evidence_attempt = next(
             (
                 candidate
                 for candidate in attempts
@@ -498,6 +505,7 @@ def _partition_application_attempts(
             ),
             None,
         )
+        attempt = evidence_attempt
         if attempt is None:
             attempt = max(
                 (candidate for candidate in attempts if candidate.first_seen_at <= event_at),
@@ -513,12 +521,12 @@ def _partition_application_attempts(
             )
             attempts.append(attempt)
         elif (
-            _event_type_for_result(result) == "applied"
+            evidence_attempt is None
             and event_at > attempt.last_activity_at
-            and (
-                attempt.current_status in _TERMINAL_APPLICATION_STATUSES
-                or event_at - attempt.last_activity_at
-                >= timedelta(days=_STALE_APPLICATION_ATTEMPT_DAYS)
+            and _starts_new_application_attempt(
+                event_type=event_type,
+                current_status=attempt.current_status,
+                inactivity=event_at - attempt.last_activity_at,
             )
         ):
             attempt = _ApplicationAttempt(
@@ -533,17 +541,31 @@ def _partition_application_attempts(
         attempt.evidence_email_ids.add(result.classification_email_id)
         attempt.last_activity_at = max(attempt.last_activity_at, event_at)
         event_status = _status_for_event_type(
-            _event_type_for_result(result),
+            event_type,
             result.extraction.status,
         )
         if event_status is not None:
             attempt.current_status = _transition_current_status(
                 current_status=attempt.current_status,
-                event_type=_event_type_for_result(result),
+                event_type=event_type,
                 event_status=event_status,
             )
 
     return partitioned
+
+
+def _starts_new_application_attempt(
+    *,
+    event_type: ApplicationEventType,
+    current_status: ApplicationStatus,
+    inactivity: timedelta,
+) -> bool:
+    is_stale = inactivity >= timedelta(days=_STALE_APPLICATION_ATTEMPT_DAYS)
+    if event_type == "applied":
+        return current_status in _TERMINAL_APPLICATION_STATUSES or is_stale
+    return event_type in _ACTIVE_ATTEMPT_EVENT_TYPES and (
+        current_status in _HARD_TERMINAL_APPLICATION_STATUSES or is_stale
+    )
 
 
 def _load_existing_attempts(

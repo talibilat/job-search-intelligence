@@ -852,6 +852,75 @@ def test_aggregation_starts_new_attempt_after_terminal_same_thread_application(
     assert rerun_snapshot == first_snapshot
 
 
+def test_aggregation_starts_new_attempt_when_interview_is_first_evidence_after_rejection(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    for email_id in ("first-applied", "first-rejected", "second-interview"):
+        insert_raw_email(connection, email_id, thread_id="reused-ats-thread")
+    connection.commit()
+
+    first_applied = make_extraction(
+        email_id="first-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=datetime(2025, 1, 2, 10, 0, tzinfo=UTC),
+    )
+    first_rejected = make_extraction(
+        email_id="first-rejected",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.REJECTION,
+        status="rejected",
+        event_type="rejection",
+        event_at=datetime(2025, 1, 10, 10, 0, tzinfo=UTC),
+    )
+    second_interview = make_extraction(
+        email_id="second-interview",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.INTERVIEW_INVITE,
+        status="interview",
+        event_type="interview_scheduled",
+        event_at=datetime(2025, 6, 12, 10, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([first_applied, first_rejected])
+    service.run([second_interview])
+    first_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """,
+    ).fetchall()
+
+    service.run([first_applied, first_rejected, second_interview])
+    rerun_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """,
+    ).fetchall()
+
+    assert [tuple(row) for row in first_snapshot] == [
+        (first_snapshot[0][0], "rejected", "first-applied,first-rejected"),
+        (first_snapshot[1][0], "interview", "second-interview"),
+    ]
+    assert MetricsRepository(connection).count_total_applications() == 2
+    assert rerun_snapshot == first_snapshot
+
+
 def test_aggregation_starts_new_attempt_after_year_inactive_same_thread_application(
     tmp_path: Path,
 ) -> None:
