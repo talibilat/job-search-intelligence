@@ -223,6 +223,100 @@ def test_q40_chat_reports_unavailable_cached_insight_without_semantic_fallback(
     assert provider.embedding_inputs == []
 
 
+def test_q41_chat_reads_cached_cited_feedback_without_provider_calls(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-acme",
+            company="Acme",
+            current_status="rejected",
+        )
+        InsightRepository(connection).save_generated_insight(
+            insight_type="recurring_feedback",
+            content="Repeated cited feedback recommends making system-design tradeoffs explicit.",
+            inputs_hash="q41-inputs",
+            model="fixture-model",
+            generated_at=datetime(2026, 7, 17, tzinfo=UTC),
+            citations=[
+                InsightCitation(
+                    citation_id="application:app-acme:event:event-feedback",
+                    application_id="app-acme",
+                    company="Acme",
+                    role_title="Platform Engineer",
+                    event_id="event-feedback",
+                    event_type="feedback",
+                    event_at=datetime(2026, 7, 16, tzinfo=UTC),
+                    email_subject="Interview feedback",
+                )
+            ],
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={
+            "message": "What does recruiter/interviewer feedback consistently say I should improve?"
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert body["answer"] == (
+        "Repeated cited feedback recommends making system-design tradeoffs explicit."
+    )
+    assert body["tool_outputs"][0]["tool"] == "cached_insight"
+    assert body["tool_outputs"][0]["insight_type"] == "recurring_feedback"
+    assert body["tool_outputs"][0]["status"] == "available"
+    assert body["citations"][0]["citation_id"] == ("application:app-acme:event:event-feedback")
+    assert provider.embedding_inputs == []
+
+
+@pytest.mark.parametrize(
+    ("stale", "expected_text"),
+    (
+        (False, "recurring-feedback insight has not been generated"),
+        (True, "cached recurring-feedback insight is stale"),
+    ),
+)
+def test_q41_chat_reports_unavailable_cached_insight_without_semantic_fallback(
+    tmp_path: Path,
+    stale: bool,
+    expected_text: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    if stale:
+        with sqlite3.connect(database_path) as connection:
+            insight = InsightRepository(connection).save_generated_insight(
+                insight_type="recurring_feedback",
+                content="Outdated feedback analysis.",
+                inputs_hash="old-inputs",
+                model="fixture-model",
+                generated_at=datetime(2026, 7, 16, tzinfo=UTC),
+            )
+            connection.execute("UPDATE insights SET is_stale = 1 WHERE id = ?", (insight.id,))
+            connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What does my feedback consistently say I need to improve?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert expected_text in body["answer"]
+    assert body["citations"] == []
+    assert body["tool_outputs"][0]["insight_type"] == "recurring_feedback"
+    assert body["tool_outputs"][0]["status"] == ("stale" if stale else "missing")
+    assert provider.embedding_inputs == []
+
+
 @pytest.mark.parametrize(
     ("question", "expected_from", "expected_to"),
     (

@@ -131,6 +131,15 @@ _WHY_REJECTED_INSIGHT_TERMS = (
     "recurring themes across rejection",
     "rejection themes",
 )
+_RECURRING_FEEDBACK_INSIGHT_TERMS = (
+    "feedback consistently say",
+    "feedback says i should improve",
+    "feedback say i should improve",
+    "feedback says i need to improve",
+    "feedback say i need to improve",
+    "recurring feedback",
+    "consistent feedback",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -392,6 +401,8 @@ def _cached_insight_type(question: str) -> InsightType | None:
     normalized = question.casefold()
     if any(term in normalized for term in _WHY_REJECTED_INSIGHT_TERMS):
         return "why_rejected"
+    if any(term in normalized for term in _RECURRING_FEEDBACK_INSIGHT_TERMS):
+        return "recurring_feedback"
     return None
 
 
@@ -701,13 +712,18 @@ def synthesize_grounded_answer(
         content = cached_insight.get("content")
         if status == "available" and isinstance(content, str):
             return content
+        insight_label = (
+            "recurring-feedback"
+            if cached_insight.get("insight_type") == "recurring_feedback"
+            else "rejection-themes"
+        )
         if status == "stale":
             return (
-                "The cached rejection-themes insight is stale because its source data changed. "
+                f"The cached {insight_label} insight is stale because its source data changed. "
                 "Regenerate it on the Insights page before relying on it here."
             )
         return (
-            "The rejection-themes insight has not been generated yet. Generate it on the "
+            f"The {insight_label} insight has not been generated yet. Generate it on the "
             "Insights page, then ask again."
         )
     structured = next((item for item in tool_outputs if item["tool"] == "structured_query"), None)
