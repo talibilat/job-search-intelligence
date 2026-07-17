@@ -65,6 +65,11 @@ _RESPONSE_RATE_TREND_TERMS = (
     "response rate trend",
     "response rate over time",
 )
+_SUCCESSFUL_APPLICATION_TRAIT_TERMS = (
+    "successful application",
+    "successful applications",
+    "wins have in common",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -276,6 +281,7 @@ def route_question(question: str) -> ChatRoute:
         or any(term in normalized for term in _GHOST_THRESHOLD_TERMS)
         or any(term in normalized for term in _APPLICATION_TREND_TERMS)
         or any(term in normalized for term in _RESPONSE_RATE_TREND_TERMS)
+        or _asks_successful_application_traits(normalized)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -304,6 +310,8 @@ def _structured_request(
         return StructuredQueryRequest(template="personal_ghost_threshold", filters=filters)
     if any(term in normalized for term in _RESPONSE_RATE_TREND_TERMS):
         return StructuredQueryRequest(template="response_rate_timeseries", filters=filters)
+    if _asks_successful_application_traits(normalized):
+        return StructuredQueryRequest(template="successful_application_segments", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):
         return StructuredQueryRequest(template="application_timeseries", filters=filters)
     if len(_matched_sources(normalized)) > 1:
@@ -399,6 +407,14 @@ def _matched_sources(normalized_question: str) -> set[ApplicationSource]:
         for source, terms in _SOURCE_FILTER_TERMS
         if any(term in normalized_question for term in terms)
     }
+
+
+def _asks_successful_application_traits(normalized_question: str) -> bool:
+    return any(term in normalized_question for term in _SUCCESSFUL_APPLICATION_TRAIT_TERMS) or (
+        "successful" in normalized_question
+        and "application" in normalized_question
+        and "in common" in normalized_question
+    )
 
 
 def _role_filter(normalized_question: str) -> str | None:
@@ -519,6 +535,10 @@ def synthesize_grounded_answer(
     structured = next((item for item in tool_outputs if item["tool"] == "structured_query"), None)
     if structured is not None:
         rows = structured.get("rows")
+        if structured.get("template") == "successful_application_segments" and isinstance(
+            rows, list
+        ):
+            return _synthesize_successful_application_segments(rows)
         if isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
                 return _synthesize_live_applications(rows)
@@ -575,6 +595,45 @@ def _synthesize_live_applications(rows: list[object]) -> str:
         return "The deterministic query found no applications awaiting an employer response."
     overdue_text = ", ".join(overdue) if overdue else "None"
     return f"Waiting on: {', '.join(waiting)}. Overdue for follow-up: {overdue_text}."
+
+
+def _synthesize_successful_application_segments(rows: list[object]) -> str:
+    segments: list[str] = []
+    for row in rows:
+        values = row.get("values") if isinstance(row, dict) else None
+        if not isinstance(values, dict):
+            continue
+        dimension = values.get("dimension")
+        value = values.get("value")
+        success_count = values.get("success_count")
+        application_count = values.get("application_count")
+        success_rate = values.get("success_rate")
+        success_rate_lift = values.get("success_rate_lift")
+        if (
+            not isinstance(dimension, str)
+            or not isinstance(value, str)
+            or not isinstance(success_count, int)
+            or not isinstance(application_count, int)
+            or not isinstance(success_rate, (int, float))
+            or not isinstance(success_rate_lift, (int, float))
+        ):
+            continue
+        segments.append(
+            f"{dimension} {value}: {success_count} of {application_count} "
+            f"({success_rate:.1%}), {success_rate_lift:.1%} above the filtered baseline"
+        )
+
+    if not segments:
+        return (
+            "No segment has a success rate above the filtered baseline, so there is not "
+            "enough deterministic evidence to identify a shared successful-application trait."
+        )
+    return (
+        "Success means an application with interview or offer evidence. The strongest "
+        "above-baseline associations are: "
+        + "; ".join(segments)
+        + ". These are correlations, not proof that a segment caused success."
+    )
 
 
 def _structured_citations(template: str, output: ToolOutput) -> list[ChatCitation]:

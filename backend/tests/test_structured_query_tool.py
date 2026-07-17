@@ -23,6 +23,9 @@ from pydantic import ValidationError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SYNTHETIC_FIXTURE_PATH = BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "basic_job_search.json"
+DIAGNOSTIC_FIXTURE_PATH = (
+    BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+)
 NOW = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
 
 
@@ -161,6 +164,30 @@ def test_structured_query_tool_answers_response_rate_timeseries_template() -> No
     ]
 
 
+def test_structured_query_tool_answers_successful_application_segments() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="successful_application_segments"))
+
+    assert result.rows[0].label == "role:platform engineer"
+    assert result.rows[0].values == {
+        "dimension": "role",
+        "value": "platform engineer",
+        "application_count": 1,
+        "interview_count": 1,
+        "offer_count": 1,
+        "success_count": 1,
+        "success_rate": 1.0,
+        "success_rate_lift": 0.8,
+        "baseline_success_count": 1,
+        "baseline_success_rate": 0.2,
+        "total_applications": 5,
+    }
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -198,6 +225,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "personal_ghost_threshold",
         "application_timeseries",
         "response_rate_timeseries",
+        "successful_application_segments",
         "breakdown",
         "live_applications",
     }

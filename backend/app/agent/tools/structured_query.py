@@ -16,6 +16,7 @@ from app.models.application import (
 )
 from app.models.metrics import MetricsBreakdownDimension
 from app.models.records import ApplicationRecord
+from app.services.diagnostics import DiagnosticsService
 
 StructuredQueryTemplate = Literal[
     "total_applications",
@@ -26,6 +27,7 @@ StructuredQueryTemplate = Literal[
     "personal_ghost_threshold",
     "application_timeseries",
     "response_rate_timeseries",
+    "successful_application_segments",
     "breakdown",
     "live_applications",
 ]
@@ -265,6 +267,33 @@ class StructuredQueryTool:
                     for point in self._metrics_repository.get_response_rate_timeseries(
                         filters=request.filters
                     )
+                ),
+            )
+
+        if request.template == "successful_application_segments":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"{segment.dimension}:{segment.value}",
+                        values={
+                            "dimension": segment.dimension,
+                            "value": segment.value,
+                            "application_count": segment.application_count,
+                            "interview_count": segment.interview_count,
+                            "offer_count": segment.offer_count,
+                            "success_count": segment.success_count,
+                            "success_rate": segment.success_rate,
+                            "success_rate_lift": segment.success_rate_lift,
+                            "baseline_success_count": diagnostics.baseline_success_count,
+                            "baseline_success_rate": diagnostics.baseline_success_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for segment in diagnostics.successful_application_segments
                 ),
             )
 
