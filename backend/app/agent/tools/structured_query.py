@@ -30,6 +30,7 @@ StructuredQueryTemplate = Literal[
     "successful_application_segments",
     "negative_outcome_segments",
     "strongest_response_correlate",
+    "wasted_effort_segments",
     "breakdown",
     "live_applications",
 ]
@@ -348,6 +349,31 @@ class StructuredQueryTool:
                     ),
                 )
             return StructuredQueryResult(template=request.template, rows=correlate_rows)
+
+        if request.template == "wasted_effort_segments":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"{segment.dimension}:{segment.value}",
+                        values={
+                            "dimension": segment.dimension,
+                            "value": segment.value,
+                            "application_count": segment.application_count,
+                            "response_count": segment.response_count,
+                            "response_rate": segment.response_rate,
+                            "response_rate_lift": segment.response_rate_lift,
+                            "baseline_response_count": diagnostics.baseline_response_count,
+                            "baseline_response_rate": diagnostics.baseline_response_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for segment in diagnostics.wasted_effort_segments
+                ),
+            )
 
         if request.template == "live_applications":
             if self._application_reader is None:

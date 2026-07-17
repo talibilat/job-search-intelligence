@@ -82,6 +82,13 @@ _STRONGEST_RESPONSE_CORRELATE_TERMS = (
     "correlates most with getting a response",
     "most correlated with response",
 )
+_WASTED_EFFORT_TERMS = (
+    "wasted effort",
+    "pouring effort",
+    "never converts",
+    "never convert",
+    "lowest conversion",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -296,6 +303,7 @@ def route_question(question: str) -> ChatRoute:
         or _asks_successful_application_traits(normalized)
         or _asks_negative_outcome_traits(normalized)
         or _asks_strongest_response_correlate(normalized)
+        or _asks_wasted_effort_segments(normalized)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -332,6 +340,8 @@ def _structured_request(
         return StructuredQueryRequest(template="negative_outcome_segments", filters=filters)
     if _asks_strongest_response_correlate(normalized):
         return StructuredQueryRequest(template="strongest_response_correlate", filters=filters)
+    if _asks_wasted_effort_segments(normalized):
+        return StructuredQueryRequest(template="wasted_effort_segments", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):
         return StructuredQueryRequest(template="application_timeseries", filters=filters)
     if len(_matched_sources(normalized)) > 1:
@@ -448,6 +458,10 @@ def _asks_negative_outcome_traits(normalized_question: str) -> bool:
 
 def _asks_strongest_response_correlate(normalized_question: str) -> bool:
     return any(term in normalized_question for term in _STRONGEST_RESPONSE_CORRELATE_TERMS)
+
+
+def _asks_wasted_effort_segments(normalized_question: str) -> bool:
+    return any(term in normalized_question for term in _WASTED_EFFORT_TERMS)
 
 
 def _role_filter(normalized_question: str) -> str | None:
@@ -576,6 +590,8 @@ def synthesize_grounded_answer(
             return _synthesize_negative_outcome_segments(rows)
         if structured.get("template") == "strongest_response_correlate" and isinstance(rows, list):
             return _synthesize_strongest_response_correlate(rows)
+        if structured.get("template") == "wasted_effort_segments" and isinstance(rows, list):
+            return _synthesize_wasted_effort_segments(rows)
         if isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
                 return _synthesize_live_applications(rows)
@@ -742,6 +758,45 @@ def _synthesize_strongest_response_correlate(rows: list[object]) -> str:
         f"{application_count} applications received a response ({response_rate:.1%}), "
         f"{response_rate_lift:.1%} above the filtered baseline. This is a correlation, "
         "not proof that the factor caused the response."
+    )
+
+
+def _synthesize_wasted_effort_segments(rows: list[object]) -> str:
+    segments: list[str] = []
+    for row in rows:
+        values = row.get("values") if isinstance(row, dict) else None
+        if not isinstance(values, dict):
+            continue
+        dimension = values.get("dimension")
+        value = values.get("value")
+        response_count = values.get("response_count")
+        application_count = values.get("application_count")
+        response_rate = values.get("response_rate")
+        response_rate_lift = values.get("response_rate_lift")
+        if (
+            not isinstance(dimension, str)
+            or not isinstance(value, str)
+            or not isinstance(response_count, int)
+            or not isinstance(application_count, int)
+            or not isinstance(response_rate, (int, float))
+            or not isinstance(response_rate_lift, (int, float))
+        ):
+            continue
+        segments.append(
+            f"{dimension} {value}: {response_count} of {application_count} responses "
+            f"({response_rate:.1%}), {abs(response_rate_lift):.1%} below the filtered baseline"
+        )
+
+    if not segments:
+        return (
+            "No segment has a response rate below the filtered baseline, so there is not "
+            "enough deterministic evidence to identify wasted-effort segments."
+        )
+    return (
+        "The strongest below-baseline response associations are: "
+        + "; ".join(segments)
+        + ". These are correlations, not proof that effort in a segment caused the lower "
+        "response rate."
     )
 
 
