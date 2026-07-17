@@ -601,6 +601,108 @@ def test_q44_chat_reports_unavailable_cached_insight_without_semantic_fallback(
 
 
 @pytest.mark.parametrize(
+    "question",
+    (
+        "What are the 3 concrete things I should do next week to improve outcomes?",
+        "What should I do next week to address my real skill gaps?",
+    ),
+)
+def test_q45_chat_reads_cached_cited_weekly_actions_without_provider_calls(
+    tmp_path: Path,
+    question: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    content = (
+        "1. Tailor two platform applications. [application:app-acme:event:event-interview]\n"
+        "2. Ask one recruiter for feedback. [application:app-acme:event:event-interview]\n"
+        "3. Practice one system-design interview. [application:app-acme:event:event-interview]"
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-acme",
+            company="Acme",
+            current_status="interview",
+        )
+        InsightRepository(connection).save_generated_insight(
+            insight_type="weekly_actions",
+            content=content,
+            inputs_hash="q45-inputs",
+            model="fixture-model",
+            generated_at=datetime(2026, 7, 17, tzinfo=UTC),
+            citations=[
+                InsightCitation(
+                    citation_id="application:app-acme:event:event-interview",
+                    application_id="app-acme",
+                    company="Acme",
+                    role_title="Platform Engineer",
+                    event_id="event-interview",
+                    event_type="interview_scheduled",
+                    event_at=datetime(2026, 7, 16, tzinfo=UTC),
+                    email_subject="Interview invitation",
+                )
+            ],
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(client, "/chat", json={"message": question})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert body["answer"] == content
+    assert body["tool_outputs"][0]["tool"] == "cached_insight"
+    assert body["tool_outputs"][0]["insight_type"] == "weekly_actions"
+    assert body["tool_outputs"][0]["status"] == "available"
+    assert body["citations"][0]["citation_id"] == "application:app-acme:event:event-interview"
+    assert provider.embedding_inputs == []
+
+
+@pytest.mark.parametrize(
+    ("stale", "expected_text"),
+    (
+        (False, "weekly-actions insight has not been generated"),
+        (True, "cached weekly-actions insight is stale"),
+    ),
+)
+def test_q45_chat_reports_unavailable_cached_insight_without_semantic_fallback(
+    tmp_path: Path,
+    stale: bool,
+    expected_text: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    if stale:
+        with sqlite3.connect(database_path) as connection:
+            insight = InsightRepository(connection).save_generated_insight(
+                insight_type="weekly_actions",
+                content="1. Outdated action.\n2. Outdated action.\n3. Outdated action.",
+                inputs_hash="old-inputs",
+                model="fixture-model",
+                generated_at=datetime(2026, 7, 16, tzinfo=UTC),
+            )
+            connection.execute("UPDATE insights SET is_stale = 1 WHERE id = ?", (insight.id,))
+            connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What weekly actions should I take?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert expected_text in body["answer"]
+    assert body["citations"] == []
+    assert body["tool_outputs"][0]["insight_type"] == "weekly_actions"
+    assert body["tool_outputs"][0]["status"] == ("stale" if stale else "missing")
+    assert provider.embedding_inputs == []
+
+
+@pytest.mark.parametrize(
     ("question", "expected_from", "expected_to"),
     (
         (

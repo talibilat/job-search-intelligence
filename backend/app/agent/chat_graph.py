@@ -158,6 +158,14 @@ _ROLE_FIT_INSIGHT_TERMS = (
     "best fit roles",
     "pattern of my wins",
 )
+_WEEKLY_ACTIONS_INSIGHT_TERMS = (
+    "3 concrete things i should do next week",
+    "three concrete things i should do next week",
+    "what should i do next week",
+    "actions should i take next week",
+    "next-week actions",
+    "weekly actions",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -419,6 +427,8 @@ def route_question(question: str) -> ChatRoute:
 
 def _cached_insight_type(question: str) -> InsightType | None:
     normalized = question.casefold()
+    if any(term in normalized for term in _WEEKLY_ACTIONS_INSIGHT_TERMS):
+        return "weekly_actions"
     if any(term in normalized for term in _WHY_REJECTED_INSIGHT_TERMS):
         return "why_rejected"
     if any(term in normalized for term in _RECURRING_FEEDBACK_INSIGHT_TERMS):
@@ -747,6 +757,8 @@ def synthesize_grounded_answer(
             insight_label = "strongest-and-weakest-signals"
         elif insight_type == "role_fit":
             insight_label = "role-fit"
+        elif insight_type == "weekly_actions":
+            insight_label = "weekly-actions"
         else:
             insight_label = "rejection-themes"
         if status == "stale":
