@@ -45,8 +45,8 @@ _CATEGORY_EVENT_TYPES: dict[JobEmailCategory, frozenset[ApplicationEventType]] =
     JobEmailCategory.INTERVIEW_INVITE: frozenset({"interview_scheduled"}),
     JobEmailCategory.OFFER: frozenset({"offer"}),
     JobEmailCategory.ASSESSMENT: frozenset({"assessment"}),
-    JobEmailCategory.FOLLOW_UP: frozenset({"feedback"}),
-    JobEmailCategory.OTHER: frozenset({"feedback"}),
+    JobEmailCategory.FOLLOW_UP: frozenset({"feedback", "response"}),
+    JobEmailCategory.OTHER: frozenset({"feedback", "response"}),
 }
 
 

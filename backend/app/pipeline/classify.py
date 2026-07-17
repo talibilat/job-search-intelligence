@@ -39,7 +39,7 @@ from app.providers.llm import (
 
 type NonBlankString = Annotated[StrictStr, Field(min_length=1)]
 
-CLASSIFICATION_PROMPT_VERSION = "v3"
+CLASSIFICATION_PROMPT_VERSION = "v4"
 CLASSIFICATION_MAX_OUTPUT_TOKENS = 1200
 
 
@@ -364,6 +364,11 @@ def _classification_system_prompt(*, prompt_version: str) -> str:
             "category follow_up (or other when it does not fit follow_up), event_type "
             "feedback, and application_status null. Do not mark cold recruiter outreach "
             "or a candidate-authored follow-up as feedback.",
+            "For an employer-authored update that confirms a response to an existing "
+            "application but is not an interview, assessment, rejection, offer, or "
+            "substantive feedback, use category follow_up (or other), event_type response, "
+            "and application_status null. Do not mark cold recruiter outreach or a "
+            "candidate-authored follow-up as a response.",
             "Do not include extra fields, raw SQL, counts, secrets, or provider payloads.",
             "The JSON object must match this schema:",
             schema,

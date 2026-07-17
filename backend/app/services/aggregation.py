@@ -59,7 +59,7 @@ _APPLICATION_LIFECYCLE_CATEGORIES = frozenset(
         JobEmailCategory.ASSESSMENT,
     }
 )
-_APPLICATION_FEEDBACK_CATEGORIES = frozenset(
+_ANCHORED_APPLICATION_EVENT_CATEGORIES = frozenset(
     {
         JobEmailCategory.FOLLOW_UP,
         JobEmailCategory.OTHER,
@@ -280,7 +280,7 @@ class _CorrectionConflict(BaseModel):
 def _filter_application_evidence(
     results: list[AcceptedLLMExtraction],
 ) -> list[_EnrichedExtraction]:
-    """Keep lifecycle evidence and explicit application feedback."""
+    """Keep lifecycle evidence and explicit thread-anchored application events."""
 
     return [
         _EnrichedExtraction(
@@ -290,7 +290,7 @@ def _filter_application_evidence(
         )
         for result in results
         if result.classification.category in _APPLICATION_LIFECYCLE_CATEGORIES
-        or _is_application_feedback(result)
+        or _is_anchored_application_event(result)
     ]
 
 
@@ -299,19 +299,19 @@ def _filter_anchored_application_evidence(
     application_repository: ApplicationRepository,
     results: list[_EnrichedExtraction],
 ) -> list[_EnrichedExtraction]:
-    """Require feedback to share a thread with submitted-application evidence."""
+    """Require response or feedback events to share an application thread."""
 
     batch_lifecycle_threads = {
         result.thread_id
         for result in results
         if result.thread_id is not None
-        and result.extraction.event_type != "feedback"
+        and not _is_enriched_anchored_application_event(result)
         and result.classification_email_id
     }
     known_application_threads: dict[str, bool] = {}
     anchored: list[_EnrichedExtraction] = []
     for result in results:
-        if not _is_enriched_application_feedback(result):
+        if not _is_enriched_anchored_application_event(result):
             anchored.append(result)
             continue
         if result.thread_id is None:
@@ -328,15 +328,15 @@ def _filter_anchored_application_evidence(
     return anchored
 
 
-def _is_application_feedback(result: AcceptedLLMExtraction) -> bool:
+def _is_anchored_application_event(result: AcceptedLLMExtraction) -> bool:
     return (
-        result.classification.category in _APPLICATION_FEEDBACK_CATEGORIES
-        and result.extraction.event_type == "feedback"
+        result.classification.category in _ANCHORED_APPLICATION_EVENT_CATEGORIES
+        and result.extraction.event_type in {"feedback", "response"}
     )
 
 
-def _is_enriched_application_feedback(result: _EnrichedExtraction) -> bool:
-    return result.extraction.event_type == "feedback"
+def _is_enriched_anchored_application_event(result: _EnrichedExtraction) -> bool:
+    return result.extraction.event_type in {"feedback", "response"}
 
 
 def _enrich_extractions_with_email_context(

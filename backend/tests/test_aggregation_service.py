@@ -279,6 +279,100 @@ def test_feedback_email_attaches_to_existing_application_thread(
     ]
 
 
+def test_employer_response_attaches_to_application_and_prevents_silence(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    applied_at = datetime(2026, 7, 5, 10, 0, tzinfo=UTC)
+    response_at = datetime(2026, 7, 8, 10, 0, tzinfo=UTC)
+    insert_raw_email(connection, "email-applied", thread_id="thread-abc", sent_at=applied_at)
+    insert_raw_email(connection, "email-response", thread_id="thread-abc", sent_at=response_at)
+    connection.commit()
+    service = make_service(connection)
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-applied",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=applied_at,
+            )
+        ]
+    )
+    first_response_run = service.run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=response_at,
+            )
+        ]
+    )
+    second_response_run = service.run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=response_at,
+            )
+        ]
+    )
+
+    assert first_response_run.applications_upserted == 1
+    assert first_response_run.events_upserted == 1
+    assert second_response_run.applications_upserted == 1
+    assert second_response_run.events_upserted == 1
+    assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 1
+    assert_current_status(connection, "in_review")
+    stored_events = connection.execute(
+        "SELECT event_type, email_id FROM application_events ORDER BY event_at"
+    ).fetchall()
+    assert [tuple(event) for event in stored_events] == [
+        ("applied", "email-applied"),
+        ("response", "email-response"),
+    ]
+    response_metric = MetricsRepository(connection).get_response_silence_metric()
+    assert response_metric.total_applications == 1
+    assert response_metric.human_response_count == 1
+    assert response_metric.silent_count == 0
+
+
+def test_unanchored_employer_response_does_not_create_application(tmp_path: Path) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-response", thread_id="thread-cold")
+    connection.commit()
+
+    result = make_service(connection).run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=EVENT_AT,
+            )
+        ]
+    )
+
+    assert result.applications_upserted == 0
+    assert result.events_upserted == 0
+    assert result.skipped_non_application_email_count == 1
+    assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0
+
+
 def test_general_job_emails_never_create_applications_on_rerun(tmp_path: Path) -> None:
     connection = migrated_connection(tmp_path)
     categories = (
