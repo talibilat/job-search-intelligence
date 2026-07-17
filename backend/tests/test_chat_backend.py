@@ -12,6 +12,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from app.agent.chat_graph import _structured_request, route_question
+from app.agent.tools import CachedInsightTool
 from app.api.dependencies import get_llm_provider
 from app.config import AppSettings, get_settings
 from app.db.engine import load_sqlite_vec_sync
@@ -30,6 +31,7 @@ from app.providers.llm import (
     LLMProviderHealthCheckRequest,
 )
 from app.security import SecretRef, SecretStore
+from app.services.insights_service import InsightInputBuilder, configured_chat_model
 from app.services.wipe_data import wipe_local_data
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
@@ -69,6 +71,29 @@ class EmptySecretStore(SecretStore):
 
     async def delete_secret(self, ref: SecretRef) -> None:
         return None
+
+
+def test_cached_insight_tool_rejects_obsolete_cache_identity(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        repository = InsightRepository(connection)
+        repository.save_generated_insight(
+            insight_type="why_rejected",
+            content="Legacy narrative.",
+            inputs_hash="legacy-inputs",
+            model="legacy-model",
+            generated_at=datetime(2026, 7, 17, tzinfo=UTC),
+            citations=[],
+        )
+        tool = CachedInsightTool(
+            repository,
+            expected_cache_identity=lambda _insight_type: ("current-inputs", "current-model"),
+        )
+
+        result = tool.run("why_rejected")
+
+    assert result.status == "stale"
+    assert result.content is None
 
 
 @pytest.mark.parametrize(
@@ -1007,6 +1032,20 @@ def test_structured_chat_preserves_unfiltered_source_comparisons(question: str) 
     assert request.filters is None
 
 
+def test_structured_chat_uses_current_turn_filter_with_inherited_count_intent() -> None:
+    question = (
+        "Previous user question: How many LinkedIn applications do I have?\n"
+        "Current user question: What about referrals?"
+    )
+
+    request = _structured_request(question)
+
+    assert route_question(question) == "quantitative"
+    assert request.template == "summary_counts"
+    assert request.filters is not None
+    assert request.filters.source == "referral"
+
+
 def test_structured_chat_preserves_filters_for_live_application_queries() -> None:
     request = _structured_request(
         "Who am I waiting on from LinkedIn this month?",
@@ -1805,7 +1844,7 @@ def test_chat_api_skill_signals_reconcile_with_metrics_diagnostics(tmp_path: Pat
     assert chat_response.status_code == 200
     diagnostics = metric_response.json()
     chat_body = chat_response.json()
-    expected_rows = []
+    expected_rows: list[dict[str, Any]] = []
     for signal, field in (
         ("selling", "selling_skill_segments"),
         ("dead_weight", "dead_weight_skill_segments"),
@@ -3059,17 +3098,17 @@ def test_q48_every_company_returns_distinct_companies_with_citations(tmp_path: P
     )
 
     assert response.status_code == 200
-    body = response.json()
-    assert len(body["citations"]) == 2
-    assert body["answer"].startswith("Companies mentioning the requested term:")
-    assert body["answer"].count("Acme") == 1
-    assert body["answer"].count("Beta") == 1
-    assert "Gamma" not in body["answer"]
-    assert {citation["subject"] for citation in body["citations"]} == {
+    response_body = response.json()
+    assert len(response_body["citations"]) == 2
+    assert response_body["answer"].startswith("Companies mentioning the requested term:")
+    assert response_body["answer"].count("Acme") == 1
+    assert response_body["answer"].count("Beta") == 1
+    assert "Gamma" not in response_body["answer"]
+    assert {citation["subject"] for citation in response_body["citations"]} == {
         "Role detail 1",
         "Role detail 2",
     }
-    assert {citation["application_id"] for citation in body["citations"]} == {
+    assert {citation["application_id"] for citation in response_body["citations"]} == {
         "app-acme",
         "app-beta",
     }
@@ -3381,6 +3420,15 @@ def create_chat_client(
         database_url=f"sqlite:///{database_path}",
         chat_index_max_emails=index_batch_size,
     )
+    with sqlite3.connect(database_path) as connection:
+        repository = InsightRepository(connection)
+        for (insight_type,) in connection.execute("SELECT DISTINCT type FROM insights"):
+            insight_input = InsightInputBuilder(repository).build(insight_type)
+            connection.execute(
+                "UPDATE insights SET inputs_hash = ?, model = ? WHERE type = ?",
+                (insight_input.inputs_hash, configured_chat_model(settings), insight_type),
+            )
+        connection.commit()
     app = create_app(settings=settings)
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_llm_provider] = lambda: provider

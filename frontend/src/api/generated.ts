@@ -803,7 +803,7 @@ export const EmailSyncMode = {
 } as const;
 
 /**
- * User-selected bounds for a manual extraction run.
+ * User-selected full-backfill bounds and per-run sync limits.
  */
 export interface EmailSyncOptions {
   before_date?: string | null;

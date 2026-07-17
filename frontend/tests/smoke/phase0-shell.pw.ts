@@ -1138,6 +1138,7 @@ const insightList = {
           citation_id: "application:app-fixture:event:event-rejection-fixture",
           company: "Fixture Systems",
           email_id: "email-rejection-fixture",
+          email_public_id: "fixture-rejection-public",
           email_subject: "Rejection decision",
           event_at: "2026-07-10T16:00:00Z",
           event_id: "event-rejection-fixture",
@@ -1223,6 +1224,7 @@ const regenerateInsightResponse = {
         citation_id: "application:app-fixture:event:event-rejection-fixture",
         company: "Fixture Systems",
         email_id: "email-rejection-fixture",
+        email_public_id: "fixture-rejection-public",
         email_subject: "Rejection decision",
         event_at: "2026-07-10T16:00:00Z",
         event_id: "event-rejection-fixture",
@@ -1417,7 +1419,7 @@ async function installRedesignFixtures(page: Page) {
       status: 200,
     }),
   );
-  await page.route("**/applications/status-counts", (route) =>
+  await page.route("**/applications/status-counts**", (route) =>
     route.fulfill({
       contentType: "application/json",
       json: redesignStatusCounts,
@@ -1932,19 +1934,20 @@ test("runs the critical private-data-free redesign journey", async ({
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
-      name: "Fixture Systems - Rejection decision",
+      name: "Open email evidence: Fixture Systems - Rejection decision",
     }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", {
-      name: "Example Analytics - Interview feedback",
-    }),
-  ).toBeVisible();
+  await expect(page.getByText("Example Analytics - Interview feedback")).toBeVisible();
   expect(requests.mutationRequestEvents).toContain("POST /insights/regenerate");
 
   await page
-    .getByRole("button", { name: "Fixture Systems - Rejection decision" })
+    .getByRole("button", {
+      name: "Open email evidence: Fixture Systems - Rejection decision",
+    })
     .click();
+  await expect(page.getByText("The role requires deeper distributed-systems design experience.")).toBeVisible();
+  await page.getByRole("button", { name: "Close email" }).click();
+  await page.getByRole("button", { name: "View application: Fixture Systems" }).click();
   await expect(page).toHaveURL("/applications/app-fixture");
   await expect(
     page.getByRole("heading", { name: "Fixture Systems" }),
@@ -1962,7 +1965,7 @@ test("runs the critical private-data-free redesign journey", async ({
 
   await page.getByRole("button", { name: "Insights" }).click();
   await page
-    .getByRole("button", { name: "Example Analytics - Interview feedback" })
+    .getByRole("button", { name: "View application: Example Analytics" })
     .click();
   await expect(page).toHaveURL("/applications/app-analytics");
   const feedbackTimeline = page

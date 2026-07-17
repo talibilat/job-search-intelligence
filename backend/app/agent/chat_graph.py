@@ -507,7 +507,8 @@ def _structured_request(
     anchor_at: datetime | None = None,
 ) -> StructuredQueryRequest:
     normalized = question.casefold()
-    filters = _structured_filters(normalized, anchor_at=anchor_at)
+    current_normalized = _current_user_question(question).casefold()
+    filters = _structured_filters(current_normalized, anchor_at=anchor_at)
     if any(term in normalized for term in ("waiting on", "overdue", "follow-up", "follow up")):
         return StructuredQueryRequest(template="live_applications", filters=filters)
     if "funnel" in normalized:
@@ -540,7 +541,7 @@ def _structured_request(
         return StructuredQueryRequest(template="adjacent_role_suggestions", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):
         return StructuredQueryRequest(template="application_timeseries", filters=filters)
-    if len(_matched_sources(normalized)) > 1:
+    if len(_matched_sources(current_normalized)) > 1:
         return StructuredQueryRequest(
             template="breakdown",
             filters=filters,
@@ -556,6 +557,13 @@ def _structured_request(
     if any(term in normalized for term in ("rate", "conversion")):
         return StructuredQueryRequest(template="rates", filters=filters)
     return StructuredQueryRequest(template="summary_counts", filters=filters)
+
+
+def _current_user_question(question: str) -> str:
+    marker = "Current user question:"
+    if marker not in question:
+        return question
+    return question.rsplit(marker, maxsplit=1)[1].strip()
 
 
 def _structured_filters(

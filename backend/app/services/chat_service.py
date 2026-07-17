@@ -138,9 +138,13 @@ class ChatService:
             conversation_id=request.conversation_id,
             limit=20,
         )
-        previous_questions = tuple(
-            message.content for message in reversed(history) if message.role == "user"
-        )
+        previous_questions: list[str] = []
+        for message in reversed(history):
+            if message.role != "user":
+                continue
+            previous_questions.append(message.content)
+            if not _needs_conversation_context(message.content):
+                break
         if not previous_questions:
             return request
         context = "\n".join(

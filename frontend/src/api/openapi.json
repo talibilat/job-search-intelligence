@@ -2227,7 +2227,7 @@
       },
       "EmailSyncOptions": {
         "additionalProperties": false,
-        "description": "User-selected bounds for a manual extraction run.",
+        "description": "User-selected full-backfill bounds and per-run sync limits.",
         "properties": {
           "before_date": {
             "anyOf": [

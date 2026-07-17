@@ -151,31 +151,17 @@ class AggregationService:
             )
         skipped_non_application_email_count = len(job_related_results) - len(application_results)
 
-        if not application_results:
-            return AggregationRunResult(
-                run_id=run_id,
-                started_at=now,
-                completed_at=self._clock(),
-                extraction_count=len(accepted_results),
-                applications_upserted=0,
-                events_upserted=0,
-                skipped_not_job_related=skipped_not_job_related,
-                skipped_non_application_email_count=skipped_non_application_email_count,
-                manual_conflict_count=0,
-                manual_conflict_application_ids=[],
-                merged_source_skip_count=0,
+        groups: dict[ApplicationGroupingKey, list[_EnrichedExtraction]] = {}
+        if application_results:
+            _inherit_sparse_thread_identity(
+                application_repository=self._application_repository,
+                results=application_results,
             )
-
-        _inherit_sparse_thread_identity(
-            application_repository=self._application_repository,
-            results=application_results,
-        )
-
-        groups = _group_by_key(
-            application_results,
-            application_repository=self._application_repository,
-            event_repository=self._event_repository,
-        )
+            groups = _group_by_key(
+                application_results,
+                application_repository=self._application_repository,
+                event_repository=self._event_repository,
+            )
 
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
@@ -183,6 +169,9 @@ class AggregationService:
                 application_repository=self._application_repository,
                 event_repository=self._event_repository,
                 groups=groups,
+                reclassified_email_ids={
+                    result.classification.email_id for result in accepted_results
+                },
             )
             for replacement_conflict in replacement_conflicts:
                 manual_conflict_count += 1
@@ -536,13 +525,16 @@ def _partition_application_attempts(
                 default=None,
             )
         if attempt is None:
-            attempt = _ApplicationAttempt(
-                key=key,
-                current_status="applied",
-                first_seen_at=event_at,
-                last_activity_at=event_at,
-            )
-            attempts.append(attempt)
+            if attempts:
+                attempt = min(attempts, key=lambda candidate: candidate.first_seen_at)
+            else:
+                attempt = _ApplicationAttempt(
+                    key=key,
+                    current_status="applied",
+                    first_seen_at=event_at,
+                    last_activity_at=event_at,
+                )
+                attempts.append(attempt)
         elif (
             evidence_attempt is None
             and event_at > attempt.last_activity_at
@@ -552,13 +544,21 @@ def _partition_application_attempts(
                 inactivity=event_at - attempt.last_activity_at,
             )
         ):
-            attempt = _ApplicationAttempt(
-                key=start_new_application_attempt(key, occurred_at=event_at),
-                current_status="applied",
-                first_seen_at=event_at,
-                last_activity_at=event_at,
+            later_attempt = min(
+                (candidate for candidate in attempts if candidate.first_seen_at > event_at),
+                key=lambda candidate: candidate.first_seen_at,
+                default=None,
             )
-            attempts.append(attempt)
+            if later_attempt is not None:
+                attempt = later_attempt
+            else:
+                attempt = _ApplicationAttempt(
+                    key=start_new_application_attempt(key, occurred_at=event_at),
+                    current_status="applied",
+                    first_seen_at=event_at,
+                    last_activity_at=event_at,
+                )
+                attempts.append(attempt)
 
         partitioned.setdefault(attempt.key, []).append(result)
         attempt.evidence_email_ids.add(result.classification_email_id)
@@ -847,6 +847,7 @@ def _remove_stale_reclassified_events(
     application_repository: ApplicationRepository,
     event_repository: EventRepository,
     groups: dict[ApplicationGroupingKey, list[_EnrichedExtraction]],
+    reclassified_email_ids: set[str],
 ) -> tuple[set[str], list[_CorrectionConflict]]:
     """Replace obsolete automatic events when extraction identity changes."""
 
@@ -854,64 +855,76 @@ def _remove_stale_reclassified_events(
     conflicts: list[_CorrectionConflict] = []
     blocked_email_ids: set[str] = set()
 
+    proposals: dict[str, tuple[str, str, ApplicationEventType, str, _EnrichedExtraction]] = {}
     for key, group in groups.items():
-        target_application_id = make_application_id(key)
+        application_id = make_application_id(key)
         for result in group:
-            email_id = result.classification_email_id
             event_type = _event_type_for_result(result)
             event_at = _event_at_for_result(result).isoformat()
-            proposed_event_id = make_event_id(
-                application_id=target_application_id,
-                email_id=email_id,
-                event_type=event_type,
-                event_at=event_at,
+            proposals[result.classification_email_id] = (
+                application_id,
+                make_event_id(
+                    application_id=application_id,
+                    email_id=result.classification_email_id,
+                    event_type=event_type,
+                    event_at=event_at,
+                ),
+                event_type,
+                event_at,
+                result,
             )
-            stale_events = [
-                event
-                for event in event_repository.list_by_email_id(email_id)
-                if event.id != proposed_event_id
-            ]
-            for stale_event in stale_events:
-                source_application = application_repository.get_application(
-                    stale_event.application_id
+
+    for email_id in reclassified_email_ids:
+        proposal = proposals.get(email_id)
+        proposed_event_id = proposal[1] if proposal is not None else None
+        stale_events = [
+            event
+            for event in event_repository.list_by_email_id(email_id)
+            if event.id != proposed_event_id
+        ]
+        for stale_event in stale_events:
+            source_application = application_repository.get_application(stale_event.application_id)
+            if source_application is not None and source_application.manual_lock:
+                if proposal is not None and stale_event.application_id == proposal[0]:
+                    continue
+                outcome = "manual_conflict"
+            else:
+                outcome = event_repository.delete_automatic_event(
+                    application_id=stale_event.application_id,
+                    event_id=stale_event.id,
                 )
-                if source_application is not None and source_application.manual_lock:
-                    if stale_event.application_id == target_application_id:
-                        continue
-                    outcome = "manual_conflict"
-                else:
-                    outcome = event_repository.delete_automatic_event(
-                        application_id=stale_event.application_id,
-                        event_id=stale_event.id,
-                    )
-                if outcome == "deleted":
-                    affected_application_ids.add(stale_event.application_id)
-                    continue
-                if outcome != "manual_conflict":
-                    continue
-                blocked_email_ids.add(email_id)
-                conflicts.append(
-                    _CorrectionConflict(
-                        application_id=stale_event.application_id,
-                        conflict_key=(f"application_event:{stale_event.application_id}:{email_id}"),
-                        conflict_type="application_event",
-                        existing_json={
-                            "event": dict(stale_event.model_dump(mode="json")),
-                        },
-                        proposed_json={
-                            "event": {
-                                "id": proposed_event_id,
-                                "application_id": target_application_id,
+            if outcome == "deleted":
+                affected_application_ids.add(stale_event.application_id)
+                continue
+            if outcome != "manual_conflict":
+                continue
+            blocked_email_ids.add(email_id)
+            conflicts.append(
+                _CorrectionConflict(
+                    application_id=stale_event.application_id,
+                    conflict_key=(f"application_event:{stale_event.application_id}:{email_id}"),
+                    conflict_type="application_event",
+                    existing_json={
+                        "event": dict(stale_event.model_dump(mode="json")),
+                    },
+                    proposed_json={
+                        "event": (
+                            {
+                                "id": proposal[1],
+                                "application_id": proposal[0],
                                 "email_id": email_id,
-                                "event_type": event_type,
-                                "event_at": event_at,
-                                "extract_note": result.extraction.rejection_reason,
-                                "extracted_status": result.extraction.status,
-                            },
-                        },
-                        evidence_email_id=email_id,
-                    )
+                                "event_type": proposal[2],
+                                "event_at": proposal[3],
+                                "extract_note": proposal[4].extraction.rejection_reason,
+                                "extracted_status": proposal[4].extraction.status,
+                            }
+                            if proposal is not None
+                            else None
+                        ),
+                    },
+                    evidence_email_id=email_id,
                 )
+            )
 
     if blocked_email_ids:
         for key, group in groups.items():

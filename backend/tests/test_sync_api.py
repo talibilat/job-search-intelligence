@@ -908,7 +908,10 @@ def test_configured_sync_job_absorbs_provider_failures(
         lambda settings: FailingSyncRuntime(),
     )
 
-    asyncio.run(sync_api.create_configured_sync_job(AppSettings(_env_file=None))())
+    async def run_job() -> None:
+        await sync_api.create_configured_sync_job(AppSettings(_env_file=None))()
+
+    asyncio.run(run_job())
 
 
 def test_get_paginated_sync_emails_returns_stable_page(tmp_path: Path) -> None:

@@ -759,6 +759,40 @@ def test_aggregation_reclassification_replaces_changed_application_identity(
     assert MetricsRepository(connection).count_total_applications() == 1
 
 
+def test_aggregation_reclassification_removes_obsolete_non_job_evidence(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+    service = make_service(connection)
+    original = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        event_at=EVENT_AT,
+    )
+
+    service.run([original])
+    result = service.run(
+        [
+            make_extraction(
+                email_id="email-1",
+                is_job_related=False,
+                company="Acme Corp",
+                role_title="Software Engineer",
+                event_at=EVENT_AT,
+                classified_at=datetime(2026, 7, 6, 12, 0, tzinfo=UTC),
+            )
+        ]
+    )
+
+    assert result.skipped_not_job_related == 1
+    assert ApplicationRepository(connection).list_applications() == []
+    assert EventRepository(connection).list_by_email_id("email-1") == []
+    assert MetricsRepository(connection).count_total_applications() == 0
+
+
 def test_aggregation_full_rerun_keeps_one_application_and_timeline_events(
     tmp_path: Path,
 ) -> None:
@@ -900,7 +934,7 @@ def test_aggregation_starts_new_attempt_when_interview_is_first_evidence_after_r
     tmp_path: Path,
 ) -> None:
     connection = migrated_connection(tmp_path)
-    for email_id in ("first-applied", "first-rejected", "second-interview"):
+    for email_id in ("first-applied", "first-rejected", "second-applied", "second-interview"):
         insert_raw_email(connection, email_id, thread_id="reused-ats-thread")
     connection.commit()
 
@@ -930,10 +964,17 @@ def test_aggregation_starts_new_attempt_when_interview_is_first_evidence_after_r
         event_type="interview_scheduled",
         event_at=datetime(2025, 6, 12, 10, 0, tzinfo=UTC),
     )
+    second_applied = make_extraction(
+        email_id="second-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        event_at=datetime(2025, 6, 5, 10, 0, tzinfo=UTC),
+    )
     service = make_service(connection)
 
     service.run([first_applied, first_rejected])
     service.run([second_interview])
+    service.run([second_applied])
     first_snapshot = connection.execute(
         """
         SELECT applications.id, applications.current_status,
@@ -945,7 +986,7 @@ def test_aggregation_starts_new_attempt_when_interview_is_first_evidence_after_r
         """,
     ).fetchall()
 
-    service.run([first_applied, first_rejected, second_interview])
+    service.run([first_applied, first_rejected, second_applied, second_interview])
     rerun_snapshot = connection.execute(
         """
         SELECT applications.id, applications.current_status,
@@ -959,7 +1000,7 @@ def test_aggregation_starts_new_attempt_when_interview_is_first_evidence_after_r
 
     assert [tuple(row) for row in first_snapshot] == [
         (first_snapshot[0][0], "rejected", "first-applied,first-rejected"),
-        (first_snapshot[1][0], "interview", "second-interview"),
+        (first_snapshot[1][0], "interview", "second-applied,second-interview"),
     ]
     assert MetricsRepository(connection).count_total_applications() == 2
     assert rerun_snapshot == first_snapshot
