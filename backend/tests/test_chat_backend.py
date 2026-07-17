@@ -502,6 +502,18 @@ def test_structured_chat_routes_skill_signals_to_diagnostics(question: str) -> N
     assert _structured_request(question).template == "skill_signal_segments"
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "Are there adjacent roles I don't apply to but should, given where I convert best?",
+        "Which roles should I explore based on where I convert best?",
+    ),
+)
+def test_structured_chat_routes_adjacent_roles_to_diagnostics(question: str) -> None:
+    assert route_question(question) == "quantitative"
+    assert _structured_request(question).template == "adjacent_role_suggestions"
+
+
 def test_chat_api_successful_traits_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -970,6 +982,72 @@ def test_chat_api_skill_signals_report_insufficient_evidence(tmp_path: Path) -> 
     assert chat_body["route"] == "quantitative"
     assert chat_body["tool_outputs"][0]["rows"] == []
     assert "not enough deterministic skill evidence" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_adjacent_roles_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        SyntheticFixtureRepository(connection).load_file(
+            BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/diagnostics")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={
+            "message": (
+                "Are there adjacent roles I don't apply to but should, given where I convert best?"
+            ),
+        },
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    diagnostics = metric_response.json()
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["template"] == "adjacent_role_suggestions"
+    assert chat_body["tool_outputs"][0]["rows"] == [
+        {
+            "label": f"role:{segment['value']}",
+            "values": {
+                "role": segment["value"],
+                "application_count": segment["application_count"],
+                "interview_count": segment["interview_count"],
+                "offer_count": segment["offer_count"],
+                "success_count": segment["success_count"],
+                "success_rate": segment["success_rate"],
+                "total_applications": diagnostics["total_applications"],
+            },
+        }
+        for segment in diagnostics["adjacent_role_suggestions"]
+    ]
+    assert chat_body["citations"][0]["citation_id"] == "metric:adjacent_role_suggestions"
+    assert "historical associations" in chat_body["answer"]
+    assert "cannot prove that a role is untried or semantically adjacent" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_adjacent_roles_report_insufficient_evidence(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Which roles should I explore based on where I convert best?"},
+    )
+
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["rows"] == []
+    assert "not enough deterministic success evidence" in chat_body["answer"]
     assert provider.embedding_inputs == []
 
 

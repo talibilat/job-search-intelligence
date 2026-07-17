@@ -34,6 +34,7 @@ StructuredQueryTemplate = Literal[
     "best_roi_source",
     "sponsorship_response_impact",
     "skill_signal_segments",
+    "adjacent_role_suggestions",
     "breakdown",
     "live_applications",
 ]
@@ -450,6 +451,29 @@ class StructuredQueryTool:
                         ("dead_weight", diagnostics.dead_weight_skill_segments),
                     )
                     for segment in segments
+                ),
+            )
+
+        if request.template == "adjacent_role_suggestions":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"role:{segment.value}",
+                        values={
+                            "role": segment.value,
+                            "application_count": segment.application_count,
+                            "interview_count": segment.interview_count,
+                            "offer_count": segment.offer_count,
+                            "success_count": segment.success_count,
+                            "success_rate": segment.success_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for segment in diagnostics.adjacent_role_suggestions
                 ),
             )
 

@@ -111,6 +111,13 @@ _SKILL_SIGNAL_TERMS = (
     "dead weight skill",
     "skills correlate with interviews",
 )
+_ADJACENT_ROLE_TERMS = (
+    "adjacent role",
+    "roles i don't apply to",
+    "roles i do not apply to",
+    "roles should i explore",
+    "roles should i consider",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -329,6 +336,7 @@ def route_question(question: str) -> ChatRoute:
         or _asks_best_roi_source(normalized)
         or _asks_sponsorship_response_impact(normalized)
         or _asks_skill_signals(normalized)
+        or _asks_adjacent_roles(normalized)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -375,6 +383,8 @@ def _structured_request(
         return StructuredQueryRequest(template="sponsorship_response_impact", filters=filters)
     if _asks_skill_signals(normalized):
         return StructuredQueryRequest(template="skill_signal_segments", filters=filters)
+    if _asks_adjacent_roles(normalized):
+        return StructuredQueryRequest(template="adjacent_role_suggestions", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):
         return StructuredQueryRequest(template="application_timeseries", filters=filters)
     if len(_matched_sources(normalized)) > 1:
@@ -516,6 +526,10 @@ def _asks_skill_signals(normalized_question: str) -> bool:
     )
 
 
+def _asks_adjacent_roles(normalized_question: str) -> bool:
+    return any(term in normalized_question for term in _ADJACENT_ROLE_TERMS)
+
+
 def _role_filter(normalized_question: str) -> str | None:
     quoted_match = re.search(
         r"\b(?:role|job title)\s+(?:is\s+)?(['\"])([^'\"]{1,100})\1",
@@ -650,6 +664,8 @@ def synthesize_grounded_answer(
             return _synthesize_sponsorship_response_impact(rows)
         if structured.get("template") == "skill_signal_segments" and isinstance(rows, list):
             return _synthesize_skill_signal_segments(rows)
+        if structured.get("template") == "adjacent_role_suggestions" and isinstance(rows, list):
+            return _synthesize_adjacent_role_suggestions(rows)
         if isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
                 return _synthesize_live_applications(rows)
@@ -975,6 +991,41 @@ def _synthesize_skill_signal_segments(rows: list[object]) -> str:
         f"below-baseline response rate: {dead_weight_text}. These are associations across "
         "technologies extracted from tracked applications, not proof that a skill caused "
         "an outcome."
+    )
+
+
+def _synthesize_adjacent_role_suggestions(rows: list[object]) -> str:
+    suggestions: list[str] = []
+    for row in rows:
+        values = row.get("values") if isinstance(row, dict) else None
+        if not isinstance(values, dict):
+            continue
+        role = values.get("role")
+        success_count = values.get("success_count")
+        application_count = values.get("application_count")
+        success_rate = values.get("success_rate")
+        if (
+            not isinstance(role, str)
+            or not isinstance(success_count, int)
+            or not isinstance(application_count, int)
+            or not isinstance(success_rate, (int, float))
+        ):
+            continue
+        suggestions.append(
+            f"{role}: {success_count} of {application_count} reached interview or offer "
+            f"({success_rate:.1%})"
+        )
+
+    if not suggestions:
+        return (
+            "There is not enough deterministic success evidence to identify role signals "
+            "worth exploring."
+        )
+    return (
+        "Tracked role signals worth exploring based on interview or offer evidence are: "
+        + "; ".join(suggestions)
+        + ". These are historical associations. The current data ranks roles already present "
+        "in tracked applications; it cannot prove that a role is untried or semantically adjacent."
     )
 
 
