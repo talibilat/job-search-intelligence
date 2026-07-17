@@ -59,6 +59,12 @@ _APPLICATION_LIFECYCLE_CATEGORIES = frozenset(
         JobEmailCategory.ASSESSMENT,
     }
 )
+_APPLICATION_FEEDBACK_CATEGORIES = frozenset(
+    {
+        JobEmailCategory.FOLLOW_UP,
+        JobEmailCategory.OTHER,
+    }
+)
 
 _TERMINAL_APPLICATION_STATUSES = frozenset(
     {"offer", "rejected", "ghosted", "withdrawn"},
@@ -128,6 +134,15 @@ class AggregationService:
         ]
         skipped_not_job_related = len(accepted_results) - len(job_related_results)
         application_results = _filter_application_evidence(job_related_results)
+        if application_results:
+            _enrich_extractions_with_email_context(
+                email_repository=self._email_repository,
+                results=application_results,
+            )
+            application_results = _filter_anchored_application_evidence(
+                application_repository=self._application_repository,
+                results=application_results,
+            )
         skipped_non_application_email_count = len(job_related_results) - len(application_results)
 
         if not application_results:
@@ -145,10 +160,6 @@ class AggregationService:
                 merged_source_skip_count=0,
             )
 
-        _enrich_extractions_with_email_context(
-            email_repository=self._email_repository,
-            results=application_results,
-        )
         _inherit_sparse_thread_identity(
             application_repository=self._application_repository,
             results=application_results,
@@ -269,7 +280,7 @@ class _CorrectionConflict(BaseModel):
 def _filter_application_evidence(
     results: list[AcceptedLLMExtraction],
 ) -> list[_EnrichedExtraction]:
-    """Keep submitted-application lifecycle evidence out of general job mail."""
+    """Keep lifecycle evidence and explicit application feedback."""
 
     return [
         _EnrichedExtraction(
@@ -279,7 +290,53 @@ def _filter_application_evidence(
         )
         for result in results
         if result.classification.category in _APPLICATION_LIFECYCLE_CATEGORIES
+        or _is_application_feedback(result)
     ]
+
+
+def _filter_anchored_application_evidence(
+    *,
+    application_repository: ApplicationRepository,
+    results: list[_EnrichedExtraction],
+) -> list[_EnrichedExtraction]:
+    """Require feedback to share a thread with submitted-application evidence."""
+
+    batch_lifecycle_threads = {
+        result.thread_id
+        for result in results
+        if result.thread_id is not None
+        and result.extraction.event_type != "feedback"
+        and result.classification_email_id
+    }
+    known_application_threads: dict[str, bool] = {}
+    anchored: list[_EnrichedExtraction] = []
+    for result in results:
+        if not _is_enriched_application_feedback(result):
+            anchored.append(result)
+            continue
+        if result.thread_id is None:
+            continue
+        if result.thread_id in batch_lifecycle_threads:
+            anchored.append(result)
+            continue
+        has_application = known_application_threads.setdefault(
+            result.thread_id,
+            bool(application_repository.list_by_email_thread_id(result.thread_id)),
+        )
+        if has_application:
+            anchored.append(result)
+    return anchored
+
+
+def _is_application_feedback(result: AcceptedLLMExtraction) -> bool:
+    return (
+        result.classification.category in _APPLICATION_FEEDBACK_CATEGORIES
+        and result.extraction.event_type == "feedback"
+    )
+
+
+def _is_enriched_application_feedback(result: _EnrichedExtraction) -> bool:
+    return result.extraction.event_type == "feedback"
 
 
 def _enrich_extractions_with_email_context(

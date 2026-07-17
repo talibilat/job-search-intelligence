@@ -83,7 +83,7 @@ Classification runs also use these non-secret settings:
 
 ```env
 JOBTRACKER_CLASSIFICATION_BATCH_SIZE=25
-JOBTRACKER_CLASSIFICATION_PROMPT_VERSION=v2
+JOBTRACKER_CLASSIFICATION_PROMPT_VERSION=v3
 ```
 
 `JOBTRACKER_CLASSIFICATION_BATCH_SIZE` controls how many non-empty retained candidates one structured extraction batch attempts.

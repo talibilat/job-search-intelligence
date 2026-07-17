@@ -213,6 +213,72 @@ def test_follow_up_email_alone_does_not_create_a_submitted_application(
     assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0
 
 
+def test_feedback_email_attaches_to_existing_application_thread(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    interview_at = datetime(2026, 7, 8, 10, 0, tzinfo=UTC)
+    feedback_at = datetime(2026, 7, 10, 10, 0, tzinfo=UTC)
+    insert_raw_email(connection, "email-interview", thread_id="thread-abc")
+    insert_raw_email(connection, "email-feedback", thread_id="thread-abc")
+    connection.commit()
+    service = make_service(connection)
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-interview",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.INTERVIEW_INVITE,
+                status="interview",
+                event_type="interview_scheduled",
+                event_at=interview_at,
+            )
+        ]
+    )
+    first_feedback_run = service.run(
+        [
+            make_extraction(
+                email_id="email-feedback",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="feedback",
+                event_at=feedback_at,
+            )
+        ]
+    )
+    second_feedback_run = service.run(
+        [
+            make_extraction(
+                email_id="email-feedback",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="feedback",
+                event_at=feedback_at,
+            )
+        ]
+    )
+
+    assert first_feedback_run.applications_upserted == 1
+    assert first_feedback_run.events_upserted == 1
+    assert second_feedback_run.applications_upserted == 1
+    assert second_feedback_run.events_upserted == 1
+    assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 1
+    assert_current_status(connection, "interview")
+    stored_events = connection.execute(
+        "SELECT event_type, email_id FROM application_events ORDER BY event_at"
+    ).fetchall()
+    assert [tuple(event) for event in stored_events] == [
+        ("interview_scheduled", "email-interview"),
+        ("feedback", "email-feedback"),
+    ]
+
+
 def test_general_job_emails_never_create_applications_on_rerun(tmp_path: Path) -> None:
     connection = migrated_connection(tmp_path)
     categories = (

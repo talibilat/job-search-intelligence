@@ -39,12 +39,14 @@ _CATEGORY_APPLICATION_STATUS = {
     JobEmailCategory.ASSESSMENT: "assessment",
 }
 
-_CATEGORY_EVENT_TYPE = {
-    JobEmailCategory.APPLICATION_CONFIRMATION: "applied",
-    JobEmailCategory.REJECTION: "rejection",
-    JobEmailCategory.INTERVIEW_INVITE: "interview_scheduled",
-    JobEmailCategory.OFFER: "offer",
-    JobEmailCategory.ASSESSMENT: "assessment",
+_CATEGORY_EVENT_TYPES: dict[JobEmailCategory, frozenset[ApplicationEventType]] = {
+    JobEmailCategory.APPLICATION_CONFIRMATION: frozenset({"applied"}),
+    JobEmailCategory.REJECTION: frozenset({"rejection"}),
+    JobEmailCategory.INTERVIEW_INVITE: frozenset({"interview_scheduled"}),
+    JobEmailCategory.OFFER: frozenset({"offer"}),
+    JobEmailCategory.ASSESSMENT: frozenset({"assessment"}),
+    JobEmailCategory.FOLLOW_UP: frozenset({"feedback"}),
+    JobEmailCategory.OTHER: frozenset({"feedback"}),
 }
 
 
@@ -214,8 +216,8 @@ class ClassificationPromptOutput(BaseModel):
                 msg = "application_status contradicts category"
                 raise ValueError(msg)
 
-            expected_event_type = _CATEGORY_EVENT_TYPE.get(self.category)
-            if self.event_type is not None and self.event_type != expected_event_type:
+            allowed_event_types = _CATEGORY_EVENT_TYPES.get(self.category, frozenset())
+            if self.event_type is not None and self.event_type not in allowed_event_types:
                 msg = "event_type contradicts category"
                 raise ValueError(msg)
 

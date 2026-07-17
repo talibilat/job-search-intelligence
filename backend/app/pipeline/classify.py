@@ -39,7 +39,7 @@ from app.providers.llm import (
 
 type NonBlankString = Annotated[StrictStr, Field(min_length=1)]
 
-CLASSIFICATION_PROMPT_VERSION = "v2"
+CLASSIFICATION_PROMPT_VERSION = "v3"
 CLASSIFICATION_MAX_OUTPUT_TOKENS = 1200
 
 
@@ -360,6 +360,10 @@ def _classification_system_prompt(*, prompt_version: str) -> str:
             "when unclear, and tech_stack as an array.",
             "For non-job-related messages, set is_job_related false, category other, "
             "nullable extraction fields to null, sponsorship unknown, and tech_stack [].",
+            "For recruiter or interviewer feedback about an existing application, use "
+            "category follow_up (or other when it does not fit follow_up), event_type "
+            "feedback, and application_status null. Do not mark cold recruiter outreach "
+            "or a candidate-authored follow-up as feedback.",
             "Do not include extra fields, raw SQL, counts, secrets, or provider payloads.",
             "The JSON object must match this schema:",
             schema,

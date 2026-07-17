@@ -40,6 +40,7 @@ def test_classification_prompt_request_is_versioned_json_contract() -> None:
     assert "is_job_related" in request.messages[0].content
     assert "source" in request.messages[0].content
     assert "rejection_reason" in request.messages[0].content
+    assert "event_type feedback" in request.messages[0].content
 
     assert request.messages[1].role is LLMMessageRole.USER
     payload = json.loads(request.messages[1].content)
@@ -83,6 +84,37 @@ def test_classification_prompt_output_validates_structured_extraction() -> None:
     assert output.application_status == "rejected"
     assert output.event_type == "rejection"
     assert output.tech_stack == ("Python", "FastAPI")
+
+
+def test_classification_prompt_output_accepts_application_feedback() -> None:
+    output = parse_classification_prompt_output(
+        json.dumps(
+            {
+                "is_job_related": True,
+                "category": "follow_up",
+                "confidence": 0.94,
+                "company": "Example Systems",
+                "role_title": "Backend Engineer",
+                "source": "other",
+                "application_status": None,
+                "event_type": "feedback",
+                "event_at": "2026-07-05T12:00:00Z",
+                "salary_min": None,
+                "salary_max": None,
+                "currency": None,
+                "location": None,
+                "work_mode": None,
+                "seniority": None,
+                "sponsorship": "unknown",
+                "tech_stack": [],
+                "rejection_reason": None,
+            }
+        )
+    )
+
+    assert output.category is models.JobEmailCategory.FOLLOW_UP
+    assert output.application_status is None
+    assert output.event_type == "feedback"
 
 
 @pytest.mark.parametrize(
