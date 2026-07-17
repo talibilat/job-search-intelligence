@@ -2741,6 +2741,77 @@ def test_q47_last_email_includes_newer_indexed_message_from_application_thread(
     ]
 
 
+def test_q47_last_recruiter_email_excludes_newer_candidate_authored_follow_up(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE raw_emails SET thread_id = ? WHERE id = ?",
+            ("thread-acme", "email-job"),
+        )
+        connection.execute(
+            """
+            INSERT INTO email_connections (
+                provider, account_id, display_email,
+                credential_ref_kind, credential_ref_provider, credential_ref_name,
+                granted_scopes, connected_at, credential_expires_at,
+                reauth_required, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "gmail",
+                "candidate@example.test",
+                "candidate@example.test",
+                "oauth_token",
+                "gmail",
+                "candidate@example.test",
+                '["https://www.googleapis.com/auth/gmail.readonly"]',
+                "2026-06-01T09:00:00+00:00",
+                None,
+                0,
+                "2026-06-01T09:00:00+00:00",
+            ),
+        )
+        insert_raw_email(
+            connection,
+            email_id="email-candidate-follow-up",
+            thread_id="thread-acme",
+            subject="Re: Interview update",
+            body="Thanks, I look forward to speaking with the Acme team.",
+            retention="retained",
+            sent_at="2026-06-06T10:00:00+00:00",
+            from_addr="Candidate Name <candidate@example.test>",
+        )
+        insert_classification(
+            connection,
+            "email-candidate-follow-up",
+            is_job_related=True,
+            category="follow_up",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What exactly did the recruiter at Acme say in the last email?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "Technical interview moved to Friday" in body["answer"]
+    assert "look forward to speaking" not in body["answer"]
+    assert len(body["citations"]) == 1
+    assert body["citations"][0]["subject"] == "Interview update"
+    assert provider.embedding_inputs == [
+        ("Acme recruiter: Technical interview moved to Friday.",),
+        ("Thanks, I look forward to speaking with the Acme team.",),
+    ]
+
+
 def test_q48_every_rejection_returns_all_exact_matches_despite_retrieval_limit(
     tmp_path: Path,
 ) -> None:
@@ -3327,6 +3398,7 @@ def insert_raw_email(
     retention: str,
     sent_at: str = "2026-06-05T10:00:00+00:00",
     thread_id: str | None = None,
+    from_addr: str = "recruiter@example.test",
 ) -> None:
     connection.execute(
         """
@@ -3338,7 +3410,7 @@ def insert_raw_email(
         (
             email_id,
             thread_id or f"thread-{email_id}",
-            "recruiter@example.test",
+            from_addr,
             "candidate@example.test",
             subject,
             sent_at,

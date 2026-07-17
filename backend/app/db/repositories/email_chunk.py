@@ -332,7 +332,7 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
     def latest_for_mentioned_company(
         self,
         question: str,
-    ) -> tuple[SemanticSearchResult, ...]:
+    ) -> tuple[SemanticSearchResult, ...] | None:
         """Return newest indexed evidence when a question names a known company."""
 
         company_rows = self.execute(
@@ -348,7 +348,7 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
             )
         )
         if not mentioned:
-            return ()
+            return None
 
         placeholders = ", ".join("?" for _ in mentioned)
         rows = self.execute(
@@ -397,6 +397,18 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
                     FROM email_chunks
                     WHERE email_chunks.email_id = raw_emails.id
                 )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM email_connections
+                    WHERE email_connections.provider = raw_emails.provider
+                      AND email_connections.display_email IS NOT NULL
+                      AND (
+                        LOWER(TRIM(raw_emails.from_addr)) =
+                            LOWER(TRIM(email_connections.display_email))
+                        OR LOWER(TRIM(raw_emails.from_addr)) LIKE
+                            '%<' || LOWER(TRIM(email_connections.display_email)) || '>'
+                      )
+                  )
                 ORDER BY
                     raw_emails.sent_at DESC,
                     applications.last_activity_at DESC,
