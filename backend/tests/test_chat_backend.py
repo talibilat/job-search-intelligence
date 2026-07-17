@@ -282,6 +282,32 @@ def test_structured_chat_does_not_filter_salary_breakdown_without_amounts() -> N
     assert request.filters is None
 
 
+@pytest.mark.parametrize(
+    ("question", "expected_role"),
+    (
+        ("How many applications for Data Scientist roles?", "data scientist"),
+        ('How many applications have the role "Platform Engineer"?', "platform engineer"),
+        ("Count applications where the job title is 'Product Designer'.", "product designer"),
+    ),
+)
+def test_structured_chat_maps_explicit_role_phrases_to_typed_metric_filter(
+    question: str,
+    expected_role: str,
+) -> None:
+    request = _structured_request(question)
+
+    assert request.filters is not None
+    assert request.filters.role == expected_role
+
+
+def test_structured_chat_does_not_treat_work_mode_as_role() -> None:
+    request = _structured_request("How many applications for remote roles?")
+
+    assert request.filters is not None
+    assert request.filters.role is None
+    assert request.filters.work_mode == "remote"
+
+
 def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     tmp_path: Path,
 ) -> None:
@@ -504,6 +530,43 @@ def test_chat_api_salary_count_reconciles_with_filtered_metrics(tmp_path: Path) 
         client,
         "/chat",
         json={"message": "How many applications had a salary 100k to 150k?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert unfiltered_response.json()["total_applications"] == 2
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    chat_values = chat_body["tool_outputs"][0]["rows"][0]["values"]
+    assert chat_body["route"] == "quantitative"
+    assert metric_response.json()["total_applications"] == 1
+    assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_role_count_reconciles_with_filtered_metrics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-data-scientist",
+            company="Data Company",
+            role_title="Data Scientist",
+        )
+        insert_application(
+            connection,
+            application_id="app-platform-engineer",
+            company="Platform Company",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    unfiltered_response = client.get("/metrics/summary")
+    metric_response = client.get("/metrics/summary", params={"role": "Data Scientist"})
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many applications for Data Scientist roles?"},
     )
 
     assert metric_response.status_code == 200
@@ -1279,11 +1342,12 @@ def insert_application(
     current_status: str = "in_review",
     salary_min: int | None = None,
     salary_max: int | None = None,
+    role_title: str = "Platform Engineer",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
         company=company,
-        role_title="Platform Engineer",
+        role_title=role_title,
         source=source,
         first_seen_at="2026-06-01T10:00:00+00:00",
         current_status=current_status,

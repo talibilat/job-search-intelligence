@@ -93,6 +93,15 @@ _STATUS_FILTER_TERMS: tuple[tuple[ApplicationStatus, tuple[str, ...]], ...] = (
     ("withdrawn", ("withdrawn application", "currently withdrawn")),
 )
 _SALARY_AMOUNT_PATTERN = r"(?:[$£€]\s*)?([0-9][0-9,]*(?:\.[0-9]+)?\s*[kK]?)"
+_ROLE_ONLY_FILTER_VALUES = frozenset(
+    {
+        "hybrid",
+        "on site",
+        "on-site",
+        "onsite",
+        "remote",
+    }
+)
 _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ...]], ...] = (
     ("role", ("by role", "which role", "job title")),
     ("source", ("by source", "which source", "application source")),
@@ -324,6 +333,7 @@ def _structured_filters(
         if any(term in normalized_question for term in terms)
     }
     status = next(iter(matched_statuses)) if len(matched_statuses) == 1 else None
+    role = _role_filter(normalized_question)
     salary_min, salary_max = _salary_filter(normalized_question)
     updates = {
         key: value
@@ -331,6 +341,7 @@ def _structured_filters(
             ("source", source),
             ("sponsorship", sponsorship),
             ("status", status),
+            ("role", role),
             ("work_mode", work_mode),
             ("salary_min", salary_min),
             ("salary_max", salary_max),
@@ -342,6 +353,27 @@ def _structured_filters(
     if filters is None:
         return MetricsFilter.model_validate(updates)
     return filters.model_copy(update=updates)
+
+
+def _role_filter(normalized_question: str) -> str | None:
+    quoted_match = re.search(
+        r"\b(?:role|job title)\s+(?:is\s+)?(['\"])([^'\"]{1,100})\1",
+        normalized_question,
+    )
+    if quoted_match is not None:
+        return quoted_match.group(2).strip()
+
+    role_match = re.search(
+        r"\bapplications?\s+for\s+(?:an?\s+)?(.{1,100}?)\s+"
+        r"(?:roles?|positions?|jobs?)\b",
+        normalized_question,
+    )
+    if role_match is None:
+        return None
+    role = role_match.group(1).strip()
+    if role in _ROLE_ONLY_FILTER_VALUES:
+        return None
+    return role
 
 
 def _salary_filter(normalized_question: str) -> tuple[int | None, int | None]:
