@@ -4122,10 +4122,15 @@ describe("App", () => {
       "/sync/emails/email-11/content": {
         body_retention_state: "metadata_only",
         body_text: "Reader body",
+        from_addr: "Sender 11 <jobs@sender-11.example>",
         from_domain: "sender-11.example",
+        ingested_at: "2026-07-12T12:05:00Z",
+        labels: ["INBOX"],
+        provider: "gmail",
         public_id: "email-11",
         sent_at: "2026-07-12T12:00:00Z",
         subject: "Subject 11",
+        to_addr: "me@recipient.example",
       },
     });
 

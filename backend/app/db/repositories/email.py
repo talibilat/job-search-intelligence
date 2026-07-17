@@ -354,7 +354,9 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
                     ELSE NULL
                 END AS body_text,
                 body_retention_state,
-                provider
+                labels,
+                provider,
+                ingested_at
             FROM raw_emails
             WHERE public_id = ? AND provider = ?
             """,

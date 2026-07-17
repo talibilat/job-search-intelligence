@@ -2619,6 +2619,7 @@ h3 {
 .email-reader-heading-group,
 .email-reader-content,
 .email-reader-error,
+.email-reader-details,
 .email-reader-body {
   min-width: 0;
 }
@@ -2733,6 +2734,33 @@ h3 {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.email-reader-details {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 16px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid #eceae3;
+  color: #666d66;
+  font-size: 12px;
+}
+
+.email-reader-details div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.email-reader-details dt {
+  font-weight: 650;
+}
+
+.email-reader-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-transform: capitalize;
 }
 
 .email-reader-body {

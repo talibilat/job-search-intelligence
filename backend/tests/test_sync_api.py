@@ -971,7 +971,19 @@ def test_get_sync_email_content_returns_retained_body(tmp_path: Path) -> None:
     response = client.get("/sync/emails/0123456789abcdef0123456789abcdef/content")
 
     assert response.status_code == 200
-    assert response.json()["body_text"] == "Private body"
+    assert response.json() == {
+        "body_retention_state": "retained",
+        "body_text": "Private body",
+        "from_addr": "jobs@example.com",
+        "from_domain": "example.com",
+        "ingested_at": NOW.isoformat().replace("+00:00", "Z"),
+        "labels": [],
+        "provider": "gmail",
+        "public_id": "0123456789abcdef0123456789abcdef",
+        "sent_at": NOW.isoformat().replace("+00:00", "Z"),
+        "subject": "Application received",
+        "to_addr": "me@example.com",
+    }
     assert "gmail-msg-1" not in response.text
 
 

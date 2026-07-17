@@ -86,9 +86,14 @@ class SyncedEmailReaderService:
 def _detail_from_record(record: RawEmailReaderRecord, *, body_text: str) -> RawEmailDetail:
     return RawEmailDetail(
         public_id=record.public_id,
+        from_addr=record.from_addr,
         from_domain=email_address_domain(record.from_addr),
+        to_addr=record.to_addr,
         subject=record.subject,
         sent_at=record.sent_at,
         body_retention_state=record.body_retention_state,
+        labels=record.labels,
+        provider=record.provider,
+        ingested_at=record.ingested_at,
         body_text=body_text,
     )

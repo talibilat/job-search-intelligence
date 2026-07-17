@@ -4712,6 +4712,17 @@
             "title": "Body Text",
             "type": "string"
           },
+          "from_addr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Addr"
+          },
           "from_domain": {
             "anyOf": [
               {
@@ -4722,6 +4733,22 @@
               }
             ],
             "title": "From Domain"
+          },
+          "ingested_at": {
+            "format": "date-time",
+            "title": "Ingested At",
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
           },
           "public_id": {
             "title": "Public Id",
@@ -4749,14 +4776,30 @@
               }
             ],
             "title": "Subject"
+          },
+          "to_addr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Addr"
           }
         },
         "required": [
           "public_id",
+          "from_addr",
           "from_domain",
+          "to_addr",
           "subject",
           "sent_at",
           "body_retention_state",
+          "labels",
+          "provider",
+          "ingested_at",
           "body_text"
         ],
         "title": "RawEmailDetail",

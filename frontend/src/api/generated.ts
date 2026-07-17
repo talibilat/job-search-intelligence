@@ -1487,10 +1487,15 @@ export const RawEmailBodyRetentionState = {
 export interface RawEmailDetail {
   body_retention_state: RawEmailBodyRetentionState;
   body_text: string;
+  from_addr: string | null;
   from_domain: string | null;
+  ingested_at: string;
+  labels: string[];
+  provider: string;
   public_id: string;
   sent_at: string | null;
   subject: string | null;
+  to_addr: string | null;
 }
 
 /**

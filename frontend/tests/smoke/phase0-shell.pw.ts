@@ -938,10 +938,15 @@ const redesignSyncedEmails = Array.from({ length: 11 }, (_, index) => {
 const redesignEmailDetail = {
   body_retention_state: "metadata_only",
   body_text: "Thanks for applying. We will follow up within two weeks.",
+  from_addr: "Jobs Team <jobs@jobs.example>",
   from_domain: "jobs.example",
+  ingested_at: "2026-07-12T12:05:00Z",
+  labels: ["INBOX"],
+  provider: "gmail",
   public_id: "fixture-email-11",
   sent_at: "2026-07-12T12:00:00Z",
   subject: "Application received - row 11",
+  to_addr: "me@example.com",
 } satisfies RawEmailDetail;
 
 const redesignSuccessfulSync = {
@@ -1730,10 +1735,15 @@ async function installRedesignFixtures(page: Page) {
       json: {
         body_retention_state: "retained",
         body_text: "The role requires deeper distributed-systems design experience.",
+        from_addr: "Hiring Team <hiring@fixtures.example>",
         from_domain: "fixtures.example",
+        ingested_at: "2026-07-10T16:05:00Z",
+        labels: ["INBOX", "CATEGORY_UPDATES"],
+        provider: "gmail",
         public_id: "fixture-rejection-public",
         sent_at: "2026-07-10T16:00:00Z",
         subject: "Rejection decision",
+        to_addr: "me@example.com",
       } satisfies RawEmailDetail,
       status: 200,
     }),
@@ -1996,6 +2006,9 @@ test("runs the critical private-data-free redesign journey", async ({
   await chat.getByRole("button", { name: "Open email evidence" }).click();
   const citedEmail = page.getByRole("dialog");
   await expect(citedEmail.getByRole("heading", { name: "Rejection decision" })).toBeVisible();
+  await expect(citedEmail.getByText("From: Hiring Team <hiring@fixtures.example>")).toBeVisible();
+  await expect(citedEmail.getByText("To: me@example.com")).toBeVisible();
+  await expect(citedEmail.getByText("INBOX, CATEGORY_UPDATES")).toBeVisible();
   await expect(citedEmail.getByText("The role requires deeper distributed-systems design experience.")).toBeVisible();
   await citedEmail.getByRole("button", { name: "Close email" }).click();
 
