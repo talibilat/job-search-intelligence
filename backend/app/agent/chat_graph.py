@@ -288,6 +288,8 @@ def _structured_filters(
     anchor_at: datetime | None,
 ) -> MetricsFilter | None:
     filters = _relative_window_filter(normalized_question, anchor_at=anchor_at)
+    if filters is None:
+        filters = _calendar_year_filter(normalized_question)
     source = next(
         (
             source
@@ -446,6 +448,20 @@ def _relative_window_filter(
     return MetricsFilter(
         first_seen_from=start,
         first_seen_to=next_period - timedelta(microseconds=1),
+    )
+
+
+def _calendar_year_filter(normalized_question: str) -> MetricsFilter | None:
+    match = re.search(r"\b(?:in|during)\s+((?:19|20)\d{2})\b", normalized_question)
+    if match is None:
+        return None
+
+    year = int(match.group(1))
+    start = datetime(year, 1, 1, tzinfo=UTC)
+    next_year = start.replace(year=year + 1)
+    return MetricsFilter(
+        first_seen_from=start,
+        first_seen_to=next_year - timedelta(microseconds=1),
     )
 
 

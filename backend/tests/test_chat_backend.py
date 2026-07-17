@@ -119,6 +119,34 @@ def test_structured_chat_maps_relative_windows_to_typed_metric_filters(
     assert request.filters.first_seen_to == expected_to
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "How many applications in 2025?",
+        "How many jobs did I apply to during 2025?",
+        "How many roles did I apply for in 2025?",
+    ),
+)
+def test_structured_chat_maps_explicit_calendar_year_to_typed_metric_filters(
+    question: str,
+) -> None:
+    request = _structured_request(question)
+
+    assert request.template == "summary_counts"
+    assert request.filters is not None
+    assert request.filters.first_seen_from == datetime(2025, 1, 1, tzinfo=UTC)
+    assert request.filters.first_seen_to == datetime(
+        2025,
+        12,
+        31,
+        23,
+        59,
+        59,
+        999999,
+        tzinfo=UTC,
+    )
+
+
 def test_structured_chat_composes_source_and_relative_window_filters() -> None:
     request = _structured_request(
         "How many LinkedIn applications this month?",
@@ -372,6 +400,52 @@ def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     assert metric_response.status_code == 200
     assert chat_response.status_code == 200
     chat_values = chat_response.json()["tool_outputs"][0]["rows"][0]["values"]
+    assert metric_response.json()["total_applications"] == 1
+    assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_calendar_year_count_reconciles_with_filtered_metrics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-2025",
+            company="Prior Year Company",
+        )
+        insert_application(
+            connection,
+            application_id="app-2026",
+            company="Current Year Company",
+        )
+        connection.execute(
+            "UPDATE applications SET first_seen_at = ? WHERE id = ?",
+            ("2025-06-15T10:00:00+00:00", "app-2025"),
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    unfiltered_response = client.get("/metrics/summary")
+    metric_response = client.get(
+        "/metrics/summary",
+        params={
+            "first_seen_from": "2025-01-01T00:00:00+00:00",
+            "first_seen_to": "2025-12-31T23:59:59.999999+00:00",
+        },
+    )
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many applications in 2025?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert unfiltered_response.json()["total_applications"] == 2
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    chat_values = chat_body["tool_outputs"][0]["rows"][0]["values"]
+    assert chat_body["route"] == "quantitative"
     assert metric_response.json()["total_applications"] == 1
     assert chat_values["total_applications"] == metric_response.json()["total_applications"]
     assert provider.embedding_inputs == []
