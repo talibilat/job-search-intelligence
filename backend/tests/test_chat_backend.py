@@ -253,6 +253,35 @@ def test_structured_chat_composes_status_source_and_relative_window_filters() ->
     )
 
 
+@pytest.mark.parametrize(
+    ("question", "expected_min", "expected_max"),
+    (
+        ("How many applications had a salary 100k to 150k?", 100_000, 150_000),
+        ("How many roles had a salary between £90,000 and £120,000?", 90_000, 120_000),
+        ("How many applications had a salary at least $125k?", 125_000, None),
+        ("How many applications had a salary under 80k?", None, 80_000),
+    ),
+)
+def test_structured_chat_maps_salary_language_to_typed_metric_filters(
+    question: str,
+    expected_min: int | None,
+    expected_max: int | None,
+) -> None:
+    request = _structured_request(question)
+
+    assert request.filters is not None
+    assert request.filters.salary_min == expected_min
+    assert request.filters.salary_max == expected_max
+
+
+def test_structured_chat_does_not_filter_salary_breakdown_without_amounts() -> None:
+    request = _structured_request("How do my salary bands convert?")
+
+    assert request.template == "breakdown"
+    assert request.breakdown_dimension == "salary"
+    assert request.filters is None
+
+
 def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     tmp_path: Path,
 ) -> None:
@@ -432,6 +461,49 @@ def test_chat_api_status_count_reconciles_with_filtered_metrics(tmp_path: Path) 
         client,
         "/chat",
         json={"message": "How many applications are currently in review?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert unfiltered_response.json()["total_applications"] == 2
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    chat_values = chat_body["tool_outputs"][0]["rows"][0]["values"]
+    assert chat_body["route"] == "quantitative"
+    assert metric_response.json()["total_applications"] == 1
+    assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_salary_count_reconciles_with_filtered_metrics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-in-band",
+            company="In Band Company",
+            salary_min=110_000,
+            salary_max=140_000,
+        )
+        insert_application(
+            connection,
+            application_id="app-outside-band",
+            company="Outside Band Company",
+            salary_min=160_000,
+            salary_max=190_000,
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    unfiltered_response = client.get("/metrics/summary")
+    metric_response = client.get(
+        "/metrics/summary",
+        params={"salary_min": 100_000, "salary_max": 150_000},
+    )
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many applications had a salary 100k to 150k?"},
     )
 
     assert metric_response.status_code == 200
@@ -1205,6 +1277,8 @@ def insert_application(
     work_mode: str = "remote",
     sponsorship: str = "unknown",
     current_status: str = "in_review",
+    salary_min: int | None = None,
+    salary_max: int | None = None,
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -1213,8 +1287,8 @@ def insert_application(
         source=source,
         first_seen_at="2026-06-01T10:00:00+00:00",
         current_status=current_status,
-        salary_min=None,
-        salary_max=None,
+        salary_min=salary_min,
+        salary_max=salary_max,
         currency=None,
         location="Remote",
         work_mode=work_mode,

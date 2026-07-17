@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Literal, TypedDict, cast
@@ -91,6 +92,7 @@ _STATUS_FILTER_TERMS: tuple[tuple[ApplicationStatus, tuple[str, ...]], ...] = (
     ("ghosted", ("ghosted application", "currently ghosted")),
     ("withdrawn", ("withdrawn application", "currently withdrawn")),
 )
+_SALARY_AMOUNT_PATTERN = r"(?:[$£€]\s*)?([0-9][0-9,]*(?:\.[0-9]+)?\s*[kK]?)"
 _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ...]], ...] = (
     ("role", ("by role", "which role", "job title")),
     ("source", ("by source", "which source", "application source")),
@@ -322,6 +324,7 @@ def _structured_filters(
         if any(term in normalized_question for term in terms)
     }
     status = next(iter(matched_statuses)) if len(matched_statuses) == 1 else None
+    salary_min, salary_max = _salary_filter(normalized_question)
     updates = {
         key: value
         for key, value in (
@@ -329,6 +332,8 @@ def _structured_filters(
             ("sponsorship", sponsorship),
             ("status", status),
             ("work_mode", work_mode),
+            ("salary_min", salary_min),
+            ("salary_max", salary_max),
         )
         if value is not None
     }
@@ -337,6 +342,46 @@ def _structured_filters(
     if filters is None:
         return MetricsFilter.model_validate(updates)
     return filters.model_copy(update=updates)
+
+
+def _salary_filter(normalized_question: str) -> tuple[int | None, int | None]:
+    if "salary" not in normalized_question:
+        return None, None
+
+    range_match = re.search(
+        rf"salary(?:\s+(?:is|of))?\s+(?:between\s+)?{_SALARY_AMOUNT_PATTERN}"
+        rf"\s*(?:-|to|and)\s*{_SALARY_AMOUNT_PATTERN}",
+        normalized_question,
+    )
+    if range_match is not None:
+        lower = _parse_salary_amount(range_match.group(1))
+        upper = _parse_salary_amount(range_match.group(2))
+        if lower <= upper:
+            return lower, upper
+        return None, None
+
+    minimum_match = re.search(
+        rf"salary\s+(?:of\s+)?(?:at least|over|above|from)\s+{_SALARY_AMOUNT_PATTERN}",
+        normalized_question,
+    )
+    if minimum_match is not None:
+        return _parse_salary_amount(minimum_match.group(1)), None
+
+    maximum_match = re.search(
+        rf"salary\s+(?:of\s+)?(?:at most|under|below|up to)\s+{_SALARY_AMOUNT_PATTERN}",
+        normalized_question,
+    )
+    if maximum_match is not None:
+        return None, _parse_salary_amount(maximum_match.group(1))
+    return None, None
+
+
+def _parse_salary_amount(value: str) -> int:
+    normalized = value.replace(",", "").replace(" ", "")
+    multiplier = 1_000 if normalized.endswith("k") else 1
+    if multiplier != 1:
+        normalized = normalized[:-1]
+    return int(float(normalized) * multiplier)
 
 
 def _relative_window_filter(
