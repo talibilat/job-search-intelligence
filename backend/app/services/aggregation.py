@@ -537,7 +537,11 @@ def _partition_application_attempts(
             result.extraction.status,
         )
         if event_status is not None:
-            attempt.current_status = event_status
+            attempt.current_status = _transition_current_status(
+                current_status=attempt.current_status,
+                event_type=_event_type_for_result(result),
+                event_status=event_status,
+            )
 
     return partitioned
 
@@ -823,7 +827,11 @@ def derive_current_status_from_event_timeline(
     for event in sorted(events, key=_status_timeline_sort_key):
         event_status = _status_for_event_type(event.event_type, event.extracted_status)
         if event_status is not None:
-            current_status = event_status
+            current_status = _transition_current_status(
+                current_status=current_status,
+                event_type=event.event_type,
+                event_status=event_status,
+            )
     return current_status
 
 
@@ -879,6 +887,21 @@ def _status_for_event_type(
     if event_status is not None:
         return event_status
     return extracted_status
+
+
+def _transition_current_status(
+    *,
+    current_status: ApplicationStatus,
+    event_type: ApplicationEventType,
+    event_status: ApplicationStatus,
+) -> ApplicationStatus:
+    if event_type == "response" and current_status not in {
+        "applied",
+        "in_review",
+        "ghosted",
+    }:
+        return current_status
+    return event_status
 
 
 def _pick_best_extraction(

@@ -348,6 +348,84 @@ def test_employer_response_attaches_to_application_and_prevents_silence(
     assert response_metric.silent_count == 0
 
 
+def test_employer_response_after_interview_preserves_advanced_status(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    interview_at = datetime(2026, 7, 8, 10, 0, tzinfo=UTC)
+    response_at = datetime(2026, 7, 9, 10, 0, tzinfo=UTC)
+    insert_raw_email(
+        connection,
+        "email-interview",
+        thread_id="thread-abc",
+        sent_at=interview_at,
+    )
+    insert_raw_email(
+        connection,
+        "email-response",
+        thread_id="thread-abc",
+        sent_at=response_at,
+    )
+    connection.commit()
+    service = make_service(connection)
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-interview",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.INTERVIEW_INVITE,
+                status="interview",
+                event_type="interview_scheduled",
+                event_at=interview_at,
+            )
+        ]
+    )
+    first_response_run = service.run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=response_at,
+            )
+        ]
+    )
+    second_response_run = service.run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=response_at,
+            )
+        ]
+    )
+
+    assert first_response_run.applications_upserted == 1
+    assert first_response_run.events_upserted == 1
+    assert second_response_run.applications_upserted == 1
+    assert second_response_run.events_upserted == 1
+    assert_current_status(connection, "interview")
+    stored_events = connection.execute(
+        "SELECT event_type, email_id FROM application_events ORDER BY event_at"
+    ).fetchall()
+    assert [tuple(event) for event in stored_events] == [
+        ("interview_scheduled", "email-interview"),
+        ("response", "email-response"),
+    ]
+    response_metric = MetricsRepository(connection).get_response_silence_metric()
+    assert response_metric.human_response_count == 1
+    assert response_metric.silent_count == 0
+
+
 def test_unanchored_employer_response_does_not_create_application(tmp_path: Path) -> None:
     connection = migrated_connection(tmp_path)
     insert_raw_email(connection, "email-response", thread_id="thread-cold")

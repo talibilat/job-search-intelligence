@@ -16,20 +16,10 @@ from app.models.correction import JsonObject
 from app.models.event import ApplicationEventRecord, ApplicationEventType
 from app.models.records import ApplicationCorrectionRecord, ApplicationRecord
 from app.pipeline.aggregate import make_event_id
+from app.services.aggregation import derive_current_status_from_events
 
 type Clock = Callable[[], datetime]
 type MissingManualEditResource = Literal["application", "event"]
-
-_STATUS_BY_EVENT_TYPE: dict[ApplicationEventType, ApplicationStatus | None] = {
-    "applied": "applied",
-    "response": "in_review",
-    "assessment": "assessment",
-    "interview_scheduled": "interview",
-    "feedback": None,
-    "rejection": "rejected",
-    "offer": "offer",
-    "ghost_inferred": "ghosted",
-}
 
 
 class ManualEditNotFoundError(Exception):
@@ -320,19 +310,7 @@ def _event_id_for_updated_event(
 
 
 def _derive_current_status(events: list[ApplicationEventRecord]) -> ApplicationStatus:
-    current_status: ApplicationStatus = "applied"
-    for event in sorted(events, key=lambda item: item.event_at):
-        event_status = _status_for_event(event)
-        if event_status is not None:
-            current_status = event_status
-    return current_status
-
-
-def _status_for_event(event: ApplicationEventRecord) -> ApplicationStatus | None:
-    event_status = _STATUS_BY_EVENT_TYPE[event.event_type]
-    if event_status is not None:
-        return event_status
-    return event.extracted_status
+    return derive_current_status_from_events(events)
 
 
 def _json_object(
