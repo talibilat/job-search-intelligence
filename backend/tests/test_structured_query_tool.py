@@ -188,6 +188,28 @@ def test_structured_query_tool_answers_successful_application_segments() -> None
     }
 
 
+def test_structured_query_tool_answers_negative_outcome_segments() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="negative_outcome_segments"))
+
+    assert result.rows[0].label == "role:data engineer"
+    assert result.rows[0].values == {
+        "dimension": "role",
+        "value": "data engineer",
+        "application_count": 1,
+        "negative_count": 1,
+        "negative_rate": 1.0,
+        "negative_rate_lift": 0.6,
+        "baseline_negative_count": 2,
+        "baseline_negative_rate": 0.4,
+        "total_applications": 5,
+    }
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -226,6 +248,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "application_timeseries",
         "response_rate_timeseries",
         "successful_application_segments",
+        "negative_outcome_segments",
         "breakdown",
         "live_applications",
     }

@@ -28,6 +28,7 @@ StructuredQueryTemplate = Literal[
     "application_timeseries",
     "response_rate_timeseries",
     "successful_application_segments",
+    "negative_outcome_segments",
     "breakdown",
     "live_applications",
 ]
@@ -294,6 +295,31 @@ class StructuredQueryTool:
                         },
                     )
                     for segment in diagnostics.successful_application_segments
+                ),
+            )
+
+        if request.template == "negative_outcome_segments":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"{segment.dimension}:{segment.value}",
+                        values={
+                            "dimension": segment.dimension,
+                            "value": segment.value,
+                            "application_count": segment.application_count,
+                            "negative_count": segment.negative_count,
+                            "negative_rate": segment.negative_rate,
+                            "negative_rate_lift": segment.negative_rate_lift,
+                            "baseline_negative_count": diagnostics.baseline_negative_count,
+                            "baseline_negative_rate": diagnostics.baseline_negative_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for segment in diagnostics.negative_outcome_segments
                 ),
             )
 

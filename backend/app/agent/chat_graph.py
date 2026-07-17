@@ -70,6 +70,12 @@ _SUCCESSFUL_APPLICATION_TRAIT_TERMS = (
     "successful applications",
     "wins have in common",
 )
+_NEGATIVE_OUTCOME_TRAIT_TERMS = (
+    "rejected/ghosted application",
+    "rejected or ghosted application",
+    "rejected and ghosted application",
+    "negative outcomes have in common",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -282,6 +288,7 @@ def route_question(question: str) -> ChatRoute:
         or any(term in normalized for term in _APPLICATION_TREND_TERMS)
         or any(term in normalized for term in _RESPONSE_RATE_TREND_TERMS)
         or _asks_successful_application_traits(normalized)
+        or _asks_negative_outcome_traits(normalized)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -312,6 +319,10 @@ def _structured_request(
         return StructuredQueryRequest(template="response_rate_timeseries", filters=filters)
     if _asks_successful_application_traits(normalized):
         return StructuredQueryRequest(template="successful_application_segments", filters=filters)
+    if _asks_negative_outcome_traits(normalized):
+        if filters is not None and filters.status in {"rejected", "ghosted"}:
+            filters = filters.model_copy(update={"status": None})
+        return StructuredQueryRequest(template="negative_outcome_segments", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):
         return StructuredQueryRequest(template="application_timeseries", filters=filters)
     if len(_matched_sources(normalized)) > 1:
@@ -414,6 +425,15 @@ def _asks_successful_application_traits(normalized_question: str) -> bool:
         "successful" in normalized_question
         and "application" in normalized_question
         and "in common" in normalized_question
+    )
+
+
+def _asks_negative_outcome_traits(normalized_question: str) -> bool:
+    return any(term in normalized_question for term in _NEGATIVE_OUTCOME_TRAIT_TERMS) or (
+        "application" in normalized_question
+        and "in common" in normalized_question
+        and "rejected" in normalized_question
+        and "ghosted" in normalized_question
     )
 
 
@@ -539,6 +559,8 @@ def synthesize_grounded_answer(
             rows, list
         ):
             return _synthesize_successful_application_segments(rows)
+        if structured.get("template") == "negative_outcome_segments" and isinstance(rows, list):
+            return _synthesize_negative_outcome_segments(rows)
         if isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
                 return _synthesize_live_applications(rows)
@@ -633,6 +655,45 @@ def _synthesize_successful_application_segments(rows: list[object]) -> str:
         "above-baseline associations are: "
         + "; ".join(segments)
         + ". These are correlations, not proof that a segment caused success."
+    )
+
+
+def _synthesize_negative_outcome_segments(rows: list[object]) -> str:
+    segments: list[str] = []
+    for row in rows:
+        values = row.get("values") if isinstance(row, dict) else None
+        if not isinstance(values, dict):
+            continue
+        dimension = values.get("dimension")
+        value = values.get("value")
+        negative_count = values.get("negative_count")
+        application_count = values.get("application_count")
+        negative_rate = values.get("negative_rate")
+        negative_rate_lift = values.get("negative_rate_lift")
+        if (
+            not isinstance(dimension, str)
+            or not isinstance(value, str)
+            or not isinstance(negative_count, int)
+            or not isinstance(application_count, int)
+            or not isinstance(negative_rate, (int, float))
+            or not isinstance(negative_rate_lift, (int, float))
+        ):
+            continue
+        segments.append(
+            f"{dimension} {value}: {negative_count} of {application_count} "
+            f"({negative_rate:.1%}), {negative_rate_lift:.1%} above the filtered baseline"
+        )
+
+    if not segments:
+        return (
+            "No segment has a rejected-or-ghosted rate above the filtered baseline, so there "
+            "is not enough deterministic evidence to identify a shared negative-outcome trait."
+        )
+    return (
+        "A negative outcome means an application currently marked rejected or ghosted. The "
+        "strongest above-baseline associations are: "
+        + "; ".join(segments)
+        + ". These are correlations, not proof that a segment caused the negative outcome."
     )
 
 

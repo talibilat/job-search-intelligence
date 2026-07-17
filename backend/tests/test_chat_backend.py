@@ -426,6 +426,18 @@ def test_structured_chat_routes_successful_application_traits_to_diagnostics() -
     assert request.filters.source == "linkedin"
 
 
+def test_structured_chat_routes_negative_outcome_traits_to_diagnostics() -> None:
+    question = "What do my rejected or ghosted LinkedIn applications have in common?"
+
+    request = _structured_request(question)
+
+    assert route_question(question) == "quantitative"
+    assert request.template == "negative_outcome_segments"
+    assert request.filters is not None
+    assert request.filters.source == "linkedin"
+    assert request.filters.status is None
+
+
 def test_chat_api_successful_traits_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -483,6 +495,71 @@ def test_chat_api_successful_traits_reports_insufficient_deterministic_evidence(
         client,
         "/chat",
         json={"message": "What do my successful applications have in common?"},
+    )
+
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["rows"] == []
+    assert "not enough deterministic evidence" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_negative_traits_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        SyntheticFixtureRepository(connection).load_file(
+            BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/diagnostics")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What do my rejected/ghosted applications have in common?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    diagnostics = metric_response.json()
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["template"] == "negative_outcome_segments"
+    assert chat_body["tool_outputs"][0]["rows"] == [
+        {
+            "label": f"{segment['dimension']}:{segment['value']}",
+            "values": {
+                "dimension": segment["dimension"],
+                "value": segment["value"],
+                "application_count": segment["application_count"],
+                "negative_count": segment["negative_count"],
+                "negative_rate": segment["negative_rate"],
+                "negative_rate_lift": segment["negative_rate_lift"],
+                "baseline_negative_count": diagnostics["baseline_negative_count"],
+                "baseline_negative_rate": diagnostics["baseline_negative_rate"],
+                "total_applications": diagnostics["total_applications"],
+            },
+        }
+        for segment in diagnostics["negative_outcome_segments"]
+    ]
+    assert chat_body["citations"][0]["citation_id"] == "metric:negative_outcome_segments"
+    assert "correlations" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_negative_traits_reports_insufficient_deterministic_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What do my rejected/ghosted applications have in common?"},
     )
 
     assert chat_response.status_code == 200
