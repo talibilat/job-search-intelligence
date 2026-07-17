@@ -1727,7 +1727,15 @@ async function installRedesignFixtures(page: Page) {
         tool_outputs_json: response.tool_outputs,
       },
     );
-    await route.fulfill({ contentType: "application/json", json: response, status: 200 });
+    const conversationId = response.conversation_id;
+    const tool = response.route === "quantitative" ? "structured_query" : "semantic_search";
+    const stream = [
+      `event: route\ndata: ${JSON.stringify({ conversation_id: conversationId, route: response.route, type: "route" })}`,
+      `event: tool\ndata: ${JSON.stringify({ conversation_id: conversationId, tool, type: "tool" })}`,
+      `event: complete\ndata: ${JSON.stringify({ conversation_id: conversationId, response, type: "complete" })}`,
+      "",
+    ].join("\n\n");
+    await route.fulfill({ body: stream, contentType: "text/event-stream", status: 200 });
   });
   await page.route("**/sync/emails/fixture-rejection-public/content", (route) =>
     route.fulfill({
@@ -1815,8 +1823,8 @@ test("runs the critical private-data-free redesign journey", async ({
   await page.getByLabel("Sponsorship").selectOption("offered");
   await page.getByLabel("Work mode").selectOption("remote");
   await page.getByLabel("Role").fill("platform");
-  await page.getByLabel("From").fill("2026-06-01");
-  await page.getByLabel("To").fill("2026-07-14");
+  await page.getByLabel("From", { exact: true }).fill("2026-06-01");
+  await page.getByLabel("To", { exact: true }).fill("2026-07-14");
   await page.getByLabel("Salary minimum").fill("120000");
   await page.getByLabel("Salary maximum").fill("180000");
   await page.getByRole("button", { name: "Apply filters" }).click();

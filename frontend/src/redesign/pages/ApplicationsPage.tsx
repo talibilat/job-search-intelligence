@@ -127,6 +127,12 @@ export function ApplicationsPage({
   );
 
   useEffect(() => {
+    const syncFiltersFromLocation = () => setFilters(filtersFromSearch(window.location.search));
+    window.addEventListener("popstate", syncFiltersFromLocation);
+    return () => window.removeEventListener("popstate", syncFiltersFromLocation);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setApplicationsLoading(true);
@@ -363,7 +369,11 @@ export function ApplicationsPage({
       </div>
 
       <ProcessingPanel externalProcessingActive={processingActive} onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
-      <DashboardFilterPanel filters={filters} onApply={applyFilters} />
+      <DashboardFilterPanel
+        filters={filters}
+        key={searchFromFilters(filters)}
+        onApply={applyFilters}
+      />
 
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
         {chips.map((chip) => {

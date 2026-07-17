@@ -21,9 +21,64 @@ const emptyEmailPage = {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
 });
 
 describe("OverviewPage request states", () => {
+  it("applies URL-backed dashboard filters and restores them on browser navigation", async () => {
+    const metricRequests: URL[] = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const url = new URL(path, "http://localhost");
+      if (url.pathname.startsWith("/metrics/") || url.pathname === "/applications") {
+        metricRequests.push(url);
+      }
+      if (url.pathname === "/metrics/summary") return Promise.resolve(response({ total_applications: 0, offers_received: 0 }));
+      if (url.pathname === "/metrics/rates") return Promise.resolve(response({}));
+      if (url.pathname === "/metrics/funnel") return Promise.resolve(response({ stages: [] }));
+      if (url.pathname === "/metrics/timeseries") return Promise.resolve(response({ points: [] }));
+      if (url.pathname === "/applications") return Promise.resolve(response([]));
+      if (url.pathname.startsWith("/sync/emails")) return Promise.resolve(response(emptyEmailPage));
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OverviewPage go={() => undefined} openApp={() => undefined} reloadKey={0} />);
+
+    fireEvent.click(screen.getByText("Filter dashboard and applications"));
+    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "Platform engineer" } });
+    fireEvent.change(screen.getByLabelText("Work mode"), { target: { value: "remote" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => {
+      expect(window.location.search).toBe("?role=Platform+engineer&work_mode=remote");
+      for (const pathname of [
+        "/metrics/summary",
+        "/metrics/rates",
+        "/metrics/funnel",
+        "/metrics/timeseries",
+        "/applications",
+      ]) {
+        expect(metricRequests.some((url) =>
+          url.pathname === pathname &&
+          url.searchParams.get("role") === "Platform engineer" &&
+          url.searchParams.get("work_mode") === "remote"
+        )).toBe(true);
+      }
+    });
+
+    window.history.pushState(null, "", "/?role=Data+scientist");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText<HTMLInputElement>("Role").value).toBe("Data scientist");
+      expect(screen.getByLabelText<HTMLSelectElement>("Work mode").value).toBe("");
+      expect(metricRequests.some((url) =>
+        url.pathname === "/metrics/summary" && url.searchParams.get("role") === "Data scientist"
+      )).toBe(true);
+    });
+  });
+
   it("renders unique interview tasks and persists Done through the backend", async () => {
     let attentionReads = 0;
     const item = {

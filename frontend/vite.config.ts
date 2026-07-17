@@ -11,7 +11,20 @@ export default defineConfig({
     proxy: {
       "/auth": BACKEND_URL,
       "/attention": BACKEND_URL,
-      "/chat": BACKEND_URL,
+      // "/chat" is both the streaming backend endpoint and a frontend route.
+      // Keep direct page loads in the SPA while proxying POST and JSON requests.
+      "/chat": {
+        target: BACKEND_URL,
+        changeOrigin: true,
+        bypass(req: IncomingMessage) {
+          if (
+            req.method === "GET" &&
+            (req.headers.accept ?? "").includes("text/html")
+          ) {
+            return req.url;
+          }
+        },
+      },
       "/sync": BACKEND_URL,
       // "/setup" is both a backend API path (POST /setup, GET /setup/status)
       // and the frontend's own client-side page route. Bypass the proxy for
