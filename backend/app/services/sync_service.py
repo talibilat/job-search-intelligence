@@ -866,15 +866,20 @@ class EmailSyncService:
                         page.messages,
                         ingested_at=self._clock(),
                     )
+                    known_candidate_thread_ids = self._email_repository.list_candidate_thread_ids(
+                        account=connection.account,
+                    )
                     self._persist_filter_decisions(
                         page.messages,
                         candidate_query=build_broad_candidate_query(),
+                        known_candidate_thread_ids=known_candidate_thread_ids,
                     )
                     if _can_fetch_retained_bodies(self._body_provider):
                         body_batch = await self.fetch_retained_bodies(
                             connection=connection,
                             metadata=page.messages,
                             candidate_query=build_broad_candidate_query(),
+                            known_candidate_thread_ids=known_candidate_thread_ids,
                         )
                         # Per-message body failures are tracked, not fatal:
                         # aborting here would pin the resumable backfill to
@@ -968,6 +973,7 @@ class EmailSyncService:
         metadata: Iterable[EmailMessageMetadata],
         candidate_query: EmailCandidateQuery,
         reconciliation_or_debug_refs: Iterable[EmailMessageRef] = (),
+        known_candidate_thread_ids: Iterable[str] = (),
         max_body_bytes: int | None = None,
     ) -> EmailBodyBatch:
         """Fetch bodies only for broad candidates or explicit reconciliation refs."""
@@ -982,7 +988,10 @@ class EmailSyncService:
             seen_message_ids.add(ref.message_id)
             selected_refs.append(ref)
 
-        decisions = candidate_query.evaluate_metadata_batch(metadata_messages)
+        decisions = candidate_query.evaluate_metadata_batch(
+            metadata_messages,
+            known_candidate_thread_ids=known_candidate_thread_ids,
+        )
         for message, decision in zip(metadata_messages, decisions, strict=True):
             if decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE:
                 select_ref(message.ref)
@@ -1104,15 +1113,20 @@ class EmailSyncService:
                     page_result.page.messages,
                     ingested_at=self._clock(),
                 )
+                known_candidate_thread_ids = self._email_repository.list_candidate_thread_ids(
+                    account=connection.account,
+                )
                 self._persist_filter_decisions(
                     page_result.page.messages,
                     candidate_query=build_broad_candidate_query(),
+                    known_candidate_thread_ids=known_candidate_thread_ids,
                 )
                 if _can_fetch_retained_bodies(self._body_provider):
                     body_batch = await self.fetch_retained_bodies(
                         connection=connection,
                         metadata=page_result.page.messages,
                         candidate_query=build_broad_candidate_query(),
+                        known_candidate_thread_ids=known_candidate_thread_ids,
                     )
                     retained_body_failure_count += len(body_batch.failures)
                     if body_batch.bodies:
@@ -1204,12 +1218,16 @@ class EmailSyncService:
         metadata: Iterable[EmailMessageMetadata],
         *,
         candidate_query: EmailCandidateQuery,
+        known_candidate_thread_ids: Iterable[str] = (),
     ) -> None:
         if self._filter_decision_repository is None:
             return
 
         metadata_messages = tuple(metadata)
-        decisions = candidate_query.evaluate_metadata_batch(metadata_messages)
+        decisions = candidate_query.evaluate_metadata_batch(
+            metadata_messages,
+            known_candidate_thread_ids=known_candidate_thread_ids,
+        )
         decided_at = self._clock()
         self._filter_decision_repository.upsert_filter_decisions(
             EmailFilterDecisionRecord(

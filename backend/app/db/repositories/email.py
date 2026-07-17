@@ -237,6 +237,26 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
             for row in rows
         )
 
+    def list_candidate_thread_ids(self, *, account: EmailAccountRef) -> frozenset[str]:
+        """Return provider-scoped threads established by prior candidate decisions."""
+
+        if not self._table_exists("email_filter_decisions"):
+            return frozenset()
+        rows = self.execute(
+            """
+            SELECT DISTINCT raw_emails.thread_id
+            FROM raw_emails
+            INNER JOIN email_filter_decisions
+                ON email_filter_decisions.email_id = raw_emails.id
+                AND email_filter_decisions.strategy = ?
+                AND email_filter_decisions.outcome = 'candidate'
+            WHERE raw_emails.provider = ?
+                AND raw_emails.thread_id IS NOT NULL
+            """,
+            (EmailCandidateQueryStrategy.BROAD_JOB_SEARCH.value, account.provider.value),
+        ).fetchall()
+        return frozenset(str(row["thread_id"]) for row in rows)
+
     def count_raw_emails_in_window(
         self,
         *,

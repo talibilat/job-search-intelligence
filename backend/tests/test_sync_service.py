@@ -1094,6 +1094,92 @@ def test_manual_sync_persists_filter_decisions_for_candidate_and_rejected_metada
     ]
 
 
+def test_manual_sync_promotes_messages_from_persisted_candidate_threads() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    create_email_filter_decisions_table(connection)
+    mailbox = email_connection()
+    provider = PagingRetainedBodyProvider(
+        (
+            EmailMetadataPage(
+                messages=(
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-application",
+                            thread_id="thread-acme",
+                        ),
+                        from_addr=EmailAddress(address="notifications@mail.greenhouse.io"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Application received",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-first",
+                    issued_at=NOW,
+                ),
+            ),
+            EmailMetadataPage(
+                messages=(
+                    EmailMessageMetadata(
+                        ref=EmailMessageRef(
+                            account=mailbox.account,
+                            message_id="gmail-later-reply",
+                            thread_id="thread-acme",
+                        ),
+                        from_addr=EmailAddress(address="recruiter@acme.example"),
+                        to_addrs=(EmailAddress(address="me@example.com"),),
+                        subject="Re: Quick update",
+                        sent_at=NOW,
+                        labels=("INBOX",),
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-second",
+                    issued_at=NOW,
+                ),
+            ),
+        )
+    )
+    service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=EmailRepository(connection),
+        filter_decision_repository=EmailFilterDecisionRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
+        clock=lambda: NOW,
+    )
+
+    asyncio.run(service.run_manual_sync(connection=mailbox))
+    asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    row = connection.execute(
+        """
+        SELECT
+            raw_emails.body_text,
+            raw_emails.body_retention_state,
+            email_filter_decisions.outcome,
+            email_filter_decisions.reason
+        FROM raw_emails
+        INNER JOIN email_filter_decisions
+            ON email_filter_decisions.email_id = raw_emails.id
+        WHERE raw_emails.id = 'gmail-later-reply'
+        """
+    ).fetchone()
+    assert row is not None
+    assert tuple(row) == (
+        "Retained body for gmail-later-reply",
+        "retained",
+        "candidate",
+        "thread_signal:candidate_thread",
+    )
+
+
 def test_manual_sync_updates_running_status_between_pages() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
