@@ -192,6 +192,67 @@ def test_structured_chat_preserves_unfiltered_sponsorship_comparisons() -> None:
     assert request.filters is None
 
 
+@pytest.mark.parametrize(
+    ("question", "expected_status"),
+    (
+        ("How many applications are currently in review?", "in_review"),
+        ("How many applications are under review?", "in_review"),
+        ("How many applications are in the assessment stage?", "assessment"),
+        ("How many applications are currently interviewing?", "interview"),
+        ("How many applications are at the offer stage?", "offer"),
+        ("How many rejected applications do I have?", "rejected"),
+        ("How many ghosted applications do I have?", "ghosted"),
+        ("How many withdrawn applications do I have?", "withdrawn"),
+    ),
+)
+def test_structured_chat_maps_current_status_to_typed_metric_filter(
+    question: str,
+    expected_status: str,
+) -> None:
+    request = _structured_request(question)
+
+    assert request.template == "summary_counts"
+    assert request.filters is not None
+    assert request.filters.status == expected_status
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "How many jobs have I applied to?",
+        "How many interview invitations have I received?",
+        "How many offers have I received?",
+        "How many applications are in review or currently interviewing?",
+    ),
+)
+def test_structured_chat_does_not_infer_ambiguous_current_status(question: str) -> None:
+    request = _structured_request(question)
+
+    assert request.filters is None or request.filters.status is None
+
+
+def test_structured_chat_composes_status_source_and_relative_window_filters() -> None:
+    request = _structured_request(
+        "How many LinkedIn applications are currently in review this month?",
+        anchor_at=datetime(2026, 7, 17, 15, 30, tzinfo=UTC),
+    )
+
+    assert request.filters is not None
+    assert request.filters.status == "in_review"
+    assert request.filters.source == "linkedin"
+    assert request.filters.first_seen_from == datetime(2026, 7, 1, tzinfo=UTC)
+    assert request.filters.first_seen_to == datetime(
+        2026,
+        7,
+        31,
+        23,
+        59,
+        59,
+        999999,
+        tzinfo=UTC,
+    )
+
+
 def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     tmp_path: Path,
 ) -> None:
@@ -342,6 +403,43 @@ def test_chat_api_sponsorship_count_reconciles_with_filtered_metrics(
     assert unfiltered_response.json()["total_applications"] == 2
     assert chat_response.status_code == 200
     chat_values = chat_response.json()["tool_outputs"][0]["rows"][0]["values"]
+    assert metric_response.json()["total_applications"] == 1
+    assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_status_count_reconciles_with_filtered_metrics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-in-review",
+            company="Review Company",
+        )
+        insert_application(
+            connection,
+            application_id="app-interviewing",
+            company="Interview Company",
+            current_status="interview",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    unfiltered_response = client.get("/metrics/summary")
+    metric_response = client.get("/metrics/summary", params={"status": "in_review"})
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many applications are currently in review?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert unfiltered_response.json()["total_applications"] == 2
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    chat_values = chat_body["tool_outputs"][0]["rows"][0]["values"]
+    assert chat_body["route"] == "quantitative"
     assert metric_response.json()["total_applications"] == 1
     assert chat_values["total_applications"] == metric_response.json()["total_applications"]
     assert provider.embedding_inputs == []
@@ -1106,6 +1204,7 @@ def insert_application(
     source: str = "company_site",
     work_mode: str = "remote",
     sponsorship: str = "unknown",
+    current_status: str = "in_review",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -1113,7 +1212,7 @@ def insert_application(
         role_title="Platform Engineer",
         source=source,
         first_seen_at="2026-06-01T10:00:00+00:00",
-        current_status="in_review",
+        current_status=current_status,
         salary_min=None,
         salary_max=None,
         currency=None,

@@ -7,7 +7,12 @@ from typing import Literal, TypedDict, cast
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
-from app.models.application import ApplicationSource, SponsorshipStatus, WorkMode
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.chat import ChatCitation, ChatRequest, ChatRoute, SemanticSearchResult
 from app.models.metrics import MetricsBreakdownDimension, MetricsFilter
 from app.services.chat_index import ChatIndexService
@@ -69,6 +74,22 @@ _SPONSORSHIP_FILTER_TERMS: tuple[tuple[SponsorshipStatus, tuple[str, ...]], ...]
             "with sponsorship",
         ),
     ),
+)
+_STATUS_FILTER_TERMS: tuple[tuple[ApplicationStatus, tuple[str, ...]], ...] = (
+    ("applied", ("at the applied stage", "current status is applied")),
+    ("in_review", ("in review", "under review")),
+    (
+        "assessment",
+        ("in the assessment stage", "at the assessment stage", "currently in assessment"),
+    ),
+    (
+        "interview",
+        ("currently interviewing", "in the interview stage", "at the interview stage"),
+    ),
+    ("offer", ("at the offer stage", "currently at offer stage")),
+    ("rejected", ("rejected application", "currently rejected")),
+    ("ghosted", ("ghosted application", "currently ghosted")),
+    ("withdrawn", ("withdrawn application", "currently withdrawn")),
 )
 _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ...]], ...] = (
     ("role", ("by role", "which role", "job title")),
@@ -295,11 +316,18 @@ def _structured_filters(
         for term in terms
     ):
         sponsorship = None
+    matched_statuses = {
+        status
+        for status, terms in _STATUS_FILTER_TERMS
+        if any(term in normalized_question for term in terms)
+    }
+    status = next(iter(matched_statuses)) if len(matched_statuses) == 1 else None
     updates = {
         key: value
         for key, value in (
             ("source", source),
             ("sponsorship", sponsorship),
+            ("status", status),
             ("work_mode", work_mode),
         )
         if value is not None
