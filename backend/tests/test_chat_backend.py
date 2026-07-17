@@ -296,6 +296,81 @@ def test_q47_last_email_uses_latest_company_evidence_not_nearest_vector(
     ]
 
 
+def test_q48_every_rejection_returns_all_exact_matches_despite_retrieval_limit(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(
+            connection,
+            email_id="email-rejection-one",
+            subject="Application outcome",
+            body="We need more production experience for this position.",
+            retention="retained",
+            sent_at="2026-06-06T10:00:00+00:00",
+        )
+        insert_classification(
+            connection,
+            "email-rejection-one",
+            is_job_related=True,
+            category="rejection",
+        )
+        insert_raw_email(
+            connection,
+            email_id="email-rejection-two",
+            subject="Role update",
+            body="Another candidate had more leadership experience.",
+            retention="retained",
+            sent_at="2026-06-07T10:00:00+00:00",
+        )
+        insert_classification(
+            connection,
+            "email-rejection-two",
+            is_job_related=True,
+            category="rejection",
+        )
+        insert_raw_email(
+            connection,
+            email_id="email-outreach-experience",
+            subject="New role",
+            body="Your platform experience looks relevant to our opening.",
+            retention="retained",
+            sent_at="2026-06-08T10:00:00+00:00",
+        )
+        insert_classification(
+            connection,
+            "email-outreach-experience",
+            is_job_related=True,
+            category="recruiter_outreach",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Show me every rejection email that mentioned experience.",
+            "retrieval_limit": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["citations"]) == 2
+    assert {citation["subject"] for citation in body["citations"]} == {
+        "Application outcome",
+        "Role update",
+    }
+    assert "production experience" in body["answer"]
+    assert "leadership experience" in body["answer"]
+    assert "platform experience" not in body["answer"]
+    assert (
+        "Show me every rejection email that mentioned experience.",
+    ) not in provider.embedding_inputs
+
+
 def test_chat_request_validates_blank_ids_and_openapi_has_incremental_contract(
     tmp_path: Path,
 ) -> None:
@@ -477,6 +552,7 @@ def insert_classification(
     email_id: str,
     *,
     is_job_related: bool,
+    category: str | None = None,
 ) -> None:
     connection.execute(
         """
@@ -487,7 +563,7 @@ def insert_classification(
         (
             email_id,
             is_job_related,
-            "recruiter_outreach" if is_job_related else "other",
+            category or ("recruiter_outreach" if is_job_related else "other"),
             0.95,
             "fixture-model",
             "v1",

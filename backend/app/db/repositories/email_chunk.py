@@ -134,6 +134,48 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
         ).fetchall()
         return tuple(self._semantic_result(row) for row in rows)
 
+    def find_all_mentioning(
+        self,
+        term: str,
+        *,
+        category: str | None = None,
+    ) -> tuple[SemanticSearchResult, ...]:
+        """Return one matching indexed chunk per email for an exhaustive lexical request."""
+
+        rows = self.execute(
+            """
+            WITH matching_chunks AS (
+                SELECT
+                    email_chunks.email_id,
+                    email_chunks.chunk_index,
+                    email_chunks.content,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY email_chunks.email_id
+                        ORDER BY email_chunks.chunk_index
+                    ) AS email_match_rank
+                FROM email_chunks
+                INNER JOIN email_classifications
+                    ON email_classifications.email_id = email_chunks.email_id
+                WHERE INSTR(LOWER(email_chunks.content), LOWER(?)) > 0
+                  AND (? IS NULL OR email_classifications.category = ?)
+            )
+            SELECT
+                matching_chunks.email_id,
+                matching_chunks.chunk_index,
+                matching_chunks.content,
+                raw_emails.public_id AS email_public_id,
+                raw_emails.subject,
+                raw_emails.from_addr,
+                raw_emails.sent_at
+            FROM matching_chunks
+            INNER JOIN raw_emails ON raw_emails.id = matching_chunks.email_id
+            WHERE matching_chunks.email_match_rank = 1
+            ORDER BY raw_emails.sent_at DESC, matching_chunks.email_id
+            """,
+            (term, category, category),
+        ).fetchall()
+        return tuple(self._semantic_result(row, distance=0.0) for row in rows)
+
     def latest_for_mentioned_company(
         self,
         question: str,

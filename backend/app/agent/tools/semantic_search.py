@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from app.db.repositories import EmailChunkRepository
 from app.models.chat import SemanticSearchResult
 from app.providers.llm import LLMEmbeddingRequest, LLMProvider, LLMProviderResponseError
@@ -23,6 +25,10 @@ class SemanticSearchTool:
         self._embedding_model = embedding_model
 
     async def run(self, question: str, *, limit: int) -> tuple[SemanticSearchResult, ...]:
+        exhaustive_request = _exhaustive_lexical_request(question)
+        if exhaustive_request is not None:
+            term, category = exhaustive_request
+            return self._repository.find_all_mentioning(term, category=category)
         if any(term in question.casefold() for term in _RECENCY_TERMS):
             latest = self._repository.latest_for_mentioned_company(question, limit=limit)
             if latest:
@@ -36,6 +42,24 @@ class SemanticSearchTool:
             )
         embedding = normalize_sqlite_vec_embedding(response.embeddings[0].embedding)
         return self._repository.search(embedding, limit=limit)
+
+
+def _exhaustive_lexical_request(question: str) -> tuple[str, str | None] | None:
+    normalized = question.strip()
+    if not re.search(r"\bevery\b", normalized, flags=re.IGNORECASE):
+        return None
+    match = re.search(
+        r"\bmentioned\s+[\"']?(.+?)[\"']?\s*[?.!]*$",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    term = match.group(1).strip().strip("\"'")
+    if not term:
+        return None
+    category = "rejection" if re.search(r"\brejections?\b", normalized, re.IGNORECASE) else None
+    return term, category
 
 
 def normalize_sqlite_vec_embedding(embedding: tuple[float, ...]) -> tuple[float, ...]:
