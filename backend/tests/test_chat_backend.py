@@ -2879,6 +2879,94 @@ def test_q48_same_thread_follow_up_cites_active_reapplication(tmp_path: Path) ->
     assert body["citations"][0]["application_id"] == "app-z-new"
 
 
+def test_generic_semantic_follow_up_cites_active_reapplication(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="app-a-old", company="Acme")
+        insert_application(connection, application_id="app-z-new", company="Acme")
+        connection.execute(
+            """
+            UPDATE applications
+            SET first_seen_at = ?, last_activity_at = ?
+            WHERE id = ?
+            """,
+            ("2025-01-01T10:00:00+00:00", "2025-02-01T10:00:00+00:00", "app-a-old"),
+        )
+        connection.execute(
+            """
+            UPDATE applications
+            SET first_seen_at = ?, last_activity_at = ?
+            WHERE id = ?
+            """,
+            ("2026-01-01T10:00:00+00:00", "2026-02-01T10:00:00+00:00", "app-z-new"),
+        )
+        for email_id, application_id, sent_at in (
+            ("email-old-attempt", "app-a-old", "2025-01-01T10:00:00+00:00"),
+            ("email-new-attempt", "app-z-new", "2026-01-01T10:00:00+00:00"),
+        ):
+            insert_raw_email(
+                connection,
+                email_id=email_id,
+                subject="Application received",
+                body="We received your application.",
+                retention="retained",
+                sent_at=sent_at,
+                thread_id="reused-acme-thread",
+            )
+            insert_classification(
+                connection,
+                email_id,
+                is_job_related=True,
+                category="application_confirmation",
+            )
+            connection.execute(
+                """
+                INSERT INTO application_events (
+                    id, application_id, email_id, event_type, event_at, extract_note
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"event-{email_id}",
+                    application_id,
+                    email_id,
+                    "applied",
+                    sent_at,
+                    "Application received",
+                ),
+            )
+        insert_raw_email(
+            connection,
+            email_id="email-new-follow-up",
+            subject="Sponsorship details",
+            body="Acme confirmed that this role offers visa sponsorship.",
+            retention="retained",
+            sent_at="2026-01-15T10:00:00+00:00",
+            thread_id="reused-acme-thread",
+        )
+        insert_classification(
+            connection,
+            "email-new-follow-up",
+            is_job_related=True,
+            category="follow_up",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What did Acme say about sponsorship?", "retrieval_limit": 1},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert body["citations"][0]["subject"] == "Sponsorship details"
+    assert body["citations"][0]["application_id"] == "app-z-new"
+    assert ("What did Acme say about sponsorship?",) in provider.embedding_inputs
+
+
 def test_chat_index_reconciles_all_eligible_emails_across_configured_batches(
     tmp_path: Path,
 ) -> None:

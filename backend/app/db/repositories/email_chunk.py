@@ -445,6 +445,42 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
                 """,
                 (row["email_id"],),
             ).fetchall()
+            if not application_rows:
+                application_rows = self.execute(
+                    """
+                    SELECT applications.id
+                    FROM raw_emails AS evidence_email
+                    INNER JOIN raw_emails AS application_email
+                        ON application_email.provider = evidence_email.provider
+                        AND application_email.thread_id = evidence_email.thread_id
+                    INNER JOIN application_events
+                        ON application_events.email_id = application_email.id
+                    INNER JOIN applications
+                        ON applications.id = application_events.application_id
+                    WHERE evidence_email.id = ?
+                      AND evidence_email.thread_id IS NOT NULL
+                      AND LENGTH(TRIM(evidence_email.thread_id)) > 0
+                    GROUP BY applications.id
+                    ORDER BY
+                        CASE
+                            WHEN applications.first_seen_at <= evidence_email.sent_at
+                            THEN 0
+                            ELSE 1
+                        END,
+                        CASE
+                            WHEN applications.first_seen_at <= evidence_email.sent_at
+                            THEN applications.first_seen_at
+                        END DESC,
+                        CASE
+                            WHEN applications.first_seen_at > evidence_email.sent_at
+                            THEN applications.first_seen_at
+                        END,
+                        applications.last_activity_at DESC,
+                        applications.id
+                    LIMIT 1
+                    """,
+                    (row["email_id"],),
+                ).fetchall()
             application_ids = tuple(str(item[0]) for item in application_rows)
         return SemanticSearchResult(
             email_public_id=row["email_public_id"],
