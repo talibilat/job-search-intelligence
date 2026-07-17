@@ -4,13 +4,14 @@ import asyncio
 import json as jsonlib
 import sqlite3
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from alembic import command
 from alembic.config import Config
-from app.agent.chat_graph import route_question
+from app.agent.chat_graph import _structured_request, route_question
 from app.api.dependencies import get_llm_provider
 from app.config import AppSettings, get_settings
 from app.db.engine import load_sqlite_vec_sync
@@ -80,6 +81,89 @@ def test_q47_to_q50_representative_questions_route_without_sql(
     expected: str,
 ) -> None:
     assert route_question(question) == expected
+
+
+@pytest.mark.parametrize(
+    ("question", "expected_from", "expected_to"),
+    (
+        (
+            "How many applications this week?",
+            datetime(2026, 7, 13, tzinfo=UTC),
+            datetime(2026, 7, 19, 23, 59, 59, 999999, tzinfo=UTC),
+        ),
+        (
+            "How many applications this month?",
+            datetime(2026, 7, 1, tzinfo=UTC),
+            datetime(2026, 7, 31, 23, 59, 59, 999999, tzinfo=UTC),
+        ),
+        (
+            "How many applications this year?",
+            datetime(2026, 1, 1, tzinfo=UTC),
+            datetime(2026, 12, 31, 23, 59, 59, 999999, tzinfo=UTC),
+        ),
+    ),
+)
+def test_structured_chat_maps_relative_windows_to_typed_metric_filters(
+    question: str,
+    expected_from: datetime,
+    expected_to: datetime,
+) -> None:
+    request = _structured_request(
+        question,
+        anchor_at=datetime(2026, 7, 17, 15, 30, tzinfo=UTC),
+    )
+
+    assert request.template == "summary_counts"
+    assert request.filters is not None
+    assert request.filters.first_seen_from == expected_from
+    assert request.filters.first_seen_to == expected_to
+
+
+def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    now = datetime.now(UTC)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if month_start.month == 12:
+        next_month = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        next_month = month_start.replace(month=month_start.month + 1)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="app-current-month", company="Current")
+        insert_application(connection, application_id="app-old", company="Old")
+        connection.execute(
+            "UPDATE applications SET first_seen_at = ? WHERE id = ?",
+            (now.isoformat(), "app-current-month"),
+        )
+        connection.execute(
+            "UPDATE applications SET first_seen_at = ? WHERE id = ?",
+            ("2000-01-01T00:00:00+00:00", "app-old"),
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get(
+        "/metrics/summary",
+        params={
+            "first_seen_from": month_start.isoformat(),
+            "first_seen_to": (next_month - datetime.resolution).isoformat(),
+        },
+    )
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many applications this month?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    chat_values = chat_response.json()["tool_outputs"][0]["rows"][0]["values"]
+    assert metric_response.json()["total_applications"] == 1
+    assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
 
 
 def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(

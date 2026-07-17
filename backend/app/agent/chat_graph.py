@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from typing import Literal, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
 from app.models.chat import ChatCitation, ChatRequest, ChatRoute, SemanticSearchResult
-from app.models.metrics import MetricsBreakdownDimension
+from app.models.metrics import MetricsBreakdownDimension, MetricsFilter
 from app.services.chat_index import ChatIndexService
 
 _QUANTITATIVE_TERMS = (
@@ -33,6 +34,7 @@ _CONTENT_TERMS = (
     "feedback",
     "why",
 )
+_RELATIVE_WINDOW_TERMS = ("this week", "this month", "this year")
 _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ...]], ...] = (
     ("role", ("by role", "which role", "job title")),
     ("source", ("by source", "which source", "application source")),
@@ -177,8 +179,10 @@ class ChatGraph:
 
 def route_question(question: str) -> ChatRoute:
     normalized = question.casefold()
-    quantitative = any(term in normalized for term in _QUANTITATIVE_TERMS) or any(
-        term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms
+    quantitative = (
+        any(term in normalized for term in _QUANTITATIVE_TERMS)
+        or any(term in normalized for term in _RELATIVE_WINDOW_TERMS)
+        or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
     )
     content = any(term in normalized for term in _CONTENT_TERMS)
     if quantitative and content:
@@ -188,21 +192,60 @@ def route_question(question: str) -> ChatRoute:
     return "content"
 
 
-def _structured_request(question: str) -> StructuredQueryRequest:
+def _structured_request(
+    question: str,
+    *,
+    anchor_at: datetime | None = None,
+) -> StructuredQueryRequest:
     normalized = question.casefold()
+    filters = _relative_window_filter(normalized, anchor_at=anchor_at)
     if any(term in normalized for term in ("waiting on", "overdue", "follow-up", "follow up")):
         return StructuredQueryRequest(template="live_applications")
     if "funnel" in normalized:
-        return StructuredQueryRequest(template="funnel")
+        return StructuredQueryRequest(template="funnel", filters=filters)
     for dimension, terms in _BREAKDOWN_DIMENSION_TERMS:
         if any(term in normalized for term in terms):
             return StructuredQueryRequest(
                 template="breakdown",
+                filters=filters,
                 breakdown_dimension=dimension,
             )
     if any(term in normalized for term in ("rate", "conversion")):
-        return StructuredQueryRequest(template="rates")
-    return StructuredQueryRequest(template="summary_counts")
+        return StructuredQueryRequest(template="rates", filters=filters)
+    return StructuredQueryRequest(template="summary_counts", filters=filters)
+
+
+def _relative_window_filter(
+    normalized_question: str,
+    *,
+    anchor_at: datetime | None,
+) -> MetricsFilter | None:
+    if not any(term in normalized_question for term in _RELATIVE_WINDOW_TERMS):
+        return None
+
+    anchor = (anchor_at or datetime.now(UTC)).astimezone(UTC)
+    if "this week" in normalized_question:
+        start = (anchor - timedelta(days=anchor.weekday())).replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        next_period = start + timedelta(days=7)
+    elif "this month" in normalized_question:
+        start = anchor.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if start.month == 12:
+            next_period = start.replace(year=start.year + 1, month=1)
+        else:
+            next_period = start.replace(month=start.month + 1)
+    else:
+        start = anchor.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        next_period = start.replace(year=start.year + 1)
+
+    return MetricsFilter(
+        first_seen_from=start,
+        first_seen_to=next_period - timedelta(microseconds=1),
+    )
 
 
 def synthesize_grounded_answer(
