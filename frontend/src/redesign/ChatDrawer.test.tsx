@@ -236,6 +236,33 @@ describe("ChatDrawer", () => {
     );
   });
 
+  it("submits the exhaustive rejection-email suggestion supported by chat retrieval", async () => {
+    loadHistoryMock.mockResolvedValue([]);
+    sendTurnMock.mockResolvedValue({
+      answer: "I found one matching rejection email.",
+      citations: [{ citation_id: "email:email-acme", source: "email" }],
+      conversation_id: "conversation-suggestion",
+      increments: [{ content: "I found one matching rejection email.", type: "answer" }],
+      route: "content",
+      tool_outputs: [],
+    });
+    renderDrawer();
+
+    const suggestion = await screen.findByRole("button", {
+      name: "Show me every rejection email that mentioned experience.",
+    });
+    fireEvent.click(suggestion);
+
+    expect(await screen.findByText("I found one matching rejection email.")).toBeTruthy();
+    expect(sendTurnMock).toHaveBeenCalledWith(
+      {
+        conversation_id: null,
+        message: "Show me every rejection email that mentioned experience.",
+      },
+      expect.any(Function),
+    );
+  });
+
   it("labels an unsupported uncited answer as a grounded refusal", async () => {
     loadHistoryMock.mockResolvedValue([
       {

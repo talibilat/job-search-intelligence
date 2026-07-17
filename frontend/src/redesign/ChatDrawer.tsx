@@ -11,7 +11,7 @@ import { EmailReaderDialog } from "./components/EmailReaderDialog";
 
 const SUGGESTIONS = [
   "How many applications have I submitted?",
-  "What exactly did the latest recruiter say?",
+  "Show me every rejection email that mentioned experience.",
   "Who am I waiting on and who is overdue?",
 ];
 
