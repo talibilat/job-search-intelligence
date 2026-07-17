@@ -119,6 +119,27 @@ def test_structured_chat_maps_relative_windows_to_typed_metric_filters(
     assert request.filters.first_seen_to == expected_to
 
 
+def test_structured_chat_composes_source_and_relative_window_filters() -> None:
+    request = _structured_request(
+        "How many LinkedIn applications this month?",
+        anchor_at=datetime(2026, 7, 17, 15, 30, tzinfo=UTC),
+    )
+
+    assert request.filters is not None
+    assert request.filters.source == "linkedin"
+    assert request.filters.first_seen_from == datetime(2026, 7, 1, tzinfo=UTC)
+    assert request.filters.first_seen_to == datetime(
+        2026,
+        7,
+        31,
+        23,
+        59,
+        59,
+        999999,
+        tzinfo=UTC,
+    )
+
+
 def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     tmp_path: Path,
 ) -> None:
@@ -159,6 +180,41 @@ def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     )
 
     assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    chat_values = chat_response.json()["tool_outputs"][0]["rows"][0]["values"]
+    assert metric_response.json()["total_applications"] == 1
+    assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_source_count_reconciles_with_filtered_metrics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-company-site",
+            company="Company Site Source",
+        )
+        insert_application(
+            connection,
+            application_id="app-linkedin",
+            company="LinkedIn Source",
+            source="linkedin",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    unfiltered_response = client.get("/metrics/summary")
+    metric_response = client.get("/metrics/summary", params={"source": "linkedin"})
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many LinkedIn applications have I submitted?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert unfiltered_response.json()["total_applications"] == 2
     assert chat_response.status_code == 200
     chat_values = chat_response.json()["tool_outputs"][0]["rows"][0]["values"]
     assert metric_response.json()["total_applications"] == 1
@@ -922,12 +978,13 @@ def insert_application(
     *,
     application_id: str,
     company: str,
+    source: str = "company_site",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
         company=company,
         role_title="Platform Engineer",
-        source="company_site",
+        source=source,
         first_seen_at="2026-06-01T10:00:00+00:00",
         current_status="in_review",
         salary_min=None,

@@ -7,6 +7,7 @@ from typing import Literal, TypedDict, cast
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
+from app.models.application import ApplicationSource
 from app.models.chat import ChatCitation, ChatRequest, ChatRoute, SemanticSearchResult
 from app.models.metrics import MetricsBreakdownDimension, MetricsFilter
 from app.services.chat_index import ChatIndexService
@@ -35,6 +36,13 @@ _CONTENT_TERMS = (
     "why",
 )
 _RELATIVE_WINDOW_TERMS = ("this week", "this month", "this year")
+_SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
+    ("linkedin", ("linkedin",)),
+    ("company_site", ("company site", "company website", "careers page")),
+    ("indeed", ("indeed",)),
+    ("referral", ("referral", "referred")),
+    ("other", ("other source",)),
+)
 _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ...]], ...] = (
     ("role", ("by role", "which role", "job title")),
     ("source", ("by source", "which source", "application source")),
@@ -198,7 +206,7 @@ def _structured_request(
     anchor_at: datetime | None = None,
 ) -> StructuredQueryRequest:
     normalized = question.casefold()
-    filters = _relative_window_filter(normalized, anchor_at=anchor_at)
+    filters = _structured_filters(normalized, anchor_at=anchor_at)
     if any(term in normalized for term in ("waiting on", "overdue", "follow-up", "follow up")):
         return StructuredQueryRequest(template="live_applications")
     if "funnel" in normalized:
@@ -213,6 +221,27 @@ def _structured_request(
     if any(term in normalized for term in ("rate", "conversion")):
         return StructuredQueryRequest(template="rates", filters=filters)
     return StructuredQueryRequest(template="summary_counts", filters=filters)
+
+
+def _structured_filters(
+    normalized_question: str,
+    *,
+    anchor_at: datetime | None,
+) -> MetricsFilter | None:
+    filters = _relative_window_filter(normalized_question, anchor_at=anchor_at)
+    source = next(
+        (
+            source
+            for source, terms in _SOURCE_FILTER_TERMS
+            if any(term in normalized_question for term in terms)
+        ),
+        None,
+    )
+    if source is None:
+        return filters
+    if filters is None:
+        return MetricsFilter(source=source)
+    return filters.model_copy(update={"source": source})
 
 
 def _relative_window_filter(
