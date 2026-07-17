@@ -8,6 +8,7 @@ import {
 } from "../../api";
 import { Alert, Button } from "../../components/ui";
 import { isSafeApplicationRouteId } from "../../lib/applicationRoutes";
+import { EmailReaderDialog } from "../components/EmailReaderDialog";
 import { formatShortDate } from "../theme";
 import { publicApiError } from "../apiError";
 
@@ -96,6 +97,8 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const regenerationRef = useRef<InsightType | null>(null);
+  const emailCitationTriggerRef = useRef<HTMLElement | null>(null);
+  const [emailPublicId, setEmailPublicId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,36 +307,68 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
                 <span style={{ fontSize: "11.5px", color: "#9A9F96" }}>Evidence:</span>
                 {insight.citations.map((citation) => {
                   const label = `${citation.company}${citation.email_subject ? ` - ${citation.email_subject}` : ""}`;
+                  const hasApplication = isSafeApplicationRouteId(citation.application_id);
+                  const emailPublicId = citation.email_public_id?.trim();
                   const citationStyle = {
                     border: "1px solid #E4E2DA",
                     borderRadius: "999px",
                     background: "#FAFAF7",
-                    padding: "3px 10px",
+                    padding: "3px 5px 3px 10px",
                     fontSize: "11.5px",
                     fontWeight: 600,
                     color: "#1E5136",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "7px",
                   };
-                  return isSafeApplicationRouteId(citation.application_id) ? (
-                    <Button
-                      className="rd-hover-green-border"
-                      key={citation.citation_id}
-                      onClick={() => openApp(citation.application_id)}
-                      style={{
-                        ...citationStyle,
-                        minHeight: 0,
-                        minWidth: 0,
-                        cursor: "pointer",
-                        lineHeight: "normal",
-                        transform: "none",
-                        transition: "none",
-                      }}
-                      variant="ghost"
-                    >
-                      {label}
-                    </Button>
-                  ) : (
+                  return (
                     <span key={citation.citation_id} style={citationStyle}>
-                      {label}
+                      {emailPublicId ? (
+                        <Button
+                          aria-label={`Open email evidence: ${label}`}
+                          onClick={(event) => {
+                            emailCitationTriggerRef.current = event.currentTarget;
+                            setEmailPublicId(emailPublicId);
+                          }}
+                          style={{
+                            minHeight: 0,
+                            minWidth: 0,
+                            padding: 0,
+                            color: "inherit",
+                            fontSize: "inherit",
+                            fontWeight: "inherit",
+                            lineHeight: "normal",
+                            transform: "none",
+                            transition: "none",
+                          }}
+                          variant="ghost"
+                        >
+                          {label}
+                        </Button>
+                      ) : (
+                        <span>{label}</span>
+                      )}
+                      {hasApplication ? (
+                        <Button
+                          aria-label={`View application: ${citation.company}`}
+                          onClick={() => openApp(citation.application_id)}
+                          style={{
+                            minHeight: 0,
+                            minWidth: 0,
+                            border: "1px solid #D7E4D9",
+                            borderRadius: "999px",
+                            padding: "2px 7px",
+                            color: "#1E5136",
+                            fontSize: "10.5px",
+                            lineHeight: "normal",
+                            transform: "none",
+                            transition: "none",
+                          }}
+                          variant="ghost"
+                        >
+                          View application
+                        </Button>
+                      ) : null}
                     </span>
                   );
                 })}
@@ -426,6 +461,11 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
           </div>
         );
       })}
+      <EmailReaderDialog
+        onClose={() => setEmailPublicId(null)}
+        publicId={emailPublicId}
+        triggerRef={emailCitationTriggerRef}
+      />
     </section>
   );
 }

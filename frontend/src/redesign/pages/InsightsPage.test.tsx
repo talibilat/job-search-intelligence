@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { InsightRecord, InsightType } from "../../api";
@@ -188,7 +188,7 @@ describe("InsightsPage", () => {
     expect(screen.getByText("Cached rejection evidence remains visible.")).toBeTruthy();
   });
 
-  it("replaces only a successful type and opens only valid citation records", async () => {
+  it("replaces one type and opens complete email evidence or valid applications", async () => {
     const openApp = vi.fn();
     const original = insight("role_fit", {
       citations: [
@@ -197,6 +197,7 @@ describe("InsightsPage", () => {
           citation_id: "application:app-1|email:email-1",
           company: "Acme",
           email_id: "email-1",
+          email_public_id: "email-public-1",
           email_subject: "Interview follow-up",
           role_title: "Platform Engineer",
         },
@@ -205,6 +206,7 @@ describe("InsightsPage", () => {
           citation_id: "application:bad/id|email:email-2",
           company: "Unsafe Co",
           email_id: "email-2",
+          email_public_id: "email-public-2",
           email_subject: "Malformed destination",
           role_title: "Engineer",
         },
@@ -234,6 +236,40 @@ describe("InsightsPage", () => {
           }),
         );
       }
+      if (path === "/sync/emails/email-public-1/content") {
+        return Promise.resolve(
+          jsonResponse({
+            body_retention_state: "retained",
+            body_text: "This is the complete retained interview follow-up.",
+            from_addr: "recruiter@acme.example",
+            from_domain: "acme.example",
+            ingested_at: "2026-07-11T12:01:00Z",
+            labels: ["INBOX"],
+            provider: "gmail",
+            public_id: "email-public-1",
+            sent_at: "2026-07-11T12:00:00Z",
+            subject: "Interview follow-up",
+            to_addr: "me@example.com",
+          }),
+        );
+      }
+      if (path === "/sync/emails/email-public-2/content") {
+        return Promise.resolve(
+          jsonResponse({
+            body_retention_state: "retained",
+            body_text: "Complete evidence remains available without an application link.",
+            from_addr: "jobs@unsafe.example",
+            from_domain: "unsafe.example",
+            ingested_at: "2026-07-11T12:01:00Z",
+            labels: [],
+            provider: "gmail",
+            public_id: "email-public-2",
+            sent_at: "2026-07-11T12:00:00Z",
+            subject: "Malformed destination",
+            to_addr: "me@example.com",
+          }),
+        );
+      }
       return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -246,9 +282,27 @@ describe("InsightsPage", () => {
     expect(await screen.findByText("Updated role evidence.")).toBeTruthy();
     expect(screen.queryByText("Original role evidence.")).toBeNull();
 
-    expect(screen.getByText(/Unsafe Co/).closest("button")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Acme.*Interview follow-up/ }));
+    const emailTrigger = screen.getByRole("button", {
+      name: "Open email evidence: Acme - Interview follow-up",
+    });
+    fireEvent.click(emailTrigger);
+    expect(await screen.findByText("This is the complete retained interview follow-up.")).toBeTruthy();
+    expect(screen.getByText("From: recruiter@acme.example")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close email" }));
+    await waitFor(() => expect(document.activeElement).toBe(emailTrigger));
+
+    fireEvent.click(screen.getByRole("button", { name: "View application: Acme" }));
     expect(openApp).toHaveBeenCalledOnce();
     expect(openApp).toHaveBeenCalledWith("app-1");
+
+    expect(screen.queryByRole("button", { name: "View application: Unsafe Co" })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open email evidence: Unsafe Co - Malformed destination",
+      }),
+    );
+    expect(
+      await screen.findByText("Complete evidence remains available without an application link."),
+    ).toBeTruthy();
   });
 });
