@@ -60,9 +60,7 @@ def test_attention_is_unique_by_company_and_persists_done_state(tmp_path: Path) 
 
 
 def test_complete_unknown_interview_returns_typed_not_found(tmp_path: Path) -> None:
-    response = _client(_migrated_database(tmp_path)).put(
-        "/attention/interviews/missing/complete"
-    )
+    response = _client(_migrated_database(tmp_path)).put("/attention/interviews/missing/complete")
     assert response.status_code == 404
     assert response.json() == {
         "error": {

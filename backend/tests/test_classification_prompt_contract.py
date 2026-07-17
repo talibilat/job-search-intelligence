@@ -38,7 +38,11 @@ def test_classification_prompt_request_is_versioned_json_contract() -> None:
     assert request.messages[0].role is LLMMessageRole.SYSTEM
     assert f"Prompt version: {CLASSIFICATION_PROMPT_VERSION}" in request.messages[0].content
     assert "is_job_related" in request.messages[0].content
+    assert "source" in request.messages[0].content
     assert "rejection_reason" in request.messages[0].content
+    assert "event_type feedback" in request.messages[0].content
+    assert "event_type response" in request.messages[0].content
+    assert "Lifecycle categories require their canonical fields" in request.messages[0].content
 
     assert request.messages[1].role is LLMMessageRole.USER
     payload = json.loads(request.messages[1].content)
@@ -60,6 +64,7 @@ def test_classification_prompt_output_validates_structured_extraction() -> None:
                 "confidence": 0.92,
                 "company": "Example Systems",
                 "role_title": "Backend Engineer",
+                "source": "linkedin",
                 "application_status": "rejected",
                 "event_type": "rejection",
                 "event_at": "2026-07-05T12:00:00Z",
@@ -77,9 +82,115 @@ def test_classification_prompt_output_validates_structured_extraction() -> None:
     )
 
     assert output.category is models.JobEmailCategory.REJECTION
+    assert output.source == "linkedin"
     assert output.application_status == "rejected"
     assert output.event_type == "rejection"
     assert output.tech_stack == ("Python", "FastAPI")
+
+
+def test_classification_prompt_output_accepts_application_feedback() -> None:
+    output = parse_classification_prompt_output(
+        json.dumps(
+            {
+                "is_job_related": True,
+                "category": "follow_up",
+                "confidence": 0.94,
+                "company": "Example Systems",
+                "role_title": "Backend Engineer",
+                "source": "other",
+                "application_status": None,
+                "event_type": "feedback",
+                "event_at": "2026-07-05T12:00:00Z",
+                "salary_min": None,
+                "salary_max": None,
+                "currency": None,
+                "location": None,
+                "work_mode": None,
+                "seniority": None,
+                "sponsorship": "unknown",
+                "tech_stack": [],
+                "rejection_reason": None,
+            }
+        )
+    )
+
+    assert output.category is models.JobEmailCategory.FOLLOW_UP
+    assert output.application_status is None
+    assert output.event_type == "feedback"
+
+
+def test_classification_prompt_output_accepts_employer_response() -> None:
+    output = parse_classification_prompt_output(
+        json.dumps(
+            {
+                "is_job_related": True,
+                "category": "follow_up",
+                "confidence": 0.96,
+                "company": "Example Systems",
+                "role_title": "Backend Engineer",
+                "source": "other",
+                "application_status": None,
+                "event_type": "response",
+                "event_at": "2026-07-05T12:00:00Z",
+                "salary_min": None,
+                "salary_max": None,
+                "currency": None,
+                "location": None,
+                "work_mode": None,
+                "seniority": None,
+                "sponsorship": "unknown",
+                "tech_stack": [],
+                "rejection_reason": None,
+            }
+        )
+    )
+
+    assert output.category is models.JobEmailCategory.FOLLOW_UP
+    assert output.application_status is None
+    assert output.event_type == "response"
+
+
+@pytest.mark.parametrize(
+    ("category", "application_status", "event_type"),
+    [
+        ("application_confirmation", "applied", "applied"),
+        ("rejection", "rejected", "rejection"),
+        ("interview_invite", "interview", "interview_scheduled"),
+        ("assessment", "assessment", "assessment"),
+        ("offer", "offer", "offer"),
+    ],
+)
+@pytest.mark.parametrize("missing_field", ["application_status", "event_type"])
+def test_classification_prompt_output_requires_canonical_lifecycle_fields(
+    category: str,
+    application_status: str,
+    event_type: str,
+    missing_field: str,
+) -> None:
+    payload: dict[str, object] = {
+        "is_job_related": True,
+        "category": category,
+        "confidence": 0.92,
+        "company": "Example Systems",
+        "role_title": "Backend Engineer",
+        "source": "other",
+        "application_status": application_status,
+        "event_type": event_type,
+        "event_at": "2026-07-05T12:00:00Z",
+        "salary_min": None,
+        "salary_max": None,
+        "currency": None,
+        "location": None,
+        "work_mode": None,
+        "seniority": None,
+        "sponsorship": "unknown",
+        "tech_stack": [],
+        "rejection_reason": None,
+    }
+    payload[missing_field] = None
+
+    with pytest.raises(ValidationError):
+        parse_classification_prompt_output(json.dumps(payload))
 
 
 @pytest.mark.parametrize(

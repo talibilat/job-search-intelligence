@@ -23,8 +23,14 @@ import { publicApiError } from "../apiError";
 import { EmailReaderDialog } from "../components/EmailReaderDialog";
 import { ProcessingPanel } from "../components/ProcessingPanel";
 import { DashboardAnalytics } from "../components/DashboardAnalytics";
+import { DashboardFilterPanel } from "../components/DashboardFilterPanel";
 import { SyncedEmailList } from "../components/SyncedEmailList";
-import { apiParamsFromFilters, filtersFromSearch, type DashboardFilters } from "../dashboardFilters";
+import {
+  apiParamsFromFilters,
+  filtersFromSearch,
+  searchFromFilters,
+  type DashboardFilters,
+} from "../dashboardFilters";
 import { daysSince, formatHoursAsDuration, formatShortDate } from "../theme";
 import { QuestionCatalogTab } from "./overview/QuestionCatalogTab";
 import { VisualizedTab } from "./overview/VisualizedTab";
@@ -142,8 +148,16 @@ export function OverviewPage({
   const [momentumOffset, setMomentumOffset] = useState(0);
   const [momentumFrom, setMomentumFrom] = useState("");
   const [momentumTo, setMomentumTo] = useState("");
-  const [filters] = useState<DashboardFilters>(() => filtersFromSearch(window.location.search));
+  const [filters, setFilters] = useState<DashboardFilters>(() =>
+    filtersFromSearch(window.location.search),
+  );
   const emailTriggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const syncFiltersFromLocation = () => setFilters(filtersFromSearch(window.location.search));
+    window.addEventListener("popstate", syncFiltersFromLocation);
+    return () => window.removeEventListener("popstate", syncFiltersFromLocation);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,6 +267,10 @@ export function OverviewPage({
   };
 
   const publishable = pipeline?.next_action === "review_dashboard";
+  const applyFilters = (next: DashboardFilters) => {
+    window.history.pushState(null, "", `/${searchFromFilters(next)}`);
+    setFilters(next);
+  };
   const countValue = (value: number | undefined) =>
     value === undefined ? "—" : !publishable && value === 0 ? "Pending" : String(value);
 
@@ -449,6 +467,11 @@ export function OverviewPage({
       </div>
 
       <ProcessingPanel externalProcessingActive={processingActive} onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
+      <DashboardFilterPanel
+        filters={filters}
+        key={searchFromFilters(filters)}
+        onApply={applyFilters}
+      />
 
       {pipeline && !publishable ? (
         <div className="rd-incomplete" role="status">
@@ -497,7 +520,7 @@ export function OverviewPage({
       ) : null}
 
       {tab === "visualized" ? (
-        <VisualizedTab funnel={funnel} rates={rates} summary={summary} timeseries={timeseries} />
+        <VisualizedTab filters={filters} funnel={funnel} rates={rates} summary={summary} timeseries={timeseries} />
       ) : null}
 
       {tab === "overview" && actions.length > 0 ? (

@@ -9,8 +9,10 @@ afterEach(() => {
 });
 
 describe("QuestionCatalogTab", () => {
-  it("marks Tier 1 rows shipped, Tier 5 rows as on the Insights page, and Tier 6/7 rows planned with no chat button", () => {
+  it("marks Tier 1 and Tier 6 rows shipped, Tier 5 rows as on the Insights page, and Tier 7 rows planned", () => {
     render(<QuestionCatalogTab go={vi.fn()} rates={null} summary={null} />);
+
+    expect(screen.getByText("50 of 54")).toBeTruthy();
 
     const q01 = screen.getByText("Q-01").closest("button");
     expect(q01).toBeTruthy();
@@ -20,9 +22,10 @@ describe("QuestionCatalogTab", () => {
     expect(within(q40 as HTMLElement).getByText("On Insights page")).toBeTruthy();
 
     const q47 = screen.getByText("Q-47").closest("button");
-    expect(within(q47 as HTMLElement).getByText("Planned")).toBeTruthy();
+    expect(within(q47 as HTMLElement).getByText("Shipped")).toBeTruthy();
 
-    expect(screen.queryByRole("button", { name: /Ask this in chat/ })).toBeNull();
+    const q51 = screen.getByText("Q-51").closest("button");
+    expect(within(q51 as HTMLElement).getByText("Planned")).toBeTruthy();
   });
 
   it("expands a shipped row to show the real deterministic answer already loaded by OverviewPage, without a new fetch", () => {
@@ -48,11 +51,15 @@ describe("QuestionCatalogTab", () => {
     expect(go).toHaveBeenCalledWith("insights");
   });
 
-  it("expands a planned Tier 6 row to show why it's not built yet", () => {
-    render(<QuestionCatalogTab go={vi.fn()} rates={null} summary={null} />);
+  it("expands a Tier 6 row and navigates to the shipped chat agent", () => {
+    const go = vi.fn();
+    render(<QuestionCatalogTab go={go} rates={null} summary={null} />);
 
     fireEvent.click(screen.getByText("Q-47"));
-    expect(screen.getByText(/Planned — Needs the Phase 5 chat agent/)).toBeTruthy();
+    expect(screen.getByText(/Answered by the grounded chat agent/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask this in chat" }));
+    expect(go).toHaveBeenCalledWith("chat");
   });
 
   it("does not crash when summary and rates are partially populated (defensive against missing fields)", () => {

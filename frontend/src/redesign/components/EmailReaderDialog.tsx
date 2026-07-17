@@ -46,6 +46,13 @@ function emailSubject(subject: string | null | undefined): string {
   return trimmedSubject;
 }
 
+function providerLabel(provider: string): string {
+  const trimmedProvider = provider.trim();
+  return trimmedProvider
+    ? trimmedProvider.charAt(0).toUpperCase() + trimmedProvider.slice(1)
+    : "Unknown";
+}
+
 function restoreFocus(triggerRef?: RefObject<HTMLElement | null>) {
   const trigger = triggerRef?.current;
   if (trigger && document.contains(trigger)) {
@@ -210,9 +217,10 @@ export function EmailReaderDialog({
         <header className="email-reader-header">
           <div className="email-reader-heading-group">
             <h2 id={headingId}>{subject}</h2>
-            {email && (email.from_domain || sentDate) ? (
+            {email ? (
               <p className="email-reader-metadata">
-                {email.from_domain ? <span>{email.from_domain}</span> : null}
+                {email.from_addr ? <span>From: {email.from_addr}</span> : null}
+                {email.to_addr ? <span>To: {email.to_addr}</span> : null}
                 {sentDate ? <span>{sentDate}</span> : null}
               </p>
             ) : null}
@@ -245,7 +253,27 @@ export function EmailReaderDialog({
               </button>
             </div>
           ) : null}
-          {email ? <div className="email-reader-body">{email.body_text}</div> : null}
+          {email ? (
+            <>
+              <dl className="email-reader-details">
+                <div>
+                  <dt>Provider</dt>
+                  <dd>{providerLabel(email.provider)}</dd>
+                </div>
+                <div>
+                  <dt>Storage</dt>
+                  <dd>{email.body_retention_state.replaceAll("_", " ")}</dd>
+                </div>
+                {email.labels.length > 0 ? (
+                  <div>
+                    <dt>Labels</dt>
+                    <dd>{email.labels.join(", ")}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              <div className="email-reader-body">{email.body_text}</div>
+            </>
+          ) : null}
         </div>
       </section>
     </div>

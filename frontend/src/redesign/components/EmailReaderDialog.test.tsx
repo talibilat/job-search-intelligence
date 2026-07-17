@@ -16,10 +16,15 @@ function email(overrides: Partial<RawEmailDetail> = {}): RawEmailDetail {
   return {
     body_retention_state: "retained",
     body_text: "Email body",
+    from_addr: "Jobs Team <jobs@jobs.example>",
     from_domain: "jobs.example",
+    ingested_at: "2026-07-12T12:05:00Z",
+    labels: ["INBOX", "CATEGORY_UPDATES"],
+    provider: "gmail",
     public_id: "email-1",
     sent_at: "2026-07-12T12:00:00Z",
     subject: "Application update",
+    to_addr: "Me <me@example.com>",
     ...overrides,
   };
 }
@@ -79,8 +84,12 @@ describe("EmailReaderDialog", () => {
     expect(
       screen.getByRole("heading", { name: "Application update" }),
     ).toBeTruthy();
-    expect(screen.getByText("jobs.example")).toBeTruthy();
+    expect(screen.getByText("From: Jobs Team <jobs@jobs.example>")).toBeTruthy();
+    expect(screen.getByText("To: Me <me@example.com>")).toBeTruthy();
     expect(screen.getByText("Jul 12, 2026")).toBeTruthy();
+    expect(screen.getByText("Gmail")).toBeTruthy();
+    expect(screen.getByText("retained")).toBeTruthy();
+    expect(screen.getByText("INBOX, CATEGORY_UPDATES")).toBeTruthy();
   });
 
   it("calls onClose from the labelled close button", () => {

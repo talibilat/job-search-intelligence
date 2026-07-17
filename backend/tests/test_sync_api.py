@@ -546,7 +546,7 @@ def test_get_sync_recent_emails_orders_by_sent_at_by_default(tmp_path: Path) -> 
     ]
 
 
-def test_incremental_sync_applies_limits_without_provider_date_filters(
+def test_incremental_sync_persists_complete_delta_before_advancing_cursor(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
@@ -623,11 +623,27 @@ def test_incremental_sync_applies_limits_without_provider_date_filters(
 
     assert response.status_code == 200
     assert response.json()["target_message_count"] == 12
-    assert response.json()["message_count"] == 0
+    assert response.json()["message_count"] == 1
     assert len(provider.requests) == 1
     assert provider.requests[0].page_size == 12
     assert provider.requests[0].since_date is None
     assert provider.requests[0].before_date is None
+    with sqlite3.connect(database_path) as connection:
+        raw_email = connection.execute(
+            "SELECT id, sent_at FROM raw_emails WHERE provider = 'gmail'"
+        ).fetchone()
+        sync_state = connection.execute(
+            """
+            SELECT sync_cursor, next_page_token
+            FROM email_sync_state
+            WHERE provider = 'gmail' AND account_id = 'me@example.com'
+            """
+        ).fetchone()
+
+    # The message falls outside the requested window, but accepting Gmail's
+    # successor cursor is only safe after the complete history delta is stored.
+    assert raw_email == ("gmail-msg-1", NOW.isoformat())
+    assert sync_state == ("history-next", None)
 
 
 def test_bounded_first_sync_runs_complete_unbounded_backfill(tmp_path: Path) -> None:
@@ -884,9 +900,7 @@ def test_configured_sync_job_absorbs_provider_failures(
 ) -> None:
     class FailingSyncRuntime:
         async def run_manual_sync(self) -> None:
-            raise EmailProviderAuthError(
-                public_message="Reconnect Gmail to continue syncing."
-            )
+            raise EmailProviderAuthError(public_message="Reconnect Gmail to continue syncing.")
 
     monkeypatch.setattr(
         sync_api,
@@ -894,7 +908,10 @@ def test_configured_sync_job_absorbs_provider_failures(
         lambda settings: FailingSyncRuntime(),
     )
 
-    asyncio.run(sync_api.create_configured_sync_job(AppSettings(_env_file=None))())
+    async def run_job() -> None:
+        await sync_api.create_configured_sync_job(AppSettings(_env_file=None))()
+
+    asyncio.run(run_job())
 
 
 def test_get_paginated_sync_emails_returns_stable_page(tmp_path: Path) -> None:
@@ -960,7 +977,6 @@ def test_get_sync_email_content_returns_retained_body(tmp_path: Path) -> None:
             body_text="Private body",
             body_retention_state="retained",
         )
-        insert_email_connection_row(connection)
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: AppSettings(
         _env_file=None,
@@ -971,8 +987,47 @@ def test_get_sync_email_content_returns_retained_body(tmp_path: Path) -> None:
     response = client.get("/sync/emails/0123456789abcdef0123456789abcdef/content")
 
     assert response.status_code == 200
-    assert response.json()["body_text"] == "Private body"
+    assert response.json() == {
+        "body_retention_state": "retained",
+        "body_text": "Private body",
+        "from_addr": "jobs@example.com",
+        "from_domain": "example.com",
+        "ingested_at": NOW.isoformat().replace("+00:00", "Z"),
+        "labels": [],
+        "provider": "gmail",
+        "public_id": "0123456789abcdef0123456789abcdef",
+        "sent_at": NOW.isoformat().replace("+00:00", "Z"),
+        "subject": "Application received",
+        "to_addr": "me@example.com",
+    }
     assert "gmail-msg-1" not in response.text
+
+
+def test_get_metadata_only_sync_email_content_requires_connection(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email_row(
+            connection,
+            message_id="gmail-msg-without-connection",
+            public_id="00000000000000000000000000000001",
+            sent_at=NOW,
+        )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/00000000000000000000000000000001/content")
+
+    assert response.status_code == 400
+    assert response.json()["error"] == {
+        "code": "bad_request",
+        "details": [],
+        "message": "No Gmail connection is configured.",
+    }
 
 
 def test_get_sync_email_content_fetches_transient_body_for_metadata_only_message(

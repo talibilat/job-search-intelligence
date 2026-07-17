@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
+
 from app.db.repositories import EmailChunkRepository
 from app.models.chat import SemanticSearchResult
 from app.providers.llm import LLMEmbeddingRequest, LLMProvider, LLMProviderResponseError
 
 SQLITE_VEC_DIMENSIONS = 1536
+_RECENCY_TERMS = ("last email", "latest email", "most recent email")
 
 
 class SemanticSearchTool:
@@ -22,6 +25,16 @@ class SemanticSearchTool:
         self._embedding_model = embedding_model
 
     async def run(self, question: str, *, limit: int) -> tuple[SemanticSearchResult, ...]:
+        exhaustive_request = _exhaustive_lexical_request(question)
+        if exhaustive_request is not None:
+            term, category, company_target = exhaustive_request
+            if company_target:
+                return self._repository.find_companies_mentioning(term)
+            return self._repository.find_all_mentioning(term, category=category)
+        if any(term in question.casefold() for term in _RECENCY_TERMS):
+            latest = self._repository.latest_for_mentioned_company(question)
+            if latest is not None:
+                return latest
         response = await self._llm_provider.embed(
             LLMEmbeddingRequest(inputs=(question,), model=self._embedding_model)
         )
@@ -31,6 +44,25 @@ class SemanticSearchTool:
             )
         embedding = normalize_sqlite_vec_embedding(response.embeddings[0].embedding)
         return self._repository.search(embedding, limit=limit)
+
+
+def _exhaustive_lexical_request(question: str) -> tuple[str, str | None, bool] | None:
+    normalized = question.strip()
+    if not re.search(r"\bevery\b", normalized, flags=re.IGNORECASE):
+        return None
+    match = re.search(
+        r"\bmentioned\s+[\"']?(.+?)[\"']?\s*[?.!]*$",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    term = match.group(1).strip().strip("\"'")
+    if not term:
+        return None
+    category = "rejection" if re.search(r"\brejections?\b", normalized, re.IGNORECASE) else None
+    company_target = re.search(r"\bcompan(?:y|ies)\b", normalized, re.IGNORECASE) is not None
+    return term, category, company_target
 
 
 def normalize_sqlite_vec_embedding(embedding: tuple[float, ...]) -> tuple[float, ...]:

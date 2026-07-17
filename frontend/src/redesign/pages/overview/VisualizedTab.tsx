@@ -12,9 +12,11 @@ import {
   type MetricsTimeseriesResponse,
 } from "../../../api";
 import { publicApiError } from "../../apiError";
+import { apiParamsFromFilters, type DashboardFilters } from "../../dashboardFilters";
 import { formatCount, formatHoursAsDuration, formatShortDate } from "../../theme";
 
 interface VisualizedTabProps {
+  filters: DashboardFilters;
   funnel: MetricsFunnelResponse | null;
   rates: MetricsRatesResponse | null;
   summary: MetricsSummaryResponse | null;
@@ -122,7 +124,7 @@ function SegmentChipList({ segments, tone }: { segments: DiagnosticSegmentCompar
   );
 }
 
-export function VisualizedTab({ funnel, rates, summary, timeseries }: VisualizedTabProps) {
+export function VisualizedTab({ filters, funnel, rates, summary, timeseries }: VisualizedTabProps) {
   const [roleRows, setRoleRows] = useState<MetricBreakdownRow[]>([]);
   const [sourceRows, setSourceRows] = useState<MetricBreakdownRow[]>([]);
   const [techRows, setTechRows] = useState<MetricBreakdownRow[]>([]);
@@ -140,12 +142,13 @@ export function VisualizedTab({ funnel, rates, summary, timeseries }: Visualized
       setBreakdownError(null);
       setDiagnosticsLoading(true);
       setDiagnosticsError(null);
+      const filterParams = apiParamsFromFilters(filters);
       const [roleResponse, sourceResponse, techResponse, salaryResponse, diagnosticsResponse] = await Promise.all([
-        getMetricsBreakdownMetricsBreakdownGet({ dimension: "role" }).catch((error: unknown) => ({ error })),
-        getMetricsBreakdownMetricsBreakdownGet({ dimension: "source" }).catch((error: unknown) => ({ error })),
-        getMetricsBreakdownMetricsBreakdownGet({ dimension: "tech" }).catch((error: unknown) => ({ error })),
-        getMetricsBreakdownMetricsBreakdownGet({ dimension: "salary" }).catch((error: unknown) => ({ error })),
-        getMetricsDiagnosticsMetricsDiagnosticsGet().catch((error: unknown) => ({ error })),
+        getMetricsBreakdownMetricsBreakdownGet({ ...filterParams, dimension: "role" }).catch((error: unknown) => ({ error })),
+        getMetricsBreakdownMetricsBreakdownGet({ ...filterParams, dimension: "source" }).catch((error: unknown) => ({ error })),
+        getMetricsBreakdownMetricsBreakdownGet({ ...filterParams, dimension: "tech" }).catch((error: unknown) => ({ error })),
+        getMetricsBreakdownMetricsBreakdownGet({ ...filterParams, dimension: "salary" }).catch((error: unknown) => ({ error })),
+        getMetricsDiagnosticsMetricsDiagnosticsGet(filterParams).catch((error: unknown) => ({ error })),
       ]);
       if (cancelled) {
         return;
@@ -177,7 +180,7 @@ export function VisualizedTab({ funnel, rates, summary, timeseries }: Visualized
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [filters]);
 
   const kpis = summary
     ? [

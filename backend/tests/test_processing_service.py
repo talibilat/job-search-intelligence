@@ -17,6 +17,7 @@ from app.models import (
     EmailClassificationRecord,
     JobEmailCategory,
     ProcessingRunRequest,
+    ProcessingStatus,
 )
 from app.models.classification import ClassificationCandidateStats
 from app.models.ghost_inference import GhostInferenceRunResponse
@@ -56,7 +57,7 @@ def test_processing_runs_multiple_batches_and_integrates_ghosts() -> None:
         aggregation=aggregation,
         ghosts=_GhostService(updates=1, conflicts=2),
     )
-    statuses = []
+    statuses: list[ProcessingStatus] = []
 
     result = asyncio.run(service.run(ProcessingRunRequest(), status_callback=statuses.append))
 

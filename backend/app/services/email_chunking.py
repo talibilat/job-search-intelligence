@@ -6,7 +6,12 @@ from app.models.chunk import EmailChunkSource, EmailTextChunk
 
 
 class ChunkableEmailRepository(Protocol):
-    def list_chunkable_retained_emails(self, *, limit: int) -> list[EmailChunkSource]: ...
+    def list_chunkable_retained_emails(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+    ) -> list[EmailChunkSource]: ...
 
 
 class EmailChunkingService:
@@ -33,13 +38,19 @@ class EmailChunkingService:
         self._max_chars = max_chars
         self._overlap_chars = overlap_chars
 
-    def build_chunks(self, *, limit: int) -> tuple[EmailTextChunk, ...]:
+    def build_chunks(self, *, limit: int, offset: int = 0) -> tuple[EmailTextChunk, ...]:
         if limit < 1:
             msg = "limit must be at least 1"
             raise ValueError(msg)
+        if offset < 0:
+            msg = "offset must be non-negative"
+            raise ValueError(msg)
 
         chunks: list[EmailTextChunk] = []
-        for source in self._repository.list_chunkable_retained_emails(limit=limit):
+        for source in self._repository.list_chunkable_retained_emails(
+            limit=limit,
+            offset=offset,
+        ):
             chunks.extend(
                 EmailTextChunk(email_id=source.email_id, chunk_index=index, content=content)
                 for index, content in enumerate(self._chunk_text(source.body_text))

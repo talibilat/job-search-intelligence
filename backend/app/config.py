@@ -105,7 +105,7 @@ class AppSettings(BaseSettings):
     classification_batch_size: int = Field(default=25, ge=1)
     classification_concurrency: int = Field(default=5, ge=1, le=25)
     processing_max_candidates_per_run: int = Field(default=500, ge=1, le=10_000)
-    classification_prompt_version: str = Field(default="v1", min_length=1)
+    classification_prompt_version: str = Field(default="v5", min_length=1)
     classification_estimate_chars_per_unit: int = Field(default=4, ge=1)
     classification_estimate_prompt_overhead_units: int = Field(default=300, ge=0)
     classification_estimate_completion_units_per_candidate: int = Field(default=500, ge=0)
@@ -127,7 +127,8 @@ class AppSettings(BaseSettings):
     ollama_chat_model: str = Field(default="llama3.1", min_length=1)
     ollama_embedding_model: str = Field(default="nomic-embed-text", min_length=1)
 
-    ghost_threshold_days: int = Field(default=60, ge=1)
+    ghost_threshold_days: int = Field(default=30, ge=1)
+    follow_up_threshold_days: int = Field(default=7, ge=1)
 
     def __init__(self, *, _env_file: str | Path | None = ".env", **values: Any) -> None:
         super().__init__(_env_file=_env_file, **values)

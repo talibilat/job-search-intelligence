@@ -8,14 +8,33 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.repositories import MetricsRepository
 from app.models import MetricsFilter
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.metrics import MetricsBreakdownDimension
 from app.models.records import ApplicationRecord
+from app.services.diagnostics import DiagnosticsService
 
 StructuredQueryTemplate = Literal[
     "total_applications",
     "summary_counts",
     "rates",
     "funnel",
+    "timing",
+    "personal_ghost_threshold",
+    "application_timeseries",
+    "response_rate_timeseries",
+    "successful_application_segments",
+    "negative_outcome_segments",
+    "strongest_response_correlate",
+    "wasted_effort_segments",
+    "best_roi_source",
+    "sponsorship_response_impact",
+    "skill_signal_segments",
+    "adjacent_role_suggestions",
     "breakdown",
     "live_applications",
 ]
@@ -68,14 +87,19 @@ class StructuredQueryTool:
         *,
         metrics_repository: MetricsRepository,
         ghost_threshold_days: int,
+        follow_up_threshold_days: int = 7,
         application_reader: LiveApplicationReader | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if ghost_threshold_days < 1:
             msg = "ghost_threshold_days must be at least 1"
             raise ValueError(msg)
+        if follow_up_threshold_days < 1:
+            msg = "follow_up_threshold_days must be at least 1"
+            raise ValueError(msg)
         self._metrics_repository = metrics_repository
         self._ghost_threshold_days = ghost_threshold_days
+        self._follow_up_threshold_days = follow_up_threshold_days
         self._application_reader = application_reader
         self._clock = clock or (lambda: datetime.now(UTC))
 
@@ -169,18 +193,317 @@ class StructuredQueryTool:
                 ),
             )
 
+        if request.template == "timing":
+            first_response = self._metrics_repository.get_time_to_first_response_metric(
+                filters=request.filters
+            )
+            rejection = self._metrics_repository.get_time_to_rejection_metric(
+                filters=request.filters
+            )
+            return StructuredQueryResult(
+                template=request.template,
+                rows=(
+                    StructuredQueryRow(
+                        label="time_to_first_response",
+                        values={
+                            "application_count": first_response.application_count,
+                            "average_hours": first_response.average_hours,
+                        },
+                    ),
+                    StructuredQueryRow(
+                        label="time_to_rejection",
+                        values={
+                            "application_count": rejection.application_count,
+                            "average_hours": rejection.average_hours,
+                        },
+                    ),
+                ),
+            )
+
+        if request.template == "personal_ghost_threshold":
+            threshold = self._metrics_repository.get_personal_ghost_threshold_metric(
+                evaluated_at=self._clock().astimezone(UTC).isoformat(),
+                fallback_threshold_days=self._ghost_threshold_days,
+                filters=request.filters,
+            )
+            return StructuredQueryResult(
+                template=request.template,
+                rows=(
+                    StructuredQueryRow(
+                        label="personal_ghost_threshold",
+                        values={
+                            "threshold_days": threshold.threshold_days,
+                            "threshold_source": threshold.threshold_source,
+                            "response_sample_size": threshold.response_sample_size,
+                            "silent_application_count": threshold.silent_application_count,
+                        },
+                    ),
+                ),
+            )
+
+        if request.template == "application_timeseries":
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=point.period_start,
+                        values={
+                            "period_start": point.period_start,
+                            "application_count": point.application_count,
+                        },
+                    )
+                    for point in self._metrics_repository.get_application_timeseries(
+                        filters=request.filters
+                    )
+                ),
+            )
+
+        if request.template == "response_rate_timeseries":
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=point.period_start,
+                        values={
+                            "period_start": point.period_start,
+                            "response_count": point.response_count,
+                            "application_count": point.application_count,
+                            "response_rate": point.response_rate,
+                        },
+                    )
+                    for point in self._metrics_repository.get_response_rate_timeseries(
+                        filters=request.filters
+                    )
+                ),
+            )
+
+        if request.template == "successful_application_segments":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"{segment.dimension}:{segment.value}",
+                        values={
+                            "dimension": segment.dimension,
+                            "value": segment.value,
+                            "application_count": segment.application_count,
+                            "interview_count": segment.interview_count,
+                            "offer_count": segment.offer_count,
+                            "success_count": segment.success_count,
+                            "success_rate": segment.success_rate,
+                            "success_rate_lift": segment.success_rate_lift,
+                            "baseline_success_count": diagnostics.baseline_success_count,
+                            "baseline_success_rate": diagnostics.baseline_success_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for segment in diagnostics.successful_application_segments
+                ),
+            )
+
+        if request.template == "negative_outcome_segments":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"{segment.dimension}:{segment.value}",
+                        values={
+                            "dimension": segment.dimension,
+                            "value": segment.value,
+                            "application_count": segment.application_count,
+                            "negative_count": segment.negative_count,
+                            "negative_rate": segment.negative_rate,
+                            "negative_rate_lift": segment.negative_rate_lift,
+                            "baseline_negative_count": diagnostics.baseline_negative_count,
+                            "baseline_negative_rate": diagnostics.baseline_negative_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for segment in diagnostics.negative_outcome_segments
+                ),
+            )
+
+        if request.template == "strongest_response_correlate":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            segment = diagnostics.strongest_response_correlate
+            correlate_rows: tuple[StructuredQueryRow, ...] = ()
+            if segment is not None:
+                correlate_rows = (
+                    StructuredQueryRow(
+                        label=f"{segment.dimension}:{segment.value}",
+                        values={
+                            "dimension": segment.dimension,
+                            "value": segment.value,
+                            "application_count": segment.application_count,
+                            "response_count": segment.response_count,
+                            "response_rate": segment.response_rate,
+                            "response_rate_lift": segment.response_rate_lift,
+                            "baseline_response_count": diagnostics.baseline_response_count,
+                            "baseline_response_rate": diagnostics.baseline_response_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    ),
+                )
+            return StructuredQueryResult(template=request.template, rows=correlate_rows)
+
+        if request.template == "wasted_effort_segments":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"{segment.dimension}:{segment.value}",
+                        values={
+                            "dimension": segment.dimension,
+                            "value": segment.value,
+                            "application_count": segment.application_count,
+                            "response_count": segment.response_count,
+                            "response_rate": segment.response_rate,
+                            "response_rate_lift": segment.response_rate_lift,
+                            "baseline_response_count": diagnostics.baseline_response_count,
+                            "baseline_response_rate": diagnostics.baseline_response_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for segment in diagnostics.wasted_effort_segments
+                ),
+            )
+
+        if request.template == "best_roi_source":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            segment = diagnostics.best_roi_source
+            roi_rows: tuple[StructuredQueryRow, ...] = ()
+            if segment is not None:
+                roi_rows = (
+                    StructuredQueryRow(
+                        label=f"source:{segment.value}",
+                        values={
+                            "source": segment.value,
+                            "application_count": segment.application_count,
+                            "interview_count": segment.interview_count,
+                            "interview_rate": segment.interview_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    ),
+                )
+            return StructuredQueryResult(template=request.template, rows=roi_rows)
+
+        if request.template == "sponsorship_response_impact":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            segment = diagnostics.sponsorship_response_impact
+            impact_rows: tuple[StructuredQueryRow, ...] = ()
+            if segment is not None:
+                impact_rows = (
+                    StructuredQueryRow(
+                        label=f"sponsorship:{segment.value}",
+                        values={
+                            "sponsorship": segment.value,
+                            "application_count": segment.application_count,
+                            "response_count": segment.response_count,
+                            "response_rate": segment.response_rate,
+                            "response_rate_lift": segment.response_rate_lift,
+                            "baseline_response_count": diagnostics.baseline_response_count,
+                            "baseline_response_rate": diagnostics.baseline_response_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    ),
+                )
+            return StructuredQueryResult(template=request.template, rows=impact_rows)
+
+        if request.template == "skill_signal_segments":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"{signal}:{segment.value}",
+                        values={
+                            "signal": signal,
+                            "skill": segment.value,
+                            "application_count": segment.application_count,
+                            "response_count": segment.response_count,
+                            "response_rate": segment.response_rate,
+                            "response_rate_lift": segment.response_rate_lift,
+                            "interview_count": segment.interview_count,
+                            "interview_rate": segment.interview_rate,
+                            "baseline_response_rate": diagnostics.baseline_response_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for signal, segments in (
+                        ("selling", diagnostics.selling_skill_segments),
+                        ("dead_weight", diagnostics.dead_weight_skill_segments),
+                    )
+                    for segment in segments
+                ),
+            )
+
+        if request.template == "adjacent_role_suggestions":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"role:{segment.value}",
+                        values={
+                            "role": segment.value,
+                            "application_count": segment.application_count,
+                            "interview_count": segment.interview_count,
+                            "offer_count": segment.offer_count,
+                            "success_count": segment.success_count,
+                            "success_rate": segment.success_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for segment in diagnostics.adjacent_role_suggestions
+                ),
+            )
+
         if request.template == "live_applications":
             if self._application_reader is None:
                 raise ValueError("application_reader is required for live application queries")
             now = self._clock().astimezone(UTC)
+            filters = request.filters or MetricsFilter()
             rows = []
-            for application in self._application_reader.list_applications():
+            for application in self._application_reader.list_applications(
+                current_status=filters.status,
+                source=filters.source,
+                sponsorship=filters.sponsorship,
+                first_seen_from=(
+                    filters.first_seen_from.isoformat()
+                    if filters.first_seen_from is not None
+                    else None
+                ),
+                first_seen_to=(
+                    filters.first_seen_to.isoformat() if filters.first_seen_to is not None else None
+                ),
+                role=filters.role,
+                salary_min=filters.salary_min,
+                salary_max=filters.salary_max,
+                work_mode=filters.work_mode,
+            ):
                 if application.current_status not in {
                     "applied",
                     "in_review",
-                    "assessment",
                     "interview",
-                    "offer",
                 }:
                     continue
                 days_waiting = max(0, (now - application.last_activity_at.astimezone(UTC)).days)
@@ -194,7 +517,8 @@ class StructuredQueryTool:
                             "current_status": application.current_status,
                             "last_activity_at": application.last_activity_at.isoformat(),
                             "days_waiting": days_waiting,
-                            "overdue": days_waiting >= self._ghost_threshold_days,
+                            "follow_up_due": days_waiting >= self._follow_up_threshold_days,
+                            "follow_up_threshold_days": self._follow_up_threshold_days,
                         },
                     )
                 )
@@ -230,4 +554,16 @@ class StructuredQueryTool:
 
 
 class LiveApplicationReader(Protocol):
-    def list_applications(self) -> list[ApplicationRecord]: ...
+    def list_applications(
+        self,
+        *,
+        current_status: ApplicationStatus | None = None,
+        source: ApplicationSource | None = None,
+        sponsorship: SponsorshipStatus | None = None,
+        first_seen_from: str | None = None,
+        first_seen_to: str | None = None,
+        role: str | None = None,
+        salary_min: int | None = None,
+        salary_max: int | None = None,
+        work_mode: WorkMode | None = None,
+    ) -> list[ApplicationRecord]: ...

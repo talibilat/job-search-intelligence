@@ -222,8 +222,10 @@ class EmailCandidateQuery(BaseModel):
     def evaluate_metadata_batch(
         self,
         metadata: Iterable[EmailMessageMetadata],
+        *,
+        known_candidate_thread_ids: Iterable[str] = (),
     ) -> tuple[EmailCandidateDecision, ...]:
-        """Evaluate metadata with same-page thread context.
+        """Evaluate metadata with current and previously known thread context.
 
         Thread IDs are treated as private provider-owned values, so decisions only
         expose a static thread signal token instead of the raw thread ID.
@@ -231,12 +233,13 @@ class EmailCandidateQuery(BaseModel):
 
         messages = tuple(metadata)
         direct_decisions = tuple(self.evaluate_metadata(message) for message in messages)
-        candidate_thread_ids = {
+        candidate_thread_ids = set(known_candidate_thread_ids)
+        candidate_thread_ids.update(
             message.ref.thread_id
             for message, decision in zip(messages, direct_decisions, strict=True)
             if message.ref.thread_id is not None
             and decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE
-        }
+        )
         if not candidate_thread_ids:
             return direct_decisions
 

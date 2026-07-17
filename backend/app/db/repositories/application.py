@@ -44,38 +44,17 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         salary_max: int | None = None,
         work_mode: WorkMode | None = None,
     ) -> list[ApplicationRecord]:
-        clauses: list[str] = []
-        parameters: list[object] = []
-
-        if current_status is not None:
-            clauses.append("current_status = ?")
-            parameters.append(current_status)
-        if source is not None:
-            clauses.append("source = ?")
-            parameters.append(source)
-        if sponsorship is not None:
-            clauses.append("sponsorship = ?")
-            parameters.append(sponsorship)
-        if first_seen_from is not None:
-            clauses.append("first_seen_at >= ?")
-            parameters.append(first_seen_from)
-        if first_seen_to is not None:
-            clauses.append("first_seen_at <= ?")
-            parameters.append(first_seen_to)
-        if role is not None:
-            stripped_role = role.strip().lower()
-            if stripped_role:
-                clauses.append("LOWER(role_title) LIKE ? ESCAPE '\\'")
-                parameters.append(f"%{_escape_like(stripped_role)}%")
-        if salary_min is not None:
-            clauses.append("COALESCE(salary_max, salary_min) >= ?")
-            parameters.append(salary_min)
-        if salary_max is not None:
-            clauses.append("COALESCE(salary_min, salary_max) <= ?")
-            parameters.append(salary_max)
-        if work_mode is not None:
-            clauses.append("work_mode = ?")
-            parameters.append(work_mode)
+        clauses, parameters = _application_filter_where_clause(
+            current_status=current_status,
+            source=source,
+            sponsorship=sponsorship,
+            first_seen_from=first_seen_from,
+            first_seen_to=first_seen_to,
+            role=role,
+            salary_min=salary_min,
+            salary_max=salary_max,
+            work_mode=work_mode,
+        )
 
         sql = "SELECT * FROM applications"
         if clauses:
@@ -83,17 +62,60 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
         sql = f"{sql} ORDER BY first_seen_at DESC, id ASC"
         return self.fetch_all(sql, tuple(parameters))
 
-    def count_by_status(self) -> dict[str, int]:
+    def count_by_status(
+        self,
+        *,
+        current_status: ApplicationStatus | None = None,
+        source: ApplicationSource | None = None,
+        sponsorship: SponsorshipStatus | None = None,
+        first_seen_from: str | None = None,
+        first_seen_to: str | None = None,
+        role: str | None = None,
+        salary_min: int | None = None,
+        salary_max: int | None = None,
+        work_mode: WorkMode | None = None,
+    ) -> dict[str, int]:
         """Return deterministic application counts grouped by current status."""
 
+        clauses, parameters = _application_filter_where_clause(
+            current_status=current_status,
+            source=source,
+            sponsorship=sponsorship,
+            first_seen_from=first_seen_from,
+            first_seen_to=first_seen_to,
+            role=role,
+            salary_min=salary_min,
+            salary_max=salary_max,
+            work_mode=work_mode,
+        )
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         rows = self.execute(
-            """
+            f"""
             SELECT current_status AS status, COUNT(*) AS count
             FROM applications
+            {where_clause}
             GROUP BY current_status
             """,
+            tuple(parameters),
         ).fetchall()
         return {str(row["status"]): int(row["count"]) for row in rows}
+
+    def list_by_email_thread_id(self, thread_id: str) -> list[ApplicationRecord]:
+        """Return applications with source evidence in one opaque provider thread."""
+
+        return self.fetch_all(
+            """
+            SELECT DISTINCT applications.*
+            FROM applications
+            INNER JOIN application_events
+                ON application_events.application_id = applications.id
+            INNER JOIN raw_emails
+                ON raw_emails.id = application_events.email_id
+            WHERE raw_emails.thread_id = ?
+            ORDER BY applications.first_seen_at, applications.id
+            """,
+            (thread_id,),
+        )
 
     def list_ghost_inference_candidates(self, *, cutoff_at: str) -> list[ApplicationRecord]:
         """Return applied applications whose timeline has no response evidence."""
@@ -186,6 +208,41 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
                   AND manual_lock = 0
                 """,
                 (current_status, last_activity_at, updated_at, application_id),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount > 0
+
+    def update_timeline_bounds_and_status(
+        self,
+        *,
+        application_id: str,
+        first_seen_at: str,
+        current_status: str,
+        last_activity_at: str,
+        updated_at: str,
+    ) -> bool:
+        """Recompute timeline-derived fields after automatic evidence is replaced."""
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                UPDATE applications
+                SET first_seen_at = ?,
+                    current_status = ?,
+                    last_activity_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                  AND manual_lock = 0
+                """,
+                (
+                    first_seen_at,
+                    current_status,
+                    last_activity_at,
+                    updated_at,
+                    application_id,
+                ),
             )
         if should_commit:
             self.connection.commit()
@@ -516,6 +573,54 @@ def _locked_application_matches(
         and existing.sponsorship == sponsorship
         and existing.tech_stack == tech_stack
     )
+
+
+def _application_filter_where_clause(
+    *,
+    current_status: ApplicationStatus | None,
+    source: ApplicationSource | None,
+    sponsorship: SponsorshipStatus | None,
+    first_seen_from: str | None,
+    first_seen_to: str | None,
+    role: str | None,
+    salary_min: int | None,
+    salary_max: int | None,
+    work_mode: WorkMode | None,
+) -> tuple[list[str], list[object]]:
+    clauses: list[str] = []
+    parameters: list[object] = []
+
+    if current_status is not None:
+        clauses.append("current_status = ?")
+        parameters.append(current_status)
+    if source is not None:
+        clauses.append("source = ?")
+        parameters.append(source)
+    if sponsorship is not None:
+        clauses.append("sponsorship = ?")
+        parameters.append(sponsorship)
+    if first_seen_from is not None:
+        clauses.append("first_seen_at >= ?")
+        parameters.append(first_seen_from)
+    if first_seen_to is not None:
+        clauses.append("first_seen_at <= ?")
+        parameters.append(first_seen_to)
+    if role is not None:
+        stripped_role = role.strip().lower()
+        if stripped_role:
+            clauses.append("LOWER(role_title) LIKE ? ESCAPE '\\'")
+            parameters.append(f"%{_escape_like(stripped_role)}%")
+    if salary_min is not None:
+        clauses.append("COALESCE(salary_max, salary_min) >= ?")
+        parameters.append(salary_min)
+    if salary_max is not None:
+        clauses.append("COALESCE(salary_min, salary_max) <= ?")
+        parameters.append(salary_max)
+    if work_mode is not None:
+        clauses.append("work_mode = ?")
+        parameters.append(work_mode)
+
+    return clauses, parameters
 
 
 def _escape_like(value: str) -> str:

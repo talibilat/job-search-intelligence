@@ -1,7 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { loadChatHistory, sendChatTurn } from "../api";
+import {
+  loadChatHistory,
+  sendChatTurn,
+  syncEmailContentSyncEmailsPublicIdContentGet,
+} from "../api";
 import { ChatDrawer } from "./ChatDrawer";
 
 vi.mock("../api", async (importOriginal) => {
@@ -16,6 +20,7 @@ vi.mock("../api", async (importOriginal) => {
 
 const loadHistoryMock = vi.mocked(loadChatHistory);
 const sendTurnMock = vi.mocked(sendChatTurn);
+const syncEmailContentMock = vi.mocked(syncEmailContentSyncEmailsPublicIdContentGet);
 
 function renderDrawer() {
   const onClose = vi.fn();
@@ -72,9 +77,132 @@ describe("ChatDrawer", () => {
     expect(onOpenApplication).toHaveBeenCalledWith("app-acme");
   });
 
+  it("keeps saved conversations separate and can start a new chat", async () => {
+    const older = {
+      citations: [],
+      content: "Older application question",
+      conversation_id: "conversation-z",
+      created_at: "2026-07-14T10:00:00Z",
+      id: 1,
+      role: "user" as const,
+      tool_outputs_json: [],
+    };
+    const newer = {
+      citations: [],
+      content: "Newest application question",
+      conversation_id: "conversation-a",
+      created_at: "2026-07-15T10:00:00Z",
+      id: 2,
+      role: "user" as const,
+      tool_outputs_json: [],
+    };
+    loadHistoryMock.mockImplementation((conversationId) =>
+      Promise.resolve(conversationId === older.conversation_id ? [older] : [older, newer]),
+    );
+    sendTurnMock.mockResolvedValue({
+      answer: "A grounded new answer.",
+      citations: [{ citation_id: "metric:summary_counts", source: "metric" }],
+      conversation_id: "conversation-new",
+      increments: [{ content: "A grounded new answer.", type: "answer" }],
+      route: "quantitative",
+      tool_outputs: [],
+    });
+    renderDrawer();
+
+    const log = screen.getByRole("log");
+    expect(await within(log).findByText("Newest application question")).toBeTruthy();
+    expect(within(log).queryByText("Older application question")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Conversation"), {
+      target: { value: "conversation-z" },
+    });
+    expect(await within(log).findByText("Older application question")).toBeTruthy();
+    expect(loadHistoryMock).toHaveBeenLastCalledWith("conversation-z");
+    expect(within(log).queryByText("Newest application question")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    expect(screen.getByText("Ask from your actual search history")).toBeTruthy();
+    const message = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "Start fresh" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+
+    await screen.findByText("A grounded new answer.");
+    expect(sendTurnMock).toHaveBeenCalledWith(
+      { conversation_id: null, message: "Start fresh" },
+      expect.any(Function),
+    );
+  });
+
+  it("opens complete cited email evidence and restores focus to its trigger", async () => {
+    loadHistoryMock.mockResolvedValue([
+      {
+        citations: [
+          {
+            application_id: "application-acme",
+            citation_id: "email:email-acme",
+            email_public_id: "email-acme",
+            sent_at: "2026-07-14T10:00:00Z",
+            source: "email",
+            subject: "Your Acme application",
+          },
+        ],
+        content: "Acme confirmed your application.",
+        conversation_id: "conversation-email",
+        created_at: "2026-07-15T10:00:00Z",
+        id: 4,
+        role: "assistant",
+        tool_outputs_json: [],
+      },
+    ]);
+    syncEmailContentMock.mockResolvedValue({
+      data: {
+        body_retention_state: "retained",
+        body_text: "This is the complete retained Acme email body.",
+        from_addr: "jobs@acme.example",
+        from_domain: "acme.example",
+        ingested_at: "2026-07-14T10:01:00Z",
+        labels: ["INBOX"],
+        provider: "gmail",
+        public_id: "email-acme",
+        sent_at: "2026-07-14T10:00:00Z",
+        subject: "Your Acme application",
+        to_addr: "me@example.com",
+      },
+      headers: new Headers(),
+      status: 200,
+    });
+    const { onOpenApplication } = renderDrawer();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View application" }));
+    expect(onOpenApplication).toHaveBeenCalledWith("application-acme");
+    const trigger = await screen.findByRole("button", { name: "Open email evidence" });
+    fireEvent.click(trigger);
+
+    expect(await screen.findByText("This is the complete retained Acme email body.")).toBeTruthy();
+    expect(screen.getByText("From: jobs@acme.example")).toBeTruthy();
+    expect(syncEmailContentMock).toHaveBeenCalledOnce();
+    const [requestedPublicId, requestOptions] = syncEmailContentMock.mock.calls[0];
+    expect(requestedPublicId).toBe("email-acme");
+    expect(requestOptions?.signal).toBeInstanceOf(AbortSignal);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close email" }));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
   it("posts a question and progressively renders a dashboard-consistent cited answer", async () => {
     loadHistoryMock.mockResolvedValue([]);
-    sendTurnMock.mockResolvedValue({
+    sendTurnMock.mockImplementation((_request, onEvent) => {
+      onEvent?.({
+        conversation_id: "conversation-2",
+        route: "quantitative",
+        type: "route",
+      });
+      onEvent?.({
+        conversation_id: "conversation-2",
+        tool: "structured_query",
+        type: "tool",
+      });
+      return Promise.resolve({
       answer: "You have 23 applications.",
       citations: [
         {
@@ -91,6 +219,7 @@ describe("ChatDrawer", () => {
       ],
       route: "quantitative",
       tool_outputs: [],
+      });
     });
     renderDrawer();
 
@@ -98,13 +227,79 @@ describe("ChatDrawer", () => {
     fireEvent.change(message, { target: { value: "How many applications?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
 
-    expect(screen.getByText("Routing your question through local job-search data…")).toBeTruthy();
+    expect(screen.getByText("Reconciling the answer with dashboard metrics…")).toBeTruthy();
     expect(await screen.findByText("You have 23 applications.")).toBeTruthy();
     expect(screen.getByText("Dashboard metric · summary_counts")).toBeTruthy();
-    expect(sendTurnMock).toHaveBeenCalledWith({
-      conversation_id: null,
-      message: "How many applications?",
+    expect(sendTurnMock).toHaveBeenCalledWith(
+      {
+        conversation_id: null,
+        message: "How many applications?",
+      },
+      expect.any(Function),
+    );
+  });
+
+  it("shows progress while reading a cached cited insight", async () => {
+    loadHistoryMock.mockResolvedValue([]);
+    let completeTurn: ((value: Awaited<ReturnType<typeof sendChatTurn>>) => void) | undefined;
+    sendTurnMock.mockImplementation((_request, onEvent) => {
+      onEvent?.({
+        conversation_id: "conversation-insight",
+        route: "content",
+        type: "route",
+      });
+      onEvent?.({
+        conversation_id: "conversation-insight",
+        tool: "cached_insight",
+        type: "tool",
+      });
+      return new Promise((resolve) => {
+        completeTurn = resolve;
+      });
     });
+    renderDrawer();
+
+    const message = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "Why am I getting rejected?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(screen.getByText("Reading your cached cited insight…")).toBeTruthy();
+    completeTurn?.({
+      answer: "Experience was the recurring cited theme.",
+      citations: [],
+      conversation_id: "conversation-insight",
+      increments: [],
+      route: "content",
+      tool_outputs: [],
+    });
+    expect(await screen.findByText("Experience was the recurring cited theme.")).toBeTruthy();
+  });
+
+  it("submits the exhaustive rejection-email suggestion supported by chat retrieval", async () => {
+    loadHistoryMock.mockResolvedValue([]);
+    sendTurnMock.mockResolvedValue({
+      answer: "I found one matching rejection email.",
+      citations: [{ citation_id: "email:email-acme", source: "email" }],
+      conversation_id: "conversation-suggestion",
+      increments: [{ content: "I found one matching rejection email.", type: "answer" }],
+      route: "content",
+      tool_outputs: [],
+    });
+    renderDrawer();
+
+    const suggestion = await screen.findByRole("button", {
+      name: "Show me every rejection email that mentioned experience.",
+    });
+    fireEvent.click(suggestion);
+
+    expect(await screen.findByText("I found one matching rejection email.")).toBeTruthy();
+    expect(sendTurnMock).toHaveBeenCalledWith(
+      {
+        conversation_id: null,
+        message: "Show me every rejection email that mentioned experience.",
+      },
+      expect.any(Function),
+    );
   });
 
   it("labels an unsupported uncited answer as a grounded refusal", async () => {
@@ -161,6 +356,6 @@ describe("ChatDrawer", () => {
 
     expect(await screen.findByText("You have 23 applications.")).toBeTruthy();
     await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(2));
-    expect(screen.getAllByText("How many applications?")).toHaveLength(1);
+    expect(within(screen.getByRole("log")).getAllByText("How many applications?")).toHaveLength(1);
   });
 });

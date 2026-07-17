@@ -10,6 +10,7 @@ dependencies = [
     "cryptography>=43",
     "fastapi>=0.115",
     "keyring>=25.6",
+    "langgraph>=1.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.8",
     "sqlalchemy[asyncio]>=2.0",

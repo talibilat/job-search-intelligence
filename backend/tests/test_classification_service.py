@@ -66,6 +66,7 @@ def test_classification_service_classifies_candidates_with_configured_prompt() -
     extraction = result.accepted[0].extraction
     assert extraction.company == "Example Systems"
     assert extraction.role_title == "Backend Engineer"
+    assert extraction.source == "company_site"
     assert extraction.status == "applied"
     assert extraction.event_type == "applied"
     assert extraction.tech_stack == ["Python", "FastAPI"]
@@ -146,6 +147,7 @@ def valid_prompt_output() -> dict[str, object]:
         "confidence": 0.97,
         "company": "Example Systems",
         "role_title": "Backend Engineer",
+        "source": "company_site",
         "application_status": "applied",
         "event_type": "applied",
         "event_at": "2026-07-05T11:30:00Z",

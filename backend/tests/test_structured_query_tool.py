@@ -12,10 +12,20 @@ from app.agent.tools.structured_query import (
     StructuredQueryTool,
 )
 from app.db.repositories import MetricsRepository, SyntheticFixtureRepository
+from app.models.records import (
+    ApplicationRecord,
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from pydantic import ValidationError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SYNTHETIC_FIXTURE_PATH = BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "basic_job_search.json"
+DIAGNOSTIC_FIXTURE_PATH = (
+    BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+)
 NOW = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
 
 
@@ -80,6 +90,256 @@ def test_structured_query_tool_answers_rate_and_funnel_templates() -> None:
     ]
 
 
+def test_structured_query_tool_answers_timing_template() -> None:
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="timing"))
+
+    assert [(row.label, row.values) for row in result.rows] == [
+        (
+            "time_to_first_response",
+            {"application_count": 1, "average_hours": 339.5},
+        ),
+        (
+            "time_to_rejection",
+            {"application_count": 1, "average_hours": 339.5},
+        ),
+    ]
+
+
+def test_structured_query_tool_answers_personal_ghost_threshold_template() -> None:
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="personal_ghost_threshold"))
+
+    assert result.rows[0].label == "personal_ghost_threshold"
+    assert result.rows[0].values == {
+        "threshold_days": 30,
+        "threshold_source": "configured_fallback",
+        "response_sample_size": 1,
+        "silent_application_count": 0,
+    }
+
+
+def test_structured_query_tool_answers_application_timeseries_template() -> None:
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="application_timeseries"))
+
+    assert [(row.label, row.values) for row in result.rows] == [
+        (
+            "2026-07-04",
+            {"period_start": "2026-07-04", "application_count": 1},
+        )
+    ]
+
+
+def test_structured_query_tool_answers_response_rate_timeseries_template() -> None:
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="response_rate_timeseries"))
+
+    assert [(row.label, row.values) for row in result.rows] == [
+        (
+            "2026-07-04",
+            {
+                "period_start": "2026-07-04",
+                "response_count": 1,
+                "application_count": 1,
+                "response_rate": 1.0,
+            },
+        )
+    ]
+
+
+def test_structured_query_tool_answers_successful_application_segments() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="successful_application_segments"))
+
+    assert result.rows[0].label == "role:platform engineer"
+    assert result.rows[0].values == {
+        "dimension": "role",
+        "value": "platform engineer",
+        "application_count": 1,
+        "interview_count": 1,
+        "offer_count": 1,
+        "success_count": 1,
+        "success_rate": 1.0,
+        "success_rate_lift": 0.8,
+        "baseline_success_count": 1,
+        "baseline_success_rate": 0.2,
+        "total_applications": 5,
+    }
+
+
+def test_structured_query_tool_answers_negative_outcome_segments() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="negative_outcome_segments"))
+
+    assert result.rows[0].label == "role:data engineer"
+    assert result.rows[0].values == {
+        "dimension": "role",
+        "value": "data engineer",
+        "application_count": 1,
+        "negative_count": 1,
+        "negative_rate": 1.0,
+        "negative_rate_lift": 0.6,
+        "baseline_negative_count": 2,
+        "baseline_negative_rate": 0.4,
+        "total_applications": 5,
+    }
+
+
+def test_structured_query_tool_answers_strongest_response_correlate() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="strongest_response_correlate"))
+
+    assert result.rows[0].label == "source:company_site"
+    assert result.rows[0].values == {
+        "dimension": "source",
+        "value": "company_site",
+        "application_count": 2,
+        "response_count": 2,
+        "response_rate": 1.0,
+        "response_rate_lift": 0.4,
+        "baseline_response_count": 3,
+        "baseline_response_rate": 0.6,
+        "total_applications": 5,
+    }
+
+
+def test_structured_query_tool_answers_wasted_effort_segments() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="wasted_effort_segments"))
+
+    assert result.rows[0].label == "role:data engineer"
+    assert result.rows[0].values == {
+        "dimension": "role",
+        "value": "data engineer",
+        "application_count": 1,
+        "response_count": 0,
+        "response_rate": 0.0,
+        "response_rate_lift": -0.6,
+        "baseline_response_count": 3,
+        "baseline_response_rate": 0.6,
+        "total_applications": 5,
+    }
+
+
+def test_structured_query_tool_answers_best_roi_source() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="best_roi_source"))
+
+    assert result.rows[0].label == "source:linkedin"
+    assert result.rows[0].values == {
+        "source": "linkedin",
+        "application_count": 3,
+        "interview_count": 1,
+        "interview_rate": 1 / 3,
+        "total_applications": 5,
+    }
+
+
+def test_structured_query_tool_answers_sponsorship_response_impact() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="sponsorship_response_impact"))
+
+    assert result.rows[0].label == "sponsorship:unknown"
+    assert result.rows[0].values == {
+        "sponsorship": "unknown",
+        "application_count": 3,
+        "response_count": 1,
+        "response_rate": 1 / 3,
+        "response_rate_lift": (1 / 3) - 0.6,
+        "baseline_response_count": 3,
+        "baseline_response_rate": 0.6,
+        "total_applications": 5,
+    }
+
+
+def test_structured_query_tool_answers_skill_signal_segments() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="skill_signal_segments"))
+
+    assert [(row.label, row.values["signal"]) for row in result.rows] == [
+        ("selling:go", "selling"),
+        ("selling:kubernetes", "selling"),
+        ("dead_weight:sql", "dead_weight"),
+    ]
+    assert result.rows[0].values == {
+        "signal": "selling",
+        "skill": "go",
+        "application_count": 1,
+        "response_count": 1,
+        "response_rate": 1.0,
+        "response_rate_lift": 0.4,
+        "interview_count": 1,
+        "interview_rate": 1.0,
+        "baseline_response_rate": 0.6,
+        "total_applications": 5,
+    }
+
+
+def test_structured_query_tool_answers_adjacent_role_suggestions() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="adjacent_role_suggestions"))
+
+    assert result.rows[0].label == "role:platform engineer"
+    assert result.rows[0].values == {
+        "role": "platform engineer",
+        "application_count": 1,
+        "interview_count": 1,
+        "offer_count": 1,
+        "success_count": 1,
+        "success_rate": 1.0,
+        "total_applications": 5,
+    }
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -113,9 +373,157 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "summary_counts",
         "rates",
         "funnel",
+        "timing",
+        "personal_ghost_threshold",
+        "application_timeseries",
+        "response_rate_timeseries",
+        "successful_application_segments",
+        "negative_outcome_segments",
+        "strongest_response_correlate",
+        "wasted_effort_segments",
+        "best_roi_source",
+        "sponsorship_response_impact",
+        "skill_signal_segments",
+        "adjacent_role_suggestions",
         "breakdown",
         "live_applications",
     }
+
+
+def test_live_applications_use_follow_up_policy_not_ghost_threshold() -> None:
+    class ApplicationReader:
+        def list_applications(
+            self,
+            *,
+            current_status: ApplicationStatus | None = None,
+            source: ApplicationSource | None = None,
+            sponsorship: SponsorshipStatus | None = None,
+            first_seen_from: str | None = None,
+            first_seen_to: str | None = None,
+            role: str | None = None,
+            salary_min: int | None = None,
+            salary_max: int | None = None,
+            work_mode: WorkMode | None = None,
+        ) -> list[ApplicationRecord]:
+            return [
+                application("waiting", "Waiting Co", "applied", "2026-07-28T12:00:00Z"),
+                application("overdue", "Overdue Co", "in_review", "2026-07-25T12:00:00Z"),
+                application("interview", "Interview Co", "interview", "2026-07-20T12:00:00Z"),
+                application("assessment", "Assessment Co", "assessment", "2026-07-20T12:00:00Z"),
+                application("offer", "Offer Co", "offer", "2026-07-20T12:00:00Z"),
+                application("rejected", "Rejected Co", "rejected", "2026-07-20T12:00:00Z"),
+            ]
+
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            application_reader=ApplicationReader(),
+            ghost_threshold_days=60,
+            follow_up_threshold_days=7,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="live_applications"))
+
+    assert [row.label for row in result.rows] == ["Waiting Co", "Overdue Co", "Interview Co"]
+    assert [row.values["days_waiting"] for row in result.rows] == [4, 7, 12]
+    assert [row.values["follow_up_due"] for row in result.rows] == [False, True, True]
+    assert all(row.values["follow_up_threshold_days"] == 7 for row in result.rows)
+
+
+def test_live_applications_forward_typed_filters_to_application_reader() -> None:
+    class ApplicationReader:
+        received: dict[str, object] = {}
+
+        def list_applications(
+            self,
+            *,
+            current_status: ApplicationStatus | None = None,
+            source: ApplicationSource | None = None,
+            sponsorship: SponsorshipStatus | None = None,
+            first_seen_from: str | None = None,
+            first_seen_to: str | None = None,
+            role: str | None = None,
+            salary_min: int | None = None,
+            salary_max: int | None = None,
+            work_mode: WorkMode | None = None,
+        ) -> list[ApplicationRecord]:
+            self.received = {
+                "current_status": current_status,
+                "source": source,
+                "sponsorship": sponsorship,
+                "first_seen_from": first_seen_from,
+                "first_seen_to": first_seen_to,
+                "role": role,
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+                "work_mode": work_mode,
+            }
+            return []
+
+    reader = ApplicationReader()
+    with fixture_connection() as connection:
+        StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            application_reader=reader,
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(
+            StructuredQueryRequest.model_validate(
+                {
+                    "template": "live_applications",
+                    "filters": {
+                        "status": "in_review",
+                        "source": "linkedin",
+                        "sponsorship": "offered",
+                        "first_seen_from": "2026-07-01T00:00:00Z",
+                        "first_seen_to": "2026-07-31T23:59:59Z",
+                        "role": "Platform Engineer",
+                        "salary_min": 100_000,
+                        "salary_max": 150_000,
+                        "work_mode": "remote",
+                    },
+                }
+            )
+        )
+
+    assert reader.received == {
+        "current_status": "in_review",
+        "source": "linkedin",
+        "sponsorship": "offered",
+        "first_seen_from": "2026-07-01T00:00:00+00:00",
+        "first_seen_to": "2026-07-31T23:59:59+00:00",
+        "role": "Platform Engineer",
+        "salary_min": 100_000,
+        "salary_max": 150_000,
+        "work_mode": "remote",
+    }
+
+
+def application(
+    application_id: str,
+    company: str,
+    status: str,
+    last_activity_at: str,
+) -> ApplicationRecord:
+    return ApplicationRecord.model_validate(
+        {
+            "id": application_id,
+            "company": company,
+            "role_title": "Engineer",
+            "source": "company_site",
+            "first_seen_at": last_activity_at,
+            "current_status": status,
+            "currency": None,
+            "location": None,
+            "work_mode": None,
+            "seniority": None,
+            "sponsorship": "unknown",
+            "tech_stack": [],
+            "last_activity_at": last_activity_at,
+            "manual_lock": False,
+            "created_at": last_activity_at,
+            "updated_at": last_activity_at,
+        }
+    )
 
 
 def fixture_connection() -> sqlite3.Connection:

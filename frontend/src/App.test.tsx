@@ -19,6 +19,7 @@ import type {
   MetricsResponseRateTrendResponse,
   MetricsSummaryResponse,
   MetricsTimeseriesResponse,
+  ProcessingRunResult,
   SetupStatusResponse,
 } from "./api";
 
@@ -164,6 +165,37 @@ function idleSyncStatusResponse(): MockObjectResponseBody {
     state: "idle",
     target_message_count: null,
   };
+}
+
+function processingRunResponse(
+  overrides: Partial<ProcessingRunResult> = {},
+): MockObjectResponseBody {
+  const response: ProcessingRunResult = {
+    accepted_count: 0,
+    applications_upserted: 0,
+    candidate_count: 0,
+    candidate_limit: 500,
+    classification_mode: "hybrid",
+    completion_tokens: 0,
+    estimated_cost_usd: 0,
+    events_upserted: 0,
+    ghost_retractions: 0,
+    ghost_updates: 0,
+    limit_reached: false,
+    llm_provider: "azure_openai",
+    malformed_count: 0,
+    manual_conflict_count: 0,
+    model: "gpt-4o-mini",
+    pending_candidate_count: 0,
+    processed_count: 0,
+    prompt_tokens: 0,
+    prompt_version: "v1",
+    skipped_not_job_count: 0,
+    state: "succeeded",
+    total_tokens: 0,
+    ...overrides,
+  };
+  return response as unknown as MockObjectResponseBody;
 }
 
 function setupStatusResponse(
@@ -4045,6 +4077,51 @@ describe("App", () => {
     },
   );
 
+  it("redesign sync polls live progress before the sync request finishes", async () => {
+    vi.useFakeTimers();
+    let resolveSyncRequest: (response: Response) => void = () => {
+      throw new Error("Sync request was not started.");
+    };
+    const fallbackFetch = mockFetchResponses({
+      "/sync/stats": { last_run_at: null, total_raw_emails: 47 },
+      "/sync/status": { message_count: 37, state: "running" },
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (requestPath(input) === "/sync") {
+        return new Promise<Response>((resolve) => {
+          resolveSyncRequest = resolve;
+        });
+      }
+      return fallbackFetch(input);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    expect(screen.getByText("37 new for this run · 47 total emails synced")).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/sync/status"),
+    ).toHaveLength(1);
+
+    resolveSyncRequest(
+      new Response(JSON.stringify({ last_error: "Test run stopped.", state: "failed" }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+
   it("redesign successful seven-day sync scopes the email list without classification", async () => {
     const startedAt = Date.now();
     const fetchMock = mockFetchResponses({
@@ -4087,6 +4164,50 @@ describe("App", () => {
     ).toHaveLength(0);
   });
 
+  it("redesign sync processes every bounded classification batch before reporting completion", async () => {
+    vi.useFakeTimers();
+    const firstBatch = processingRunResponse({
+      accepted_count: 500,
+      applications_upserted: 80,
+      candidate_count: 600,
+      limit_reached: true,
+      pending_candidate_count: 100,
+      processed_count: 500,
+    });
+    const finalBatch = processingRunResponse({
+      accepted_count: 100,
+      applications_upserted: 20,
+      candidate_count: 100,
+      pending_candidate_count: 0,
+      processed_count: 100,
+    });
+    const fetchMock = mockFetchResponses({
+      "/config/providers/readiness": {
+        classification_generation: { message: "Ready.", state: "ready" },
+        ready_to_classify: true,
+      },
+      "/processing/run": [firstBatch, finalBatch],
+      "/processing/status": [firstBatch, finalBatch],
+      "/sync": { message_count: 12, state: "succeeded" },
+    });
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+
+    expect(screen.getByRole("heading", { name: "Your inbox is up to date" })).toBeTruthy();
+    expect(screen.getByText("Saved 600 classifications and updated 100 applications.")).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/processing/run"),
+    ).toHaveLength(2);
+  });
+
   it("redesign email reader closes without changing the selected inbox page", async () => {
     const emailRecord = (index: number) => ({
       body_retention_state: "metadata_only",
@@ -4122,10 +4243,15 @@ describe("App", () => {
       "/sync/emails/email-11/content": {
         body_retention_state: "metadata_only",
         body_text: "Reader body",
+        from_addr: "Sender 11 <jobs@sender-11.example>",
         from_domain: "sender-11.example",
+        ingested_at: "2026-07-12T12:05:00Z",
+        labels: ["INBOX"],
+        provider: "gmail",
         public_id: "email-11",
         sent_at: "2026-07-12T12:00:00Z",
         subject: "Subject 11",
+        to_addr: "me@recipient.example",
       },
     });
 
@@ -4148,7 +4274,7 @@ describe("App", () => {
     ).toBe("page");
   });
 
-  it("redesign sync sends the exact custom date payload", async () => {
+  it("redesign sync includes the selected custom end date", async () => {
     const fetchMock = mockFetchResponses({
       "/sync": { state: "succeeded" },
     });
@@ -4177,7 +4303,7 @@ describe("App", () => {
         throw new Error("Expected the sync request body to be JSON text.");
       }
       expect(JSON.parse(init.body)).toEqual({
-        before_date: "2026-07-10",
+        before_date: "2026-07-11",
         since_date: "2026-06-01",
       });
     });

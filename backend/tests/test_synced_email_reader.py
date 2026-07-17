@@ -59,6 +59,11 @@ async def test_read_email_returns_retained_body_without_calling_provider() -> No
     detail = await service.read_email("public-retained")
 
     assert detail.body_text == "Stored plain text"
+    assert detail.from_addr == "jobs@example.com"
+    assert detail.to_addr == "me@example.com"
+    assert detail.labels == ["INBOX", "CATEGORY_UPDATES"]
+    assert detail.provider == "gmail"
+    assert detail.ingested_at == NOW
     assert provider.fetch_requests == []
     assert repository.persisted_body_writes == []
 
@@ -278,7 +283,9 @@ def reader_record(
         sent_at=NOW,
         body_text=body_text,
         body_retention_state=body_retention_state,
+        labels=["INBOX", "CATEGORY_UPDATES"],
         provider=EmailProviderName.GMAIL.value,
+        ingested_at=NOW,
     )
 
 

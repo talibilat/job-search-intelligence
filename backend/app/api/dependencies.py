@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.agent.tools import SemanticSearchTool, StructuredQueryTool
+from app.agent.tools import CachedInsightTool, SemanticSearchTool, StructuredQueryTool
 from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.engine import load_sqlite_vec_sync, verify_sqlite_vec
@@ -44,7 +44,12 @@ from app.services.chat_index import ChatIndexService
 from app.services.chat_service import ChatService
 from app.services.diagnostics import DiagnosticsService
 from app.services.ghost_inference import GhostInferenceService
-from app.services.insights_service import InsightGenerationService, InsightReadService
+from app.services.insights_service import (
+    InsightGenerationService,
+    InsightInputBuilder,
+    InsightReadService,
+    configured_chat_model,
+)
 from app.services.manual_edit import ManualApplicationEditService
 from app.services.manual_merge import ManualApplicationMergeService
 from app.services.metrics import (
@@ -184,6 +189,7 @@ def get_chat_service(
     try:
         email_repository = EmailRepository(connection)
         chunk_repository = EmailChunkRepository(connection)
+        insight_repository = InsightRepository(connection)
         embedding_model = (
             settings.azure_openai_embedding_deployment
             if settings.llm_provider is LLMProviderName.AZURE_OPENAI
@@ -202,11 +208,19 @@ def get_chat_service(
                 metrics_repository=MetricsRepository(connection),
                 application_reader=ApplicationRepository(connection),
                 ghost_threshold_days=settings.ghost_threshold_days,
+                follow_up_threshold_days=settings.follow_up_threshold_days,
             ),
             semantic_search=SemanticSearchTool(
                 repository=chunk_repository,
                 llm_provider=llm_provider,
                 embedding_model=embedding_model,
+            ),
+            cached_insight=CachedInsightTool(
+                insight_repository,
+                expected_cache_identity=lambda insight_type: (
+                    InsightInputBuilder(insight_repository).build(insight_type).inputs_hash,
+                    configured_chat_model(settings),
+                ),
             ),
         )
     finally:

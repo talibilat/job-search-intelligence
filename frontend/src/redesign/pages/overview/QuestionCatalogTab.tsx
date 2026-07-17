@@ -26,6 +26,11 @@ interface CatalogTier {
   capability: string;
   phase: string;
   status: CatalogStatus;
+  shippedNote?: string;
+  shippedDestination?: {
+    label: string;
+    page: RedesignPage;
+  };
   questions: CatalogQuestion[];
 }
 
@@ -136,13 +141,15 @@ const CATALOG: CatalogTier[] = [
     n: 6,
     name: "Conversational Recall",
     capability: "Hybrid RAG using semantic retrieval plus structured-query tools.",
-    phase: "Planned · Phase 5",
-    status: "planned",
+    phase: "Shipped",
+    status: "shipped",
+    shippedNote: "Answered by the grounded chat agent using deterministic application data and cited email evidence.",
+    shippedDestination: { label: "Ask this in chat", page: "chat" },
     questions: [
-      { id: "Q-47", text: "\"What exactly did the recruiter at [Company] say in their last email?\"", plannedNote: "Needs the Phase 5 chat agent and semantic retrieval." },
-      { id: "Q-48", text: "\"Show me every rejection that mentioned experience / every company that mentioned sponsorship.\"", plannedNote: "Needs the Phase 5 chat agent and semantic retrieval." },
-      { id: "Q-49", text: "\"Who am I waiting on, and who's overdue for a follow-up?\"", plannedNote: "Needs the Phase 5 chat agent." },
-      { id: "Q-50", text: "Free-form: ask anything about my job search in natural language.", plannedNote: "Needs the Phase 5 chat agent." },
+      { id: "Q-47", text: "\"What exactly did the recruiter at [Company] say in their last email?\"" },
+      { id: "Q-48", text: "\"Show me every rejection that mentioned experience / every company that mentioned sponsorship.\"" },
+      { id: "Q-49", text: "\"Who am I waiting on, and who's overdue for a follow-up?\"" },
+      { id: "Q-50", text: "Free-form: ask anything about my job search in natural language." },
     ],
   },
   {
@@ -244,11 +251,24 @@ export function QuestionCatalogTab({ go, rates, summary }: QuestionCatalogTabPro
                   {isOpen ? (
                     <div style={{ padding: "0 16px 16px 56px", display: "flex", flexDirection: "column", gap: "10px" }}>
                       {tier.status === "shipped" ? (
-                        <p style={{ margin: 0, fontSize: "13px", color: "#4A5049", lineHeight: 1.6 }}>
-                          {answer !== null
-                            ? `Current answer: ${answer}`
-                            : "Answered from your applications and events data. See the Applications and Overview tabs for the full breakdown."}
-                        </p>
+                        <>
+                          <p style={{ margin: 0, fontSize: "13px", color: "#4A5049", lineHeight: 1.6 }}>
+                            {answer !== null
+                              ? `Current answer: ${answer}`
+                              : tier.shippedNote ??
+                                "Answered from your applications and events data. See the Applications and Overview tabs for the full breakdown."}
+                          </p>
+                          {tier.shippedDestination ? (
+                            <button
+                              className="rd-hover-purple"
+                              onClick={() => go(tier.shippedDestination?.page ?? "overview")}
+                              style={{ alignSelf: "flex-start", padding: "7px 14px", border: "none", borderRadius: "999px", background: "#6C5FC7", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                              type="button"
+                            >
+                              {tier.shippedDestination.label}
+                            </button>
+                          ) : null}
+                        </>
                       ) : null}
                       {tier.status === "narrative" ? (
                         <>

@@ -938,10 +938,15 @@ const redesignSyncedEmails = Array.from({ length: 11 }, (_, index) => {
 const redesignEmailDetail = {
   body_retention_state: "metadata_only",
   body_text: "Thanks for applying. We will follow up within two weeks.",
+  from_addr: "Jobs Team <jobs@jobs.example>",
   from_domain: "jobs.example",
+  ingested_at: "2026-07-12T12:05:00Z",
+  labels: ["INBOX"],
+  provider: "gmail",
   public_id: "fixture-email-11",
   sent_at: "2026-07-12T12:00:00Z",
   subject: "Application received - row 11",
+  to_addr: "me@example.com",
 } satisfies RawEmailDetail;
 
 const redesignSuccessfulSync = {
@@ -1133,6 +1138,7 @@ const insightList = {
           citation_id: "application:app-fixture:event:event-rejection-fixture",
           company: "Fixture Systems",
           email_id: "email-rejection-fixture",
+          email_public_id: "fixture-rejection-public",
           email_subject: "Rejection decision",
           event_at: "2026-07-10T16:00:00Z",
           event_id: "event-rejection-fixture",
@@ -1218,6 +1224,7 @@ const regenerateInsightResponse = {
         citation_id: "application:app-fixture:event:event-rejection-fixture",
         company: "Fixture Systems",
         email_id: "email-rejection-fixture",
+        email_public_id: "fixture-rejection-public",
         email_subject: "Rejection decision",
         event_at: "2026-07-10T16:00:00Z",
         event_id: "event-rejection-fixture",
@@ -1412,7 +1419,7 @@ async function installRedesignFixtures(page: Page) {
       status: 200,
     }),
   );
-  await page.route("**/applications/status-counts", (route) =>
+  await page.route("**/applications/status-counts**", (route) =>
     route.fulfill({
       contentType: "application/json",
       json: redesignStatusCounts,
@@ -1566,7 +1573,9 @@ async function installRedesignFixtures(page: Page) {
   await page.route("**/processing/status", (route) =>
     route.fulfill({
       contentType: "application/json",
-      json: processingStatus,
+      json: processingComplete
+        ? { ...processingStatus, state: "succeeded" }
+        : processingStatus,
       status: 200,
     }),
   );
@@ -1722,7 +1731,15 @@ async function installRedesignFixtures(page: Page) {
         tool_outputs_json: response.tool_outputs,
       },
     );
-    await route.fulfill({ contentType: "application/json", json: response, status: 200 });
+    const conversationId = response.conversation_id;
+    const tool = response.route === "quantitative" ? "structured_query" : "semantic_search";
+    const stream = [
+      `event: route\ndata: ${JSON.stringify({ conversation_id: conversationId, route: response.route, type: "route" })}`,
+      `event: tool\ndata: ${JSON.stringify({ conversation_id: conversationId, tool, type: "tool" })}`,
+      `event: complete\ndata: ${JSON.stringify({ conversation_id: conversationId, response, type: "complete" })}`,
+      "",
+    ].join("\n\n");
+    await route.fulfill({ body: stream, contentType: "text/event-stream", status: 200 });
   });
   await page.route("**/sync/emails/fixture-rejection-public/content", (route) =>
     route.fulfill({
@@ -1730,10 +1747,15 @@ async function installRedesignFixtures(page: Page) {
       json: {
         body_retention_state: "retained",
         body_text: "The role requires deeper distributed-systems design experience.",
+        from_addr: "Hiring Team <hiring@fixtures.example>",
         from_domain: "fixtures.example",
+        ingested_at: "2026-07-10T16:05:00Z",
+        labels: ["INBOX", "CATEGORY_UPDATES"],
+        provider: "gmail",
         public_id: "fixture-rejection-public",
         sent_at: "2026-07-10T16:00:00Z",
         subject: "Rejection decision",
+        to_addr: "me@example.com",
       } satisfies RawEmailDetail,
       status: 200,
     }),
@@ -1805,8 +1827,8 @@ test("runs the critical private-data-free redesign journey", async ({
   await page.getByLabel("Sponsorship").selectOption("offered");
   await page.getByLabel("Work mode").selectOption("remote");
   await page.getByLabel("Role").fill("platform");
-  await page.getByLabel("From").fill("2026-06-01");
-  await page.getByLabel("To").fill("2026-07-14");
+  await page.getByLabel("From", { exact: true }).fill("2026-06-01");
+  await page.getByLabel("To", { exact: true }).fill("2026-07-14");
   await page.getByLabel("Salary minimum").fill("120000");
   await page.getByLabel("Salary maximum").fill("180000");
   await page.getByRole("button", { name: "Apply filters" }).click();
@@ -1912,19 +1934,20 @@ test("runs the critical private-data-free redesign journey", async ({
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
-      name: "Fixture Systems - Rejection decision",
+      name: "Open email evidence: Fixture Systems - Rejection decision",
     }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", {
-      name: "Example Analytics - Interview feedback",
-    }),
-  ).toBeVisible();
+  await expect(page.getByText("Example Analytics - Interview feedback")).toBeVisible();
   expect(requests.mutationRequestEvents).toContain("POST /insights/regenerate");
 
   await page
-    .getByRole("button", { name: "Fixture Systems - Rejection decision" })
+    .getByRole("button", {
+      name: "Open email evidence: Fixture Systems - Rejection decision",
+    })
     .click();
+  await expect(page.getByText("The role requires deeper distributed-systems design experience.")).toBeVisible();
+  await page.getByRole("button", { name: "Close email" }).click();
+  await page.getByRole("button", { name: "View application: Fixture Systems" }).click();
   await expect(page).toHaveURL("/applications/app-fixture");
   await expect(
     page.getByRole("heading", { name: "Fixture Systems" }),
@@ -1942,7 +1965,7 @@ test("runs the critical private-data-free redesign journey", async ({
 
   await page.getByRole("button", { name: "Insights" }).click();
   await page
-    .getByRole("button", { name: "Example Analytics - Interview feedback" })
+    .getByRole("button", { name: "View application: Example Analytics" })
     .click();
   await expect(page).toHaveURL("/applications/app-analytics");
   const feedbackTimeline = page
@@ -1996,6 +2019,9 @@ test("runs the critical private-data-free redesign journey", async ({
   await chat.getByRole("button", { name: "Open email evidence" }).click();
   const citedEmail = page.getByRole("dialog");
   await expect(citedEmail.getByRole("heading", { name: "Rejection decision" })).toBeVisible();
+  await expect(citedEmail.getByText("From: Hiring Team <hiring@fixtures.example>")).toBeVisible();
+  await expect(citedEmail.getByText("To: me@example.com")).toBeVisible();
+  await expect(citedEmail.getByText("INBOX, CATEGORY_UPDATES")).toBeVisible();
   await expect(citedEmail.getByText("The role requires deeper distributed-systems design experience.")).toBeVisible();
   await citedEmail.getByRole("button", { name: "Close email" }).click();
 
@@ -2033,6 +2059,13 @@ test("runs the critical private-data-free redesign journey", async ({
   await syncScopePanel
     .getByRole("button", { exact: true, name: "Sync" })
     .click();
+
+  const syncProgress = page.getByRole("dialog");
+  await expect(
+    syncProgress.getByRole("heading", { name: "Your inbox is up to date" }),
+  ).toBeVisible({ timeout: 15_000 });
+  await syncProgress.getByRole("button", { name: "Close" }).click();
+  await expect(syncProgress).toHaveCount(0);
 
   const syncedEmails = page.getByRole("list", { name: "Synced emails" });
   await expect(syncedEmails).toBeVisible();
@@ -2082,9 +2115,14 @@ test("runs the critical private-data-free redesign journey", async ({
   const scopedEmailRequests = requests.syncEmailRequestUrls
     .map((requestUrl) => new URL(requestUrl))
     .filter((requestUrl) => requestUrl.searchParams.has("sent_after"));
-  expect(scopedEmailRequests).toHaveLength(2);
-  for (const [index, requestUrl] of scopedEmailRequests.entries()) {
-    expect(requestUrl.searchParams.get("page")).toBe(String(index + 1));
+  expect(
+    new Set(
+      scopedEmailRequests.map((requestUrl) =>
+        requestUrl.searchParams.get("page"),
+      ),
+    ),
+  ).toEqual(new Set(["1", "2"]));
+  for (const requestUrl of scopedEmailRequests) {
     expect(requestUrl.searchParams.get("page_size")).toBe("10");
     const sentAfter = Date.parse(
       requestUrl.searchParams.get("sent_after") ?? "",

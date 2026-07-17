@@ -127,6 +127,12 @@ export function ApplicationsPage({
   );
 
   useEffect(() => {
+    const syncFiltersFromLocation = () => setFilters(filtersFromSearch(window.location.search));
+    window.addEventListener("popstate", syncFiltersFromLocation);
+    return () => window.removeEventListener("popstate", syncFiltersFromLocation);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setApplicationsLoading(true);
@@ -144,7 +150,7 @@ export function ApplicationsPage({
             listApplicationsApplicationsGet({ ...params, status: status ?? undefined }).catch((error: unknown) => ({ error })),
           ),
         ),
-        getApplicationStatusCountsApplicationsStatusCountsGet().catch((error: unknown) => ({ error })),
+        getApplicationStatusCountsApplicationsStatusCountsGet(params).catch((error: unknown) => ({ error })),
       ]);
       if (cancelled) {
         return;
@@ -298,7 +304,12 @@ export function ApplicationsPage({
   ];
 
   const applyFilters = (next: DashboardFilters) => {
-    window.history.pushState(null, "", `/applications${searchFromFilters(next)}`);
+    const params = new URLSearchParams(searchFromFilters(next));
+    if (!next.status && statusFilter !== "all") {
+      params.set("status", statusFilter);
+    }
+    const query = params.toString();
+    window.history.pushState(null, "", `/applications${query ? `?${query}` : ""}`);
     setFilters(next);
   };
   const publishable = pipeline?.next_action === "review_dashboard";
@@ -363,7 +374,11 @@ export function ApplicationsPage({
       </div>
 
       <ProcessingPanel externalProcessingActive={processingActive} onPipelineStatus={setPipeline} onProcessed={onProcessed} reloadKey={reloadKey} />
-      <DashboardFilterPanel filters={filters} onApply={applyFilters} />
+      <DashboardFilterPanel
+        filters={filters}
+        key={searchFromFilters(filters)}
+        onApply={applyFilters}
+      />
 
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
         {chips.map((chip) => {

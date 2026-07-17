@@ -15,7 +15,12 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.classification import (
     ClassificationPromptOutput,
     EmailClassificationRecord,
@@ -34,7 +39,7 @@ from app.providers.llm import (
 
 type NonBlankString = Annotated[StrictStr, Field(min_length=1)]
 
-CLASSIFICATION_PROMPT_VERSION = "v1"
+CLASSIFICATION_PROMPT_VERSION = "v5"
 CLASSIFICATION_MAX_OUTPUT_TOKENS = 1200
 
 
@@ -84,6 +89,7 @@ class JobApplicationExtraction(BaseModel):
 
     company: NonBlankString | None = None
     role_title: NonBlankString | None = None
+    source: ApplicationSource = "other"
     status: ApplicationStatus | None = None
     event_type: ApplicationEventType | None = None
     event_at: datetime | None = None
@@ -262,6 +268,7 @@ def parse_classification_generation_response(
     extraction = JobApplicationExtraction(
         company=prompt_output.company,
         role_title=prompt_output.role_title,
+        source=prompt_output.source,
         status=prompt_output.application_status,
         event_type=prompt_output.event_type,
         event_at=prompt_output.event_at,
@@ -310,6 +317,7 @@ def parse_llm_extraction_response(
         extraction = JobApplicationExtraction(
             company=payload.company,
             role_title=payload.role_title,
+            source=payload.source,
             status=payload.application_status,
             event_type=payload.event_type,
             event_at=payload.event_at,
@@ -348,10 +356,25 @@ def _classification_system_prompt(*, prompt_version: str) -> str:
             f"Prompt version: {prompt_version}",
             "Return exactly one JSON object. Do not wrap it in Markdown.",
             f"Allowed categories: {categories}.",
-            "Use null for unknown nullable fields, sponsorship unknown when unclear, "
-            "and tech_stack as an array.",
+            "Use null for unknown nullable fields, source other and sponsorship unknown "
+            "when unclear, and tech_stack as an array.",
             "For non-job-related messages, set is_job_related false, category other, "
             "nullable extraction fields to null, sponsorship unknown, and tech_stack [].",
+            "Lifecycle categories require their canonical fields: application_confirmation "
+            "uses application_status applied and event_type applied; rejection uses "
+            "application_status rejected and event_type rejection; interview_invite uses "
+            "application_status interview and event_type interview_scheduled; assessment "
+            "uses application_status assessment and event_type assessment; offer uses "
+            "application_status offer and event_type offer.",
+            "For recruiter or interviewer feedback about an existing application, use "
+            "category follow_up (or other when it does not fit follow_up), event_type "
+            "feedback, and application_status null. Do not mark cold recruiter outreach "
+            "or a candidate-authored follow-up as feedback.",
+            "For an employer-authored update that confirms a response to an existing "
+            "application but is not an interview, assessment, rejection, offer, or "
+            "substantive feedback, use category follow_up (or other), event_type response, "
+            "and application_status null. Do not mark cold recruiter outreach or a "
+            "candidate-authored follow-up as a response.",
             "Do not include extra fields, raw SQL, counts, secrets, or provider payloads.",
             "The JSON object must match this schema:",
             schema,

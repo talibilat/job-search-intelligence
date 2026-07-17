@@ -82,6 +82,7 @@ def test_insight_generation_service_generates_and_persists_grounded_narrative(
     )
     assert result.insight.model == "llama3.1"
     assert result.insight.generated_at == GENERATED_AT
+    assert result.insight.citations[0].email_public_id
     assert cached == result.insight
 
     assert len(provider.requests) == 1
@@ -131,6 +132,7 @@ def test_insight_generation_service_generates_and_persists_grounded_narrative(
             ),
         }
     ]
+    assert "email_public_id" not in prompt_payload["evidence"][0]
 
 
 def test_insight_generation_service_allows_bracketed_non_citation_prose(

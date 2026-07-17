@@ -157,7 +157,7 @@ class InsightGenerationService:
             insight_type,
             max_evidence_items=max_evidence_items,
         )
-        model = _configured_chat_model(self._settings)
+        model = configured_chat_model(self._settings)
 
         if not force:
             cached = self._insight_repository.get_cached_insight(
@@ -296,7 +296,7 @@ def _estimate_regeneration_cost_for_input(
         settings=settings,
         request=build_insight_generation_request(
             insight_input,
-            model=_configured_chat_model(settings),
+            model=configured_chat_model(settings),
         ),
     )
 
@@ -731,7 +731,7 @@ def _allowed_citation_ids(insight_input: InsightInput) -> set[str]:
     return citation_ids
 
 
-def _configured_chat_model(settings: AppSettings) -> str:
+def configured_chat_model(settings: AppSettings) -> str:
     model = (
         settings.azure_openai_chat_deployment
         if settings.llm_provider is LLMProviderName.AZURE_OPENAI
@@ -850,6 +850,7 @@ def _citations_from_content(
             role_title=item.role_title,
             event_id=item.event_id,
             email_id=item.email_id,
+            email_public_id=item.email_public_id,
             event_type=item.event_type,
             event_at=item.event_at,
             email_subject=item.email_subject,

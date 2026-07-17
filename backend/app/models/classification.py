@@ -8,7 +8,12 @@ from typing import Annotated, Self
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator, model_validator
 
 from app.config import ClassificationMode, EmailProviderName, LLMProviderName
-from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.event import ApplicationEventType
 
 NonEmptyString = Annotated[StrictStr, Field(min_length=1)]
@@ -34,12 +39,14 @@ _CATEGORY_APPLICATION_STATUS = {
     JobEmailCategory.ASSESSMENT: "assessment",
 }
 
-_CATEGORY_EVENT_TYPE = {
-    JobEmailCategory.APPLICATION_CONFIRMATION: "applied",
-    JobEmailCategory.REJECTION: "rejection",
-    JobEmailCategory.INTERVIEW_INVITE: "interview_scheduled",
-    JobEmailCategory.OFFER: "offer",
-    JobEmailCategory.ASSESSMENT: "assessment",
+_CATEGORY_EVENT_TYPES: dict[JobEmailCategory, frozenset[ApplicationEventType]] = {
+    JobEmailCategory.APPLICATION_CONFIRMATION: frozenset({"applied"}),
+    JobEmailCategory.REJECTION: frozenset({"rejection"}),
+    JobEmailCategory.INTERVIEW_INVITE: frozenset({"interview_scheduled"}),
+    JobEmailCategory.OFFER: frozenset({"offer"}),
+    JobEmailCategory.ASSESSMENT: frozenset({"assessment"}),
+    JobEmailCategory.FOLLOW_UP: frozenset({"feedback", "response"}),
+    JobEmailCategory.OTHER: frozenset({"feedback", "response"}),
 }
 
 
@@ -130,6 +137,7 @@ class ClassificationPromptOutput(BaseModel):
     confidence: float = Field(ge=0, le=1)
     company: NonEmptyString | None
     role_title: NonEmptyString | None
+    source: ApplicationSource = "other"
     application_status: ApplicationStatus | None
     event_type: ApplicationEventType | None
     event_at: datetime | None
@@ -204,12 +212,22 @@ class ClassificationPromptOutput(BaseModel):
 
         if self.is_job_related:
             expected_status = _CATEGORY_APPLICATION_STATUS.get(self.category)
-            if self.application_status is not None and self.application_status != expected_status:
+            if expected_status is not None and self.application_status != expected_status:
+                msg = "application_status contradicts category"
+                raise ValueError(msg)
+            if expected_status is None and self.application_status is not None:
                 msg = "application_status contradicts category"
                 raise ValueError(msg)
 
-            expected_event_type = _CATEGORY_EVENT_TYPE.get(self.category)
-            if self.event_type is not None and self.event_type != expected_event_type:
+            allowed_event_types = _CATEGORY_EVENT_TYPES.get(self.category, frozenset())
+            if expected_status is not None and self.event_type not in allowed_event_types:
+                msg = "event_type contradicts category"
+                raise ValueError(msg)
+            if (
+                expected_status is None
+                and self.event_type is not None
+                and self.event_type not in allowed_event_types
+            ):
                 msg = "event_type contradicts category"
                 raise ValueError(msg)
 
@@ -235,6 +253,7 @@ class ClassificationPromptOutput(BaseModel):
         )
         if (
             any(value is not None for value in extracted_values)
+            or self.source != "other"
             or self.sponsorship != "unknown"
             or self.tech_stack
         ):

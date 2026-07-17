@@ -29,8 +29,11 @@ class ApplicationGroupingKey(BaseModel):
     thread_id: str | None
     time_window_start: date | None
     time_window_days: int = Field(gt=0)
+    attempt_started_at: datetime | None = None
 
-    def as_tuple(self) -> tuple[str | None, str | None, str | None, str | None, int]:
+    def as_tuple(
+        self,
+    ) -> tuple[str | None, str | None, str | None, str | None, int, str | None]:
         """Return a stable primitive key for dictionaries, sets, and tests."""
 
         return (
@@ -39,6 +42,7 @@ class ApplicationGroupingKey(BaseModel):
             self.thread_id,
             self.time_window_start.isoformat() if self.time_window_start is not None else None,
             self.time_window_days,
+            self.attempt_started_at.isoformat() if self.attempt_started_at is not None else None,
         )
 
 
@@ -106,20 +110,39 @@ def make_application_id(key: ApplicationGroupingKey) -> str:
     which makes re-running aggregation idempotent.
     """
 
+    identity = {
+        "company": key.normalized_company,
+        "role": key.normalized_role,
+        "thread_id": key.thread_id,
+        "time_window_start": key.time_window_start.isoformat()
+        if key.time_window_start is not None
+        else None,
+        "window_days": key.time_window_days,
+    }
+    if key.attempt_started_at is not None:
+        identity["attempt_started_at"] = _utc_datetime(key.attempt_started_at).isoformat()
     canonical = json.dumps(
-        {
-            "company": key.normalized_company,
-            "role": key.normalized_role,
-            "thread_id": key.thread_id,
-            "time_window_start": key.time_window_start.isoformat()
-            if key.time_window_start is not None
-            else None,
-            "window_days": key.time_window_days,
-        },
+        identity,
         separators=(",", ":"),
         sort_keys=True,
     )
     return uuid5(_APPLICATION_UUID_NAMESPACE, canonical).hex
+
+
+def start_new_application_attempt(
+    key: ApplicationGroupingKey,
+    *,
+    occurred_at: datetime,
+) -> ApplicationGroupingKey:
+    """Discriminate a later lifecycle attempt while preserving provider thread identity."""
+
+    return key.model_copy(update={"attempt_started_at": _utc_datetime(occurred_at)})
+
+
+def _utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def make_event_id(
@@ -153,4 +176,5 @@ __all__ = [
     "build_application_grouping_key",
     "make_application_id",
     "make_event_id",
+    "start_new_application_attempt",
 ]

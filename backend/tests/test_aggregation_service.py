@@ -12,8 +12,14 @@ from app.db.repositories import (
     CorrectionConflictRepository,
     EmailRepository,
     EventRepository,
+    MetricsRepository,
 )
-from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.classification import EmailClassificationRecord, JobEmailCategory
 from app.models.event import ApplicationEventType
 from app.pipeline.classify import AcceptedLLMExtraction, JobApplicationExtraction
@@ -33,6 +39,7 @@ def test_aggregation_creates_one_application_from_single_extraction(tmp_path: Pa
         email_id="email-1",
         company="Acme Corp",
         role_title="Software Engineer",
+        source="linkedin",
         status="applied",
         event_type="applied",
         event_at=EVENT_AT,
@@ -49,7 +56,12 @@ def test_aggregation_creates_one_application_from_single_extraction(tmp_path: Pa
         "SELECT company, role_title, current_status, source FROM applications",
     ).fetchall()
     assert len(stored_apps) == 1
-    assert tuple(stored_apps[0]) == ("Acme Corp", "Software Engineer", "applied", "other")
+    assert tuple(stored_apps[0]) == (
+        "Acme Corp",
+        "Software Engineer",
+        "applied",
+        "linkedin",
+    )
 
     stored_events = connection.execute(
         "SELECT event_type, email_id FROM application_events",
@@ -197,6 +209,244 @@ def test_follow_up_email_alone_does_not_create_a_submitted_application(
     assert result.applications_upserted == 0
     assert result.events_upserted == 0
     assert result.skipped_not_job_related == 0
+    assert result.skipped_non_application_email_count == 1
+    assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0
+
+
+def test_feedback_email_attaches_to_existing_application_thread(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    interview_at = datetime(2026, 7, 8, 10, 0, tzinfo=UTC)
+    feedback_at = datetime(2026, 7, 10, 10, 0, tzinfo=UTC)
+    insert_raw_email(connection, "email-interview", thread_id="thread-abc")
+    insert_raw_email(connection, "email-feedback", thread_id="thread-abc")
+    connection.commit()
+    service = make_service(connection)
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-interview",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.INTERVIEW_INVITE,
+                status="interview",
+                event_type="interview_scheduled",
+                event_at=interview_at,
+            )
+        ]
+    )
+    first_feedback_run = service.run(
+        [
+            make_extraction(
+                email_id="email-feedback",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="feedback",
+                event_at=feedback_at,
+            )
+        ]
+    )
+    second_feedback_run = service.run(
+        [
+            make_extraction(
+                email_id="email-feedback",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="feedback",
+                event_at=feedback_at,
+            )
+        ]
+    )
+
+    assert first_feedback_run.applications_upserted == 1
+    assert first_feedback_run.events_upserted == 1
+    assert second_feedback_run.applications_upserted == 1
+    assert second_feedback_run.events_upserted == 1
+    assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 1
+    assert_current_status(connection, "interview")
+    stored_events = connection.execute(
+        "SELECT event_type, email_id FROM application_events ORDER BY event_at"
+    ).fetchall()
+    assert [tuple(event) for event in stored_events] == [
+        ("interview_scheduled", "email-interview"),
+        ("feedback", "email-feedback"),
+    ]
+
+
+def test_employer_response_attaches_to_application_and_prevents_silence(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    applied_at = datetime(2026, 7, 5, 10, 0, tzinfo=UTC)
+    response_at = datetime(2026, 7, 8, 10, 0, tzinfo=UTC)
+    insert_raw_email(connection, "email-applied", thread_id="thread-abc", sent_at=applied_at)
+    insert_raw_email(connection, "email-response", thread_id="thread-abc", sent_at=response_at)
+    connection.commit()
+    service = make_service(connection)
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-applied",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=applied_at,
+            )
+        ]
+    )
+    first_response_run = service.run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=response_at,
+            )
+        ]
+    )
+    second_response_run = service.run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=response_at,
+            )
+        ]
+    )
+
+    assert first_response_run.applications_upserted == 1
+    assert first_response_run.events_upserted == 1
+    assert second_response_run.applications_upserted == 1
+    assert second_response_run.events_upserted == 1
+    assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 1
+    assert_current_status(connection, "in_review")
+    stored_events = connection.execute(
+        "SELECT event_type, email_id FROM application_events ORDER BY event_at"
+    ).fetchall()
+    assert [tuple(event) for event in stored_events] == [
+        ("applied", "email-applied"),
+        ("response", "email-response"),
+    ]
+    response_metric = MetricsRepository(connection).get_response_silence_metric()
+    assert response_metric.total_applications == 1
+    assert response_metric.human_response_count == 1
+    assert response_metric.silent_count == 0
+
+
+def test_employer_response_after_interview_preserves_advanced_status(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    interview_at = datetime(2026, 7, 8, 10, 0, tzinfo=UTC)
+    response_at = datetime(2026, 7, 9, 10, 0, tzinfo=UTC)
+    insert_raw_email(
+        connection,
+        "email-interview",
+        thread_id="thread-abc",
+        sent_at=interview_at,
+    )
+    insert_raw_email(
+        connection,
+        "email-response",
+        thread_id="thread-abc",
+        sent_at=response_at,
+    )
+    connection.commit()
+    service = make_service(connection)
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-interview",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.INTERVIEW_INVITE,
+                status="interview",
+                event_type="interview_scheduled",
+                event_at=interview_at,
+            )
+        ]
+    )
+    first_response_run = service.run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=response_at,
+            )
+        ]
+    )
+    second_response_run = service.run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=response_at,
+            )
+        ]
+    )
+
+    assert first_response_run.applications_upserted == 1
+    assert first_response_run.events_upserted == 1
+    assert second_response_run.applications_upserted == 1
+    assert second_response_run.events_upserted == 1
+    assert_current_status(connection, "interview")
+    stored_events = connection.execute(
+        "SELECT event_type, email_id FROM application_events ORDER BY event_at"
+    ).fetchall()
+    assert [tuple(event) for event in stored_events] == [
+        ("interview_scheduled", "email-interview"),
+        ("response", "email-response"),
+    ]
+    response_metric = MetricsRepository(connection).get_response_silence_metric()
+    assert response_metric.human_response_count == 1
+    assert response_metric.silent_count == 0
+
+
+def test_unanchored_employer_response_does_not_create_application(tmp_path: Path) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-response", thread_id="thread-cold")
+    connection.commit()
+
+    result = make_service(connection).run(
+        [
+            make_extraction(
+                email_id="email-response",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                category=JobEmailCategory.FOLLOW_UP,
+                status=None,
+                event_type="response",
+                event_at=EVENT_AT,
+            )
+        ]
+    )
+
+    assert result.applications_upserted == 0
+    assert result.events_upserted == 0
     assert result.skipped_non_application_email_count == 1
     assert connection.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0
 
@@ -465,6 +715,84 @@ def test_aggregation_is_idempotent(tmp_path: Path) -> None:
     assert stored_events[0] == 1
 
 
+def test_aggregation_reclassification_replaces_changed_application_identity(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+    service = make_service(connection)
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-1",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=EVENT_AT,
+            )
+        ]
+    )
+    corrected = make_extraction(
+        email_id="email-1",
+        company="Beta Inc",
+        role_title="Platform Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+        classified_at=datetime(2026, 7, 6, 12, 0, tzinfo=UTC),
+    )
+
+    service.run([corrected])
+    service.run([corrected])
+
+    applications = ApplicationRepository(connection).list_applications()
+    assert [(application.company, application.role_title) for application in applications] == [
+        ("Beta Inc", "Platform Engineer")
+    ]
+    events = connection.execute(
+        "SELECT application_id, email_id, event_type FROM application_events"
+    ).fetchall()
+    assert [tuple(event) for event in events] == [(applications[0].id, "email-1", "applied")]
+    assert MetricsRepository(connection).count_total_applications() == 1
+
+
+def test_aggregation_reclassification_removes_obsolete_non_job_evidence(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+    service = make_service(connection)
+    original = make_extraction(
+        email_id="email-1",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        event_at=EVENT_AT,
+    )
+
+    service.run([original])
+    result = service.run(
+        [
+            make_extraction(
+                email_id="email-1",
+                is_job_related=False,
+                company="Acme Corp",
+                role_title="Software Engineer",
+                event_at=EVENT_AT,
+                classified_at=datetime(2026, 7, 6, 12, 0, tzinfo=UTC),
+            )
+        ]
+    )
+
+    assert result.skipped_not_job_related == 1
+    assert ApplicationRepository(connection).list_applications() == []
+    assert EventRepository(connection).list_by_email_id("email-1") == []
+    assert MetricsRepository(connection).count_total_applications() == 0
+
+
 def test_aggregation_full_rerun_keeps_one_application_and_timeline_events(
     tmp_path: Path,
 ) -> None:
@@ -524,6 +852,316 @@ def test_aggregation_full_rerun_keeps_one_application_and_timeline_events(
     assert rerun_events == first_events
 
 
+def test_aggregation_starts_new_attempt_after_terminal_same_thread_application(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    for email_id in ("first-applied", "first-rejected", "second-applied", "second-interview"):
+        insert_raw_email(connection, email_id, thread_id="reused-ats-thread")
+    connection.commit()
+
+    first_applied = make_extraction(
+        email_id="first-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=datetime(2025, 1, 2, 10, 0, tzinfo=UTC),
+    )
+    first_rejected = make_extraction(
+        email_id="first-rejected",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.REJECTION,
+        status="rejected",
+        event_type="rejection",
+        event_at=datetime(2025, 1, 10, 10, 0, tzinfo=UTC),
+    )
+    second_applied = make_extraction(
+        email_id="second-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+    )
+    second_interview = make_extraction(
+        email_id="second-interview",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.INTERVIEW_INVITE,
+        status="interview",
+        event_type="interview_scheduled",
+        event_at=datetime(2026, 1, 12, 10, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([first_applied, first_rejected])
+    service.run([second_applied])
+    service.run([second_interview])
+    first_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """,
+    ).fetchall()
+
+    service.run([first_applied, first_rejected, second_applied, second_interview])
+    rerun_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """,
+    ).fetchall()
+
+    assert [tuple(row) for row in first_snapshot] == [
+        (first_snapshot[0][0], "rejected", "first-applied,first-rejected"),
+        (first_snapshot[1][0], "interview", "second-applied,second-interview"),
+    ]
+    assert MetricsRepository(connection).count_total_applications() == 2
+    assert rerun_snapshot == first_snapshot
+
+
+def test_aggregation_starts_new_attempt_when_interview_is_first_evidence_after_rejection(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    for email_id in ("first-applied", "first-rejected", "second-applied", "second-interview"):
+        insert_raw_email(connection, email_id, thread_id="reused-ats-thread")
+    connection.commit()
+
+    first_applied = make_extraction(
+        email_id="first-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=datetime(2025, 1, 2, 10, 0, tzinfo=UTC),
+    )
+    first_rejected = make_extraction(
+        email_id="first-rejected",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.REJECTION,
+        status="rejected",
+        event_type="rejection",
+        event_at=datetime(2025, 1, 10, 10, 0, tzinfo=UTC),
+    )
+    second_interview = make_extraction(
+        email_id="second-interview",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.INTERVIEW_INVITE,
+        status="interview",
+        event_type="interview_scheduled",
+        event_at=datetime(2025, 6, 12, 10, 0, tzinfo=UTC),
+    )
+    second_applied = make_extraction(
+        email_id="second-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        event_at=datetime(2025, 6, 5, 10, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([first_applied, first_rejected])
+    service.run([second_interview])
+    service.run([second_applied])
+    first_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """,
+    ).fetchall()
+
+    service.run([first_applied, first_rejected, second_applied, second_interview])
+    rerun_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """,
+    ).fetchall()
+
+    assert [tuple(row) for row in first_snapshot] == [
+        (first_snapshot[0][0], "rejected", "first-applied,first-rejected"),
+        (first_snapshot[1][0], "interview", "second-applied,second-interview"),
+    ]
+    assert MetricsRepository(connection).count_total_applications() == 2
+    assert rerun_snapshot == first_snapshot
+
+
+def test_aggregation_starts_new_attempt_after_year_inactive_same_thread_application(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    for email_id in ("first-applied", "first-interview", "second-applied", "second-interview"):
+        insert_raw_email(connection, email_id, thread_id="reused-ats-thread")
+    connection.commit()
+
+    first_applied = make_extraction(
+        email_id="first-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=datetime(2025, 1, 2, 10, 0, tzinfo=UTC),
+    )
+    first_interview = make_extraction(
+        email_id="first-interview",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.INTERVIEW_INVITE,
+        status="interview",
+        event_type="interview_scheduled",
+        event_at=datetime(2025, 1, 10, 10, 0, tzinfo=UTC),
+    )
+    second_applied = make_extraction(
+        email_id="second-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=datetime(2026, 1, 11, 10, 0, tzinfo=UTC),
+    )
+    second_interview = make_extraction(
+        email_id="second-interview",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.INTERVIEW_INVITE,
+        status="interview",
+        event_type="interview_scheduled",
+        event_at=datetime(2026, 1, 18, 10, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([first_applied, first_interview])
+    service.run([second_applied])
+    service.run([second_interview])
+    first_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """,
+    ).fetchall()
+
+    service.run([first_applied, first_interview, second_applied, second_interview])
+    rerun_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """,
+    ).fetchall()
+
+    assert [tuple(row) for row in first_snapshot] == [
+        (first_snapshot[0][0], "interview", "first-applied,first-interview"),
+        (first_snapshot[1][0], "interview", "second-applied,second-interview"),
+    ]
+    assert MetricsRepository(connection).count_total_applications() == 2
+    assert rerun_snapshot == first_snapshot
+
+
+def test_aggregation_starts_new_attempt_after_terminal_application_without_thread(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    for email_id in ("first-applied", "first-rejected", "second-applied", "second-interview"):
+        insert_raw_email(connection, email_id, thread_id=None)
+    connection.commit()
+
+    first_applied = make_extraction(
+        email_id="first-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=datetime(2026, 1, 2, 9, 0, tzinfo=UTC),
+    )
+    first_rejected = make_extraction(
+        email_id="first-rejected",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.REJECTION,
+        status="rejected",
+        event_type="rejection",
+        event_at=datetime(2026, 1, 2, 10, 0, tzinfo=UTC),
+    )
+    second_applied = make_extraction(
+        email_id="second-applied",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=datetime(2026, 1, 2, 11, 0, tzinfo=UTC),
+    )
+    second_interview = make_extraction(
+        email_id="second-interview",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.INTERVIEW_INVITE,
+        status="interview",
+        event_type="interview_scheduled",
+        event_at=datetime(2026, 1, 2, 12, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([first_applied, first_rejected])
+    service.run([second_applied])
+    service.run([second_interview])
+    first_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """
+    ).fetchall()
+
+    service.run([first_applied, first_rejected, second_applied, second_interview])
+    rerun_snapshot = connection.execute(
+        """
+        SELECT applications.id, applications.current_status,
+               GROUP_CONCAT(application_events.email_id, ',')
+        FROM applications
+        JOIN application_events ON application_events.application_id = applications.id
+        GROUP BY applications.id
+        ORDER BY applications.first_seen_at
+        """
+    ).fetchall()
+
+    assert [tuple(row) for row in first_snapshot] == [
+        (first_snapshot[0][0], "rejected", "first-applied,first-rejected"),
+        (first_snapshot[1][0], "interview", "second-applied,second-interview"),
+    ]
+    assert MetricsRepository(connection).count_total_applications() == 2
+    assert rerun_snapshot == first_snapshot
+
+
 def test_aggregation_replayed_incremental_batch_does_not_duplicate_existing_event(
     tmp_path: Path,
 ) -> None:
@@ -576,6 +1214,104 @@ def test_aggregation_replayed_incremental_batch_does_not_duplicate_existing_even
     assert len(event_rows_after_replay) == 2
     assert event_rows_after_replay == event_rows_after_incremental
     assert_current_status(connection, "interview")
+
+
+def test_aggregation_sparse_incremental_evidence_preserves_application_details(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "application-email", thread_id="thread-abc")
+    insert_raw_email(connection, "rejection-email", thread_id="thread-abc")
+    connection.commit()
+
+    application = make_extraction(
+        email_id="application-email",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        source="linkedin",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+        salary_min=120_000,
+        salary_max=150_000,
+        currency="GBP",
+        location="London",
+        work_mode="remote",
+        seniority="senior",
+        sponsorship="offered",
+        tech_stack=["Python", "FastAPI"],
+    )
+    rejection = make_extraction(
+        email_id="rejection-email",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.REJECTION,
+        status="rejected",
+        event_type="rejection",
+        event_at=datetime(2026, 7, 8, 10, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([application])
+    service.run([rejection])
+    service.run([rejection])
+
+    stored = ApplicationRepository(connection).list_applications()
+    assert len(stored) == 1
+    assert stored[0].current_status == "rejected"
+    assert stored[0].source == "linkedin"
+    assert stored[0].salary_min == 120_000
+    assert stored[0].salary_max == 150_000
+    assert stored[0].currency == "GBP"
+    assert stored[0].location == "London"
+    assert stored[0].work_mode == "remote"
+    assert stored[0].seniority == "senior"
+    assert stored[0].sponsorship == "offered"
+    assert stored[0].tech_stack == ["Python", "FastAPI"]
+    assert len(EventRepository(connection).list_by_application_id(stored[0].id)) == 2
+
+
+def test_aggregation_sparse_same_thread_evidence_inherits_application_identity(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "application-email", thread_id="thread-abc")
+    insert_raw_email(connection, "rejection-email", thread_id="thread-abc")
+    connection.commit()
+
+    service = make_service(connection)
+    service.run(
+        [
+            make_extraction(
+                email_id="application-email",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=EVENT_AT,
+            ),
+        ],
+    )
+    service.run(
+        [
+            make_extraction(
+                email_id="rejection-email",
+                company=None,
+                role_title=None,
+                category=JobEmailCategory.REJECTION,
+                status="rejected",
+                event_type="rejection",
+                event_at=datetime(2026, 7, 8, 10, 0, tzinfo=UTC),
+            ),
+        ],
+    )
+
+    stored = ApplicationRepository(connection).list_applications()
+    assert len(stored) == 1
+    assert stored[0].company == "Acme Corp"
+    assert stored[0].role_title == "Software Engineer"
+    assert stored[0].current_status == "rejected"
+    assert len(EventRepository(connection).list_by_application_id(stored[0].id)) == 2
 
 
 def test_aggregation_uses_email_sent_at_for_missing_event_at_idempotency(
@@ -1054,6 +1790,7 @@ def make_extraction(
     is_job_related: bool = True,
     company: str | None = None,
     role_title: str | None = None,
+    source: ApplicationSource = "other",
     category: JobEmailCategory = JobEmailCategory.APPLICATION_CONFIRMATION,
     confidence: float = 0.95,
     classified_at: datetime = NOW,
@@ -1083,6 +1820,7 @@ def make_extraction(
         extraction=JobApplicationExtraction(
             company=company,
             role_title=role_title,
+            source=source,
             status=status,
             event_type=event_type,
             event_at=event_at,

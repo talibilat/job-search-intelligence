@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from datetime import datetime
 
@@ -13,9 +14,7 @@ from app.models.chunk import EmailTextChunk
 class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
     """Persist and search retained job-email vectors in sqlite-vec."""
 
-    def eligible_email_ids(self, *, limit: int) -> set[str]:
-        if limit < 1:
-            raise ValueError("limit must be at least 1")
+    def eligible_email_ids(self) -> set[str]:
         rows = self.execute(
             """
             SELECT raw_emails.id
@@ -27,9 +26,7 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
               AND LENGTH(TRIM(raw_emails.body_text)) > 0
               AND email_classifications.is_job_related = 1
             ORDER BY raw_emails.sent_at, raw_emails.id
-            LIMIT ?
             """,
-            (limit,),
         ).fetchall()
         return {str(row[0]) for row in rows}
 
@@ -131,8 +128,347 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
             """,
             (json.dumps(embedding), limit),
         ).fetchall()
-        results: list[SemanticSearchResult] = []
-        for row in rows:
+        return tuple(self._semantic_result(row) for row in rows)
+
+    def find_all_mentioning(
+        self,
+        term: str,
+        *,
+        category: str | None = None,
+    ) -> tuple[SemanticSearchResult, ...]:
+        """Return one matching indexed chunk per email for an exhaustive lexical request."""
+
+        rows = self.execute(
+            """
+            WITH matching_chunks AS (
+                SELECT
+                    email_chunks.email_id,
+                    email_chunks.chunk_index,
+                    email_chunks.content,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY email_chunks.email_id
+                        ORDER BY email_chunks.chunk_index
+                    ) AS email_match_rank
+                FROM email_chunks
+                INNER JOIN email_classifications
+                    ON email_classifications.email_id = email_chunks.email_id
+                WHERE INSTR(LOWER(email_chunks.content), LOWER(?)) > 0
+                  AND (? IS NULL OR email_classifications.category = ?)
+            )
+            SELECT
+                matching_chunks.email_id,
+                matching_chunks.chunk_index,
+                matching_chunks.content,
+                raw_emails.public_id AS email_public_id,
+                raw_emails.subject,
+                raw_emails.from_addr,
+                raw_emails.sent_at
+            FROM matching_chunks
+            INNER JOIN raw_emails ON raw_emails.id = matching_chunks.email_id
+            WHERE matching_chunks.email_match_rank = 1
+            ORDER BY raw_emails.sent_at DESC, matching_chunks.email_id
+            """,
+            (term, category, category),
+        ).fetchall()
+        return tuple(self._semantic_result(row, distance=0.0) for row in rows)
+
+    def find_companies_mentioning(self, term: str) -> tuple[SemanticSearchResult, ...]:
+        """Return one cited matching email per distinct application company."""
+
+        rows = self.execute(
+            """
+            WITH matching_chunks AS (
+                SELECT
+                    email_chunks.email_id,
+                    email_chunks.chunk_index,
+                    email_chunks.content,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY email_chunks.email_id
+                        ORDER BY email_chunks.chunk_index
+                    ) AS email_match_rank
+                FROM email_chunks
+                WHERE INSTR(LOWER(email_chunks.content), LOWER(?)) > 0
+            ),
+            indexed_matches AS (
+                SELECT
+                    matching_chunks.email_id,
+                    matching_chunks.chunk_index,
+                    matching_chunks.content,
+                    raw_emails.public_id AS email_public_id,
+                    raw_emails.subject,
+                    raw_emails.from_addr,
+                    raw_emails.sent_at,
+                    raw_emails.provider,
+                    raw_emails.thread_id
+                FROM matching_chunks
+                INNER JOIN raw_emails
+                    ON raw_emails.id = matching_chunks.email_id
+                WHERE matching_chunks.email_match_rank = 1
+            ),
+            matching_threads AS (
+                SELECT DISTINCT
+                    raw_emails.provider,
+                    raw_emails.thread_id,
+                    application_events.application_id
+                FROM application_events
+                INNER JOIN raw_emails
+                    ON raw_emails.id = application_events.email_id
+                WHERE raw_emails.thread_id IS NOT NULL
+                  AND LENGTH(TRIM(raw_emails.thread_id)) > 0
+            ),
+            thread_associated_matches AS (
+                SELECT
+                    applications.id AS application_id,
+                    applications.company,
+                    indexed_matches.email_id,
+                    indexed_matches.chunk_index,
+                    indexed_matches.content,
+                    indexed_matches.email_public_id,
+                    indexed_matches.subject,
+                    indexed_matches.from_addr,
+                    indexed_matches.sent_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            indexed_matches.email_id,
+                            LOWER(TRIM(applications.company))
+                        ORDER BY
+                            CASE
+                                WHEN applications.first_seen_at <= indexed_matches.sent_at
+                                THEN 0
+                                ELSE 1
+                            END,
+                            CASE
+                                WHEN applications.first_seen_at <= indexed_matches.sent_at
+                                THEN applications.first_seen_at
+                            END DESC,
+                            CASE
+                                WHEN applications.first_seen_at > indexed_matches.sent_at
+                                THEN applications.first_seen_at
+                            END,
+                            applications.last_activity_at DESC,
+                            applications.id
+                    ) AS association_rank
+                FROM indexed_matches
+                INNER JOIN matching_threads
+                    ON matching_threads.provider = indexed_matches.provider
+                    AND matching_threads.thread_id = indexed_matches.thread_id
+                INNER JOIN applications
+                    ON applications.id = matching_threads.application_id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM application_events
+                    WHERE application_events.email_id = indexed_matches.email_id
+                )
+            ),
+            associated_matches AS (
+                SELECT DISTINCT
+                    applications.id AS application_id,
+                    applications.company,
+                    indexed_matches.email_id,
+                    indexed_matches.chunk_index,
+                    indexed_matches.content,
+                    indexed_matches.email_public_id,
+                    indexed_matches.subject,
+                    indexed_matches.from_addr,
+                    indexed_matches.sent_at
+                FROM indexed_matches
+                INNER JOIN application_events
+                    ON application_events.email_id = indexed_matches.email_id
+                INNER JOIN applications
+                    ON applications.id = application_events.application_id
+                UNION
+                SELECT
+                    application_id,
+                    company,
+                    email_id,
+                    chunk_index,
+                    content,
+                    email_public_id,
+                    subject,
+                    from_addr,
+                    sent_at
+                FROM thread_associated_matches
+                WHERE association_rank = 1
+            ),
+            matching_companies AS (
+                SELECT
+                    associated_matches.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY LOWER(TRIM(associated_matches.company))
+                        ORDER BY
+                            associated_matches.sent_at DESC,
+                            associated_matches.chunk_index,
+                            associated_matches.email_id,
+                            associated_matches.application_id
+                    ) AS company_match_rank
+                FROM associated_matches
+            )
+            SELECT
+                application_id,
+                company,
+                email_id,
+                chunk_index,
+                content,
+                email_public_id,
+                subject,
+                from_addr,
+                sent_at
+            FROM matching_companies
+            WHERE company_match_rank = 1
+            ORDER BY LOWER(company), company
+            """,
+            (term,),
+        ).fetchall()
+        return tuple(
+            self._semantic_result(
+                row,
+                distance=0.0,
+                company=str(row["company"]),
+                application_ids=(str(row["application_id"]),),
+            )
+            for row in rows
+        )
+
+    def latest_for_mentioned_company(
+        self,
+        question: str,
+    ) -> tuple[SemanticSearchResult, ...] | None:
+        """Return newest indexed evidence when a question names a known company."""
+
+        company_rows = self.execute(
+            "SELECT DISTINCT company FROM applications ORDER BY LENGTH(company) DESC"
+        ).fetchall()
+        current_question = question.rpartition("\nCurrent user question: ")[2]
+        company_scopes: tuple[str, ...] = (current_question,) if current_question else (question,)
+        if current_question:
+            company_scopes += tuple(
+                match.group(1)
+                for match in re.finditer(
+                    r"(?:^|\n)Previous user question: (.*?)"
+                    r"(?=\nPrevious user question: |\nCurrent user question: |\Z)",
+                    question,
+                    flags=re.DOTALL,
+                )
+            )
+        mentioned: tuple[str, ...] = ()
+        for company_scope in company_scopes:
+            mentioned = tuple(
+                str(row[0])
+                for row in company_rows
+                if re.search(
+                    rf"(?<!\w){re.escape(str(row[0]))}(?!\w)",
+                    company_scope,
+                    flags=re.IGNORECASE,
+                )
+            )
+            if mentioned:
+                break
+        if not mentioned:
+            return None
+
+        placeholders = ", ".join("?" for _ in mentioned)
+        rows = self.execute(
+            f"""
+            WITH matching_applications AS (
+                SELECT applications.id
+                FROM applications
+                WHERE applications.company IN ({placeholders})
+            ),
+            matching_threads AS (
+                SELECT DISTINCT
+                    raw_emails.provider,
+                    raw_emails.thread_id,
+                    application_events.application_id
+                FROM application_events
+                INNER JOIN matching_applications
+                    ON matching_applications.id = application_events.application_id
+                INNER JOIN raw_emails
+                    ON raw_emails.id = application_events.email_id
+                WHERE raw_emails.thread_id IS NOT NULL
+                  AND LENGTH(TRIM(raw_emails.thread_id)) > 0
+            ),
+            matching_emails AS (
+                SELECT application_events.email_id, application_events.application_id
+                FROM application_events
+                INNER JOIN matching_applications
+                    ON matching_applications.id = application_events.application_id
+                WHERE application_events.email_id IS NOT NULL
+                UNION
+                SELECT raw_emails.id, matching_threads.application_id
+                FROM raw_emails
+                INNER JOIN matching_threads
+                    ON matching_threads.provider = raw_emails.provider
+                    AND matching_threads.thread_id = raw_emails.thread_id
+            ),
+            latest_indexed_email AS (
+                SELECT
+                    raw_emails.id,
+                    matching_emails.application_id
+                FROM matching_emails
+                INNER JOIN raw_emails ON raw_emails.id = matching_emails.email_id
+                INNER JOIN applications
+                    ON applications.id = matching_emails.application_id
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM email_chunks
+                    WHERE email_chunks.email_id = raw_emails.id
+                )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM json_each(raw_emails.labels)
+                    WHERE UPPER(TRIM(json_each.value)) = 'SENT'
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM email_connections
+                    WHERE email_connections.provider = raw_emails.provider
+                      AND email_connections.display_email IS NOT NULL
+                      AND (
+                        LOWER(TRIM(raw_emails.from_addr)) =
+                            LOWER(TRIM(email_connections.display_email))
+                        OR LOWER(TRIM(raw_emails.from_addr)) LIKE
+                            '%<' || LOWER(TRIM(email_connections.display_email)) || '>'
+                      )
+                  )
+                ORDER BY
+                    raw_emails.sent_at DESC,
+                    applications.last_activity_at DESC,
+                    raw_emails.id,
+                    matching_emails.application_id
+                LIMIT 1
+            )
+            SELECT
+                raw_emails.id AS email_id,
+                latest_indexed_email.application_id,
+                0 AS chunk_index,
+                raw_emails.body_text AS content,
+                raw_emails.public_id AS email_public_id,
+                raw_emails.subject,
+                raw_emails.from_addr,
+                raw_emails.sent_at
+            FROM latest_indexed_email
+            INNER JOIN raw_emails ON raw_emails.id = latest_indexed_email.id
+            """,
+            mentioned,
+        ).fetchall()
+        return tuple(
+            self._semantic_result(
+                row,
+                distance=0.0,
+                application_ids=(str(row["application_id"]),),
+            )
+            for row in rows
+        )
+
+    def _semantic_result(
+        self,
+        row: sqlite3.Row,
+        *,
+        distance: float | None = None,
+        company: str | None = None,
+        application_ids: tuple[str, ...] | None = None,
+    ) -> SemanticSearchResult:
+        if application_ids is None:
             application_rows = self.execute(
                 """
                 SELECT DISTINCT application_id
@@ -142,19 +478,54 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
                 """,
                 (row["email_id"],),
             ).fetchall()
-            results.append(
-                SemanticSearchResult(
-                    email_public_id=row["email_public_id"],
-                    application_ids=tuple(str(item[0]) for item in application_rows),
-                    chunk_index=row["chunk_index"],
-                    content=row["content"],
-                    subject=row["subject"],
-                    from_addr=row["from_addr"],
-                    sent_at=row["sent_at"],
-                    distance=row["distance"],
-                )
-            )
-        return tuple(results)
+            if not application_rows:
+                application_rows = self.execute(
+                    """
+                    SELECT applications.id
+                    FROM raw_emails AS evidence_email
+                    INNER JOIN raw_emails AS application_email
+                        ON application_email.provider = evidence_email.provider
+                        AND application_email.thread_id = evidence_email.thread_id
+                    INNER JOIN application_events
+                        ON application_events.email_id = application_email.id
+                    INNER JOIN applications
+                        ON applications.id = application_events.application_id
+                    WHERE evidence_email.id = ?
+                      AND evidence_email.thread_id IS NOT NULL
+                      AND LENGTH(TRIM(evidence_email.thread_id)) > 0
+                    GROUP BY applications.id
+                    ORDER BY
+                        CASE
+                            WHEN applications.first_seen_at <= evidence_email.sent_at
+                            THEN 0
+                            ELSE 1
+                        END,
+                        CASE
+                            WHEN applications.first_seen_at <= evidence_email.sent_at
+                            THEN applications.first_seen_at
+                        END DESC,
+                        CASE
+                            WHEN applications.first_seen_at > evidence_email.sent_at
+                            THEN applications.first_seen_at
+                        END,
+                        applications.last_activity_at DESC,
+                        applications.id
+                    LIMIT 1
+                    """,
+                    (row["email_id"],),
+                ).fetchall()
+            application_ids = tuple(str(item[0]) for item in application_rows)
+        return SemanticSearchResult(
+            email_public_id=row["email_public_id"],
+            application_ids=application_ids,
+            company=company,
+            chunk_index=row["chunk_index"],
+            content=row["content"],
+            subject=row["subject"],
+            from_addr=row["from_addr"],
+            sent_at=row["sent_at"],
+            distance=row["distance"] if distance is None else distance,
+        )
 
     def map_row(self, row: sqlite3.Row) -> SemanticSearchResult:
         raise NotImplementedError

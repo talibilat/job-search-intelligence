@@ -1,7 +1,8 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MetricsDiagnosticsResponse } from "../../../api";
+import { EMPTY_DASHBOARD_FILTERS } from "../../dashboardFilters";
 import { VisualizedTab } from "./VisualizedTab";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -39,6 +40,72 @@ afterEach(() => {
 });
 
 describe("VisualizedTab", () => {
+  it("composes active dashboard filters into every breakdown and diagnostics request", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path.startsWith("/metrics/breakdown")) {
+        return Promise.resolve(jsonResponse(emptyBreakdown()));
+      }
+      if (path.startsWith("/metrics/diagnostics")) {
+        return Promise.resolve(jsonResponse(emptyDiagnostics()));
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const filters = {
+      firstSeenFrom: "2026-07-01",
+      firstSeenTo: "2026-07-10",
+      role: "Platform Engineer",
+      salaryMax: "120000",
+      salaryMin: "80000",
+      source: "linkedin",
+      sponsorship: "offered",
+      status: "interview",
+      workMode: "remote",
+    };
+    const { rerender } = render(
+      <VisualizedTab
+        filters={filters}
+        funnel={null}
+        rates={null}
+        summary={null}
+        timeseries={null}
+      />,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    for (const [input] of fetchMock.mock.calls) {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const params = new URL(path, "http://localhost").searchParams;
+      expect(params.get("first_seen_from")).toBe("2026-07-01T00:00:00Z");
+      expect(params.get("first_seen_to")).toBe("2026-07-10T23:59:59.999Z");
+      expect(params.get("role")).toBe("Platform Engineer");
+      expect(params.get("salary_max")).toBe("120000");
+      expect(params.get("salary_min")).toBe("80000");
+      expect(params.get("source")).toBe("linkedin");
+      expect(params.get("sponsorship")).toBe("offered");
+      expect(params.get("status")).toBe("interview");
+      expect(params.get("work_mode")).toBe("remote");
+    }
+
+    rerender(
+      <VisualizedTab
+        filters={{ ...filters, source: "company_site" }}
+        funnel={null}
+        rates={null}
+        summary={null}
+        timeseries={null}
+      />,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(10));
+    for (const [input] of fetchMock.mock.calls.slice(5)) {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      expect(new URL(path, "http://localhost").searchParams.get("source")).toBe("company_site");
+    }
+  });
+
   it("loads breakdown and diagnostics data for each dimension and renders real values, not fixed placeholders", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -63,6 +130,7 @@ describe("VisualizedTab", () => {
 
     render(
       <VisualizedTab
+        filters={EMPTY_DASHBOARD_FILTERS}
         funnel={{ stages: [{ count: 10, stage: "applied" }, { count: 3, stage: "interview" }] }}
         rates={null}
         summary={null}
@@ -97,7 +165,7 @@ describe("VisualizedTab", () => {
       return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
     }));
 
-    render(<VisualizedTab funnel={null} rates={null} summary={null} timeseries={null} />);
+    render(<VisualizedTab filters={EMPTY_DASHBOARD_FILTERS} funnel={null} rates={null} summary={null} timeseries={null} />);
 
     const errors = await screen.findAllByText("Breakdown failed.");
     expect(errors.length).toBeGreaterThan(0);
@@ -117,6 +185,7 @@ describe("VisualizedTab", () => {
 
     render(
       <VisualizedTab
+        filters={EMPTY_DASHBOARD_FILTERS}
         funnel={null}
         rates={null}
         summary={{

@@ -11,17 +11,59 @@ import { EmailReaderDialog } from "./components/EmailReaderDialog";
 
 const SUGGESTIONS = [
   "How many applications have I submitted?",
-  "What exactly did the latest recruiter say?",
+  "Show me every rejection email that mentioned experience.",
   "Who am I waiting on and who is overdue?",
 ];
 
-type VisibleMessage = Pick<ChatHistoryMessage, "content" | "conversation_id"> & {
+type VisibleMessage = Pick<ChatHistoryMessage, "content" | "conversation_id" | "created_at"> & {
   citations: ChatCitation[];
   id: number | string;
   role: "assistant" | "user";
 };
 
 type ChatFailure = "history" | "provider" | "request" | null;
+
+interface ConversationSummary {
+  id: string;
+  label: string;
+  lastActivity: string;
+}
+
+function visibleMessages(history: ChatHistoryMessage[]): VisibleMessage[] {
+  return history
+    .filter(
+      (message): message is ChatHistoryMessage & { role: "assistant" | "user" } =>
+        message.role === "assistant" || message.role === "user",
+    )
+    .map((message) => ({
+      citations: message.citations,
+      content: message.content,
+      conversation_id: message.conversation_id,
+      created_at: message.created_at,
+      id: message.id,
+      role: message.role,
+    }));
+}
+
+function conversationSummaries(messages: VisibleMessage[]): ConversationSummary[] {
+  const summaries = new Map<string, ConversationSummary>();
+  for (const message of messages) {
+    const current = summaries.get(message.conversation_id);
+    const label = message.role === "user" && (!current || current.label === "Saved conversation")
+      ? message.content.trim().slice(0, 60)
+      : current?.label ?? "Saved conversation";
+    summaries.set(message.conversation_id, {
+      id: message.conversation_id,
+      label,
+      lastActivity: current?.lastActivity && current.lastActivity > message.created_at
+        ? current.lastActivity
+        : message.created_at,
+    });
+  }
+  return [...summaries.values()].sort((left, right) =>
+    right.lastActivity.localeCompare(left.lastActivity),
+  );
+}
 
 function messageStyle(role: "assistant" | "user"): CSSProperties {
   return role === "user"
@@ -42,10 +84,6 @@ function messageStyle(role: "assistant" | "user"): CSSProperties {
         border: "1px solid #E9E5F7",
         color: "#2B2833",
       };
-}
-
-function delay(milliseconds: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 function isProviderUnavailable(error: unknown): boolean {
@@ -76,6 +114,7 @@ export function ChatDrawer({
   onOpenSettings: () => void;
 }) {
   const [messages, setMessages] = useState<VisibleMessage[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [draft, setDraft] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -85,31 +124,33 @@ export function ChatDrawer({
   const [progress, setProgress] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [emailPublicId, setEmailPublicId] = useState<string | null>(null);
+  const emailCitationTriggerRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const requestSequence = useRef(0);
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (selectedConversationId?: string) => {
     const sequence = ++requestSequence.current;
     setHistoryLoading(true);
     setFailure(null);
     setErrorMessage(null);
     try {
-      const history = await loadChatHistory();
+      const history = await loadChatHistory(selectedConversationId);
       if (sequence !== requestSequence.current) return;
-      const visible = history.filter(
-        (message): message is ChatHistoryMessage & { role: "assistant" | "user" } =>
-          message.role === "assistant" || message.role === "user",
-      );
-      setMessages(
-        visible.map((message) => ({
-          citations: message.citations,
-          content: message.content,
-          conversation_id: message.conversation_id,
-          id: message.id,
-          role: message.role,
-        })),
-      );
-      setConversationId(visible.at(-1)?.conversation_id ?? null);
+      const visible = visibleMessages(history);
+      if (selectedConversationId) {
+        setMessages(visible);
+        setConversationId(selectedConversationId);
+      } else {
+        const summaries = conversationSummaries(visible);
+        const latestConversationId = summaries[0]?.id ?? null;
+        setConversations(summaries);
+        setMessages(
+          latestConversationId
+            ? visible.filter((message) => message.conversation_id === latestConversationId)
+            : [],
+        );
+        setConversationId(latestConversationId);
+      }
     } catch (error) {
       if (sequence !== requestSequence.current) return;
       setFailure("history");
@@ -126,6 +167,17 @@ export function ChatDrawer({
     };
   }, []);
 
+  const startNewChat = () => {
+    requestSequence.current += 1;
+    setMessages([]);
+    setConversationId(null);
+    setHistoryLoading(false);
+    setFailure(null);
+    setErrorMessage(null);
+    setLastQuestion(null);
+    setProgress(null);
+  };
+
   useEffect(() => {
     const log = logRef.current;
     if (!log) return;
@@ -140,6 +192,7 @@ export function ChatDrawer({
     const trimmed = question.trim();
     if (!trimmed || sending) return;
     const optimisticId = `user-${Date.now()}`;
+    const requestedAt = new Date().toISOString();
     if (appendUser) {
       setMessages((current) => [
         ...current,
@@ -147,6 +200,7 @@ export function ChatDrawer({
           citations: [],
           content: trimmed,
           conversation_id: conversationId ?? "pending",
+          created_at: requestedAt,
           id: optimisticId,
           role: "user",
         },
@@ -159,40 +213,53 @@ export function ChatDrawer({
     setSending(true);
     setProgress("Routing your question through local job-search data…");
     try {
-      const response = await sendChatTurn({
-        conversation_id: conversationId,
-        message: trimmed,
-      });
-      setConversationId(response.conversation_id);
-      for (const increment of response.increments) {
-        if (increment.type === "route") {
-          const routeLabel = increment.content === "quantitative"
-            ? "Checking deterministic dashboard facts…"
-            : increment.content === "mixed"
-              ? "Checking metrics and cited email evidence…"
-              : "Searching cited email evidence…";
-          setProgress(routeLabel);
-        } else if (increment.type === "tool") {
-          setProgress(
-            increment.content === "structured_query"
+      const response = await sendChatTurn(
+        {
+          conversation_id: conversationId,
+          message: trimmed,
+        },
+        (event) => {
+          if (event.type === "route") {
+            const routeLabel = event.route === "quantitative"
+              ? "Checking deterministic dashboard facts…"
+              : event.route === "mixed"
+                ? "Checking metrics and cited email evidence…"
+                : "Searching cited email evidence…";
+            setProgress(routeLabel);
+          } else if (event.type === "tool") {
+            const toolLabel = event.tool === "structured_query"
               ? "Reconciling the answer with dashboard metrics…"
-              : "Reviewing safe retained email evidence…",
-          );
-        } else {
-          setMessages((current) => [
-            ...current,
-            {
-              citations: response.citations,
-              content: increment.content,
-              conversation_id: response.conversation_id,
-              id: `assistant-${Date.now()}`,
-              role: "assistant",
-            },
-          ]);
-          setProgress(null);
-        }
-        await delay(90);
-      }
+              : event.tool === "cached_insight"
+                ? "Reading your cached cited insight…"
+                : "Reviewing safe retained email evidence…";
+            setProgress(toolLabel);
+          }
+        },
+      );
+      setConversationId(response.conversation_id);
+      setConversations((current) => {
+        const existing = current.find((conversation) => conversation.id === response.conversation_id);
+        const summary = {
+          id: response.conversation_id,
+          label: existing?.label === "Saved conversation" || !existing
+            ? trimmed.slice(0, 60)
+            : existing.label,
+          lastActivity: new Date().toISOString(),
+        };
+        return [summary, ...current.filter((conversation) => conversation.id !== response.conversation_id)];
+      });
+      setMessages((current) => [
+        ...current,
+        {
+          citations: response.citations,
+          content: response.answer,
+          conversation_id: response.conversation_id,
+          created_at: new Date().toISOString(),
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+        },
+      ]);
+      setProgress(null);
     } catch (error) {
       setProgress(null);
       setFailure(isProviderUnavailable(error) ? "provider" : "request");
@@ -230,6 +297,29 @@ export function ChatDrawer({
           </button>
         </header>
 
+        {!historyLoading && conversations.length > 0 ? (
+          <div className="rd-chat-conversation-bar">
+            <label htmlFor="chat-conversation">Conversation</label>
+            <select
+              disabled={sending}
+              id="chat-conversation"
+              onChange={(event) => {
+                if (event.target.value === "new") startNewChat();
+                else void fetchHistory(event.target.value);
+              }}
+              value={conversationId ?? "new"}
+            >
+              {conversationId === null ? <option value="new">New conversation</option> : null}
+              {conversations.map((conversation) => (
+                <option key={conversation.id} value={conversation.id}>
+                  {conversation.label}
+                </option>
+              ))}
+            </select>
+            <button disabled={sending} onClick={startNewChat} type="button">New chat</button>
+          </div>
+        ) : null}
+
         <div aria-live="polite" aria-relevant="additions text" className="rd-chat-log" ref={logRef} role="log">
           {historyLoading ? <div className="rd-chat-state" role="status">Loading saved conversation…</div> : null}
           {!historyLoading && failure === "history" ? (
@@ -266,7 +356,13 @@ export function ChatDrawer({
                             </button>
                           ) : null}
                           {citation.source === "email" && citation.email_public_id ? (
-                            <button onClick={() => setEmailPublicId(citation.email_public_id!)} type="button">
+                            <button
+                              onClick={(event) => {
+                                emailCitationTriggerRef.current = event.currentTarget;
+                                setEmailPublicId(citation.email_public_id!);
+                              }}
+                              type="button"
+                            >
                               Open email evidence
                             </button>
                           ) : null}
@@ -328,7 +424,11 @@ export function ChatDrawer({
           <small>Only configured providers receive the evidence needed for this question.</small>
         </form>
       </aside>
-      <EmailReaderDialog onClose={() => setEmailPublicId(null)} publicId={emailPublicId} />
+      <EmailReaderDialog
+        onClose={() => setEmailPublicId(null)}
+        publicId={emailPublicId}
+        triggerRef={emailCitationTriggerRef}
+      />
     </>
   );
 }

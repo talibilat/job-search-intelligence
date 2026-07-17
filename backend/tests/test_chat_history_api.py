@@ -73,7 +73,43 @@ def test_get_chat_history_limits_results(tmp_path: Path) -> None:
     response = client.get("/chat/history", params={"limit": 1})
 
     assert response.status_code == 200
-    assert [message["id"] for message in response.json()["messages"]] == [1]
+    assert [message["id"] for message in response.json()["messages"]] == [2]
+
+
+def test_get_chat_history_returns_recent_messages_in_display_order(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_chat_message(
+            connection,
+            1,
+            "conversation-z",
+            "user",
+            "Old lexical winner",
+            created_at=datetime(2026, 7, 8, 12, 0, tzinfo=UTC),
+        )
+        insert_chat_message(
+            connection,
+            2,
+            "conversation-a",
+            "user",
+            "Newest question",
+            created_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+        )
+        insert_chat_message(
+            connection,
+            3,
+            "conversation-a",
+            "assistant",
+            "Newest answer",
+            created_at=datetime(2026, 7, 10, 12, 1, tzinfo=UTC),
+        )
+        connection.commit()
+    client = create_test_client(database_path)
+
+    response = client.get("/chat/history", params={"limit": 2})
+
+    assert response.status_code == 200
+    assert [message["id"] for message in response.json()["messages"]] == [2, 3]
 
 
 def migrated_database(tmp_path: Path) -> Path:
@@ -104,6 +140,7 @@ def insert_chat_message(
     *,
     citations_json: str = "[]",
     tool_outputs_json: str = "[]",
+    created_at: datetime = CREATED_AT,
 ) -> None:
     connection.execute(
         """
@@ -124,6 +161,6 @@ def insert_chat_message(
             content,
             citations_json,
             tool_outputs_json,
-            CREATED_AT.isoformat(),
+            created_at.isoformat(),
         ),
     )

@@ -14,6 +14,7 @@ from app.db.repositories import (
     EmailRepository,
 )
 from app.db.repositories.sync_state import SyncStateRepository
+from app.models.filter_decision import EmailCandidateQueryStrategy
 from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import (
     EmailBackfillStateRecord,
@@ -186,7 +187,7 @@ class EmailSyncStatus(BaseModel):
 
 
 class EmailSyncOptions(BaseModel):
-    """User-selected bounds for a manual extraction run."""
+    """User-selected full-backfill bounds and per-run sync limits."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -666,6 +667,9 @@ class EmailSyncService:
         )
 
         try:
+            retry_failure_count = await self._retry_pending_candidate_bodies(
+                connection=connection,
+            )
             result = await self._run_metadata_pages(
                 connection=connection,
                 sync_cursor=existing_cursor,
@@ -674,6 +678,14 @@ class EmailSyncService:
                 started_at=started_at,
                 options=sync_options,
             )
+            if retry_failure_count:
+                result = result.model_copy(
+                    update={
+                        "retained_body_failure_count": (
+                            result.retained_body_failure_count + retry_failure_count
+                        )
+                    }
+                )
         except Exception as error:
             self._set_status(
                 self._status.model_copy(
@@ -766,11 +778,7 @@ class EmailSyncService:
 
         return EmailSyncPageResult(
             mode=EmailSyncMode.INCREMENTAL,
-            page=_filter_metadata_page(
-                page,
-                since_date=since_date,
-                before_date=sync_options.before_date,
-            ),
+            page=page,
         )
 
     async def run_backfill_page(
@@ -843,6 +851,9 @@ class EmailSyncService:
         message_count = 0
         retained_body_failure_count = 0
         try:
+            retained_body_failure_count = await self._retry_pending_candidate_bodies(
+                connection=connection,
+            )
             while True:
                 page_result = await self.run_backfill_page(
                     connection=connection,
@@ -856,15 +867,20 @@ class EmailSyncService:
                         page.messages,
                         ingested_at=self._clock(),
                     )
+                    known_candidate_thread_ids = self._email_repository.list_candidate_thread_ids(
+                        account=connection.account,
+                    )
                     self._persist_filter_decisions(
                         page.messages,
                         candidate_query=build_broad_candidate_query(),
+                        known_candidate_thread_ids=known_candidate_thread_ids,
                     )
                     if _can_fetch_retained_bodies(self._body_provider):
                         body_batch = await self.fetch_retained_bodies(
                             connection=connection,
                             metadata=page.messages,
                             candidate_query=build_broad_candidate_query(),
+                            known_candidate_thread_ids=known_candidate_thread_ids,
                         )
                         # Per-message body failures are tracked, not fatal:
                         # aborting here would pin the resumable backfill to
@@ -875,6 +891,11 @@ class EmailSyncService:
                                 body_batch.bodies,
                                 retention_state=RawEmailBodyRetentionState.RETAINED,
                             )
+                    retained_body_failure_count += (
+                        await self._promote_pending_candidate_thread_bodies(
+                            connection=connection,
+                        )
+                    )
 
                 state = backfill_state_service.record_backfill_page(
                     connection.account,
@@ -958,6 +979,7 @@ class EmailSyncService:
         metadata: Iterable[EmailMessageMetadata],
         candidate_query: EmailCandidateQuery,
         reconciliation_or_debug_refs: Iterable[EmailMessageRef] = (),
+        known_candidate_thread_ids: Iterable[str] = (),
         max_body_bytes: int | None = None,
     ) -> EmailBodyBatch:
         """Fetch bodies only for broad candidates or explicit reconciliation refs."""
@@ -972,7 +994,10 @@ class EmailSyncService:
             seen_message_ids.add(ref.message_id)
             selected_refs.append(ref)
 
-        decisions = candidate_query.evaluate_metadata_batch(metadata_messages)
+        decisions = candidate_query.evaluate_metadata_batch(
+            metadata_messages,
+            known_candidate_thread_ids=known_candidate_thread_ids,
+        )
         for message, decision in zip(metadata_messages, decisions, strict=True):
             if decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE:
                 select_ref(message.ref)
@@ -998,6 +1023,71 @@ class EmailSyncService:
             failures.extend(batch.failures)
 
         return EmailBodyBatch(bodies=tuple(bodies), failures=tuple(failures))
+
+    async def _retry_pending_candidate_bodies(
+        self,
+        *,
+        connection: EmailConnection,
+    ) -> int:
+        if self._email_repository is None or not _can_fetch_retained_bodies(self._body_provider):
+            return 0
+        pending_refs = self._email_repository.list_pending_candidate_body_refs(
+            account=connection.account,
+        )
+        if not pending_refs:
+            return 0
+        body_batch = await self.fetch_retained_bodies(
+            connection=connection,
+            metadata=(),
+            candidate_query=build_broad_candidate_query(),
+            reconciliation_or_debug_refs=pending_refs,
+        )
+        if body_batch.bodies:
+            self._email_repository.upsert_retained_bodies(
+                body_batch.bodies,
+                retention_state=RawEmailBodyRetentionState.RETAINED,
+            )
+        return len(body_batch.failures)
+
+    async def _promote_pending_candidate_thread_bodies(
+        self,
+        *,
+        connection: EmailConnection,
+    ) -> int:
+        if self._email_repository is None or self._filter_decision_repository is None:
+            return 0
+        pending_refs = self._email_repository.list_pending_thread_candidate_body_refs(
+            account=connection.account,
+        )
+        if not pending_refs:
+            return 0
+
+        decided_at = self._clock()
+        self._filter_decision_repository.upsert_filter_decisions(
+            EmailFilterDecisionRecord(
+                email_id=ref.message_id,
+                strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
+                outcome=EmailCandidateDecisionOutcome.CANDIDATE,
+                reason=EmailCandidateQuery.THREAD_SIGNAL_TOKEN,
+                decided_at=decided_at,
+            )
+            for ref in pending_refs
+        )
+        if not _can_fetch_retained_bodies(self._body_provider):
+            return 0
+
+        body_batch = await self.fetch_retained_bodies(
+            connection=connection,
+            metadata=(),
+            candidate_query=build_broad_candidate_query(),
+            reconciliation_or_debug_refs=pending_refs,
+        )
+        if body_batch.bodies:
+            self._email_repository.upsert_retained_bodies(
+                body_batch.bodies,
+                retention_state=RawEmailBodyRetentionState.RETAINED,
+            )
+        return len(body_batch.failures)
 
     async def _list_full_backfill_page(
         self,
@@ -1043,6 +1133,7 @@ class EmailSyncService:
         message_count = 0
         retained_body_failure_count = 0
         recovered_from_expired_cursor = False
+        pagination_complete = False
         final_mode = (
             EmailSyncMode.INCREMENTAL if sync_cursor is not None else EmailSyncMode.FULL_BACKFILL
         )
@@ -1068,15 +1159,20 @@ class EmailSyncService:
                     page_result.page.messages,
                     ingested_at=self._clock(),
                 )
+                known_candidate_thread_ids = self._email_repository.list_candidate_thread_ids(
+                    account=connection.account,
+                )
                 self._persist_filter_decisions(
                     page_result.page.messages,
                     candidate_query=build_broad_candidate_query(),
+                    known_candidate_thread_ids=known_candidate_thread_ids,
                 )
                 if _can_fetch_retained_bodies(self._body_provider):
                     body_batch = await self.fetch_retained_bodies(
                         connection=connection,
                         metadata=page_result.page.messages,
                         candidate_query=build_broad_candidate_query(),
+                        known_candidate_thread_ids=known_candidate_thread_ids,
                     )
                     retained_body_failure_count += len(body_batch.failures)
                     if body_batch.bodies:
@@ -1084,6 +1180,9 @@ class EmailSyncService:
                             body_batch.bodies,
                             retention_state=RawEmailBodyRetentionState.RETAINED,
                         )
+                retained_body_failure_count += await self._promote_pending_candidate_thread_bodies(
+                    connection=connection,
+                )
             if page_result.page.next_sync_cursor is not None:
                 latest_cursor = page_result.page.next_sync_cursor
             self._set_status(
@@ -1107,11 +1206,8 @@ class EmailSyncService:
                     ),
                 )
             )
-            if page_result.page.next_page_token is None or _sync_limit_reached(
-                options=options,
-                page_count=page_count,
-                message_count=message_count,
-            ):
+            if page_result.page.next_page_token is None:
+                pagination_complete = True
                 break
 
             page_token = page_result.page.next_page_token
@@ -1125,17 +1221,24 @@ class EmailSyncService:
             )
             if mode is EmailSyncMode.FULL_BACKFILL:
                 sync_cursor = None
+            if _sync_limit_reached(
+                options=options,
+                page_count=page_count,
+                message_count=message_count,
+            ):
+                break
 
-        if latest_cursor is not None:
-            self._sync_service.store_sync_cursor(
-                latest_cursor,
-                updated_at=self._clock(),
-            )
-        else:
-            self._sync_service.clear_page_progress(
-                connection.account,
-                updated_at=self._clock(),
-            )
+        if pagination_complete:
+            if latest_cursor is not None:
+                self._sync_service.store_sync_cursor(
+                    latest_cursor,
+                    updated_at=self._clock(),
+                )
+            else:
+                self._sync_service.clear_page_progress(
+                    connection.account,
+                    updated_at=self._clock(),
+                )
 
         return EmailSyncStatus(
             provider=connection.account.provider,
@@ -1164,12 +1267,16 @@ class EmailSyncService:
         metadata: Iterable[EmailMessageMetadata],
         *,
         candidate_query: EmailCandidateQuery,
+        known_candidate_thread_ids: Iterable[str] = (),
     ) -> None:
         if self._filter_decision_repository is None:
             return
 
         metadata_messages = tuple(metadata)
-        decisions = candidate_query.evaluate_metadata_batch(metadata_messages)
+        decisions = candidate_query.evaluate_metadata_batch(
+            metadata_messages,
+            known_candidate_thread_ids=known_candidate_thread_ids,
+        )
         decided_at = self._clock()
         self._filter_decision_repository.upsert_filter_decisions(
             EmailFilterDecisionRecord(
@@ -1229,45 +1336,6 @@ def _remaining_options(
 
 def _bounded_preview_limit(limit: int) -> int:
     return min(max(limit, 1), 50)
-
-
-def _filter_metadata_page(
-    page: EmailMetadataPage,
-    *,
-    since_date: date | None,
-    before_date: date | None,
-) -> EmailMetadataPage:
-    if since_date is None and before_date is None:
-        return page
-
-    return page.model_copy(
-        update={
-            "messages": tuple(
-                message
-                for message in page.messages
-                if _metadata_matches_date_bounds(
-                    message,
-                    since_date=since_date,
-                    before_date=before_date,
-                )
-            )
-        }
-    )
-
-
-def _metadata_matches_date_bounds(
-    message: EmailMessageMetadata,
-    *,
-    since_date: date | None,
-    before_date: date | None,
-) -> bool:
-    timestamp = message.sent_at or message.received_at
-    if timestamp is None:
-        return False
-    message_date = timestamp.date()
-    if since_date is not None and message_date < since_date:
-        return False
-    return before_date is None or message_date < before_date
 
 
 class BackfillReconciliationMetrics(BaseModel):

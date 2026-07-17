@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import get_chat_history_service, get_chat_service
 from app.api.errors import ApiErrorResponse
-from app.models.chat import ChatRequest, ChatResponse
+from app.models.chat import ChatRequest, ChatStreamEvent
 from app.models.chat_history import ChatHistoryResponse
+from app.providers.llm import (
+    LLMProviderError,
+    LLMProviderResponseError,
+    LLMProviderTimeoutError,
+    LLMProviderUnavailableError,
+)
 from app.services.chat_history import ChatHistoryService
 from app.services.chat_service import ChatService
 
@@ -16,8 +24,13 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 @router.post(
     "",
-    response_model=ChatResponse,
+    response_class=StreamingResponse,
     responses={
+        200: {
+            "model": ChatStreamEvent,
+            "content": {"text/event-stream": {}},
+            "description": "Ordered grounded chat events.",
+        },
         422: {"model": ApiErrorResponse, "description": "Request validation failed."},
         502: {"model": ApiErrorResponse, "description": "AI provider response failed."},
         503: {"model": ApiErrorResponse, "description": "AI provider unavailable."},
@@ -25,17 +38,52 @@ router = APIRouter(prefix="/chat", tags=["chat"])
     summary="Run Grounded Chat Turn",
     description=(
         "Routes one question through constrained deterministic metrics, cited semantic "
-        "retrieval, or both. Returns ordered route, tool, and answer increments after the "
-        "complete turn is persisted."
+        "retrieval, or both. Streams route and completed-tool progress, then emits the "
+        "grounded response after the complete turn is persisted."
     ),
 )
 async def post_chat(
     request: ChatRequest,
     service: Annotated[ChatService, Depends(get_chat_service)],
-) -> ChatResponse:
-    """Return ordered route/tool/answer increments for one grounded chat turn."""
+) -> StreamingResponse:
+    """Stream one grounded chat turn as server-sent events."""
 
-    return await service.answer(request)
+    async def events() -> AsyncIterator[str]:
+        try:
+            async for event in service.stream(request):
+                yield _sse(event)
+        except LLMProviderError as error:
+            yield _sse(_provider_error_event(request, error))
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _sse(event: ChatStreamEvent) -> str:
+    return f"event: {event.type}\ndata: {event.model_dump_json()}\n\n"
+
+
+def _provider_error_event(request: ChatRequest, error: LLMProviderError) -> ChatStreamEvent:
+    if isinstance(error, LLMProviderUnavailableError):
+        code = "llm_provider_unavailable"
+    elif isinstance(error, LLMProviderTimeoutError):
+        code = "llm_provider_timeout"
+    elif isinstance(error, LLMProviderResponseError):
+        code = "llm_provider_invalid_response"
+    else:
+        code = "llm_provider_request_failed"
+    return ChatStreamEvent(
+        type="error",
+        conversation_id=request.conversation_id or "pending",
+        error_code=code,
+        error_message=error.public_message,
+    )
 
 
 @router.get("/history", response_model=ChatHistoryResponse)

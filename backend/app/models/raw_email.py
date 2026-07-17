@@ -105,10 +105,15 @@ class RawEmailDetail(BaseModel):
     """Public-safe on-demand email content for the reader dialog."""
 
     public_id: str
+    from_addr: str | None
     from_domain: str | None
+    to_addr: str | None
     subject: str | None
     sent_at: datetime | None
     body_retention_state: RawEmailBodyRetentionState
+    labels: list[str]
+    provider: str
+    ingested_at: datetime
     body_text: str
 
 
@@ -128,4 +133,11 @@ class RawEmailReaderRecord(BaseModel):
     sent_at: datetime | None
     body_text: str | None = Field(default=None, repr=False)
     body_retention_state: RawEmailBodyRetentionState
+    labels: list[str]
     provider: str
+    ingested_at: datetime
+
+    @field_validator("labels", mode="before")
+    @classmethod
+    def parse_labels(cls, value: object) -> object:
+        return parse_json_column(value)

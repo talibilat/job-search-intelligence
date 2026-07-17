@@ -13,6 +13,7 @@ from app.models.records import (
 
 type EventUpsertOutcome = Literal["upserted", "locked_unchanged", "manual_conflict"]
 type GhostEventDeleteOutcome = Literal["deleted", "manual_conflict", "not_found"]
+type AutomaticEventDeleteOutcome = Literal["deleted", "manual_conflict", "not_found"]
 
 
 class EventRepository(BaseRepository[ApplicationEventRecord]):
@@ -40,6 +41,26 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
     ) -> list[ApplicationEventRecord]:
         """Return the persisted timeline for one application in event order."""
         return self.list_for_application(application_id)
+
+    def list_by_email_id(self, email_id: str) -> list[ApplicationEventRecord]:
+        """Return every application event currently derived from one source email."""
+
+        return self.fetch_all(
+            """
+            SELECT
+                application_events.*,
+                raw_emails.sent_at AS email_sent_at,
+                email_classifications.classified_at AS classification_classified_at
+            FROM application_events
+            LEFT JOIN raw_emails
+                ON raw_emails.id = application_events.email_id
+            LEFT JOIN email_classifications
+                ON email_classifications.email_id = application_events.email_id
+            WHERE application_events.email_id = ?
+            ORDER BY application_events.application_id, application_events.id
+            """,
+            (email_id,),
+        )
 
     def list_for_application(self, application_id: str) -> list[ApplicationEventRecord]:
         return self.fetch_all(
@@ -277,6 +298,39 @@ class EventRepository(BaseRepository[ApplicationEventRecord]):
             )
         if should_commit:
             self.connection.commit()
+
+    def delete_automatic_event(
+        self,
+        *,
+        application_id: str,
+        event_id: str,
+    ) -> AutomaticEventDeleteOutcome:
+        """Delete stale derived evidence unless a manual event edit protects it."""
+
+        existing = self.get_by_application_and_id(
+            application_id=application_id,
+            event_id=event_id,
+        )
+        if existing is None:
+            return "not_found"
+        if self._has_manual_event_edit(
+            application_id=application_id,
+            event_id=event_id,
+        ) or self._has_manual_event_edit_for_source_email(
+            application_id=application_id,
+            email_id=existing.email_id,
+        ):
+            return "manual_conflict"
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            self.execute(
+                "DELETE FROM application_events WHERE application_id = ? AND id = ?",
+                (application_id, event_id),
+            )
+        if should_commit:
+            self.connection.commit()
+        return "deleted"
 
     def raw_email_exists(self, email_id: str) -> bool:
         row = self.execute(

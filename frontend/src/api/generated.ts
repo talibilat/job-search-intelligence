@@ -470,6 +470,38 @@ export interface ChatResponse {
   tool_outputs: JsonObjectList;
 }
 
+export type ChatStreamEventTool =
+  (typeof ChatStreamEventTool)[keyof typeof ChatStreamEventTool] | null;
+
+export const ChatStreamEventTool = {
+  structured_query: "structured_query",
+  semantic_search: "semantic_search",
+  cached_insight: "cached_insight",
+} as const;
+
+export type ChatStreamEventType =
+  (typeof ChatStreamEventType)[keyof typeof ChatStreamEventType];
+
+export const ChatStreamEventType = {
+  route: "route",
+  tool: "tool",
+  complete: "complete",
+  error: "error",
+} as const;
+
+/**
+ * One server-sent event emitted while a grounded chat turn runs.
+ */
+export interface ChatStreamEvent {
+  conversation_id: string;
+  error_code?: string | null;
+  error_message?: string | null;
+  response?: ChatResponse | null;
+  route?: ChatRoute | null;
+  tool?: ChatStreamEventTool;
+  type: ChatStreamEventType;
+}
+
 export type ClassificationMode =
   (typeof ClassificationMode)[keyof typeof ClassificationMode];
 
@@ -771,7 +803,7 @@ export const EmailSyncMode = {
 } as const;
 
 /**
- * User-selected bounds for a manual extraction run.
+ * User-selected full-backfill bounds and per-run sync limits.
  */
 export interface EmailSyncOptions {
   before_date?: string | null;
@@ -875,6 +907,7 @@ export interface InsightCitation {
   citation_id: string;
   company: string;
   email_id?: string | null;
+  email_public_id?: string | null;
   email_subject?: string | null;
   event_at?: string | null;
   event_id?: string | null;
@@ -1456,10 +1489,15 @@ export const RawEmailBodyRetentionState = {
 export interface RawEmailDetail {
   body_retention_state: RawEmailBodyRetentionState;
   body_text: string;
+  from_addr: string | null;
   from_domain: string | null;
+  ingested_at: string;
+  labels: string[];
+  provider: string;
   public_id: string;
   sent_at: string | null;
   subject: string | null;
+  to_addr: string | null;
 }
 
 /**
@@ -1651,6 +1689,18 @@ export type ListRecentApplicationEventsApplicationsEventsRecentGetParams = {
    * @maximum 100
    */
   limit?: number;
+};
+
+export type GetApplicationStatusCountsApplicationsStatusCountsGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
 };
 
 export type GmailAuthCallbackAuthGmailCallbackGetParams = {
@@ -2002,27 +2052,52 @@ export type getApplicationStatusCountsApplicationsStatusCountsGetResponse200 = {
   status: 200;
 };
 
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type getApplicationStatusCountsApplicationsStatusCountsGetResponseSuccess =
   getApplicationStatusCountsApplicationsStatusCountsGetResponse200 & {
     headers: Headers;
   };
-export type getApplicationStatusCountsApplicationsStatusCountsGetResponse =
-  getApplicationStatusCountsApplicationsStatusCountsGetResponseSuccess;
-
-export const getGetApplicationStatusCountsApplicationsStatusCountsGetUrl =
-  () => {
-    return `/applications/status-counts`;
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponseError =
+  getApplicationStatusCountsApplicationsStatusCountsGetResponse422 & {
+    headers: Headers;
   };
 
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponse =
+  | getApplicationStatusCountsApplicationsStatusCountsGetResponseSuccess
+  | getApplicationStatusCountsApplicationsStatusCountsGetResponseError;
+
+export const getGetApplicationStatusCountsApplicationsStatusCountsGetUrl = (
+  params?: GetApplicationStatusCountsApplicationsStatusCountsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/applications/status-counts?${stringifiedParams}`
+    : `/applications/status-counts`;
+};
+
 /**
- * Returns deterministic application counts per canonical current status from the local SQLite source of truth, zero-filled for unused statuses.
+ * Returns deterministic application counts per canonical current status from the local SQLite source of truth, zero-filled for unused statuses and optionally scoped by the application-list filters.
  * @summary Get Application Status Counts
  */
 export const getApplicationStatusCountsApplicationsStatusCountsGet = async (
+  params?: GetApplicationStatusCountsApplicationsStatusCountsGetParams,
   options?: RequestInit,
 ): Promise<getApplicationStatusCountsApplicationsStatusCountsGetResponse> => {
   const res = await fetch(
-    getGetApplicationStatusCountsApplicationsStatusCountsGetUrl(),
+    getGetApplicationStatusCountsApplicationsStatusCountsGetUrl(params),
     {
       ...options,
       method: "GET",
@@ -3023,7 +3098,7 @@ export const gmailAuthCallbackAuthGmailCallbackGet = async (
 };
 
 export type postChatChatPostResponse200 = {
-  data: ChatResponse;
+  data: ChatStreamEvent;
   status: 200;
 };
 
@@ -3061,7 +3136,7 @@ export const getPostChatChatPostUrl = () => {
 };
 
 /**
- * Routes one question through constrained deterministic metrics, cited semantic retrieval, or both. Returns ordered route, tool, and answer increments after the complete turn is persisted.
+ * Routes one question through constrained deterministic metrics, cited semantic retrieval, or both. Streams route and completed-tool progress, then emits the grounded response after the complete turn is persisted.
  * @summary Run Grounded Chat Turn
  */
 export const postChatChatPost = async (

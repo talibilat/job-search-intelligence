@@ -1,43 +1,22 @@
 from __future__ import annotations
 
+import re
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Literal, cast
 from uuid import uuid4
 
-from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
+from app.agent.chat_graph import ChatGraph, ChatGraphState
+from app.agent.tools import CachedInsightTool, SemanticSearchTool, StructuredQueryTool
 from app.db.repositories import ChatRepository
-from app.models.chat import (
-    ChatCitation,
-    ChatIncrement,
-    ChatRequest,
-    ChatResponse,
-    ChatRoute,
-    SemanticSearchResult,
-)
+from app.models.chat import ChatIncrement, ChatRequest, ChatResponse, ChatStreamEvent
 from app.services.chat_index import ChatIndexService
 
-_QUANTITATIVE_TERMS = (
-    "how many",
-    "count",
-    "rate",
-    "funnel",
-    "conversion",
-    "waiting on",
-    "overdue",
-    "follow-up",
-    "follow up",
-    "which roles",
-    "which sources",
+_CONTEXT_REFERENCE_PATTERN = re.compile(
+    r"\b(?:it|its|they|them|their|theirs|that|those|there|this)\b",
+    flags=re.IGNORECASE,
 )
-_CONTENT_TERMS = (
-    "exactly",
-    "email",
-    "recruiter",
-    "said",
-    "say",
-    "mentioned",
-    "feedback",
-    "why",
-)
+_CONTEXT_PREFIXES = ("and ", "how about ", "what about ")
 
 
 class ChatService:
@@ -50,51 +29,61 @@ class ChatService:
         index_service: ChatIndexService,
         structured_query: StructuredQueryTool,
         semantic_search: SemanticSearchTool,
+        cached_insight: CachedInsightTool,
     ) -> None:
         self._history_repository = history_repository
-        self._index_service = index_service
-        self._structured_query = structured_query
-        self._semantic_search = semantic_search
+        self._graph = ChatGraph(
+            index_service=index_service,
+            structured_query=structured_query,
+            semantic_search=semantic_search,
+            cached_insight=cached_insight,
+        )
 
     async def answer(self, request: ChatRequest) -> ChatResponse:
+        response: ChatResponse | None = None
+        async for event in self.stream(request):
+            if event.type == "complete":
+                response = event.response
+        if response is None:  # pragma: no cover - the compiled graph always synthesizes
+            raise RuntimeError("Chat graph completed without an answer.")
+        return response
+
+    async def stream(self, request: ChatRequest) -> AsyncIterator[ChatStreamEvent]:
         conversation_id = request.conversation_id or uuid4().hex
-        route = route_question(request.message)
-        tool_outputs: list[dict[str, object]] = []
-        citations: list[ChatCitation] = []
-        content_results: tuple[SemanticSearchResult, ...] = ()
-
-        if route in {"quantitative", "mixed"}:
-            structured_result = self._structured_query.run(_structured_request(request.message))
-            structured_output = structured_result.model_dump(mode="json")
-            tool_outputs.append(structured_output)
-            citations.extend(_structured_citations(structured_result.template, structured_output))
-        if route in {"content", "mixed"}:
-            await self._index_service.reconcile()
-            content_results = await self._semantic_search.run(
-                request.message,
-                limit=request.retrieval_limit,
-            )
-            semantic_output: dict[str, object] = {
-                "tool": "semantic_search",
-                "results": [
-                    item.model_dump(mode="json", exclude={"content"}) for item in content_results
-                ],
-            }
-            tool_outputs.append(semantic_output)
-            citations.extend(
-                ChatCitation(
-                    citation_id=f"email:{item.email_public_id}:{item.chunk_index}",
-                    source="email",
-                    email_public_id=item.email_public_id,
-                    application_id=item.application_ids[0] if item.application_ids else None,
-                    subject=item.subject,
-                    sent_at=item.sent_at,
-                    snippet=" ".join(item.content.split())[:280],
+        graph_request = self._with_conversation_context(request)
+        graph_result = ChatGraphState(request=graph_request)
+        async for node, update in self._graph.stream(graph_request):
+            graph_result.update(update)
+            if node == "route":
+                route = update["route"]
+                yield ChatStreamEvent(
+                    type="route",
+                    conversation_id=conversation_id,
+                    route=route,
                 )
-                for item in content_results
-            )
+            elif node in {
+                "structured_query",
+                "semantic_search",
+                "cached_insight",
+                "mixed_tools",
+                "mixed_cached_insight",
+            }:
+                for output in update.get("tool_outputs", []):
+                    tool = output.get("tool")
+                    if tool in {"structured_query", "semantic_search", "cached_insight"}:
+                        yield ChatStreamEvent(
+                            type="tool",
+                            conversation_id=conversation_id,
+                            tool=cast(
+                                "Literal['structured_query', 'semantic_search', 'cached_insight']",
+                                tool,
+                            ),
+                        )
 
-        answer = synthesize_grounded_answer(route, tool_outputs, content_results, citations)
+        route = graph_result["route"]
+        tool_outputs = graph_result.get("tool_outputs", [])
+        citations = graph_result.get("citations", [])
+        answer = graph_result["answer"]
         increments = [
             ChatIncrement(type="route", content=route),
             *(ChatIncrement(type="tool", content=str(output["tool"])) for output in tool_outputs),
@@ -128,7 +117,7 @@ class ChatService:
             created_at=now,
         )
         self._history_repository.connection.commit()
-        return ChatResponse(
+        response = ChatResponse(
             conversation_id=conversation_id,
             route=route,
             answer=answer,
@@ -136,86 +125,38 @@ class ChatService:
             tool_outputs=tool_outputs,
             increments=increments,
         )
-
-
-def route_question(question: str) -> ChatRoute:
-    normalized = question.casefold()
-    quantitative = any(term in normalized for term in _QUANTITATIVE_TERMS)
-    content = any(term in normalized for term in _CONTENT_TERMS)
-    if quantitative and content:
-        return "mixed"
-    if quantitative:
-        return "quantitative"
-    return "content"
-
-
-def _structured_request(question: str) -> StructuredQueryRequest:
-    normalized = question.casefold()
-    if any(term in normalized for term in ("waiting on", "overdue", "follow-up", "follow up")):
-        return StructuredQueryRequest(template="live_applications")
-    if "funnel" in normalized:
-        return StructuredQueryRequest(template="funnel")
-    if any(term in normalized for term in ("rate", "conversion")):
-        return StructuredQueryRequest(template="rates")
-    if "role" in normalized:
-        return StructuredQueryRequest(template="breakdown", breakdown_dimension="role")
-    return StructuredQueryRequest(template="summary_counts")
-
-
-def synthesize_grounded_answer(
-    route: ChatRoute,
-    tool_outputs: list[dict[str, object]],
-    content_results: tuple[SemanticSearchResult, ...],
-    citations: list[ChatCitation],
-) -> str:
-    parts: list[str] = []
-    structured = next((item for item in tool_outputs if item["tool"] == "structured_query"), None)
-    if structured is not None:
-        rows = structured.get("rows")
-        if isinstance(rows, list) and rows:
-            rendered_rows = []
-            for row in rows:
-                if isinstance(row, dict):
-                    rendered_rows.append(f"{row.get('label')}: {row.get('values')}")
-            parts.append("Deterministic result: " + "; ".join(rendered_rows) + ".")
-        else:
-            parts.append("The deterministic query found no matching applications.")
-    if content_results:
-        excerpts = []
-        email_citations = [item for item in citations if item.source == "email"]
-        for result, citation in zip(content_results, email_citations, strict=True):
-            excerpt = " ".join(result.content.split())[:280]
-            excerpts.append(f'"{excerpt}" [{citation.citation_id}]')
-        parts.append("Relevant source email evidence: " + " ".join(excerpts))
-    elif route in {"content", "mixed"}:
-        parts.append(
-            "I cannot answer the email-content portion because no retained job-related "
-            "source email was retrieved."
+        yield ChatStreamEvent(
+            type="complete",
+            conversation_id=conversation_id,
+            response=response,
         )
-    return " ".join(parts)
 
-
-def _structured_citations(template: str, output: dict[str, object]) -> list[ChatCitation]:
-    if template == "live_applications":
-        rows = output.get("rows")
-        if isinstance(rows, list):
-            result = []
-            for row in rows:
-                values = row.get("values") if isinstance(row, dict) else None
-                application_id = values.get("application_id") if isinstance(values, dict) else None
-                if isinstance(application_id, str):
-                    result.append(
-                        ChatCitation(
-                            citation_id=f"application:{application_id}",
-                            source="application",
-                            application_id=application_id,
-                        )
-                    )
-            return result
-    return [
-        ChatCitation(
-            citation_id=f"metric:{template}",
-            source="metric",
-            metric_template=template,
+    def _with_conversation_context(self, request: ChatRequest) -> ChatRequest:
+        if request.conversation_id is None or not _needs_conversation_context(request.message):
+            return request
+        history = self._history_repository.list_messages(
+            conversation_id=request.conversation_id,
+            limit=20,
         )
-    ]
+        previous_questions: list[str] = []
+        for message in reversed(history):
+            if message.role != "user":
+                continue
+            previous_questions.append(message.content)
+            if not _needs_conversation_context(message.content):
+                break
+        if not previous_questions:
+            return request
+        context = "\n".join(
+            f"Previous user question: {question}" for question in previous_questions
+        )
+        return request.model_copy(
+            update={"message": (f"{context}\nCurrent user question: {request.message}")}
+        )
+
+
+def _needs_conversation_context(message: str) -> bool:
+    normalized = message.casefold().lstrip()
+    return _CONTEXT_REFERENCE_PATTERN.search(message) is not None or normalized.startswith(
+        _CONTEXT_PREFIXES
+    )

@@ -66,6 +66,7 @@ def test_settings_defaults_match_phase_zero_config_shell(
     )
     assert settings.sync_on_open is True
     assert settings.ghost_threshold_days == 30
+    assert settings.follow_up_threshold_days == 7
 
 
 def test_settings_load_env_file_overrides(
@@ -93,6 +94,7 @@ def test_settings_load_env_file_overrides(
                 "JOBTRACKER_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly",
                 "JOBTRACKER_SQLITE_VEC_EXTENSION_PATH=/usr/local/lib/sqlite_vec.dylib",
                 "JOBTRACKER_GHOST_THRESHOLD_DAYS=45",
+                "JOBTRACKER_FOLLOW_UP_THRESHOLD_DAYS=10",
             ]
         )
     )
@@ -118,6 +120,7 @@ def test_settings_load_env_file_overrides(
     assert settings.gmail_scopes == ("https://www.googleapis.com/auth/gmail.readonly",)
     assert settings.sqlite_vec_extension_path == Path("/usr/local/lib/sqlite_vec.dylib")
     assert settings.ghost_threshold_days == 45
+    assert settings.follow_up_threshold_days == 10
 
 
 def test_settings_reject_invalid_enum_values(
