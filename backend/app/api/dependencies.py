@@ -202,6 +202,7 @@ def get_chat_service(
                 metrics_repository=MetricsRepository(connection),
                 application_reader=ApplicationRepository(connection),
                 ghost_threshold_days=settings.ghost_threshold_days,
+                follow_up_threshold_days=settings.follow_up_threshold_days,
             ),
             semantic_search=SemanticSearchTool(
                 repository=chunk_repository,

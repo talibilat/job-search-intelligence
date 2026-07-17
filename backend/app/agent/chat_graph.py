@@ -189,6 +189,8 @@ def synthesize_grounded_answer(
     if structured is not None:
         rows = structured.get("rows")
         if isinstance(rows, list) and rows:
+            if structured.get("template") == "live_applications":
+                return _synthesize_live_applications(rows)
             rendered_rows = []
             for row in rows:
                 if isinstance(row, dict):
@@ -209,6 +211,31 @@ def synthesize_grounded_answer(
             "source email was retrieved."
         )
     return " ".join(parts)
+
+
+def _synthesize_live_applications(rows: list[object]) -> str:
+    waiting: list[str] = []
+    overdue: list[str] = []
+    for row in rows:
+        values = row.get("values") if isinstance(row, dict) else None
+        if not isinstance(values, dict):
+            continue
+        company = values.get("company")
+        role = values.get("role_title")
+        application_id = values.get("application_id")
+        if not all(isinstance(value, str) for value in (company, role, application_id)):
+            continue
+        citation_id = f"application:{application_id}"
+        label = f"{company} - {role} [{citation_id}]"
+        waiting.append(label)
+        if values.get("follow_up_due") is True:
+            days_waiting = values.get("days_waiting")
+            overdue.append(f"{label} ({days_waiting} days waiting)")
+
+    if not waiting:
+        return "The deterministic query found no applications awaiting an employer response."
+    overdue_text = ", ".join(overdue) if overdue else "None"
+    return f"Waiting on: {', '.join(waiting)}. Overdue for follow-up: {overdue_text}."
 
 
 def _structured_citations(template: str, output: ToolOutput) -> list[ChatCitation]:

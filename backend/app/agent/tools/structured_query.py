@@ -68,14 +68,19 @@ class StructuredQueryTool:
         *,
         metrics_repository: MetricsRepository,
         ghost_threshold_days: int,
+        follow_up_threshold_days: int = 7,
         application_reader: LiveApplicationReader | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if ghost_threshold_days < 1:
             msg = "ghost_threshold_days must be at least 1"
             raise ValueError(msg)
+        if follow_up_threshold_days < 1:
+            msg = "follow_up_threshold_days must be at least 1"
+            raise ValueError(msg)
         self._metrics_repository = metrics_repository
         self._ghost_threshold_days = ghost_threshold_days
+        self._follow_up_threshold_days = follow_up_threshold_days
         self._application_reader = application_reader
         self._clock = clock or (lambda: datetime.now(UTC))
 
@@ -178,9 +183,7 @@ class StructuredQueryTool:
                 if application.current_status not in {
                     "applied",
                     "in_review",
-                    "assessment",
                     "interview",
-                    "offer",
                 }:
                     continue
                 days_waiting = max(0, (now - application.last_activity_at.astimezone(UTC)).days)
@@ -194,7 +197,8 @@ class StructuredQueryTool:
                             "current_status": application.current_status,
                             "last_activity_at": application.last_activity_at.isoformat(),
                             "days_waiting": days_waiting,
-                            "overdue": days_waiting >= self._ghost_threshold_days,
+                            "follow_up_due": days_waiting >= self._follow_up_threshold_days,
+                            "follow_up_threshold_days": self._follow_up_threshold_days,
                         },
                     )
                 )

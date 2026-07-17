@@ -127,7 +127,8 @@ class AppSettings(BaseSettings):
     ollama_chat_model: str = Field(default="llama3.1", min_length=1)
     ollama_embedding_model: str = Field(default="nomic-embed-text", min_length=1)
 
-    ghost_threshold_days: int = Field(default=60, ge=1)
+    ghost_threshold_days: int = Field(default=30, ge=1)
+    follow_up_threshold_days: int = Field(default=7, ge=1)
 
     def __init__(self, *, _env_file: str | Path | None = ".env", **values: Any) -> None:
         super().__init__(_env_file=_env_file, **values)

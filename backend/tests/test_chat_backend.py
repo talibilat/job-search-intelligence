@@ -183,8 +183,13 @@ def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(
         },
     )
     assert waiting.status_code == 200
-    assert waiting.json()["tool_outputs"][0]["template"] == "live_applications"
-    assert waiting.json()["citations"][0] == {
+    waiting_body = waiting.json()
+    assert waiting_body["route"] == "quantitative"
+    assert waiting_body["tool_outputs"][0]["template"] == "live_applications"
+    assert waiting_body["answer"].startswith("Waiting on: Acme - Platform Engineer")
+    assert "[application:app-acme]" in waiting_body["answer"]
+    assert "Overdue for follow-up:" in waiting_body["answer"]
+    assert waiting_body["citations"][0] == {
         "citation_id": "application:app-acme",
         "source": "application",
         "email_public_id": None,

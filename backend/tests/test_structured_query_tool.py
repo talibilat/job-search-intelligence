@@ -12,6 +12,7 @@ from app.agent.tools.structured_query import (
     StructuredQueryTool,
 )
 from app.db.repositories import MetricsRepository, SyntheticFixtureRepository
+from app.models.records import ApplicationRecord
 from pydantic import ValidationError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -116,6 +117,61 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "breakdown",
         "live_applications",
     }
+
+
+def test_live_applications_use_follow_up_policy_not_ghost_threshold() -> None:
+    class ApplicationReader:
+        def list_applications(self) -> list[ApplicationRecord]:
+            return [
+                application("waiting", "Waiting Co", "applied", "2026-07-28T12:00:00Z"),
+                application("overdue", "Overdue Co", "in_review", "2026-07-25T12:00:00Z"),
+                application("interview", "Interview Co", "interview", "2026-07-20T12:00:00Z"),
+                application("assessment", "Assessment Co", "assessment", "2026-07-20T12:00:00Z"),
+                application("offer", "Offer Co", "offer", "2026-07-20T12:00:00Z"),
+                application("rejected", "Rejected Co", "rejected", "2026-07-20T12:00:00Z"),
+            ]
+
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            application_reader=ApplicationReader(),
+            ghost_threshold_days=60,
+            follow_up_threshold_days=7,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="live_applications"))
+
+    assert [row.label for row in result.rows] == ["Waiting Co", "Overdue Co", "Interview Co"]
+    assert [row.values["days_waiting"] for row in result.rows] == [4, 7, 12]
+    assert [row.values["follow_up_due"] for row in result.rows] == [False, True, True]
+    assert all(row.values["follow_up_threshold_days"] == 7 for row in result.rows)
+
+
+def application(
+    application_id: str,
+    company: str,
+    status: str,
+    last_activity_at: str,
+) -> ApplicationRecord:
+    return ApplicationRecord.model_validate(
+        {
+            "id": application_id,
+            "company": company,
+            "role_title": "Engineer",
+            "source": "company_site",
+            "first_seen_at": last_activity_at,
+            "current_status": status,
+            "currency": None,
+            "location": None,
+            "work_mode": None,
+            "seniority": None,
+            "sponsorship": "unknown",
+            "tech_stack": [],
+            "last_activity_at": last_activity_at,
+            "manual_lock": False,
+            "created_at": last_activity_at,
+            "updated_at": last_activity_at,
+        }
+    )
 
 
 def fixture_connection() -> sqlite3.Connection:
