@@ -32,6 +32,7 @@ StructuredQueryTemplate = Literal[
     "strongest_response_correlate",
     "wasted_effort_segments",
     "best_roi_source",
+    "sponsorship_response_impact",
     "breakdown",
     "live_applications",
 ]
@@ -396,6 +397,30 @@ class StructuredQueryTool:
                     ),
                 )
             return StructuredQueryResult(template=request.template, rows=roi_rows)
+
+        if request.template == "sponsorship_response_impact":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            segment = diagnostics.sponsorship_response_impact
+            impact_rows: tuple[StructuredQueryRow, ...] = ()
+            if segment is not None:
+                impact_rows = (
+                    StructuredQueryRow(
+                        label=f"sponsorship:{segment.value}",
+                        values={
+                            "sponsorship": segment.value,
+                            "application_count": segment.application_count,
+                            "response_count": segment.response_count,
+                            "response_rate": segment.response_rate,
+                            "response_rate_lift": segment.response_rate_lift,
+                            "baseline_response_count": diagnostics.baseline_response_count,
+                            "baseline_response_rate": diagnostics.baseline_response_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    ),
+                )
+            return StructuredQueryResult(template=request.template, rows=impact_rows)
 
         if request.template == "live_applications":
             if self._application_reader is None:

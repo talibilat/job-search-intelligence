@@ -95,6 +95,14 @@ _BEST_ROI_SOURCE_TERMS = (
     "best source for interviews",
     "most interviews per application",
 )
+_SPONSORSHIP_RESPONSE_IMPACT_TERMS = (
+    "sponsorship requirement measurably hurting",
+    "sponsorship requirement hurting",
+    "sponsorship hurting my response rate",
+    "sponsorship hurt my response rate",
+    "response rate impact of sponsorship",
+    "sponsorship response impact",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -311,6 +319,7 @@ def route_question(question: str) -> ChatRoute:
         or _asks_strongest_response_correlate(normalized)
         or _asks_wasted_effort_segments(normalized)
         or _asks_best_roi_source(normalized)
+        or _asks_sponsorship_response_impact(normalized)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -351,6 +360,10 @@ def _structured_request(
         return StructuredQueryRequest(template="wasted_effort_segments", filters=filters)
     if _asks_best_roi_source(normalized):
         return StructuredQueryRequest(template="best_roi_source", filters=filters)
+    if _asks_sponsorship_response_impact(normalized):
+        if filters is not None and filters.sponsorship is not None:
+            filters = filters.model_copy(update={"sponsorship": None})
+        return StructuredQueryRequest(template="sponsorship_response_impact", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):
         return StructuredQueryRequest(template="application_timeseries", filters=filters)
     if len(_matched_sources(normalized)) > 1:
@@ -475,6 +488,10 @@ def _asks_wasted_effort_segments(normalized_question: str) -> bool:
 
 def _asks_best_roi_source(normalized_question: str) -> bool:
     return any(term in normalized_question for term in _BEST_ROI_SOURCE_TERMS)
+
+
+def _asks_sponsorship_response_impact(normalized_question: str) -> bool:
+    return any(term in normalized_question for term in _SPONSORSHIP_RESPONSE_IMPACT_TERMS)
 
 
 def _role_filter(normalized_question: str) -> str | None:
@@ -607,6 +624,8 @@ def synthesize_grounded_answer(
             return _synthesize_wasted_effort_segments(rows)
         if structured.get("template") == "best_roi_source" and isinstance(rows, list):
             return _synthesize_best_roi_source(rows)
+        if structured.get("template") == "sponsorship_response_impact" and isinstance(rows, list):
+            return _synthesize_sponsorship_response_impact(rows)
         if isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
                 return _synthesize_live_applications(rows)
@@ -840,6 +859,46 @@ def _synthesize_best_roi_source(rows: list[object]) -> str:
         f"The best-ROI application source is {source}: {interview_count} of "
         f"{application_count} applications reached an interview ({interview_rate:.1%}). "
         "ROI here means interviews per application, not financial return."
+    )
+
+
+def _synthesize_sponsorship_response_impact(rows: list[object]) -> str:
+    if not rows:
+        return (
+            "There is not enough deterministic evidence to measure sponsorship's impact "
+            "on response rate."
+        )
+    row = rows[0]
+    values = row.get("values") if isinstance(row, dict) else None
+    if not isinstance(values, dict):
+        return "There is not enough deterministic evidence to measure sponsorship impact."
+    sponsorship = values.get("sponsorship")
+    response_count = values.get("response_count")
+    application_count = values.get("application_count")
+    response_rate = values.get("response_rate")
+    response_rate_lift = values.get("response_rate_lift")
+    baseline_response_rate = values.get("baseline_response_rate")
+    if (
+        not isinstance(sponsorship, str)
+        or not isinstance(response_count, int)
+        or not isinstance(application_count, int)
+        or not isinstance(response_rate, (int, float))
+        or not isinstance(response_rate_lift, (int, float))
+        or not isinstance(baseline_response_rate, (int, float))
+    ):
+        return "There is not enough deterministic evidence to measure sponsorship impact."
+    direction = "below" if response_rate_lift < 0 else "above"
+    conclusion = (
+        "This is associated with a lower response rate."
+        if response_rate_lift < 0
+        else "This does not show a lower response rate."
+    )
+    return (
+        f"For sponsorship status {sponsorship}, {response_count} of {application_count} "
+        f"applications received a response ({response_rate:.1%}), "
+        f"{abs(response_rate_lift):.1%} {direction} the filtered baseline of "
+        f"{baseline_response_rate:.1%}. {conclusion} This is a correlation, not proof that "
+        "sponsorship caused the difference."
     )
 
 

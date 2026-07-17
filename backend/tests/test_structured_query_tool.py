@@ -272,6 +272,27 @@ def test_structured_query_tool_answers_best_roi_source() -> None:
     }
 
 
+def test_structured_query_tool_answers_sponsorship_response_impact() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="sponsorship_response_impact"))
+
+    assert result.rows[0].label == "sponsorship:unknown"
+    assert result.rows[0].values == {
+        "sponsorship": "unknown",
+        "application_count": 3,
+        "response_count": 1,
+        "response_rate": 1 / 3,
+        "response_rate_lift": (1 / 3) - 0.6,
+        "baseline_response_count": 3,
+        "baseline_response_rate": 0.6,
+        "total_applications": 5,
+    }
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -314,6 +335,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "strongest_response_correlate",
         "wasted_effort_segments",
         "best_roi_source",
+        "sponsorship_response_impact",
         "breakdown",
         "live_applications",
     }

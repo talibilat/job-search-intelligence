@@ -477,6 +477,18 @@ def test_structured_chat_routes_best_roi_source_to_diagnostics(question: str) ->
     assert _structured_request(question).template == "best_roi_source"
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "Is my sponsorship requirement measurably hurting my response rate, and by how much?",
+        "What is the response rate impact of sponsorship?",
+    ),
+)
+def test_structured_chat_routes_sponsorship_impact_to_diagnostics(question: str) -> None:
+    assert route_question(question) == "quantitative"
+    assert _structured_request(question).template == "sponsorship_response_impact"
+
+
 def test_chat_api_successful_traits_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -792,6 +804,80 @@ def test_chat_api_best_roi_source_reports_insufficient_evidence(tmp_path: Path) 
         client,
         "/chat",
         json={"message": "Which application source gives the best ROI?"},
+    )
+
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["rows"] == []
+    assert "not enough deterministic evidence" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_sponsorship_impact_reconciles_with_metrics_diagnostics(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        SyntheticFixtureRepository(connection).load_file(
+            BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/diagnostics")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={
+            "message": (
+                "Is my sponsorship requirement measurably hurting my response rate, "
+                "and by how much?"
+            )
+        },
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    diagnostics = metric_response.json()
+    segment = diagnostics["sponsorship_response_impact"]
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0] == {
+        "tool": "structured_query",
+        "template": "sponsorship_response_impact",
+        "rows": [
+            {
+                "label": f"sponsorship:{segment['value']}",
+                "values": {
+                    "sponsorship": segment["value"],
+                    "application_count": segment["application_count"],
+                    "response_count": segment["response_count"],
+                    "response_rate": segment["response_rate"],
+                    "response_rate_lift": segment["response_rate_lift"],
+                    "baseline_response_count": diagnostics["baseline_response_count"],
+                    "baseline_response_rate": diagnostics["baseline_response_rate"],
+                    "total_applications": diagnostics["total_applications"],
+                },
+            }
+        ],
+        "source": "metrics_repository",
+    }
+    assert chat_body["citations"][0]["citation_id"] == "metric:sponsorship_response_impact"
+    assert "lower response rate" in chat_body["answer"]
+    assert "correlation" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_sponsorship_impact_reports_insufficient_evidence(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What is the response rate impact of sponsorship?"},
     )
 
     assert chat_response.status_code == 200
