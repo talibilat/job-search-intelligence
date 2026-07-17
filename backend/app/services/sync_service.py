@@ -854,6 +854,9 @@ class EmailSyncService:
         message_count = 0
         retained_body_failure_count = 0
         try:
+            retained_body_failure_count = await self._retry_pending_candidate_bodies(
+                connection=connection,
+            )
             while True:
                 page_result = await self.run_backfill_page(
                     connection=connection,

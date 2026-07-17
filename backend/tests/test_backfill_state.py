@@ -9,7 +9,12 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from app.config import GMAIL_READONLY_SCOPE, EmailProviderName
-from app.db.repositories import BackfillStateRepository, EmailRepository, SyncStateRepository
+from app.db.repositories import (
+    BackfillStateRepository,
+    EmailFilterDecisionRepository,
+    EmailRepository,
+    SyncStateRepository,
+)
 from app.models.records import EmailBackfillStateRecord, EmailBackfillStatus
 from app.providers.email import (
     EmailAccountRef,
@@ -34,6 +39,7 @@ from app.providers.email import (
 from app.security import SecretKind, SecretRef
 from app.services.sync_service import (
     BackfillStateService,
+    EmailSyncOptions,
     EmailSyncRunState,
     EmailSyncService,
     SyncService,
@@ -616,6 +622,85 @@ def test_full_backfill_records_body_batch_failures_and_still_completes(
     assert state.last_error is None
 
 
+def test_resumed_full_backfill_retries_candidate_body_from_completed_page(
+    tmp_path: Path,
+) -> None:
+    database_connection = migrated_connection(tmp_path)
+    backfill_state_service = BackfillStateService(
+        backfill_state_repository=BackfillStateRepository(database_connection),
+        sync_state_repository=SyncStateRepository(database_connection),
+    )
+    provider = RecoveringBodyBackfillProvider(
+        pages=(
+            EmailMetadataPage(
+                messages=(
+                    candidate_metadata(
+                        gmail_account(),
+                        "msg-candidate-1",
+                        from_addr="notifications@mail.greenhouse.io",
+                        subject="Application received",
+                    ),
+                ),
+                next_page_token="page-2",
+            ),
+            EmailMetadataPage(
+                messages=(
+                    candidate_metadata(
+                        gmail_account(),
+                        "msg-candidate-2",
+                        from_addr="recruiting@example.com",
+                        subject="Next steps for your interview",
+                    ),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=gmail_account(),
+                    value="history-complete",
+                    issued_at=NOW + timedelta(minutes=1),
+                ),
+            ),
+        )
+    )
+    email_repository = EmailRepository(database_connection)
+    sync_service = EmailSyncService(
+        provider=provider,
+        page_size=250,
+        email_repository=email_repository,
+        filter_decision_repository=EmailFilterDecisionRepository(database_connection),
+        clock=lambda: NOW,
+    )
+    email_provider_connection = email_connection()
+
+    first_status = asyncio.run(
+        sync_service.run_full_backfill(
+            connection=email_provider_connection,
+            backfill_state_service=backfill_state_service,
+            options=EmailSyncOptions(max_pages=1),
+        )
+    )
+    resumed_status = asyncio.run(
+        sync_service.run_full_backfill(
+            connection=email_provider_connection,
+            backfill_state_service=backfill_state_service,
+        )
+    )
+
+    assert first_status.retained_body_failure_count == 1
+    assert resumed_status.retained_body_failure_count == 0
+    assert [request.page_token for request in provider.requests] == [None, "page-2"]
+    assert [[ref.message_id for ref in request.refs] for request in provider.body_requests] == [
+        ["msg-candidate-1"],
+        ["msg-candidate-1"],
+        ["msg-candidate-2"],
+    ]
+    rows = database_connection.execute(
+        "SELECT id, body_retention_state FROM raw_emails ORDER BY id"
+    ).fetchall()
+    assert [tuple(row) for row in rows] == [
+        ("msg-candidate-1", "retained"),
+        ("msg-candidate-2", "retained"),
+    ]
+
+
 class PaginatedBackfillProvider:
     name = EmailProviderName.GMAIL
     capabilities = EmailProviderCapabilities(
@@ -720,6 +805,26 @@ class BodyFailureBackfillProvider(RetainedBodyBackfillProvider):
                 ),
             ),
         )
+
+
+class RecoveringBodyBackfillProvider(RetainedBodyBackfillProvider):
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        if not self.body_requests:
+            self.body_requests.append(request)
+            return EmailBodyBatch(
+                bodies=(),
+                failures=(
+                    EmailBodyFetchFailure(
+                        ref=request.refs[0],
+                        reason=EmailBodyFetchFailureReason.NOT_FOUND,
+                    ),
+                ),
+            )
+        return await super().fetch_message_bodies(connection, request)
 
 
 def email_connection() -> EmailConnection:
