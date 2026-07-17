@@ -7,7 +7,12 @@ from typing import Literal, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
 
-from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
+from app.agent.tools import (
+    CachedInsightTool,
+    SemanticSearchTool,
+    StructuredQueryRequest,
+    StructuredQueryTool,
+)
 from app.models.application import (
     ApplicationSource,
     ApplicationStatus,
@@ -15,6 +20,7 @@ from app.models.application import (
     WorkMode,
 )
 from app.models.chat import ChatCitation, ChatRequest, ChatRoute, SemanticSearchResult
+from app.models.insight import InsightType
 from app.models.metrics import MetricsBreakdownDimension, MetricsFilter
 from app.services.chat_index import ChatIndexService
 
@@ -118,6 +124,13 @@ _ADJACENT_ROLE_TERMS = (
     "roles should i explore",
     "roles should i consider",
 )
+_WHY_REJECTED_INSIGHT_TERMS = (
+    "why am i getting rejected",
+    "why do i keep getting rejected",
+    "why i am getting rejected",
+    "recurring themes across rejection",
+    "rejection themes",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -190,7 +203,7 @@ _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ..
     ("work_mode", ("work mode", "remote vs", "hybrid vs", "onsite vs", "on-site vs")),
 )
 type ToolOutput = dict[str, object]
-type ToolBranch = Literal["quantitative", "content", "mixed"]
+type ToolBranch = Literal["quantitative", "content", "mixed", "cached_insight"]
 
 
 class ChatGraphState(TypedDict, total=False):
@@ -211,15 +224,18 @@ class ChatGraph:
         index_service: ChatIndexService,
         structured_query: StructuredQueryTool,
         semantic_search: SemanticSearchTool,
+        cached_insight: CachedInsightTool,
     ) -> None:
         self._index_service = index_service
         self._structured_query = structured_query
         self._semantic_search = semantic_search
+        self._cached_insight = cached_insight
 
         builder = StateGraph(ChatGraphState)
         builder.add_node("route", self._route)
         builder.add_node("structured_query", self._run_structured_query)
         builder.add_node("semantic_search", self._run_semantic_search)
+        builder.add_node("cached_insight", self._run_cached_insight)
         builder.add_node("mixed_tools", self._run_mixed_tools)
         builder.add_node("synthesize", self._synthesize)
         builder.add_edge(START, "route")
@@ -230,10 +246,12 @@ class ChatGraph:
                 "quantitative": "structured_query",
                 "content": "semantic_search",
                 "mixed": "mixed_tools",
+                "cached_insight": "cached_insight",
             },
         )
         builder.add_edge("structured_query", "synthesize")
         builder.add_edge("semantic_search", "synthesize")
+        builder.add_edge("cached_insight", "synthesize")
         builder.add_edge("mixed_tools", "synthesize")
         builder.add_edge("synthesize", END)
         self._graph = builder.compile()
@@ -254,6 +272,8 @@ class ChatGraph:
         return {"route": route_question(state["request"].message)}
 
     def _tool_branch(self, state: ChatGraphState) -> ToolBranch:
+        if _cached_insight_type(state["request"].message) is not None:
+            return "cached_insight"
         return state["route"]
 
     def _run_structured_query(self, state: ChatGraphState) -> ChatGraphState:
@@ -266,6 +286,26 @@ class ChatGraph:
             "tool_outputs": [output],
             "citations": citations,
             "content_results": results,
+        }
+
+    def _run_cached_insight(self, state: ChatGraphState) -> ChatGraphState:
+        insight_type = _cached_insight_type(state["request"].message)
+        if insight_type is None:  # pragma: no cover - guarded by the graph branch
+            raise RuntimeError("Cached insight node received an unsupported question.")
+        result = self._cached_insight.run(insight_type)
+        citations = [
+            ChatCitation(
+                citation_id=item.citation_id,
+                source="application",
+                application_id=item.application_id,
+                subject=item.email_subject,
+            )
+            for item in result.citations
+        ]
+        return {
+            "tool_outputs": [result.model_dump(mode="json")],
+            "citations": citations,
+            "content_results": (),
         }
 
     async def _run_mixed_tools(self, state: ChatGraphState) -> ChatGraphState:
@@ -346,6 +386,13 @@ def route_question(question: str) -> ChatRoute:
     if quantitative:
         return "quantitative"
     return "content"
+
+
+def _cached_insight_type(question: str) -> InsightType | None:
+    normalized = question.casefold()
+    if any(term in normalized for term in _WHY_REJECTED_INSIGHT_TERMS):
+        return "why_rejected"
+    return None
 
 
 def _structured_request(
@@ -645,6 +692,24 @@ def synthesize_grounded_answer(
     citations: list[ChatCitation],
 ) -> str:
     parts: list[str] = []
+    cached_insight = next(
+        (item for item in tool_outputs if item["tool"] == "cached_insight"),
+        None,
+    )
+    if cached_insight is not None:
+        status = cached_insight.get("status")
+        content = cached_insight.get("content")
+        if status == "available" and isinstance(content, str):
+            return content
+        if status == "stale":
+            return (
+                "The cached rejection-themes insight is stale because its source data changed. "
+                "Regenerate it on the Insights page before relying on it here."
+            )
+        return (
+            "The rejection-themes insight has not been generated yet. Generate it on the "
+            "Insights page, then ask again."
+        )
     structured = next((item for item in tool_outputs if item["tool"] == "structured_query"), None)
     if structured is not None:
         rows = structured.get("rows")

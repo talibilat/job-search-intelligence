@@ -8,7 +8,7 @@ import {
 
 export type ChatClientStreamEvent =
   | { conversation_id: string; route: ChatResponse["route"]; type: "route" }
-  | { conversation_id: string; tool: "semantic_search" | "structured_query"; type: "tool" }
+  | { conversation_id: string; tool: "cached_insight" | "semantic_search" | "structured_query"; type: "tool" }
   | { conversation_id: string; response: ChatResponse; type: "complete" };
 
 export interface ChatHistoryMessage
@@ -140,7 +140,8 @@ function parseStreamFrame(frame: string): ChatClientStreamEvent | ChatStreamErro
     return event as ChatClientStreamEvent;
   }
   if (event.type === "tool" && typeof event.conversation_id === "string" &&
-      (event.tool === "structured_query" || event.tool === "semantic_search")) {
+      (event.tool === "structured_query" || event.tool === "semantic_search" ||
+        event.tool === "cached_insight")) {
     return event as ChatClientStreamEvent;
   }
   if (event.type === "complete" && typeof event.conversation_id === "string" &&

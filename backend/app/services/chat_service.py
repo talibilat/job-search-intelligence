@@ -6,7 +6,7 @@ from typing import Literal, cast
 from uuid import uuid4
 
 from app.agent.chat_graph import ChatGraph, ChatGraphState
-from app.agent.tools import SemanticSearchTool, StructuredQueryTool
+from app.agent.tools import CachedInsightTool, SemanticSearchTool, StructuredQueryTool
 from app.db.repositories import ChatRepository
 from app.models.chat import ChatIncrement, ChatRequest, ChatResponse, ChatStreamEvent
 from app.services.chat_index import ChatIndexService
@@ -22,12 +22,14 @@ class ChatService:
         index_service: ChatIndexService,
         structured_query: StructuredQueryTool,
         semantic_search: SemanticSearchTool,
+        cached_insight: CachedInsightTool,
     ) -> None:
         self._history_repository = history_repository
         self._graph = ChatGraph(
             index_service=index_service,
             structured_query=structured_query,
             semantic_search=semantic_search,
+            cached_insight=cached_insight,
         )
 
     async def answer(self, request: ChatRequest) -> ChatResponse:
@@ -51,14 +53,17 @@ class ChatService:
                     conversation_id=conversation_id,
                     route=route,
                 )
-            elif node in {"structured_query", "semantic_search", "mixed_tools"}:
+            elif node in {"structured_query", "semantic_search", "cached_insight", "mixed_tools"}:
                 for output in update.get("tool_outputs", []):
                     tool = output.get("tool")
-                    if tool in {"structured_query", "semantic_search"}:
+                    if tool in {"structured_query", "semantic_search", "cached_insight"}:
                         yield ChatStreamEvent(
                             type="tool",
                             conversation_id=conversation_id,
-                            tool=cast("Literal['structured_query', 'semantic_search']", tool),
+                            tool=cast(
+                                "Literal['structured_query', 'semantic_search', 'cached_insight']",
+                                tool,
+                            ),
                         )
 
         route = graph_result["route"]

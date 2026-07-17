@@ -227,11 +227,12 @@ export function ChatDrawer({
                 : "Searching cited email evidence…";
             setProgress(routeLabel);
           } else if (event.type === "tool") {
-            setProgress(
-              event.tool === "structured_query"
-                ? "Reconciling the answer with dashboard metrics…"
-                : "Reviewing safe retained email evidence…",
-            );
+            const toolLabel = event.tool === "structured_query"
+              ? "Reconciling the answer with dashboard metrics…"
+              : event.tool === "cached_insight"
+                ? "Reading your cached cited insight…"
+                : "Reviewing safe retained email evidence…";
+            setProgress(toolLabel);
           }
         },
       );

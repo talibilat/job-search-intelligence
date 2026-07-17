@@ -70,6 +70,32 @@ describe("sendChatTurn", () => {
     expect(response).toEqual(completeResponse);
   });
 
+  it("accepts cached insight tool progress events", async () => {
+    const tool = JSON.stringify({
+      conversation_id: "conversation-1",
+      tool: "cached_insight",
+      type: "tool",
+    });
+    const complete = JSON.stringify({
+      conversation_id: "conversation-1",
+      response: completeResponse,
+      type: "complete",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        streamingResponse([
+          `event: tool\ndata: ${tool}\n\nevent: complete\ndata: ${complete}\n\n`,
+        ]),
+      ),
+    );
+    const events: ChatClientStreamEvent[] = [];
+
+    await sendChatTurn({ message: "Why am I getting rejected?" }, (event) => events.push(event));
+
+    expect(events[0]).toMatchObject({ tool: "cached_insight", type: "tool" });
+  });
+
   it("turns an in-stream provider failure into the existing public API error shape", async () => {
     vi.stubGlobal(
       "fetch",

@@ -476,6 +476,7 @@ export type ChatStreamEventTool =
 export const ChatStreamEventTool = {
   structured_query: "structured_query",
   semantic_search: "semantic_search",
+  cached_insight: "cached_insight",
 } as const;
 
 export type ChatStreamEventType =

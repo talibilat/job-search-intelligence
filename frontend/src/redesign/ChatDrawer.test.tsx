@@ -236,6 +236,42 @@ describe("ChatDrawer", () => {
     );
   });
 
+  it("shows progress while reading a cached cited insight", async () => {
+    loadHistoryMock.mockResolvedValue([]);
+    let completeTurn: ((value: Awaited<ReturnType<typeof sendChatTurn>>) => void) | undefined;
+    sendTurnMock.mockImplementation((_request, onEvent) => {
+      onEvent?.({
+        conversation_id: "conversation-insight",
+        route: "content",
+        type: "route",
+      });
+      onEvent?.({
+        conversation_id: "conversation-insight",
+        tool: "cached_insight",
+        type: "tool",
+      });
+      return new Promise((resolve) => {
+        completeTurn = resolve;
+      });
+    });
+    renderDrawer();
+
+    const message = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "Why am I getting rejected?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(screen.getByText("Reading your cached cited insight…")).toBeTruthy();
+    completeTurn?.({
+      answer: "Experience was the recurring cited theme.",
+      citations: [],
+      conversation_id: "conversation-insight",
+      increments: [],
+      route: "content",
+      tool_outputs: [],
+    });
+    expect(await screen.findByText("Experience was the recurring cited theme.")).toBeTruthy();
+  });
+
   it("submits the exhaustive rejection-email suggestion supported by chat retrieval", async () => {
     loadHistoryMock.mockResolvedValue([]);
     sendTurnMock.mockResolvedValue({

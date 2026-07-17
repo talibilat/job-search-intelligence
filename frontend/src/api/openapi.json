@@ -1526,7 +1526,8 @@
               {
                 "enum": [
                   "structured_query",
-                  "semantic_search"
+                  "semantic_search",
+                  "cached_insight"
                 ],
                 "type": "string"
               },

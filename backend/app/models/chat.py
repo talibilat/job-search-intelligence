@@ -93,7 +93,7 @@ class ChatStreamEvent(BaseModel):
     type: Literal["route", "tool", "complete", "error"]
     conversation_id: str
     route: ChatRoute | None = None
-    tool: Literal["structured_query", "semantic_search"] | None = None
+    tool: Literal["structured_query", "semantic_search", "cached_insight"] | None = None
     response: ChatResponse | None = None
     error_code: str | None = None
     error_message: str | None = None

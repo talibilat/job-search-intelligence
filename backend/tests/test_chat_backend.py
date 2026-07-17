@@ -15,8 +15,13 @@ from app.agent.chat_graph import _structured_request, route_question
 from app.api.dependencies import get_llm_provider
 from app.config import AppSettings, get_settings
 from app.db.engine import load_sqlite_vec_sync
-from app.db.repositories import ApplicationRepository, SyntheticFixtureRepository
+from app.db.repositories import (
+    ApplicationRepository,
+    InsightRepository,
+    SyntheticFixtureRepository,
+)
 from app.main import create_app
+from app.models.insight import InsightCitation
 from app.providers.llm import (
     LLMEmbedding,
     LLMEmbeddingRequest,
@@ -81,6 +86,141 @@ def test_q47_to_q50_representative_questions_route_without_sql(
     expected: str,
 ) -> None:
     assert route_question(question) == expected
+
+
+def test_q40_chat_reads_cached_cited_insight_without_provider_calls(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-acme",
+            company="Acme",
+            current_status="rejected",
+        )
+        InsightRepository(connection).save_generated_insight(
+            insight_type="why_rejected",
+            content="The cited rejection evidence repeatedly mentions role-specific experience.",
+            inputs_hash="q40-inputs",
+            model="fixture-model",
+            generated_at=datetime(2026, 7, 17, tzinfo=UTC),
+            citations=[
+                InsightCitation(
+                    citation_id="application:app-acme:event:event-rejection",
+                    application_id="app-acme",
+                    company="Acme",
+                    role_title="Platform Engineer",
+                    event_id="event-rejection",
+                    event_type="rejection",
+                    event_at=datetime(2026, 7, 16, tzinfo=UTC),
+                    email_subject="Application update",
+                )
+            ],
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Why am I getting rejected - what are the recurring themes?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert body["answer"] == (
+        "The cited rejection evidence repeatedly mentions role-specific experience."
+    )
+    assert body["tool_outputs"] == [
+        {
+            "tool": "cached_insight",
+            "insight_type": "why_rejected",
+            "status": "available",
+            "content": body["answer"],
+            "citations": [
+                {
+                    "citation_id": "application:app-acme:event:event-rejection",
+                    "application_id": "app-acme",
+                    "company": "Acme",
+                    "role_title": "Platform Engineer",
+                    "event_id": "event-rejection",
+                    "email_id": None,
+                    "event_type": "rejection",
+                    "event_at": "2026-07-16T00:00:00Z",
+                    "email_subject": "Application update",
+                }
+            ],
+        }
+    ]
+    assert len(body["citations"]) == 1
+    assert body["citations"][0] | {
+        "email_public_id": None,
+        "metric_template": None,
+        "sent_at": None,
+        "snippet": None,
+    } == {
+        "citation_id": "application:app-acme:event:event-rejection",
+        "source": "application",
+        "email_public_id": None,
+        "application_id": "app-acme",
+        "metric_template": None,
+        "subject": "Application update",
+        "sent_at": None,
+        "snippet": None,
+    }
+    assert [event.get("tool") for event in response.events if event["type"] == "tool"] == [
+        "cached_insight"
+    ]
+    assert provider.embedding_inputs == []
+
+    history = client.get("/chat/history").json()["messages"]
+    assert (
+        next(message for message in history if message["role"] == "tool")["tool_outputs_json"][0][
+            "insight_type"
+        ]
+        == "why_rejected"
+    )
+
+
+@pytest.mark.parametrize(
+    ("stale", "expected_text"),
+    (
+        (False, "has not been generated"),
+        (True, "is stale"),
+    ),
+)
+def test_q40_chat_reports_unavailable_cached_insight_without_semantic_fallback(
+    tmp_path: Path,
+    stale: bool,
+    expected_text: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    if stale:
+        with sqlite3.connect(database_path) as connection:
+            insight = InsightRepository(connection).save_generated_insight(
+                insight_type="why_rejected",
+                content="Outdated rejection analysis.",
+                inputs_hash="old-inputs",
+                model="fixture-model",
+                generated_at=datetime(2026, 7, 16, tzinfo=UTC),
+            )
+            connection.execute("UPDATE insights SET is_stale = 1 WHERE id = ?", (insight.id,))
+            connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Why do I keep getting rejected?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert expected_text in body["answer"]
+    assert body["citations"] == []
+    assert body["tool_outputs"][0]["status"] == ("stale" if stale else "missing")
+    assert provider.embedding_inputs == []
 
 
 @pytest.mark.parametrize(

@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.agent.tools import SemanticSearchTool, StructuredQueryTool
+from app.agent.tools import CachedInsightTool, SemanticSearchTool, StructuredQueryTool
 from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.engine import load_sqlite_vec_sync, verify_sqlite_vec
@@ -209,6 +209,7 @@ def get_chat_service(
                 llm_provider=llm_provider,
                 embedding_model=embedding_model,
             ),
+            cached_insight=CachedInsightTool(InsightRepository(connection)),
         )
     finally:
         connection.close()
