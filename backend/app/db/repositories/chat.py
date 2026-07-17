@@ -38,10 +38,21 @@ class ChatRepository(BaseRepository[ChatMessageRecord]):
                 citations_json,
                 tool_outputs_json,
                 created_at
-            FROM chat_messages
-            {where_clause}
-            ORDER BY conversation_id ASC, created_at ASC, id ASC
-            LIMIT ?
+            FROM (
+                SELECT
+                    id,
+                    conversation_id,
+                    role,
+                    content,
+                    citations_json,
+                    tool_outputs_json,
+                    created_at
+                FROM chat_messages
+                {where_clause}
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            ) AS recent_messages
+            ORDER BY created_at ASC, id ASC
             """,
             parameters,
         ).fetchall()

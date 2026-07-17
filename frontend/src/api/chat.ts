@@ -41,8 +41,11 @@ function chatCitations(values: unknown[]): ChatCitation[] {
   return citations;
 }
 
-export async function loadChatHistory(): Promise<ChatHistoryMessage[]> {
-  const response = await getChatHistoryChatHistoryGet({ limit: 500 });
+export async function loadChatHistory(conversationId?: string): Promise<ChatHistoryMessage[]> {
+  const response = await getChatHistoryChatHistoryGet({
+    conversation_id: conversationId,
+    limit: 500,
+  });
   if (response.status !== 200) {
     throw new ChatApiError(response);
   }

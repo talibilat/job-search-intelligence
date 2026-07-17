@@ -77,6 +77,62 @@ describe("ChatDrawer", () => {
     expect(onOpenApplication).toHaveBeenCalledWith("app-acme");
   });
 
+  it("keeps saved conversations separate and can start a new chat", async () => {
+    const older = {
+      citations: [],
+      content: "Older application question",
+      conversation_id: "conversation-z",
+      created_at: "2026-07-14T10:00:00Z",
+      id: 1,
+      role: "user" as const,
+      tool_outputs_json: [],
+    };
+    const newer = {
+      citations: [],
+      content: "Newest application question",
+      conversation_id: "conversation-a",
+      created_at: "2026-07-15T10:00:00Z",
+      id: 2,
+      role: "user" as const,
+      tool_outputs_json: [],
+    };
+    loadHistoryMock.mockImplementation((conversationId) =>
+      Promise.resolve(conversationId === older.conversation_id ? [older] : [older, newer]),
+    );
+    sendTurnMock.mockResolvedValue({
+      answer: "A grounded new answer.",
+      citations: [{ citation_id: "metric:summary_counts", source: "metric" }],
+      conversation_id: "conversation-new",
+      increments: [{ content: "A grounded new answer.", type: "answer" }],
+      route: "quantitative",
+      tool_outputs: [],
+    });
+    renderDrawer();
+
+    const log = screen.getByRole("log");
+    expect(await within(log).findByText("Newest application question")).toBeTruthy();
+    expect(within(log).queryByText("Older application question")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Conversation"), {
+      target: { value: "conversation-z" },
+    });
+    expect(await within(log).findByText("Older application question")).toBeTruthy();
+    expect(loadHistoryMock).toHaveBeenLastCalledWith("conversation-z");
+    expect(within(log).queryByText("Newest application question")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    expect(screen.getByText("Ask from your actual search history")).toBeTruthy();
+    const message = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "Start fresh" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+
+    await screen.findByText("A grounded new answer.");
+    expect(sendTurnMock).toHaveBeenCalledWith(
+      { conversation_id: null, message: "Start fresh" },
+      expect.any(Function),
+    );
+  });
+
   it("opens complete cited email evidence and restores focus to its trigger", async () => {
     loadHistoryMock.mockResolvedValue([
       {
@@ -234,6 +290,6 @@ describe("ChatDrawer", () => {
 
     expect(await screen.findByText("You have 23 applications.")).toBeTruthy();
     await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(2));
-    expect(screen.getAllByText("How many applications?")).toHaveLength(1);
+    expect(within(screen.getByRole("log")).getAllByText("How many applications?")).toHaveLength(1);
   });
 });
