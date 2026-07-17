@@ -140,6 +140,12 @@ _RECURRING_FEEDBACK_INSIGHT_TERMS = (
     "recurring feedback",
     "consistent feedback",
 )
+_SKILL_GAPS_INSIGHT_TERMS = (
+    "skills keep appearing in roles i get rejected from",
+    "technologies keep appearing in roles i get rejected from",
+    "real skill gaps",
+    "skill gaps",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -370,6 +376,8 @@ class ChatGraph:
 
 
 def route_question(question: str) -> ChatRoute:
+    if _cached_insight_type(question) is not None:
+        return "content"
     normalized = question.casefold()
     quantitative = (
         any(term in normalized for term in _QUANTITATIVE_TERMS)
@@ -403,6 +411,8 @@ def _cached_insight_type(question: str) -> InsightType | None:
         return "why_rejected"
     if any(term in normalized for term in _RECURRING_FEEDBACK_INSIGHT_TERMS):
         return "recurring_feedback"
+    if any(term in normalized for term in _SKILL_GAPS_INSIGHT_TERMS):
+        return "skill_gaps"
     return None
 
 
@@ -712,11 +722,13 @@ def synthesize_grounded_answer(
         content = cached_insight.get("content")
         if status == "available" and isinstance(content, str):
             return content
-        insight_label = (
-            "recurring-feedback"
-            if cached_insight.get("insight_type") == "recurring_feedback"
-            else "rejection-themes"
-        )
+        insight_type = cached_insight.get("insight_type")
+        if insight_type == "recurring_feedback":
+            insight_label = "recurring-feedback"
+        elif insight_type == "skill_gaps":
+            insight_label = "skill-gaps"
+        else:
+            insight_label = "rejection-themes"
         if status == "stale":
             return (
                 f"The cached {insight_label} insight is stale because its source data changed. "
