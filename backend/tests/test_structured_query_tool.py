@@ -107,6 +107,23 @@ def test_structured_query_tool_answers_timing_template() -> None:
     ]
 
 
+def test_structured_query_tool_answers_personal_ghost_threshold_template() -> None:
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="personal_ghost_threshold"))
+
+    assert result.rows[0].label == "personal_ghost_threshold"
+    assert result.rows[0].values == {
+        "threshold_days": 30,
+        "threshold_source": "configured_fallback",
+        "response_sample_size": 1,
+        "silent_application_count": 0,
+    }
+
+
 def test_structured_query_tool_answers_application_timeseries_template() -> None:
     with fixture_connection() as connection:
         result = StructuredQueryTool(
@@ -178,6 +195,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "rates",
         "funnel",
         "timing",
+        "personal_ghost_threshold",
         "application_timeseries",
         "response_rate_timeseries",
         "breakdown",

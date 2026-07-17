@@ -50,6 +50,11 @@ _TIMING_TERMS = (
     "time to rejection",
     "time-to-rejection",
 )
+_GHOST_THRESHOLD_TERMS = (
+    "ghost threshold",
+    "days of silence",
+    "effectively dead",
+)
 _APPLICATION_TREND_TERMS = (
     "application volume",
     "applications trended",
@@ -268,6 +273,7 @@ def route_question(question: str) -> ChatRoute:
         any(term in normalized for term in _QUANTITATIVE_TERMS)
         or any(term in normalized for term in _RELATIVE_WINDOW_TERMS)
         or any(term in normalized for term in _TIMING_TERMS)
+        or any(term in normalized for term in _GHOST_THRESHOLD_TERMS)
         or any(term in normalized for term in _APPLICATION_TREND_TERMS)
         or any(term in normalized for term in _RESPONSE_RATE_TREND_TERMS)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
@@ -294,6 +300,8 @@ def _structured_request(
         return StructuredQueryRequest(template="funnel", filters=filters)
     if any(term in normalized for term in _TIMING_TERMS):
         return StructuredQueryRequest(template="timing", filters=filters)
+    if any(term in normalized for term in _GHOST_THRESHOLD_TERMS):
+        return StructuredQueryRequest(template="personal_ghost_threshold", filters=filters)
     if any(term in normalized for term in _RESPONSE_RATE_TREND_TERMS):
         return StructuredQueryRequest(template="response_rate_timeseries", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):

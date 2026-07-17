@@ -387,6 +387,20 @@ def test_structured_chat_routes_timing_questions_to_whitelisted_metrics(question
     assert _structured_request(question).template == "timing"
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "After how many days of silence is an application effectively dead?",
+        "What is my personal ghost threshold?",
+    ),
+)
+def test_structured_chat_routes_ghost_threshold_questions_to_whitelisted_metrics(
+    question: str,
+) -> None:
+    assert route_question(question) == "quantitative"
+    assert _structured_request(question).template == "personal_ghost_threshold"
+
+
 def test_structured_chat_routes_application_volume_trends_to_whitelisted_metrics() -> None:
     question = "How has my application volume trended over time?"
 
@@ -490,6 +504,40 @@ def test_chat_api_response_timing_reconciles_with_metrics_summary(tmp_path: Path
         timing_rows["time_to_first_response"]
         == metric_response.json()["average_time_to_first_response"]
     )
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_ghost_threshold_reconciles_with_metrics_summary(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/summary")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "After how many days of silence is an application effectively dead?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    threshold = metric_response.json()["personal_ghost_threshold"]
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["template"] == "personal_ghost_threshold"
+    assert chat_body["tool_outputs"][0]["rows"] == [
+        {
+            "label": "personal_ghost_threshold",
+            "values": {
+                "threshold_days": threshold["threshold_days"],
+                "threshold_source": threshold["threshold_source"],
+                "response_sample_size": threshold["response_sample_size"],
+                "silent_application_count": threshold["silent_application_count"],
+            },
+        }
+    ]
+    assert chat_body["citations"][0]["citation_id"] == "metric:personal_ghost_threshold"
     assert provider.embedding_inputs == []
 
 

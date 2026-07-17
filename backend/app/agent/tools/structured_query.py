@@ -23,6 +23,7 @@ StructuredQueryTemplate = Literal[
     "rates",
     "funnel",
     "timing",
+    "personal_ghost_threshold",
     "application_timeseries",
     "response_rate_timeseries",
     "breakdown",
@@ -205,6 +206,27 @@ class StructuredQueryTool:
                         values={
                             "application_count": rejection.application_count,
                             "average_hours": rejection.average_hours,
+                        },
+                    ),
+                ),
+            )
+
+        if request.template == "personal_ghost_threshold":
+            threshold = self._metrics_repository.get_personal_ghost_threshold_metric(
+                evaluated_at=self._clock().astimezone(UTC).isoformat(),
+                fallback_threshold_days=self._ghost_threshold_days,
+                filters=request.filters,
+            )
+            return StructuredQueryResult(
+                template=request.template,
+                rows=(
+                    StructuredQueryRow(
+                        label="personal_ghost_threshold",
+                        values={
+                            "threshold_days": threshold.threshold_days,
+                            "threshold_source": threshold.threshold_source,
+                            "response_sample_size": threshold.response_sample_size,
+                            "silent_application_count": threshold.silent_application_count,
                         },
                     ),
                 ),
