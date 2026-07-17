@@ -118,6 +118,7 @@ class SemanticSearchResult(BaseModel):
 
     email_public_id: str = Field(min_length=1)
     application_ids: tuple[str, ...] = ()
+    company: str | None = None
     chunk_index: int = Field(ge=0)
     content: str = Field(min_length=1, repr=False)
     subject: str | None = None

@@ -388,6 +388,70 @@ def test_q48_every_rejection_returns_all_exact_matches_despite_retrieval_limit(
     ) not in provider.embedding_inputs
 
 
+def test_q48_every_company_returns_distinct_companies_with_citations(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="app-beta", company="Beta")
+        insert_application(connection, application_id="app-gamma", company="Gamma")
+        sources = (
+            ("email-acme-sponsorship-one", "app-acme", "Acme offers visa sponsorship."),
+            ("email-acme-sponsorship-two", "app-acme", "Sponsorship is available at Acme."),
+            ("email-beta-sponsorship", "app-beta", "Beta can discuss sponsorship."),
+            ("email-gamma-location", "app-gamma", "Gamma requires hybrid attendance."),
+        )
+        for index, (email_id, application_id, body) in enumerate(sources):
+            insert_raw_email(
+                connection,
+                email_id=email_id,
+                subject=f"Role detail {index}",
+                body=body,
+                retention="retained",
+                sent_at=f"2026-06-{10 + index:02d}T10:00:00+00:00",
+            )
+            insert_classification(connection, email_id, is_job_related=True)
+            connection.execute(
+                """
+                INSERT INTO application_events (
+                    id, application_id, email_id, event_type, event_at, extract_note
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"event-{email_id}",
+                    application_id,
+                    email_id,
+                    "response",
+                    f"2026-06-{10 + index:02d}T10:00:00+00:00",
+                    "Role detail",
+                ),
+            )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={
+            "message": "Show me every company that mentioned sponsorship.",
+            "retrieval_limit": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["citations"]) == 2
+    assert body["answer"].startswith("Companies mentioning the requested term:")
+    assert body["answer"].count("Acme") == 1
+    assert body["answer"].count("Beta") == 1
+    assert "Gamma" not in body["answer"]
+    assert {citation["application_id"] for citation in body["citations"]} == {
+        "app-acme",
+        "app-beta",
+    }
+    assert ("Show me every company that mentioned sponsorship.",) not in provider.embedding_inputs
+
+
 def test_chat_index_reconciles_all_eligible_emails_across_configured_batches(
     tmp_path: Path,
 ) -> None:
@@ -681,6 +745,33 @@ def insert_classification(
             "v1",
             "2026-06-05T10:02:00+00:00",
         ),
+    )
+
+
+def insert_application(
+    connection: sqlite3.Connection,
+    *,
+    application_id: str,
+    company: str,
+) -> None:
+    ApplicationRepository(connection).upsert_application(
+        id=application_id,
+        company=company,
+        role_title="Platform Engineer",
+        source="company_site",
+        first_seen_at="2026-06-01T10:00:00+00:00",
+        current_status="in_review",
+        salary_min=None,
+        salary_max=None,
+        currency=None,
+        location="Remote",
+        work_mode="remote",
+        seniority="senior",
+        sponsorship="unknown",
+        tech_stack=["Python"],
+        last_activity_at="2026-06-05T10:00:00+00:00",
+        created_at="2026-06-01T10:00:00+00:00",
+        updated_at="2026-06-05T10:00:00+00:00",
     )
 
 

@@ -172,6 +172,57 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
         ).fetchall()
         return tuple(self._semantic_result(row, distance=0.0) for row in rows)
 
+    def find_companies_mentioning(self, term: str) -> tuple[SemanticSearchResult, ...]:
+        """Return one cited matching email per distinct application company."""
+
+        rows = self.execute(
+            """
+            WITH matching_companies AS (
+                SELECT
+                    applications.company,
+                    email_chunks.email_id,
+                    email_chunks.chunk_index,
+                    email_chunks.content,
+                    raw_emails.public_id AS email_public_id,
+                    raw_emails.subject,
+                    raw_emails.from_addr,
+                    raw_emails.sent_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY LOWER(TRIM(applications.company))
+                        ORDER BY
+                            raw_emails.sent_at DESC,
+                            email_chunks.chunk_index,
+                            email_chunks.email_id,
+                            applications.id
+                    ) AS company_match_rank
+                FROM email_chunks
+                INNER JOIN application_events
+                    ON application_events.email_id = email_chunks.email_id
+                INNER JOIN applications
+                    ON applications.id = application_events.application_id
+                INNER JOIN raw_emails
+                    ON raw_emails.id = email_chunks.email_id
+                WHERE INSTR(LOWER(email_chunks.content), LOWER(?)) > 0
+            )
+            SELECT
+                company,
+                email_id,
+                chunk_index,
+                content,
+                email_public_id,
+                subject,
+                from_addr,
+                sent_at
+            FROM matching_companies
+            WHERE company_match_rank = 1
+            ORDER BY LOWER(company), company
+            """,
+            (term,),
+        ).fetchall()
+        return tuple(
+            self._semantic_result(row, distance=0.0, company=str(row["company"])) for row in rows
+        )
+
     def latest_for_mentioned_company(
         self,
         question: str,
@@ -229,6 +280,7 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
         row: sqlite3.Row,
         *,
         distance: float | None = None,
+        company: str | None = None,
     ) -> SemanticSearchResult:
         application_rows = self.execute(
             """
@@ -242,6 +294,7 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
         return SemanticSearchResult(
             email_public_id=row["email_public_id"],
             application_ids=tuple(str(item[0]) for item in application_rows),
+            company=company,
             chunk_index=row["chunk_index"],
             content=row["content"],
             subject=row["subject"],

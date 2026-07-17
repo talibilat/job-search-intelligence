@@ -208,6 +208,14 @@ def synthesize_grounded_answer(
         else:
             parts.append("The deterministic query found no matching applications.")
     if content_results:
+        if all(result.company is not None for result in content_results):
+            email_citations = [item for item in citations if item.source == "email"]
+            companies = [
+                f"{result.company} [{citation.citation_id}]"
+                for result, citation in zip(content_results, email_citations, strict=True)
+            ]
+            parts.append("Companies mentioning the requested term: " + ", ".join(companies) + ".")
+            return " ".join(parts)
         excerpts = []
         email_citations = [item for item in citations if item.source == "email"]
         for result, citation in zip(content_results, email_citations, strict=True):
