@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from app.agent.chat_graph import route_question
 from app.api.dependencies import get_llm_provider
 from app.config import AppSettings, get_settings
 from app.db.engine import load_sqlite_vec_sync
@@ -20,7 +21,6 @@ from app.providers.llm import (
     LLMProviderHealthCheckRequest,
 )
 from app.security import SecretRef, SecretStore
-from app.services.chat_service import route_question
 from app.services.wipe_data import wipe_local_data
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
