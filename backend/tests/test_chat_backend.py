@@ -2790,6 +2790,60 @@ def test_q47_last_recruiter_email_excludes_newer_candidate_authored_follow_up(
     ]
 
 
+def test_chat_follow_up_uses_company_context_from_same_conversation(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    first = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "contextual-chat",
+            "message": "What exactly did the recruiter at Acme say?",
+        },
+    )
+    follow_up = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "contextual-chat",
+            "message": "Did they mention Friday?",
+            "retrieval_limit": 1,
+        },
+    )
+
+    assert first.status_code == 200
+    assert follow_up.status_code == 200
+    assert "Technical interview moved to Friday" in follow_up.json()["answer"]
+    assert follow_up.json()["citations"][0]["application_id"] == "app-acme"
+    assert provider.embedding_inputs[-1] == (
+        "Previous user question: What exactly did the recruiter at Acme say?\n"
+        "Follow-up question: Did they mention Friday?",
+    )
+    history = client.get(
+        "/chat/history",
+        params={"conversation_id": "contextual-chat"},
+    ).json()["messages"]
+    assert [message["content"] for message in history if message["role"] == "user"] == [
+        "What exactly did the recruiter at Acme say?",
+        "Did they mention Friday?",
+    ]
+
+    separate = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "separate-chat",
+            "message": "Did they mention Friday?",
+            "retrieval_limit": 1,
+        },
+    )
+    assert separate.status_code == 200
+    assert provider.embedding_inputs[-1] == ("Did they mention Friday?",)
+
+
 def test_q48_every_rejection_returns_all_exact_matches_despite_retrieval_limit(
     tmp_path: Path,
 ) -> None:

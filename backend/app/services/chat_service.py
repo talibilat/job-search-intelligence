@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Literal, cast
@@ -10,6 +11,12 @@ from app.agent.tools import CachedInsightTool, SemanticSearchTool, StructuredQue
 from app.db.repositories import ChatRepository
 from app.models.chat import ChatIncrement, ChatRequest, ChatResponse, ChatStreamEvent
 from app.services.chat_index import ChatIndexService
+
+_CONTEXT_REFERENCE_PATTERN = re.compile(
+    r"\b(?:it|its|they|them|their|theirs|that|those|there|this)\b",
+    flags=re.IGNORECASE,
+)
+_CONTEXT_PREFIXES = ("and ", "how about ", "what about ")
 
 
 class ChatService:
@@ -43,8 +50,9 @@ class ChatService:
 
     async def stream(self, request: ChatRequest) -> AsyncIterator[ChatStreamEvent]:
         conversation_id = request.conversation_id or uuid4().hex
-        graph_result = ChatGraphState(request=request)
-        async for node, update in self._graph.stream(request):
+        graph_request = self._with_conversation_context(request)
+        graph_result = ChatGraphState(request=graph_request)
+        async for node, update in self._graph.stream(graph_request):
             graph_result.update(update)
             if node == "route":
                 route = update["route"]
@@ -122,3 +130,32 @@ class ChatService:
             conversation_id=conversation_id,
             response=response,
         )
+
+    def _with_conversation_context(self, request: ChatRequest) -> ChatRequest:
+        if request.conversation_id is None or not _needs_conversation_context(request.message):
+            return request
+        history = self._history_repository.list_messages(
+            conversation_id=request.conversation_id,
+            limit=20,
+        )
+        previous_question = next(
+            (message.content for message in reversed(history) if message.role == "user"),
+            None,
+        )
+        if previous_question is None:
+            return request
+        return request.model_copy(
+            update={
+                "message": (
+                    f"Previous user question: {previous_question}\n"
+                    f"Follow-up question: {request.message}"
+                )
+            }
+        )
+
+
+def _needs_conversation_context(message: str) -> bool:
+    normalized = message.casefold().lstrip()
+    return _CONTEXT_REFERENCE_PATTERN.search(message) is not None or normalized.startswith(
+        _CONTEXT_PREFIXES
+    )
