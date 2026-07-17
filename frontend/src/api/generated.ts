@@ -907,6 +907,7 @@ export interface InsightCitation {
   citation_id: string;
   company: string;
   email_id?: string | null;
+  email_public_id?: string | null;
   email_subject?: string | null;
   event_at?: string | null;
   event_id?: string | null;

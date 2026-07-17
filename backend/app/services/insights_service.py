@@ -850,6 +850,7 @@ def _citations_from_content(
             role_title=item.role_title,
             event_id=item.event_id,
             email_id=item.email_id,
+            email_public_id=item.email_public_id,
             event_type=item.event_type,
             event_at=item.event_at,
             email_subject=item.email_subject,

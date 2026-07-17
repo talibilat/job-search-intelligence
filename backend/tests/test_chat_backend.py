@@ -112,6 +112,7 @@ def test_q40_chat_reads_cached_cited_insight_without_provider_calls(tmp_path: Pa
                     event_id="event-rejection",
                     event_type="rejection",
                     event_at=datetime(2026, 7, 16, tzinfo=UTC),
+                    email_public_id="public-email-rejection",
                     email_subject="Application update",
                 )
             ],
@@ -145,6 +146,7 @@ def test_q40_chat_reads_cached_cited_insight_without_provider_calls(tmp_path: Pa
                     "role_title": "Platform Engineer",
                     "event_id": "event-rejection",
                     "email_id": None,
+                    "email_public_id": "public-email-rejection",
                     "event_type": "rejection",
                     "event_at": "2026-07-16T00:00:00Z",
                     "email_subject": "Application update",
@@ -154,14 +156,13 @@ def test_q40_chat_reads_cached_cited_insight_without_provider_calls(tmp_path: Pa
     ]
     assert len(body["citations"]) == 1
     assert body["citations"][0] | {
-        "email_public_id": None,
         "metric_template": None,
         "sent_at": None,
         "snippet": None,
     } == {
         "citation_id": "application:app-acme:event:event-rejection",
-        "source": "application",
-        "email_public_id": None,
+        "source": "email",
+        "email_public_id": "public-email-rejection",
         "application_id": "app-acme",
         "metric_template": None,
         "subject": "Application update",

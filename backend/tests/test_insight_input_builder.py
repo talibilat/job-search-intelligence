@@ -45,6 +45,7 @@ def test_insight_input_builder_prepares_facts_citations_and_hash(
     )
     assert rejection_evidence.application_id == "application-rejected"
     assert rejection_evidence.email_id == "email-rejection"
+    assert rejection_evidence.email_public_id
     assert rejection_evidence.company == "Acme Corp"
     assert rejection_evidence.email_subject == "Update on your application"
     assert (

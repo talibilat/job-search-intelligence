@@ -338,7 +338,8 @@ class ChatGraph:
         citations = [
             ChatCitation(
                 citation_id=item.citation_id,
-                source="application",
+                source="email" if item.email_public_id is not None else "application",
+                email_public_id=item.email_public_id,
                 application_id=item.application_id,
                 subject=item.email_subject,
             )

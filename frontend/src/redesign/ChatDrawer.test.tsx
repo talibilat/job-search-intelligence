@@ -138,6 +138,7 @@ describe("ChatDrawer", () => {
       {
         citations: [
           {
+            application_id: "application-acme",
             citation_id: "email:email-acme",
             email_public_id: "email-acme",
             sent_at: "2026-07-14T10:00:00Z",
@@ -170,8 +171,10 @@ describe("ChatDrawer", () => {
       headers: new Headers(),
       status: 200,
     });
-    renderDrawer();
+    const { onOpenApplication } = renderDrawer();
 
+    fireEvent.click(await screen.findByRole("button", { name: "View application" }));
+    expect(onOpenApplication).toHaveBeenCalledWith("application-acme");
     const trigger = await screen.findByRole("button", { name: "Open email evidence" });
     fireEvent.click(trigger);
 

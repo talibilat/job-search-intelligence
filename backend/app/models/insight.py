@@ -38,6 +38,7 @@ class InsightCitation(BaseModel):
     role_title: str
     event_id: str | None = None
     email_id: str | None = None
+    email_public_id: str | None = None
     event_type: ApplicationEventType | None = None
     event_at: datetime | None = None
     email_subject: str | None = None
@@ -145,6 +146,7 @@ class InsightInputEvidence(BaseModel):
     tech_stack: list[str]
     event_id: str | None
     email_id: str | None
+    email_public_id: str | None = Field(default=None, exclude=True)
     event_type: ApplicationEventType | None
     event_at: datetime | None
     extract_note: str | None

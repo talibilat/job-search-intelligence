@@ -293,6 +293,7 @@ class InsightRepository(BaseRepository[InsightRecord]):
                 applications.tech_stack AS tech_stack,
                 application_events.id AS event_id,
                 application_events.email_id AS email_id,
+                raw_emails.public_id AS email_public_id,
                 application_events.event_type AS event_type,
                 application_events.event_at AS event_at,
                 application_events.extract_note AS extract_note,
