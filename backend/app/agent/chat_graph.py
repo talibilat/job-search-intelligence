@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
 from app.models.chat import ChatCitation, ChatRequest, ChatRoute, SemanticSearchResult
+from app.models.metrics import MetricsBreakdownDimension
 from app.services.chat_index import ChatIndexService
 
 _QUANTITATIVE_TERMS = (
@@ -31,6 +32,17 @@ _CONTENT_TERMS = (
     "mentioned",
     "feedback",
     "why",
+)
+_BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ...]], ...] = (
+    ("role", ("by role", "which role", "job title")),
+    ("source", ("by source", "which source", "application source")),
+    ("salary", ("by salary", "salary band")),
+    ("company_type", ("company type",)),
+    ("industry", ("by industry", "which industry")),
+    ("tech", ("by tech", "tech stack", "which technolog", "which skill")),
+    ("sponsorship", ("by sponsorship", "sponsorship vs")),
+    ("seniority", ("by seniority", "seniority level")),
+    ("work_mode", ("work mode", "remote vs", "hybrid vs", "onsite vs", "on-site vs")),
 )
 type ToolOutput = dict[str, object]
 type ToolBranch = Literal["quantitative", "content", "mixed"]
@@ -165,7 +177,9 @@ class ChatGraph:
 
 def route_question(question: str) -> ChatRoute:
     normalized = question.casefold()
-    quantitative = any(term in normalized for term in _QUANTITATIVE_TERMS)
+    quantitative = any(term in normalized for term in _QUANTITATIVE_TERMS) or any(
+        term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms
+    )
     content = any(term in normalized for term in _CONTENT_TERMS)
     if quantitative and content:
         return "mixed"
@@ -180,10 +194,14 @@ def _structured_request(question: str) -> StructuredQueryRequest:
         return StructuredQueryRequest(template="live_applications")
     if "funnel" in normalized:
         return StructuredQueryRequest(template="funnel")
+    for dimension, terms in _BREAKDOWN_DIMENSION_TERMS:
+        if any(term in normalized for term in terms):
+            return StructuredQueryRequest(
+                template="breakdown",
+                breakdown_dimension=dimension,
+            )
     if any(term in normalized for term in ("rate", "conversion")):
         return StructuredQueryRequest(template="rates")
-    if "role" in normalized:
-        return StructuredQueryRequest(template="breakdown", breakdown_dimension="role")
     return StructuredQueryRequest(template="summary_counts")
 
 

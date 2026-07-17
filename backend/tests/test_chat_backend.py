@@ -128,6 +128,31 @@ def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(
     assert quantitative.response.headers["x-accel-buffering"] == "no"
     assert provider.embedding_inputs == []
 
+    source_breakdown_response = client.get("/metrics/breakdown", params={"dimension": "source"})
+    source_breakdown = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "q-source-breakdown",
+            "message": "Which sources have the best conversion rate?",
+        },
+    )
+
+    assert source_breakdown_response.status_code == 200
+    assert source_breakdown.status_code == 200
+    source_breakdown_body = source_breakdown.json()
+    assert source_breakdown_body["route"] == "quantitative"
+    assert source_breakdown_body["tool_outputs"][0]["template"] == "breakdown"
+    assert source_breakdown_body["tool_outputs"][0]["rows"] == [
+        {
+            "label": row["value"],
+            "values": row,
+        }
+        for row in source_breakdown_response.json()["rows"]
+    ]
+    assert source_breakdown_body["citations"][0]["citation_id"] == "metric:breakdown"
+    assert provider.embedding_inputs == []
+
     content = post_chat(
         client,
         "/chat",
