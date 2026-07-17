@@ -24,6 +24,7 @@ StructuredQueryTemplate = Literal[
     "funnel",
     "timing",
     "application_timeseries",
+    "response_rate_timeseries",
     "breakdown",
     "live_applications",
 ]
@@ -221,6 +222,25 @@ class StructuredQueryTool:
                         },
                     )
                     for point in self._metrics_repository.get_application_timeseries(
+                        filters=request.filters
+                    )
+                ),
+            )
+
+        if request.template == "response_rate_timeseries":
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=point.period_start,
+                        values={
+                            "period_start": point.period_start,
+                            "response_count": point.response_count,
+                            "application_count": point.application_count,
+                            "response_rate": point.response_rate,
+                        },
+                    )
+                    for point in self._metrics_repository.get_response_rate_timeseries(
                         filters=request.filters
                     )
                 ),

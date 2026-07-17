@@ -123,6 +123,27 @@ def test_structured_query_tool_answers_application_timeseries_template() -> None
     ]
 
 
+def test_structured_query_tool_answers_response_rate_timeseries_template() -> None:
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="response_rate_timeseries"))
+
+    assert [(row.label, row.values) for row in result.rows] == [
+        (
+            "2026-07-04",
+            {
+                "period_start": "2026-07-04",
+                "response_count": 1,
+                "application_count": 1,
+                "response_rate": 1.0,
+            },
+        )
+    ]
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -158,6 +179,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "funnel",
         "timing",
         "application_timeseries",
+        "response_rate_timeseries",
         "breakdown",
         "live_applications",
     }
