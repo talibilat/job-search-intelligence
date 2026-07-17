@@ -788,29 +788,32 @@ def synthesize_grounded_answer(
         if structured.get("template") == "successful_application_segments" and isinstance(
             rows, list
         ):
-            return _synthesize_successful_application_segments(rows)
-        if structured.get("template") == "negative_outcome_segments" and isinstance(rows, list):
-            return _synthesize_negative_outcome_segments(rows)
-        if structured.get("template") == "strongest_response_correlate" and isinstance(rows, list):
-            return _synthesize_strongest_response_correlate(rows)
-        if structured.get("template") == "wasted_effort_segments" and isinstance(rows, list):
-            return _synthesize_wasted_effort_segments(rows)
-        if structured.get("template") == "best_roi_source" and isinstance(rows, list):
-            return _synthesize_best_roi_source(rows)
-        if structured.get("template") == "sponsorship_response_impact" and isinstance(rows, list):
-            return _synthesize_sponsorship_response_impact(rows)
-        if structured.get("template") == "skill_signal_segments" and isinstance(rows, list):
-            return _synthesize_skill_signal_segments(rows)
-        if structured.get("template") == "adjacent_role_suggestions" and isinstance(rows, list):
-            return _synthesize_adjacent_role_suggestions(rows)
-        if isinstance(rows, list) and rows:
+            parts.append(_synthesize_successful_application_segments(rows))
+        elif structured.get("template") == "negative_outcome_segments" and isinstance(rows, list):
+            parts.append(_synthesize_negative_outcome_segments(rows))
+        elif structured.get("template") == "strongest_response_correlate" and isinstance(
+            rows, list
+        ):
+            parts.append(_synthesize_strongest_response_correlate(rows))
+        elif structured.get("template") == "wasted_effort_segments" and isinstance(rows, list):
+            parts.append(_synthesize_wasted_effort_segments(rows))
+        elif structured.get("template") == "best_roi_source" and isinstance(rows, list):
+            parts.append(_synthesize_best_roi_source(rows))
+        elif structured.get("template") == "sponsorship_response_impact" and isinstance(rows, list):
+            parts.append(_synthesize_sponsorship_response_impact(rows))
+        elif structured.get("template") == "skill_signal_segments" and isinstance(rows, list):
+            parts.append(_synthesize_skill_signal_segments(rows))
+        elif structured.get("template") == "adjacent_role_suggestions" and isinstance(rows, list):
+            parts.append(_synthesize_adjacent_role_suggestions(rows))
+        elif isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
-                return _synthesize_live_applications(rows)
-            rendered_rows = []
-            for row in rows:
-                if isinstance(row, dict):
-                    rendered_rows.append(f"{row.get('label')}: {row.get('values')}")
-            parts.append("Deterministic result: " + "; ".join(rendered_rows) + ".")
+                parts.append(_synthesize_live_applications(rows))
+            else:
+                rendered_rows = []
+                for row in rows:
+                    if isinstance(row, dict):
+                        rendered_rows.append(f"{row.get('label')}: {row.get('values')}")
+                parts.append("Deterministic result: " + "; ".join(rendered_rows) + ".")
         else:
             parts.append("The deterministic query found no matching applications.")
     if content_results:

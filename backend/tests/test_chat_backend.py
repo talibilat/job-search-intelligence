@@ -1301,6 +1301,56 @@ def test_chat_api_successful_traits_reports_insufficient_deterministic_evidence(
     assert provider.embedding_inputs == []
 
 
+def test_chat_api_mixed_successful_traits_includes_and_persists_email_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        SyntheticFixtureRepository(connection).load_file(
+            BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "mixed-successful-traits",
+            "message": (
+                "What do my successful applications have in common, and show me the emails "
+                "that support that?"
+            ),
+        },
+    )
+
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "mixed"
+    assert [output["tool"] for output in chat_body["tool_outputs"]] == [
+        "structured_query",
+        "semantic_search",
+    ]
+    assert "correlations" in chat_body["answer"]
+    assert "Relevant source email evidence:" in chat_body["answer"]
+    email_citation_ids = {
+        citation["citation_id"]
+        for citation in chat_body["citations"]
+        if citation["source"] == "email"
+    }
+    assert email_citation_ids
+    assert all(f"[{citation_id}]" in chat_body["answer"] for citation_id in email_citation_ids)
+
+    history = client.get(
+        "/chat/history",
+        params={"conversation_id": "mixed-successful-traits"},
+    )
+    assert history.status_code == 200
+    assistant = history.json()["messages"][-1]
+    assert assistant["role"] == "assistant"
+    assert assistant["content"] == chat_body["answer"]
+
+
 def test_chat_api_negative_traits_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
