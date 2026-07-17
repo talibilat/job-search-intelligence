@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -308,10 +308,7 @@ def _group_by_key(
 
     groups: dict[ApplicationGroupingKey, list[_EnrichedExtraction]] = {}
     for key, group in base_groups.items():
-        if key.thread_id is None:
-            groups[key] = group
-            continue
-        for attempt_key, attempt_group in _partition_thread_attempts(
+        for attempt_key, attempt_group in _partition_application_attempts(
             key=key,
             group=group,
             application_repository=application_repository,
@@ -338,7 +335,7 @@ class _ApplicationAttempt:
         self.evidence_email_ids = evidence_email_ids or set()
 
 
-def _partition_thread_attempts(
+def _partition_application_attempts(
     *,
     key: ApplicationGroupingKey,
     group: list[_EnrichedExtraction],
@@ -408,16 +405,34 @@ def _load_existing_attempts(
     application_repository: ApplicationRepository,
     event_repository: EventRepository,
 ) -> list[_ApplicationAttempt]:
-    if key.thread_id is None:
-        return []
-
     attempts: list[_ApplicationAttempt] = []
     base_application_id = make_application_id(key)
-    for application in application_repository.list_by_email_thread_id(key.thread_id):
+    if key.thread_id is not None:
+        applications = application_repository.list_by_email_thread_id(key.thread_id)
+    elif key.time_window_start is not None:
+        window_start = datetime.combine(key.time_window_start, time.min, tzinfo=UTC)
+        applications = application_repository.list_applications(
+            first_seen_from=window_start.isoformat(),
+            first_seen_to=(window_start + timedelta(days=key.time_window_days)).isoformat(),
+        )
+    else:
+        applications = []
+
+    for application in applications:
         if normalize_company_name(application.company) != (key.normalized_company or ""):
             continue
         if normalize_role_title(application.role_title) != key.normalized_role:
             continue
+        if key.thread_id is None:
+            application_key = build_application_grouping_key(
+                company=application.company,
+                role_title=application.role_title,
+                thread_id=None,
+                occurred_at=application.first_seen_at,
+                window_days=key.time_window_days,
+            )
+            if application_key != key:
+                continue
         events = event_repository.list_by_application_id(application.id)
         attempt_key = key
         if application.id != base_application_id:
