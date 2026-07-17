@@ -31,7 +31,13 @@ from app.models.records import (
     RawEmailBodyRetentionState,
     RawEmailRecord,
 )
-from app.providers.email import EmailAddress, EmailMessageBody, EmailMessageMetadata
+from app.providers.email import (
+    EmailAccountRef,
+    EmailAddress,
+    EmailMessageBody,
+    EmailMessageMetadata,
+    EmailMessageRef,
+)
 
 
 class EmailRepository(BaseRepository[RawEmailRecord]):
@@ -198,6 +204,38 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         if row is None:
             return 0
         return int(row[0])
+
+    def list_pending_candidate_body_refs(
+        self,
+        *,
+        account: EmailAccountRef,
+    ) -> tuple[EmailMessageRef, ...]:
+        """Return known candidates whose retained body still needs fetching."""
+
+        if not self._table_exists("email_filter_decisions"):
+            return ()
+        rows = self.execute(
+            """
+            SELECT raw_emails.id, raw_emails.thread_id
+            FROM raw_emails
+            INNER JOIN email_filter_decisions
+                ON email_filter_decisions.email_id = raw_emails.id
+                AND email_filter_decisions.strategy = ?
+                AND email_filter_decisions.outcome = 'candidate'
+            WHERE raw_emails.provider = ?
+                AND raw_emails.body_retention_state = 'metadata_only'
+            ORDER BY raw_emails.id
+            """,
+            (EmailCandidateQueryStrategy.BROAD_JOB_SEARCH.value, account.provider.value),
+        ).fetchall()
+        return tuple(
+            EmailMessageRef(
+                account=account,
+                message_id=str(row["id"]),
+                thread_id=row["thread_id"],
+            )
+            for row in rows
+        )
 
     def count_raw_emails_in_window(
         self,

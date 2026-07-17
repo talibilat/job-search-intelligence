@@ -15,6 +15,8 @@ from app.providers.email import (
     EmailAddress,
     EmailAttachmentPolicy,
     EmailBodyBatch,
+    EmailBodyFetchFailure,
+    EmailBodyFetchFailureReason,
     EmailBodyFetchRequest,
     EmailBodySource,
     EmailConnection,
@@ -157,6 +159,31 @@ class PagingRetainedBodyProvider(RecordingRetainedBodyProvider):
         del connection
         self.requests.append(request)
         return self._pages.pop(0)
+
+
+class RecoveringRetainedBodyProvider(PagingRetainedBodyProvider):
+    def __init__(self, pages: tuple[EmailMetadataPage, ...]) -> None:
+        super().__init__(pages)
+        self._failed_once = False
+
+    async def fetch_message_bodies(
+        self,
+        connection: EmailConnection,
+        request: EmailBodyFetchRequest,
+    ) -> EmailBodyBatch:
+        if not self._failed_once:
+            self._failed_once = True
+            self.body_requests.append(request)
+            return EmailBodyBatch(
+                bodies=(),
+                failures=(
+                    EmailBodyFetchFailure(
+                        ref=request.refs[0],
+                        reason=EmailBodyFetchFailureReason.NOT_FOUND,
+                    ),
+                ),
+            )
+        return await super().fetch_message_bodies(connection, request)
 
 
 class RecordingScheduler:
@@ -645,6 +672,73 @@ def test_manual_sync_uses_incremental_mode_when_cursor_exists() -> None:
     stored_cursor = sync_state_repository.get_cursor(mailbox.account)
     assert stored_cursor is not None
     assert stored_cursor.value == "history-next"
+
+
+def test_later_sync_retries_failed_candidate_body_when_incremental_page_is_empty() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    create_email_filter_decisions_table(connection)
+    mailbox = email_connection()
+    candidate = metadata_message(mailbox, "gmail-candidate")
+    provider = RecoveringRetainedBodyProvider(
+        (
+            EmailMetadataPage(
+                messages=(candidate,),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-initial",
+                    issued_at=NOW,
+                ),
+            ),
+            EmailMetadataPage(
+                messages=(),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-next",
+                    issued_at=NOW + timedelta(minutes=1),
+                ),
+            ),
+        )
+    )
+    repository = EmailRepository(connection)
+    service = EmailSyncService(
+        provider=provider,
+        page_size=100,
+        email_repository=repository,
+        filter_decision_repository=EmailFilterDecisionRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
+        clock=lambda: NOW,
+    )
+
+    first_status = asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    assert first_status.retained_body_failure_count == 1
+    first_row = connection.execute(
+        "SELECT body_retention_state, body_text FROM raw_emails WHERE id = ?",
+        (candidate.ref.message_id,),
+    ).fetchone()
+    assert first_row is not None
+    assert tuple(first_row) == ("metadata_only", None)
+
+    second_status = asyncio.run(service.run_manual_sync(connection=mailbox))
+
+    assert second_status.mode is EmailSyncMode.INCREMENTAL
+    assert second_status.message_count == 0
+    assert second_status.retained_body_failure_count == 0
+    assert [request.refs[0].message_id for request in provider.body_requests] == [
+        "gmail-candidate",
+        "gmail-candidate",
+    ]
+    recovered_row = connection.execute(
+        "SELECT body_retention_state, body_text FROM raw_emails WHERE id = ?",
+        (candidate.ref.message_id,),
+    ).fetchone()
+    assert recovered_row is not None
+    assert tuple(recovered_row) == (
+        "retained",
+        "Retained body for gmail-candidate",
+    )
 
 
 def test_manual_sync_resumes_failed_full_backfill_from_persisted_page_token() -> None:

@@ -666,6 +666,9 @@ class EmailSyncService:
         )
 
         try:
+            retry_failure_count = await self._retry_pending_candidate_bodies(
+                connection=connection,
+            )
             result = await self._run_metadata_pages(
                 connection=connection,
                 sync_cursor=existing_cursor,
@@ -674,6 +677,14 @@ class EmailSyncService:
                 started_at=started_at,
                 options=sync_options,
             )
+            if retry_failure_count:
+                result = result.model_copy(
+                    update={
+                        "retained_body_failure_count": (
+                            result.retained_body_failure_count + retry_failure_count
+                        )
+                    }
+                )
         except Exception as error:
             self._set_status(
                 self._status.model_copy(
@@ -998,6 +1009,31 @@ class EmailSyncService:
             failures.extend(batch.failures)
 
         return EmailBodyBatch(bodies=tuple(bodies), failures=tuple(failures))
+
+    async def _retry_pending_candidate_bodies(
+        self,
+        *,
+        connection: EmailConnection,
+    ) -> int:
+        if self._email_repository is None or not _can_fetch_retained_bodies(self._body_provider):
+            return 0
+        pending_refs = self._email_repository.list_pending_candidate_body_refs(
+            account=connection.account,
+        )
+        if not pending_refs:
+            return 0
+        body_batch = await self.fetch_retained_bodies(
+            connection=connection,
+            metadata=(),
+            candidate_query=build_broad_candidate_query(),
+            reconciliation_or_debug_refs=pending_refs,
+        )
+        if body_batch.bodies:
+            self._email_repository.upsert_retained_bodies(
+                body_batch.bodies,
+                retention_state=RawEmailBodyRetentionState.RETAINED,
+            )
+        return len(body_batch.failures)
 
     async def _list_full_backfill_page(
         self,
