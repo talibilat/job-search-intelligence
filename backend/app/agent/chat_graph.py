@@ -103,6 +103,14 @@ _SPONSORSHIP_RESPONSE_IMPACT_TERMS = (
     "response rate impact of sponsorship",
     "sponsorship response impact",
 )
+_SKILL_SIGNAL_TERMS = (
+    "skills actually sell",
+    "skills that sell",
+    "skill signals",
+    "dead-weight skill",
+    "dead weight skill",
+    "skills correlate with interviews",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -320,6 +328,7 @@ def route_question(question: str) -> ChatRoute:
         or _asks_wasted_effort_segments(normalized)
         or _asks_best_roi_source(normalized)
         or _asks_sponsorship_response_impact(normalized)
+        or _asks_skill_signals(normalized)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -364,6 +373,8 @@ def _structured_request(
         if filters is not None and filters.sponsorship is not None:
             filters = filters.model_copy(update={"sponsorship": None})
         return StructuredQueryRequest(template="sponsorship_response_impact", filters=filters)
+    if _asks_skill_signals(normalized):
+        return StructuredQueryRequest(template="skill_signal_segments", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):
         return StructuredQueryRequest(template="application_timeseries", filters=filters)
     if len(_matched_sources(normalized)) > 1:
@@ -492,6 +503,17 @@ def _asks_best_roi_source(normalized_question: str) -> bool:
 
 def _asks_sponsorship_response_impact(normalized_question: str) -> bool:
     return any(term in normalized_question for term in _SPONSORSHIP_RESPONSE_IMPACT_TERMS)
+
+
+def _asks_skill_signals(normalized_question: str) -> bool:
+    return any(term in normalized_question for term in _SKILL_SIGNAL_TERMS) or (
+        "skill" in normalized_question
+        and (
+            "sell" in normalized_question
+            or "dead weight" in normalized_question
+            or ("correlate" in normalized_question and "interview" in normalized_question)
+        )
+    )
 
 
 def _role_filter(normalized_question: str) -> str | None:
@@ -626,6 +648,8 @@ def synthesize_grounded_answer(
             return _synthesize_best_roi_source(rows)
         if structured.get("template") == "sponsorship_response_impact" and isinstance(rows, list):
             return _synthesize_sponsorship_response_impact(rows)
+        if structured.get("template") == "skill_signal_segments" and isinstance(rows, list):
+            return _synthesize_skill_signal_segments(rows)
         if isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
                 return _synthesize_live_applications(rows)
@@ -899,6 +923,58 @@ def _synthesize_sponsorship_response_impact(rows: list[object]) -> str:
         f"{abs(response_rate_lift):.1%} {direction} the filtered baseline of "
         f"{baseline_response_rate:.1%}. {conclusion} This is a correlation, not proof that "
         "sponsorship caused the difference."
+    )
+
+
+def _synthesize_skill_signal_segments(rows: list[object]) -> str:
+    selling: list[str] = []
+    dead_weight: list[str] = []
+    for row in rows:
+        values = row.get("values") if isinstance(row, dict) else None
+        if not isinstance(values, dict):
+            continue
+        signal = values.get("signal")
+        skill = values.get("skill")
+        application_count = values.get("application_count")
+        interview_count = values.get("interview_count")
+        interview_rate = values.get("interview_rate")
+        response_count = values.get("response_count")
+        response_rate = values.get("response_rate")
+        response_rate_lift = values.get("response_rate_lift")
+        if (
+            not isinstance(signal, str)
+            or not isinstance(skill, str)
+            or not isinstance(application_count, int)
+            or not isinstance(interview_count, int)
+            or not isinstance(interview_rate, (int, float))
+            or not isinstance(response_count, int)
+            or not isinstance(response_rate, (int, float))
+            or not isinstance(response_rate_lift, (int, float))
+        ):
+            continue
+        if signal == "selling":
+            selling.append(
+                f"{skill}: {interview_count} of {application_count} reached interview "
+                f"({interview_rate:.1%})"
+            )
+        elif signal == "dead_weight":
+            dead_weight.append(
+                f"{skill}: {response_count} of {application_count} received a response "
+                f"({response_rate:.1%}), {abs(response_rate_lift):.1%} below the filtered baseline"
+            )
+
+    if not selling and not dead_weight:
+        return (
+            "There is not enough deterministic skill evidence to identify selling or "
+            "dead-weight skills."
+        )
+    selling_text = "; ".join(selling) if selling else "Not enough interview evidence"
+    dead_weight_text = "; ".join(dead_weight) if dead_weight else "None below response baseline"
+    return (
+        f"Skills that sell by interview rate: {selling_text}. Dead-weight skills by "
+        f"below-baseline response rate: {dead_weight_text}. These are associations across "
+        "technologies extracted from tracked applications, not proof that a skill caused "
+        "an outcome."
     )
 
 

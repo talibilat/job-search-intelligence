@@ -489,6 +489,19 @@ def test_structured_chat_routes_sponsorship_impact_to_diagnostics(question: str)
     assert _structured_request(question).template == "sponsorship_response_impact"
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        'Which of the skills I list actually "sell" vs. which are dead weight?',
+        "Which skills correlate with interviews?",
+        "Show me my skill signals.",
+    ),
+)
+def test_structured_chat_routes_skill_signals_to_diagnostics(question: str) -> None:
+    assert route_question(question) == "quantitative"
+    assert _structured_request(question).template == "skill_signal_segments"
+
+
 def test_chat_api_successful_traits_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -885,6 +898,78 @@ def test_chat_api_sponsorship_impact_reports_insufficient_evidence(tmp_path: Pat
     assert chat_body["route"] == "quantitative"
     assert chat_body["tool_outputs"][0]["rows"] == []
     assert "not enough deterministic evidence" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_skill_signals_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        SyntheticFixtureRepository(connection).load_file(
+            BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/diagnostics")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": 'Which skills actually "sell" vs. which are dead weight?'},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    diagnostics = metric_response.json()
+    chat_body = chat_response.json()
+    expected_rows = []
+    for signal, field in (
+        ("selling", "selling_skill_segments"),
+        ("dead_weight", "dead_weight_skill_segments"),
+    ):
+        expected_rows.extend(
+            {
+                "label": f"{signal}:{segment['value']}",
+                "values": {
+                    "signal": signal,
+                    "skill": segment["value"],
+                    "application_count": segment["application_count"],
+                    "response_count": segment["response_count"],
+                    "response_rate": segment["response_rate"],
+                    "response_rate_lift": segment["response_rate_lift"],
+                    "interview_count": segment["interview_count"],
+                    "interview_rate": segment["interview_rate"],
+                    "baseline_response_rate": diagnostics["baseline_response_rate"],
+                    "total_applications": diagnostics["total_applications"],
+                },
+            }
+            for segment in diagnostics[field]
+        )
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["template"] == "skill_signal_segments"
+    assert chat_body["tool_outputs"][0]["rows"] == expected_rows
+    assert chat_body["citations"][0]["citation_id"] == "metric:skill_signal_segments"
+    assert "Skills that sell by interview rate" in chat_body["answer"]
+    assert "Dead-weight skills by below-baseline response rate" in chat_body["answer"]
+    assert "associations" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_skill_signals_report_insufficient_evidence(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Which skills actually sell vs. which are dead weight?"},
+    )
+
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["rows"] == []
+    assert "not enough deterministic skill evidence" in chat_body["answer"]
     assert provider.embedding_inputs == []
 
 

@@ -33,6 +33,7 @@ StructuredQueryTemplate = Literal[
     "wasted_effort_segments",
     "best_roi_source",
     "sponsorship_response_impact",
+    "skill_signal_segments",
     "breakdown",
     "live_applications",
 ]
@@ -421,6 +422,36 @@ class StructuredQueryTool:
                     ),
                 )
             return StructuredQueryResult(template=request.template, rows=impact_rows)
+
+        if request.template == "skill_signal_segments":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=f"{signal}:{segment.value}",
+                        values={
+                            "signal": signal,
+                            "skill": segment.value,
+                            "application_count": segment.application_count,
+                            "response_count": segment.response_count,
+                            "response_rate": segment.response_rate,
+                            "response_rate_lift": segment.response_rate_lift,
+                            "interview_count": segment.interview_count,
+                            "interview_rate": segment.interview_rate,
+                            "baseline_response_rate": diagnostics.baseline_response_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    )
+                    for signal, segments in (
+                        ("selling", diagnostics.selling_skill_segments),
+                        ("dead_weight", diagnostics.dead_weight_skill_segments),
+                    )
+                    for segment in segments
+                ),
+            )
 
         if request.template == "live_applications":
             if self._application_reader is None:

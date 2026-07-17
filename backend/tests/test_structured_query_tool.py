@@ -293,6 +293,33 @@ def test_structured_query_tool_answers_sponsorship_response_impact() -> None:
     }
 
 
+def test_structured_query_tool_answers_skill_signal_segments() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="skill_signal_segments"))
+
+    assert [(row.label, row.values["signal"]) for row in result.rows] == [
+        ("selling:go", "selling"),
+        ("selling:kubernetes", "selling"),
+        ("dead_weight:sql", "dead_weight"),
+    ]
+    assert result.rows[0].values == {
+        "signal": "selling",
+        "skill": "go",
+        "application_count": 1,
+        "response_count": 1,
+        "response_rate": 1.0,
+        "response_rate_lift": 0.4,
+        "interview_count": 1,
+        "interview_rate": 1.0,
+        "baseline_response_rate": 0.6,
+        "total_applications": 5,
+    }
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -336,6 +363,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "wasted_effort_segments",
         "best_roi_source",
         "sponsorship_response_impact",
+        "skill_signal_segments",
         "breakdown",
         "live_applications",
     }
