@@ -4077,6 +4077,51 @@ describe("App", () => {
     },
   );
 
+  it("redesign sync polls live progress before the sync request finishes", async () => {
+    vi.useFakeTimers();
+    let resolveSyncRequest: (response: Response) => void = () => {
+      throw new Error("Sync request was not started.");
+    };
+    const fallbackFetch = mockFetchResponses({
+      "/sync/stats": { last_run_at: null, total_raw_emails: 47 },
+      "/sync/status": { message_count: 37, state: "running" },
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (requestPath(input) === "/sync") {
+        return new Promise<Response>((resolve) => {
+          resolveSyncRequest = resolve;
+        });
+      }
+      return fallbackFetch(input);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAtPath("/");
+    fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    const menu = screen.getByText("What should I check?").parentElement;
+    expect(menu).toBeTruthy();
+    fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    expect(screen.getByText("37 new for this run · 47 total emails synced")).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/sync/status"),
+    ).toHaveLength(1);
+
+    resolveSyncRequest(
+      new Response(JSON.stringify({ last_error: "Test run stopped.", state: "failed" }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+
   it("redesign successful seven-day sync scopes the email list without classification", async () => {
     const startedAt = Date.now();
     const fetchMock = mockFetchResponses({

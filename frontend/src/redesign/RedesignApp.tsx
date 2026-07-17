@@ -428,7 +428,36 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
     setProcessingStatus(null);
     try {
       const options = syncOptionsForScope(syncScope, customFrom, customTo, lastCount);
-      const response = await syncNowSyncPost(options);
+      let syncRequestSettled = false;
+      let syncRequestError: unknown = null;
+      const syncRequest = syncNowSyncPost(options).catch((error: unknown) => {
+        syncRequestError = error;
+        return null;
+      });
+      void syncRequest.then(() => {
+        syncRequestSettled = true;
+      });
+      for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
+        const next = await Promise.race([
+          syncRequest.then(() => "settled" as const),
+          new Promise<"poll">((resolve) => {
+            setTimeout(() => resolve("poll"), SYNC_POLL_INTERVAL_MS);
+          }),
+        ]);
+        if (next === "settled" || syncRequestSettled) {
+          break;
+        }
+        const status = await syncStatusSyncStatusGet().catch(() => null);
+        if (status?.status === 200 && status.data.state === "running") {
+          setSyncFlowEmailCount(status.data.message_count ?? 0);
+          const stats = await syncStatsSyncStatsGet().catch(() => null);
+          if (stats?.status === 200) setSyncFlowTotalEmailCount(stats.data.total_raw_emails);
+        }
+      }
+      const response = await syncRequest;
+      if (response === null) {
+        throw syncRequestError;
+      }
       let state: EmailSyncStatus;
       if (response.status === 200) {
         state = response.data;
