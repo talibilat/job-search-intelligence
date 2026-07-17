@@ -813,6 +813,59 @@ def test_aggregation_replayed_incremental_batch_does_not_duplicate_existing_even
     assert_current_status(connection, "interview")
 
 
+def test_aggregation_sparse_incremental_evidence_preserves_application_details(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "application-email", thread_id="thread-abc")
+    insert_raw_email(connection, "rejection-email", thread_id="thread-abc")
+    connection.commit()
+
+    application = make_extraction(
+        email_id="application-email",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+        salary_min=120_000,
+        salary_max=150_000,
+        currency="GBP",
+        location="London",
+        work_mode="remote",
+        seniority="senior",
+        sponsorship="offered",
+        tech_stack=["Python", "FastAPI"],
+    )
+    rejection = make_extraction(
+        email_id="rejection-email",
+        company="Acme Corp",
+        role_title="Software Engineer",
+        category=JobEmailCategory.REJECTION,
+        status="rejected",
+        event_type="rejection",
+        event_at=datetime(2026, 7, 8, 10, 0, tzinfo=UTC),
+    )
+    service = make_service(connection)
+
+    service.run([application])
+    service.run([rejection])
+    service.run([rejection])
+
+    stored = ApplicationRepository(connection).list_applications()
+    assert len(stored) == 1
+    assert stored[0].current_status == "rejected"
+    assert stored[0].salary_min == 120_000
+    assert stored[0].salary_max == 150_000
+    assert stored[0].currency == "GBP"
+    assert stored[0].location == "London"
+    assert stored[0].work_mode == "remote"
+    assert stored[0].seniority == "senior"
+    assert stored[0].sponsorship == "offered"
+    assert stored[0].tech_stack == ["Python", "FastAPI"]
+    assert len(EventRepository(connection).list_by_application_id(stored[0].id)) == 2
+
+
 def test_aggregation_uses_email_sent_at_for_missing_event_at_idempotency(
     tmp_path: Path,
 ) -> None:

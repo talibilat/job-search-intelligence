@@ -486,15 +486,15 @@ def _upsert_application(
     created_at = now.isoformat()
     updated_at = now.isoformat()
 
-    salary_min: int | None = None
-    salary_max: int | None = None
-    currency: str | None = None
-    location: str | None = None
-    work_mode: str | None = None
-    seniority: str | None = None
-    sponsorship: str = "unknown"
-    tech_stack: list[str] = []
-    source: str = "other"
+    salary_min = existing_application.salary_min if existing_application else None
+    salary_max = existing_application.salary_max if existing_application else None
+    currency = existing_application.currency if existing_application else None
+    location = existing_application.location if existing_application else None
+    work_mode = existing_application.work_mode if existing_application else None
+    seniority = existing_application.seniority if existing_application else None
+    sponsorship = existing_application.sponsorship if existing_application else "unknown"
+    tech_stack = list(existing_application.tech_stack) if existing_application else []
+    source = existing_application.source if existing_application else "other"
 
     for result in group:
         ext = result.extraction
