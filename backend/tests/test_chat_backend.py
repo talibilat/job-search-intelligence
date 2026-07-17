@@ -140,6 +140,32 @@ def test_structured_chat_composes_source_and_relative_window_filters() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("question", "expected_work_mode"),
+    (
+        ("How many remote applications?", "remote"),
+        ("How many hybrid roles did I apply to?", "hybrid"),
+        ("How many on-site applications?", "onsite"),
+    ),
+)
+def test_structured_chat_maps_work_modes_to_typed_metric_filters(
+    question: str,
+    expected_work_mode: str,
+) -> None:
+    request = _structured_request(question)
+
+    assert request.filters is not None
+    assert request.filters.work_mode == expected_work_mode
+
+
+def test_structured_chat_preserves_unfiltered_work_mode_comparisons() -> None:
+    request = _structured_request("How do remote vs hybrid roles convert?")
+
+    assert request.template == "breakdown"
+    assert request.breakdown_dimension == "work_mode"
+    assert request.filters is None
+
+
 def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     tmp_path: Path,
 ) -> None:
@@ -211,6 +237,42 @@ def test_chat_api_source_count_reconciles_with_filtered_metrics(tmp_path: Path) 
         client,
         "/chat",
         json={"message": "How many LinkedIn applications have I submitted?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert unfiltered_response.json()["total_applications"] == 2
+    assert chat_response.status_code == 200
+    chat_values = chat_response.json()["tool_outputs"][0]["rows"][0]["values"]
+    assert metric_response.json()["total_applications"] == 1
+    assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_work_mode_count_reconciles_with_filtered_metrics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-remote",
+            company="Remote Company",
+            work_mode="remote",
+        )
+        insert_application(
+            connection,
+            application_id="app-onsite",
+            company="Onsite Company",
+            work_mode="onsite",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    unfiltered_response = client.get("/metrics/summary")
+    metric_response = client.get("/metrics/summary", params={"work_mode": "remote"})
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many remote applications have I submitted?"},
     )
 
     assert metric_response.status_code == 200
@@ -979,6 +1041,7 @@ def insert_application(
     application_id: str,
     company: str,
     source: str = "company_site",
+    work_mode: str = "remote",
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
@@ -991,7 +1054,7 @@ def insert_application(
         salary_max=None,
         currency=None,
         location="Remote",
-        work_mode="remote",
+        work_mode=work_mode,
         seniority="senior",
         sponsorship="unknown",
         tech_stack=["Python"],

@@ -7,7 +7,7 @@ from typing import Literal, TypedDict, cast
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.tools import SemanticSearchTool, StructuredQueryRequest, StructuredQueryTool
-from app.models.application import ApplicationSource
+from app.models.application import ApplicationSource, WorkMode
 from app.models.chat import ChatCitation, ChatRequest, ChatRoute, SemanticSearchResult
 from app.models.metrics import MetricsBreakdownDimension, MetricsFilter
 from app.services.chat_index import ChatIndexService
@@ -42,6 +42,11 @@ _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("indeed", ("indeed",)),
     ("referral", ("referral", "referred")),
     ("other", ("other source",)),
+)
+_WORK_MODE_FILTER_TERMS: tuple[tuple[WorkMode, tuple[str, ...]], ...] = (
+    ("remote", ("remote", "fully remote")),
+    ("hybrid", ("hybrid",)),
+    ("onsite", ("onsite", "on-site", "on site")),
 )
 _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ...]], ...] = (
     ("role", ("by role", "which role", "job title")),
@@ -237,11 +242,32 @@ def _structured_filters(
         ),
         None,
     )
-    if source is None:
+    matched_work_modes = {
+        work_mode
+        for work_mode, terms in _WORK_MODE_FILTER_TERMS
+        if any(term in normalized_question for term in terms)
+    }
+    work_mode = (
+        next(iter(matched_work_modes))
+        if len(matched_work_modes) == 1
+        and not any(
+            term in normalized_question
+            for dimension, terms in _BREAKDOWN_DIMENSION_TERMS
+            if dimension == "work_mode"
+            for term in terms
+        )
+        else None
+    )
+    updates = {
+        key: value
+        for key, value in (("source", source), ("work_mode", work_mode))
+        if value is not None
+    }
+    if not updates:
         return filters
     if filters is None:
-        return MetricsFilter(source=source)
-    return filters.model_copy(update={"source": source})
+        return MetricsFilter.model_validate(updates)
+    return filters.model_copy(update=updates)
 
 
 def _relative_window_filter(
