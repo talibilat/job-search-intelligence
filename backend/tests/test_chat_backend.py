@@ -509,6 +509,97 @@ def test_q43_chat_reports_unavailable_cached_insight_without_semantic_fallback(
     assert provider.embedding_inputs == []
 
 
+def test_q44_chat_reads_cached_cited_role_fit_without_provider_calls(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-acme",
+            company="Acme",
+            current_status="offer",
+        )
+        InsightRepository(connection).save_generated_insight(
+            insight_type="role_fit",
+            content="Cited win patterns show platform engineering roles suit you best.",
+            inputs_hash="q44-inputs",
+            model="fixture-model",
+            generated_at=datetime(2026, 7, 17, tzinfo=UTC),
+            citations=[
+                InsightCitation(
+                    citation_id="application:app-acme:event:event-offer",
+                    application_id="app-acme",
+                    company="Acme",
+                    role_title="Platform Engineer",
+                    event_id="event-offer",
+                    event_type="offer",
+                    event_at=datetime(2026, 7, 16, tzinfo=UTC),
+                    email_subject="Offer",
+                )
+            ],
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Which roles genuinely suit me best, based on the pattern of my wins?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert body["answer"] == "Cited win patterns show platform engineering roles suit you best."
+    assert body["tool_outputs"][0]["tool"] == "cached_insight"
+    assert body["tool_outputs"][0]["insight_type"] == "role_fit"
+    assert body["tool_outputs"][0]["status"] == "available"
+    assert body["citations"][0]["citation_id"] == "application:app-acme:event:event-offer"
+    assert provider.embedding_inputs == []
+
+
+@pytest.mark.parametrize(
+    ("stale", "expected_text"),
+    (
+        (False, "role-fit insight has not been generated"),
+        (True, "cached role-fit insight is stale"),
+    ),
+)
+def test_q44_chat_reports_unavailable_cached_insight_without_semantic_fallback(
+    tmp_path: Path,
+    stale: bool,
+    expected_text: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    if stale:
+        with sqlite3.connect(database_path) as connection:
+            insight = InsightRepository(connection).save_generated_insight(
+                insight_type="role_fit",
+                content="Outdated role-fit analysis.",
+                inputs_hash="old-inputs",
+                model="fixture-model",
+                generated_at=datetime(2026, 7, 16, tzinfo=UTC),
+            )
+            connection.execute("UPDATE insights SET is_stale = 1 WHERE id = ?", (insight.id,))
+            connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What are my best-fit roles?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert expected_text in body["answer"]
+    assert body["citations"] == []
+    assert body["tool_outputs"][0]["insight_type"] == "role_fit"
+    assert body["tool_outputs"][0]["status"] == ("stale" if stale else "missing")
+    assert provider.embedding_inputs == []
+
+
 @pytest.mark.parametrize(
     ("question", "expected_from", "expected_to"),
     (

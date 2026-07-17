@@ -151,6 +151,13 @@ _STRONGEST_WEAKEST_SIGNALS_INSIGHT_TERMS = (
     "strongest & weakest signals",
     "strongest/weakest signals",
 )
+_ROLE_FIT_INSIGHT_TERMS = (
+    "roles genuinely suit me best",
+    "roles suit me best",
+    "best-fit roles",
+    "best fit roles",
+    "pattern of my wins",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -420,6 +427,8 @@ def _cached_insight_type(question: str) -> InsightType | None:
         return "skill_gaps"
     if any(term in normalized for term in _STRONGEST_WEAKEST_SIGNALS_INSIGHT_TERMS):
         return "strongest_weakest_signals"
+    if any(term in normalized for term in _ROLE_FIT_INSIGHT_TERMS):
+        return "role_fit"
     return None
 
 
@@ -736,6 +745,8 @@ def synthesize_grounded_answer(
             insight_label = "skill-gaps"
         elif insight_type == "strongest_weakest_signals":
             insight_label = "strongest-and-weakest-signals"
+        elif insight_type == "role_fit":
+            insight_label = "role-fit"
         else:
             insight_label = "rejection-themes"
         if status == "stale":
