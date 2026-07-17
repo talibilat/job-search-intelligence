@@ -37,6 +37,10 @@ class SyncedEmailContentUnavailableError(RuntimeError):
     """Raised when neither a retained body nor a provider fetch can supply content."""
 
 
+class SyncedEmailConnectionRequiredError(RuntimeError):
+    """Raised when metadata-only content requires an email provider connection."""
+
+
 class SyncedEmailReaderService:
     """Resolve on-demand plain-text content for one synced email.
 
@@ -50,7 +54,7 @@ class SyncedEmailReaderService:
         *,
         repository: ReaderRepository,
         provider: EmailBodyProvider,
-        connection: EmailConnection,
+        connection: EmailConnection | None,
         provider_name: EmailProviderName,
     ) -> None:
         self._repository = repository
@@ -65,6 +69,9 @@ class SyncedEmailReaderService:
 
         if record.body_text is not None:
             return _detail_from_record(record, body_text=record.body_text)
+
+        if self._connection is None:
+            raise SyncedEmailConnectionRequiredError
 
         batch = await self._provider.fetch_message_bodies(
             self._connection,

@@ -884,9 +884,7 @@ def test_configured_sync_job_absorbs_provider_failures(
 ) -> None:
     class FailingSyncRuntime:
         async def run_manual_sync(self) -> None:
-            raise EmailProviderAuthError(
-                public_message="Reconnect Gmail to continue syncing."
-            )
+            raise EmailProviderAuthError(public_message="Reconnect Gmail to continue syncing.")
 
     monkeypatch.setattr(
         sync_api,
@@ -960,7 +958,6 @@ def test_get_sync_email_content_returns_retained_body(tmp_path: Path) -> None:
             body_text="Private body",
             body_retention_state="retained",
         )
-        insert_email_connection_row(connection)
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: AppSettings(
         _env_file=None,
@@ -985,6 +982,33 @@ def test_get_sync_email_content_returns_retained_body(tmp_path: Path) -> None:
         "to_addr": "me@example.com",
     }
     assert "gmail-msg-1" not in response.text
+
+
+def test_get_metadata_only_sync_email_content_requires_connection(tmp_path: Path) -> None:
+    database_path = tmp_path / "jobtracker.sqlite3"
+    create_sync_tables(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email_row(
+            connection,
+            message_id="gmail-msg-without-connection",
+            public_id="00000000000000000000000000000001",
+            sent_at=NOW,
+        )
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+    )
+    client = TestClient(app)
+
+    response = client.get("/sync/emails/00000000000000000000000000000001/content")
+
+    assert response.status_code == 400
+    assert response.json()["error"] == {
+        "code": "bad_request",
+        "details": [],
+        "message": "No Gmail connection is configured.",
+    }
 
 
 def test_get_sync_email_content_fetches_transient_body_for_metadata_only_message(

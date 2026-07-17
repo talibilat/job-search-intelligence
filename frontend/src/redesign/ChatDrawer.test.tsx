@@ -1,7 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { loadChatHistory, sendChatTurn } from "../api";
+import {
+  loadChatHistory,
+  sendChatTurn,
+  syncEmailContentSyncEmailsPublicIdContentGet,
+} from "../api";
 import { ChatDrawer } from "./ChatDrawer";
 
 vi.mock("../api", async (importOriginal) => {
@@ -16,6 +20,7 @@ vi.mock("../api", async (importOriginal) => {
 
 const loadHistoryMock = vi.mocked(loadChatHistory);
 const sendTurnMock = vi.mocked(sendChatTurn);
+const syncEmailContentMock = vi.mocked(syncEmailContentSyncEmailsPublicIdContentGet);
 
 function renderDrawer() {
   const onClose = vi.fn();
@@ -70,6 +75,59 @@ describe("ChatDrawer", () => {
     fireEvent.click(screen.getByRole("button", { name: "View application" }));
 
     expect(onOpenApplication).toHaveBeenCalledWith("app-acme");
+  });
+
+  it("opens complete cited email evidence and restores focus to its trigger", async () => {
+    loadHistoryMock.mockResolvedValue([
+      {
+        citations: [
+          {
+            citation_id: "email:email-acme",
+            email_public_id: "email-acme",
+            sent_at: "2026-07-14T10:00:00Z",
+            source: "email",
+            subject: "Your Acme application",
+          },
+        ],
+        content: "Acme confirmed your application.",
+        conversation_id: "conversation-email",
+        created_at: "2026-07-15T10:00:00Z",
+        id: 4,
+        role: "assistant",
+        tool_outputs_json: [],
+      },
+    ]);
+    syncEmailContentMock.mockResolvedValue({
+      data: {
+        body_retention_state: "retained",
+        body_text: "This is the complete retained Acme email body.",
+        from_addr: "jobs@acme.example",
+        from_domain: "acme.example",
+        ingested_at: "2026-07-14T10:01:00Z",
+        labels: ["INBOX"],
+        provider: "gmail",
+        public_id: "email-acme",
+        sent_at: "2026-07-14T10:00:00Z",
+        subject: "Your Acme application",
+        to_addr: "me@example.com",
+      },
+      headers: new Headers(),
+      status: 200,
+    });
+    renderDrawer();
+
+    const trigger = await screen.findByRole("button", { name: "Open email evidence" });
+    fireEvent.click(trigger);
+
+    expect(await screen.findByText("This is the complete retained Acme email body.")).toBeTruthy();
+    expect(screen.getByText("From: jobs@acme.example")).toBeTruthy();
+    expect(syncEmailContentMock).toHaveBeenCalledOnce();
+    const [requestedPublicId, requestOptions] = syncEmailContentMock.mock.calls[0];
+    expect(requestedPublicId).toBe("email-acme");
+    expect(requestOptions?.signal).toBeInstanceOf(AbortSignal);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close email" }));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
   it("posts a question and progressively renders a dashboard-consistent cited answer", async () => {

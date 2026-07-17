@@ -81,6 +81,7 @@ export function ChatDrawer({
   const [progress, setProgress] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [emailPublicId, setEmailPublicId] = useState<string | null>(null);
+  const emailCitationTriggerRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const requestSequence = useRef(0);
 
@@ -262,7 +263,13 @@ export function ChatDrawer({
                             </button>
                           ) : null}
                           {citation.source === "email" && citation.email_public_id ? (
-                            <button onClick={() => setEmailPublicId(citation.email_public_id!)} type="button">
+                            <button
+                              onClick={(event) => {
+                                emailCitationTriggerRef.current = event.currentTarget;
+                                setEmailPublicId(citation.email_public_id!);
+                              }}
+                              type="button"
+                            >
                               Open email evidence
                             </button>
                           ) : null}
@@ -324,7 +331,11 @@ export function ChatDrawer({
           <small>Only configured providers receive the evidence needed for this question.</small>
         </form>
       </aside>
-      <EmailReaderDialog onClose={() => setEmailPublicId(null)} publicId={emailPublicId} />
+      <EmailReaderDialog
+        onClose={() => setEmailPublicId(null)}
+        publicId={emailPublicId}
+        triggerRef={emailCitationTriggerRef}
+      />
     </>
   );
 }

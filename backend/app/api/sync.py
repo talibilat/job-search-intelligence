@@ -54,6 +54,7 @@ from app.services.sync_service import (
     latest_sync_run_at,
 )
 from app.services.synced_email_reader import (
+    SyncedEmailConnectionRequiredError,
     SyncedEmailContentUnavailableError,
     SyncedEmailNotFoundError,
     SyncedEmailReaderService,
@@ -261,12 +262,6 @@ def get_synced_email_reader_service(
     ],
 ) -> SyncedEmailReaderService:
     connection = connection_resolver()
-    if connection is None:
-        raise ApiError(
-            status_code=400,
-            code=ApiErrorCode.BAD_REQUEST,
-            message="No Gmail connection is configured.",
-        )
     return SyncedEmailReaderService(
         repository=email_repository,
         provider=email_provider,
@@ -406,6 +401,12 @@ async def sync_email_content(
             status_code=404,
             code=ApiErrorCode.NOT_FOUND,
             message="Email content is not available.",
+        ) from error
+    except SyncedEmailConnectionRequiredError as error:
+        raise ApiError(
+            status_code=400,
+            code=ApiErrorCode.BAD_REQUEST,
+            message="No Gmail connection is configured.",
         ) from error
 
 
