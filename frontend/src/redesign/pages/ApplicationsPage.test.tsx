@@ -100,6 +100,47 @@ describe("ApplicationsPage timeline refresh", () => {
     }
   });
 
+  it("preserves a grouped status in the URL when applying unrelated filters", async () => {
+    window.history.replaceState(null, "", "/applications?status=closed");
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path.startsWith("/applications/status-counts")) {
+        return Promise.resolve(jsonResponse({ counts: { rejected: 1 }, total: 1 }));
+      }
+      if (path.startsWith("/applications")) {
+        return Promise.resolve(jsonResponse([application({ current_status: "rejected" })]));
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+
+    render(
+      <ApplicationsPage
+        openApp={() => undefined}
+        reloadKey={0}
+        setStatusFilter={() => undefined}
+        statusFilter="closed"
+      />,
+    );
+
+    await screen.findByRole("button", { name: "Closed 1" });
+    fireEvent.click(screen.getByText("Filter dashboard and applications"));
+    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "Platform engineer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => {
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get("status")).toBe("closed");
+      expect(params.get("role")).toBe("Platform engineer");
+    });
+
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "rejected" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => {
+      expect(new URLSearchParams(window.location.search).get("status")).toBe("rejected");
+    });
+  });
+
   it("explains that totals are partial when refreshed status counts fail", async () => {
     let applicationRequestCount = 0;
     let countRequestCount = 0;

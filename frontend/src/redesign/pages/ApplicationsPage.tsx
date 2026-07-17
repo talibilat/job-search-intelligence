@@ -304,7 +304,12 @@ export function ApplicationsPage({
   ];
 
   const applyFilters = (next: DashboardFilters) => {
-    window.history.pushState(null, "", `/applications${searchFromFilters(next)}`);
+    const params = new URLSearchParams(searchFromFilters(next));
+    if (!next.status && statusFilter !== "all") {
+      params.set("status", statusFilter);
+    }
+    const query = params.toString();
+    window.history.pushState(null, "", `/applications${query ? `?${query}` : ""}`);
     setFilters(next);
   };
   const publishable = pipeline?.next_action === "review_dashboard";
