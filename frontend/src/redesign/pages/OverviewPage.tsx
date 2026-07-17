@@ -520,7 +520,7 @@ export function OverviewPage({
       ) : null}
 
       {tab === "visualized" ? (
-        <VisualizedTab funnel={funnel} rates={rates} summary={summary} timeseries={timeseries} />
+        <VisualizedTab filters={filters} funnel={funnel} rates={rates} summary={summary} timeseries={timeseries} />
       ) : null}
 
       {tab === "overview" && actions.length > 0 ? (
