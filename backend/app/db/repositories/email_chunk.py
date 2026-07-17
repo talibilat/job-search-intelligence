@@ -216,6 +216,50 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
                 WHERE raw_emails.thread_id IS NOT NULL
                   AND LENGTH(TRIM(raw_emails.thread_id)) > 0
             ),
+            thread_associated_matches AS (
+                SELECT
+                    applications.id AS application_id,
+                    applications.company,
+                    indexed_matches.email_id,
+                    indexed_matches.chunk_index,
+                    indexed_matches.content,
+                    indexed_matches.email_public_id,
+                    indexed_matches.subject,
+                    indexed_matches.from_addr,
+                    indexed_matches.sent_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            indexed_matches.email_id,
+                            LOWER(TRIM(applications.company))
+                        ORDER BY
+                            CASE
+                                WHEN applications.first_seen_at <= indexed_matches.sent_at
+                                THEN 0
+                                ELSE 1
+                            END,
+                            CASE
+                                WHEN applications.first_seen_at <= indexed_matches.sent_at
+                                THEN applications.first_seen_at
+                            END DESC,
+                            CASE
+                                WHEN applications.first_seen_at > indexed_matches.sent_at
+                                THEN applications.first_seen_at
+                            END,
+                            applications.last_activity_at DESC,
+                            applications.id
+                    ) AS association_rank
+                FROM indexed_matches
+                INNER JOIN matching_threads
+                    ON matching_threads.provider = indexed_matches.provider
+                    AND matching_threads.thread_id = indexed_matches.thread_id
+                INNER JOIN applications
+                    ON applications.id = matching_threads.application_id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM application_events
+                    WHERE application_events.email_id = indexed_matches.email_id
+                )
+            ),
             associated_matches AS (
                 SELECT DISTINCT
                     applications.id AS application_id,
@@ -234,26 +278,17 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
                     ON applications.id = application_events.application_id
                 UNION
                 SELECT
-                    applications.id AS application_id,
-                    applications.company,
-                    indexed_matches.email_id,
-                    indexed_matches.chunk_index,
-                    indexed_matches.content,
-                    indexed_matches.email_public_id,
-                    indexed_matches.subject,
-                    indexed_matches.from_addr,
-                    indexed_matches.sent_at
-                FROM indexed_matches
-                INNER JOIN matching_threads
-                    ON matching_threads.provider = indexed_matches.provider
-                    AND matching_threads.thread_id = indexed_matches.thread_id
-                INNER JOIN applications
-                    ON applications.id = matching_threads.application_id
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM application_events
-                    WHERE application_events.email_id = indexed_matches.email_id
-                )
+                    application_id,
+                    company,
+                    email_id,
+                    chunk_index,
+                    content,
+                    email_public_id,
+                    subject,
+                    from_addr,
+                    sent_at
+                FROM thread_associated_matches
+                WHERE association_rank = 1
             ),
             matching_companies AS (
                 SELECT
