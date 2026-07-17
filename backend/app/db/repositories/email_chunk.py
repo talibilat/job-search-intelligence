@@ -177,34 +177,99 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
 
         rows = self.execute(
             """
-            WITH matching_companies AS (
+            WITH matching_chunks AS (
                 SELECT
-                    applications.company,
                     email_chunks.email_id,
                     email_chunks.chunk_index,
                     email_chunks.content,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY email_chunks.email_id
+                        ORDER BY email_chunks.chunk_index
+                    ) AS email_match_rank
+                FROM email_chunks
+                WHERE INSTR(LOWER(email_chunks.content), LOWER(?)) > 0
+            ),
+            indexed_matches AS (
+                SELECT
+                    matching_chunks.email_id,
+                    matching_chunks.chunk_index,
+                    matching_chunks.content,
                     raw_emails.public_id AS email_public_id,
                     raw_emails.subject,
                     raw_emails.from_addr,
                     raw_emails.sent_at,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY LOWER(TRIM(applications.company))
-                        ORDER BY
-                            raw_emails.sent_at DESC,
-                            email_chunks.chunk_index,
-                            email_chunks.email_id,
-                            applications.id
-                    ) AS company_match_rank
-                FROM email_chunks
+                    raw_emails.provider,
+                    raw_emails.thread_id
+                FROM matching_chunks
+                INNER JOIN raw_emails
+                    ON raw_emails.id = matching_chunks.email_id
+                WHERE matching_chunks.email_match_rank = 1
+            ),
+            matching_threads AS (
+                SELECT DISTINCT
+                    raw_emails.provider,
+                    raw_emails.thread_id,
+                    application_events.application_id
+                FROM application_events
+                INNER JOIN raw_emails
+                    ON raw_emails.id = application_events.email_id
+                WHERE raw_emails.thread_id IS NOT NULL
+                  AND LENGTH(TRIM(raw_emails.thread_id)) > 0
+            ),
+            associated_matches AS (
+                SELECT DISTINCT
+                    applications.id AS application_id,
+                    applications.company,
+                    indexed_matches.email_id,
+                    indexed_matches.chunk_index,
+                    indexed_matches.content,
+                    indexed_matches.email_public_id,
+                    indexed_matches.subject,
+                    indexed_matches.from_addr,
+                    indexed_matches.sent_at
+                FROM indexed_matches
                 INNER JOIN application_events
-                    ON application_events.email_id = email_chunks.email_id
+                    ON application_events.email_id = indexed_matches.email_id
                 INNER JOIN applications
                     ON applications.id = application_events.application_id
-                INNER JOIN raw_emails
-                    ON raw_emails.id = email_chunks.email_id
-                WHERE INSTR(LOWER(email_chunks.content), LOWER(?)) > 0
+                UNION
+                SELECT
+                    applications.id AS application_id,
+                    applications.company,
+                    indexed_matches.email_id,
+                    indexed_matches.chunk_index,
+                    indexed_matches.content,
+                    indexed_matches.email_public_id,
+                    indexed_matches.subject,
+                    indexed_matches.from_addr,
+                    indexed_matches.sent_at
+                FROM indexed_matches
+                INNER JOIN matching_threads
+                    ON matching_threads.provider = indexed_matches.provider
+                    AND matching_threads.thread_id = indexed_matches.thread_id
+                INNER JOIN applications
+                    ON applications.id = matching_threads.application_id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM application_events
+                    WHERE application_events.email_id = indexed_matches.email_id
+                )
+            ),
+            matching_companies AS (
+                SELECT
+                    associated_matches.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY LOWER(TRIM(associated_matches.company))
+                        ORDER BY
+                            associated_matches.sent_at DESC,
+                            associated_matches.chunk_index,
+                            associated_matches.email_id,
+                            associated_matches.application_id
+                    ) AS company_match_rank
+                FROM associated_matches
             )
             SELECT
+                application_id,
                 company,
                 email_id,
                 chunk_index,
@@ -220,7 +285,13 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
             (term,),
         ).fetchall()
         return tuple(
-            self._semantic_result(row, distance=0.0, company=str(row["company"])) for row in rows
+            self._semantic_result(
+                row,
+                distance=0.0,
+                company=str(row["company"]),
+                application_ids=(str(row["application_id"]),),
+            )
+            for row in rows
         )
 
     def latest_for_mentioned_company(

@@ -472,6 +472,7 @@ def test_q48_every_company_returns_distinct_companies_with_citations(tmp_path: P
             ("email-gamma-location", "app-gamma", "Gamma requires hybrid attendance."),
         )
         for index, (email_id, application_id, body) in enumerate(sources):
+            is_event_neutral_follow_up = email_id == "email-acme-sponsorship-two"
             insert_raw_email(
                 connection,
                 email_id=email_id,
@@ -479,8 +480,16 @@ def test_q48_every_company_returns_distinct_companies_with_citations(tmp_path: P
                 body=body,
                 retention="retained",
                 sent_at=f"2026-06-{10 + index:02d}T10:00:00+00:00",
+                thread_id="thread-acme" if application_id == "app-acme" else None,
             )
-            insert_classification(connection, email_id, is_job_related=True)
+            insert_classification(
+                connection,
+                email_id,
+                is_job_related=True,
+                category="follow_up" if is_event_neutral_follow_up else None,
+            )
+            if is_event_neutral_follow_up:
+                continue
             connection.execute(
                 """
                 INSERT INTO application_events (
@@ -516,6 +525,10 @@ def test_q48_every_company_returns_distinct_companies_with_citations(tmp_path: P
     assert body["answer"].count("Acme") == 1
     assert body["answer"].count("Beta") == 1
     assert "Gamma" not in body["answer"]
+    assert {citation["subject"] for citation in body["citations"]} == {
+        "Role detail 1",
+        "Role detail 2",
+    }
     assert {citation["application_id"] for citation in body["citations"]} == {
         "app-acme",
         "app-beta",
