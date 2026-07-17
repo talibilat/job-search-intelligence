@@ -63,6 +63,7 @@ _APPLICATION_LIFECYCLE_CATEGORIES = frozenset(
 _TERMINAL_APPLICATION_STATUSES = frozenset(
     {"offer", "rejected", "ghosted", "withdrawn"},
 )
+_STALE_APPLICATION_ATTEMPT_DAYS = 365
 
 
 class AggregationRunResult(BaseModel):
@@ -375,8 +376,12 @@ def _partition_application_attempts(
             attempts.append(attempt)
         elif (
             _event_type_for_result(result) == "applied"
-            and attempt.current_status in _TERMINAL_APPLICATION_STATUSES
             and event_at > attempt.last_activity_at
+            and (
+                attempt.current_status in _TERMINAL_APPLICATION_STATUSES
+                or event_at - attempt.last_activity_at
+                >= timedelta(days=_STALE_APPLICATION_ATTEMPT_DAYS)
+            )
         ):
             attempt = _ApplicationAttempt(
                 key=start_new_application_attempt(key, occurred_at=event_at),
