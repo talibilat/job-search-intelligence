@@ -375,6 +375,43 @@ def test_structured_chat_does_not_treat_work_mode_as_role() -> None:
     assert request.filters.work_mode == "remote"
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "How long does it take to get a first response?",
+        "What is my average time to rejection?",
+    ),
+)
+def test_structured_chat_routes_timing_questions_to_whitelisted_metrics(question: str) -> None:
+    assert route_question(question) == "quantitative"
+    assert _structured_request(question).template == "timing"
+
+
+def test_chat_api_response_timing_reconciles_with_metrics_summary(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/summary")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How long does it take to get a first response?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    timing_rows = {row["label"]: row["values"] for row in chat_body["tool_outputs"][0]["rows"]}
+    assert chat_body["route"] == "quantitative"
+    assert (
+        timing_rows["time_to_first_response"]
+        == metric_response.json()["average_time_to_first_response"]
+    )
+    assert provider.embedding_inputs == []
+
+
 def test_chat_api_relative_month_count_reconciles_with_filtered_metrics(
     tmp_path: Path,
 ) -> None:

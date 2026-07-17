@@ -87,6 +87,26 @@ def test_structured_query_tool_answers_rate_and_funnel_templates() -> None:
     ]
 
 
+def test_structured_query_tool_answers_timing_template() -> None:
+    with fixture_connection() as connection:
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(StructuredQueryRequest(template="timing"))
+
+    assert [(row.label, row.values) for row in result.rows] == [
+        (
+            "time_to_first_response",
+            {"application_count": 1, "average_hours": 339.5},
+        ),
+        (
+            "time_to_rejection",
+            {"application_count": 1, "average_hours": 339.5},
+        ),
+    ]
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -120,6 +140,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "summary_counts",
         "rates",
         "funnel",
+        "timing",
         "breakdown",
         "live_applications",
     }

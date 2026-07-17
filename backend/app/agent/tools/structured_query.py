@@ -22,6 +22,7 @@ StructuredQueryTemplate = Literal[
     "summary_counts",
     "rates",
     "funnel",
+    "timing",
     "breakdown",
     "live_applications",
 ]
@@ -177,6 +178,33 @@ class StructuredQueryTool:
                     for stage in self._metrics_repository.get_funnel_metrics(
                         filters=request.filters
                     )
+                ),
+            )
+
+        if request.template == "timing":
+            first_response = self._metrics_repository.get_time_to_first_response_metric(
+                filters=request.filters
+            )
+            rejection = self._metrics_repository.get_time_to_rejection_metric(
+                filters=request.filters
+            )
+            return StructuredQueryResult(
+                template=request.template,
+                rows=(
+                    StructuredQueryRow(
+                        label="time_to_first_response",
+                        values={
+                            "application_count": first_response.application_count,
+                            "average_hours": first_response.average_hours,
+                        },
+                    ),
+                    StructuredQueryRow(
+                        label="time_to_rejection",
+                        values={
+                            "application_count": rejection.application_count,
+                            "average_hours": rejection.average_hours,
+                        },
+                    ),
                 ),
             )
 
