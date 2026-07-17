@@ -4274,7 +4274,7 @@ describe("App", () => {
     ).toBe("page");
   });
 
-  it("redesign sync sends the exact custom date payload", async () => {
+  it("redesign sync includes the selected custom end date", async () => {
     const fetchMock = mockFetchResponses({
       "/sync": { state: "succeeded" },
     });
@@ -4303,7 +4303,7 @@ describe("App", () => {
         throw new Error("Expected the sync request body to be JSON text.");
       }
       expect(JSON.parse(init.body)).toEqual({
-        before_date: "2026-07-10",
+        before_date: "2026-07-11",
         since_date: "2026-06-01",
       });
     });

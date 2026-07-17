@@ -157,6 +157,13 @@ const SYNC_SCOPES: { key: SyncScopeKey; label: string; note: string }[] = [
 const SYNC_POLL_MAX_ATTEMPTS = 600;
 const SYNC_POLL_INTERVAL_MS = 1000;
 
+function exclusiveDayAfter(dateInput: string): string {
+  const [year, month, day] = dateInput.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
 function syncOptionsForScope(
   scope: SyncScopeKey,
   customFrom: string,
@@ -171,7 +178,7 @@ function syncOptionsForScope(
   }
   if (scope === "custom") {
     return {
-      before_date: customTo || null,
+      before_date: customTo ? exclusiveDayAfter(customTo) : null,
       since_date: customFrom || null,
     };
   }
@@ -204,9 +211,8 @@ function completedSyncScope(
       ).toISOString();
     }
     if (customTo) {
-      const [toYear, toMonth, toDay] = customTo.split("-").map(Number);
       sentBefore = new Date(
-        Date.UTC(toYear, toMonth - 1, toDay + 1),
+        `${exclusiveDayAfter(customTo)}T00:00:00Z`,
       ).toISOString();
     }
     return { sentAfter, sentBefore };
