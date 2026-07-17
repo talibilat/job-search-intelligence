@@ -146,6 +146,11 @@ _SKILL_GAPS_INSIGHT_TERMS = (
     "real skill gaps",
     "skill gaps",
 )
+_STRONGEST_WEAKEST_SIGNALS_INSIGHT_TERMS = (
+    "strongest and weakest signals",
+    "strongest & weakest signals",
+    "strongest/weakest signals",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -413,6 +418,8 @@ def _cached_insight_type(question: str) -> InsightType | None:
         return "recurring_feedback"
     if any(term in normalized for term in _SKILL_GAPS_INSIGHT_TERMS):
         return "skill_gaps"
+    if any(term in normalized for term in _STRONGEST_WEAKEST_SIGNALS_INSIGHT_TERMS):
+        return "strongest_weakest_signals"
     return None
 
 
@@ -727,6 +734,8 @@ def synthesize_grounded_answer(
             insight_label = "recurring-feedback"
         elif insight_type == "skill_gaps":
             insight_label = "skill-gaps"
+        elif insight_type == "strongest_weakest_signals":
+            insight_label = "strongest-and-weakest-signals"
         else:
             insight_label = "rejection-themes"
         if status == "stale":
