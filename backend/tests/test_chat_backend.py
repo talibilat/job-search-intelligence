@@ -2813,12 +2813,28 @@ def test_chat_follow_up_uses_company_context_from_same_conversation(tmp_path: Pa
             "retrieval_limit": 1,
         },
     )
+    second_follow_up = post_chat(
+        client,
+        "/chat",
+        json={
+            "conversation_id": "contextual-chat",
+            "message": "What else did they say?",
+            "retrieval_limit": 1,
+        },
+    )
 
     assert first.status_code == 200
     assert follow_up.status_code == 200
     assert "Technical interview moved to Friday" in follow_up.json()["answer"]
     assert follow_up.json()["citations"][0]["application_id"] == "app-acme"
     assert provider.embedding_inputs[-1] == (
+        "Previous user question: Did they mention Friday?\n"
+        "Previous user question: What exactly did the recruiter at Acme say?\n"
+        "Current user question: What else did they say?",
+    )
+    assert second_follow_up.status_code == 200
+    assert second_follow_up.json()["citations"][0]["application_id"] == "app-acme"
+    assert provider.embedding_inputs[-2] == (
         "Previous user question: What exactly did the recruiter at Acme say?\n"
         "Current user question: Did they mention Friday?",
     )
@@ -2829,6 +2845,7 @@ def test_chat_follow_up_uses_company_context_from_same_conversation(tmp_path: Pa
     assert [message["content"] for message in history if message["role"] == "user"] == [
         "What exactly did the recruiter at Acme say?",
         "Did they mention Friday?",
+        "What else did they say?",
     ]
 
     separate = post_chat(

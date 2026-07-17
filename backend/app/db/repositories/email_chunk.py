@@ -339,26 +339,30 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
             "SELECT DISTINCT company FROM applications ORDER BY LENGTH(company) DESC"
         ).fetchall()
         current_question = question.rpartition("\nCurrent user question: ")[2]
-        company_scope = current_question or question
-        mentioned = tuple(
-            str(row[0])
-            for row in company_rows
-            if re.search(
-                rf"(?<!\w){re.escape(str(row[0]))}(?!\w)",
-                company_scope,
-                flags=re.IGNORECASE,
+        company_scopes: tuple[str, ...] = (current_question,) if current_question else (question,)
+        if current_question:
+            company_scopes += tuple(
+                match.group(1)
+                for match in re.finditer(
+                    r"(?:^|\n)Previous user question: (.*?)"
+                    r"(?=\nPrevious user question: |\nCurrent user question: |\Z)",
+                    question,
+                    flags=re.DOTALL,
+                )
             )
-        )
-        if not mentioned and company_scope != question:
+        mentioned: tuple[str, ...] = ()
+        for company_scope in company_scopes:
             mentioned = tuple(
                 str(row[0])
                 for row in company_rows
                 if re.search(
                     rf"(?<!\w){re.escape(str(row[0]))}(?!\w)",
-                    question,
+                    company_scope,
                     flags=re.IGNORECASE,
                 )
             )
+            if mentioned:
+                break
         if not mentioned:
             return None
 

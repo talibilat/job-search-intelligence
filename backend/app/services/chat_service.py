@@ -138,19 +138,16 @@ class ChatService:
             conversation_id=request.conversation_id,
             limit=20,
         )
-        previous_question = next(
-            (message.content for message in reversed(history) if message.role == "user"),
-            None,
+        previous_questions = tuple(
+            message.content for message in reversed(history) if message.role == "user"
         )
-        if previous_question is None:
+        if not previous_questions:
             return request
+        context = "\n".join(
+            f"Previous user question: {question}" for question in previous_questions
+        )
         return request.model_copy(
-            update={
-                "message": (
-                    f"Previous user question: {previous_question}\n"
-                    f"Current user question: {request.message}"
-                )
-            }
+            update={"message": (f"{context}\nCurrent user question: {request.message}")}
         )
 
 
