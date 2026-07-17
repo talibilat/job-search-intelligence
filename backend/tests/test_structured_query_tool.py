@@ -254,6 +254,24 @@ def test_structured_query_tool_answers_wasted_effort_segments() -> None:
     }
 
 
+def test_structured_query_tool_answers_best_roi_source() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="best_roi_source"))
+
+    assert result.rows[0].label == "source:linkedin"
+    assert result.rows[0].values == {
+        "source": "linkedin",
+        "application_count": 3,
+        "interview_count": 1,
+        "interview_rate": 1 / 3,
+        "total_applications": 5,
+    }
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -295,6 +313,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "negative_outcome_segments",
         "strongest_response_correlate",
         "wasted_effort_segments",
+        "best_roi_source",
         "breakdown",
         "live_applications",
     }

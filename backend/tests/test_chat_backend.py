@@ -465,6 +465,18 @@ def test_structured_chat_routes_wasted_effort_to_diagnostics(question: str) -> N
     assert _structured_request(question).template == "wasted_effort_segments"
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "Which application source gives the best ROI (interviews per application)?",
+        "What is my best source for interviews?",
+    ),
+)
+def test_structured_chat_routes_best_roi_source_to_diagnostics(question: str) -> None:
+    assert route_question(question) == "quantitative"
+    assert _structured_request(question).template == "best_roi_source"
+
+
 def test_chat_api_successful_traits_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -717,6 +729,69 @@ def test_chat_api_wasted_effort_reports_insufficient_evidence(tmp_path: Path) ->
         client,
         "/chat",
         json={"message": "Which segments are wasted effort?"},
+    )
+
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["rows"] == []
+    assert "not enough deterministic evidence" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_best_roi_source_reconciles_with_metrics_diagnostics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        SyntheticFixtureRepository(connection).load_file(
+            BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/diagnostics")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Which application source gives the best ROI?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    diagnostics = metric_response.json()
+    segment = diagnostics["best_roi_source"]
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0] == {
+        "tool": "structured_query",
+        "template": "best_roi_source",
+        "rows": [
+            {
+                "label": f"source:{segment['value']}",
+                "values": {
+                    "source": segment["value"],
+                    "application_count": segment["application_count"],
+                    "interview_count": segment["interview_count"],
+                    "interview_rate": segment["interview_rate"],
+                    "total_applications": diagnostics["total_applications"],
+                },
+            }
+        ],
+        "source": "metrics_repository",
+    }
+    assert chat_body["citations"][0]["citation_id"] == "metric:best_roi_source"
+    assert "interviews per application" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_best_roi_source_reports_insufficient_evidence(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Which application source gives the best ROI?"},
     )
 
     assert chat_response.status_code == 200

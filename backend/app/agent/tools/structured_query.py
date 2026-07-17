@@ -31,6 +31,7 @@ StructuredQueryTemplate = Literal[
     "negative_outcome_segments",
     "strongest_response_correlate",
     "wasted_effort_segments",
+    "best_roi_source",
     "breakdown",
     "live_applications",
 ]
@@ -374,6 +375,27 @@ class StructuredQueryTool:
                     for segment in diagnostics.wasted_effort_segments
                 ),
             )
+
+        if request.template == "best_roi_source":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            segment = diagnostics.best_roi_source
+            roi_rows: tuple[StructuredQueryRow, ...] = ()
+            if segment is not None:
+                roi_rows = (
+                    StructuredQueryRow(
+                        label=f"source:{segment.value}",
+                        values={
+                            "source": segment.value,
+                            "application_count": segment.application_count,
+                            "interview_count": segment.interview_count,
+                            "interview_rate": segment.interview_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    ),
+                )
+            return StructuredQueryResult(template=request.template, rows=roi_rows)
 
         if request.template == "live_applications":
             if self._application_reader is None:

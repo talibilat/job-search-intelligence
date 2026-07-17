@@ -89,6 +89,12 @@ _WASTED_EFFORT_TERMS = (
     "never convert",
     "lowest conversion",
 )
+_BEST_ROI_SOURCE_TERMS = (
+    "best roi source",
+    "source gives the best roi",
+    "best source for interviews",
+    "most interviews per application",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -304,6 +310,7 @@ def route_question(question: str) -> ChatRoute:
         or _asks_negative_outcome_traits(normalized)
         or _asks_strongest_response_correlate(normalized)
         or _asks_wasted_effort_segments(normalized)
+        or _asks_best_roi_source(normalized)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -342,6 +349,8 @@ def _structured_request(
         return StructuredQueryRequest(template="strongest_response_correlate", filters=filters)
     if _asks_wasted_effort_segments(normalized):
         return StructuredQueryRequest(template="wasted_effort_segments", filters=filters)
+    if _asks_best_roi_source(normalized):
+        return StructuredQueryRequest(template="best_roi_source", filters=filters)
     if any(term in normalized for term in _APPLICATION_TREND_TERMS):
         return StructuredQueryRequest(template="application_timeseries", filters=filters)
     if len(_matched_sources(normalized)) > 1:
@@ -462,6 +471,10 @@ def _asks_strongest_response_correlate(normalized_question: str) -> bool:
 
 def _asks_wasted_effort_segments(normalized_question: str) -> bool:
     return any(term in normalized_question for term in _WASTED_EFFORT_TERMS)
+
+
+def _asks_best_roi_source(normalized_question: str) -> bool:
+    return any(term in normalized_question for term in _BEST_ROI_SOURCE_TERMS)
 
 
 def _role_filter(normalized_question: str) -> str | None:
@@ -592,6 +605,8 @@ def synthesize_grounded_answer(
             return _synthesize_strongest_response_correlate(rows)
         if structured.get("template") == "wasted_effort_segments" and isinstance(rows, list):
             return _synthesize_wasted_effort_segments(rows)
+        if structured.get("template") == "best_roi_source" and isinstance(rows, list):
+            return _synthesize_best_roi_source(rows)
         if isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
                 return _synthesize_live_applications(rows)
@@ -797,6 +812,34 @@ def _synthesize_wasted_effort_segments(rows: list[object]) -> str:
         + "; ".join(segments)
         + ". These are correlations, not proof that effort in a segment caused the lower "
         "response rate."
+    )
+
+
+def _synthesize_best_roi_source(rows: list[object]) -> str:
+    if not rows:
+        return (
+            "There is not enough deterministic evidence to identify a best-ROI application "
+            "source with interview data."
+        )
+    row = rows[0]
+    values = row.get("values") if isinstance(row, dict) else None
+    if not isinstance(values, dict):
+        return "There is not enough deterministic evidence to identify a best-ROI source."
+    source = values.get("source")
+    interview_count = values.get("interview_count")
+    application_count = values.get("application_count")
+    interview_rate = values.get("interview_rate")
+    if (
+        not isinstance(source, str)
+        or not isinstance(interview_count, int)
+        or not isinstance(application_count, int)
+        or not isinstance(interview_rate, (int, float))
+    ):
+        return "There is not enough deterministic evidence to identify a best-ROI source."
+    return (
+        f"The best-ROI application source is {source}: {interview_count} of "
+        f"{application_count} applications reached an interview ({interview_rate:.1%}). "
+        "ROI here means interviews per application, not financial return."
     )
 
 
