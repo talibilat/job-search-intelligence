@@ -703,6 +703,106 @@ def test_q45_chat_reports_unavailable_cached_insight_without_semantic_fallback(
 
 
 @pytest.mark.parametrize(
+    "question",
+    (
+        "What's the story my last 6-12 months of job searching tells?",
+        "Tell me my job search story.",
+    ),
+)
+def test_q46_chat_reads_cached_cited_story_without_provider_calls(
+    tmp_path: Path,
+    question: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    content = (
+        "Your recent search moved from broad applications to stronger platform-role interviews."
+    )
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-acme",
+            company="Acme",
+            current_status="interview",
+        )
+        InsightRepository(connection).save_generated_insight(
+            insight_type="story",
+            content=content,
+            inputs_hash="q46-inputs",
+            model="fixture-model",
+            generated_at=datetime(2026, 7, 17, tzinfo=UTC),
+            citations=[
+                InsightCitation(
+                    citation_id="application:app-acme:event:event-interview",
+                    application_id="app-acme",
+                    company="Acme",
+                    role_title="Platform Engineer",
+                    event_id="event-interview",
+                    event_type="interview_scheduled",
+                    event_at=datetime(2026, 7, 16, tzinfo=UTC),
+                    email_subject="Interview invitation",
+                )
+            ],
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(client, "/chat", json={"message": question})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert body["answer"] == content
+    assert body["tool_outputs"][0]["tool"] == "cached_insight"
+    assert body["tool_outputs"][0]["insight_type"] == "story"
+    assert body["tool_outputs"][0]["status"] == "available"
+    assert body["citations"][0]["citation_id"] == "application:app-acme:event:event-interview"
+    assert provider.embedding_inputs == []
+
+
+@pytest.mark.parametrize(
+    ("stale", "expected_text"),
+    (
+        (False, "search-story insight has not been generated"),
+        (True, "cached search-story insight is stale"),
+    ),
+)
+def test_q46_chat_reports_unavailable_cached_insight_without_semantic_fallback(
+    tmp_path: Path,
+    stale: bool,
+    expected_text: str,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    if stale:
+        with sqlite3.connect(database_path) as connection:
+            insight = InsightRepository(connection).save_generated_insight(
+                insight_type="story",
+                content="Outdated search story.",
+                inputs_hash="old-inputs",
+                model="fixture-model",
+                generated_at=datetime(2026, 7, 16, tzinfo=UTC),
+            )
+            connection.execute("UPDATE insights SET is_stale = 1 WHERE id = ?", (insight.id,))
+            connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What is the story of my job search?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route"] == "content"
+    assert expected_text in body["answer"]
+    assert body["citations"] == []
+    assert body["tool_outputs"][0]["insight_type"] == "story"
+    assert body["tool_outputs"][0]["status"] == ("stale" if stale else "missing")
+    assert provider.embedding_inputs == []
+
+
+@pytest.mark.parametrize(
     ("question", "expected_from", "expected_to"),
     (
         (

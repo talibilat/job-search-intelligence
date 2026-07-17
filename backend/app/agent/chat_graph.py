@@ -166,6 +166,13 @@ _WEEKLY_ACTIONS_INSIGHT_TERMS = (
     "next-week actions",
     "weekly actions",
 )
+_STORY_INSIGHT_TERMS = (
+    "story my last 6-12 months of job searching tells",
+    "story my last 6 to 12 months of job searching tells",
+    "job search story",
+    "story of my job search",
+    "search story",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -439,6 +446,8 @@ def _cached_insight_type(question: str) -> InsightType | None:
         return "strongest_weakest_signals"
     if any(term in normalized for term in _ROLE_FIT_INSIGHT_TERMS):
         return "role_fit"
+    if any(term in normalized for term in _STORY_INSIGHT_TERMS):
+        return "story"
     return None
 
 
@@ -759,6 +768,8 @@ def synthesize_grounded_answer(
             insight_label = "role-fit"
         elif insight_type == "weekly_actions":
             insight_label = "weekly-actions"
+        elif insight_type == "story":
+            insight_label = "search-story"
         else:
             insight_label = "rejection-themes"
         if status == "stale":
