@@ -4,7 +4,6 @@ import {
   listInsightsInsightsGet,
   regenerateInsightInsightsRegeneratePost,
   type InsightListResponse,
-  type InsightRecord,
   type InsightType,
 } from "../../api";
 import { Alert, Button } from "../../components/ui";
@@ -75,14 +74,19 @@ const DISPLAY_ORDER: InsightType[] = [
   "story",
 ];
 
-function costLabel(response: InsightListResponse | null, type: InsightType): string {
+function costLabel(
+  response: InsightListResponse | null,
+  type: InsightType,
+  hasInsight: boolean,
+): string {
   const estimate = response?.regeneration_cost_estimates?.find((item) => item.type === type);
   const usd = estimate?.cost.estimated_cost_usd;
+  const action = hasInsight ? "Rewrite with latest data" : "Generate insight";
   if (usd === null || usd === undefined) {
-    return "Rewrite with latest data";
+    return action;
   }
   const rounded = usd < 0.01 ? `~$${usd.toFixed(3)}` : `~$${usd.toFixed(2)}`;
-  return `Rewrite with latest data · ${rounded}`;
+  return `${action} · ${rounded}`;
 }
 
 export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
@@ -116,9 +120,12 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
     };
   }, [reloadKey]);
 
-  const insights: InsightRecord[] = (response?.insights ?? [])
-    .slice()
-    .sort((a, b) => DISPLAY_ORDER.indexOf(a.type) - DISPLAY_ORDER.indexOf(b.type));
+  const insightCards = response
+    ? DISPLAY_ORDER.map((type) => ({
+        insight: response.insights.find((insight) => insight.type === type),
+        type,
+      }))
+    : [];
 
   const regenerate = async (type: InsightType) => {
     if (regenerationRef.current) {
@@ -134,10 +141,21 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
           if (!current) {
             return current;
           }
-          const nextInsights = current.insights.map((insight) =>
-            insight.type === type ? regenerateResponse.data.insight : insight,
-          );
-          return { ...current, insights: nextInsights };
+          const hasExistingInsight = current.insights.some((insight) => insight.type === type);
+          const nextInsights = hasExistingInsight
+            ? current.insights.map((insight) =>
+                insight.type === type ? regenerateResponse.data.insight : insight,
+              )
+            : [...current.insights, regenerateResponse.data.insight];
+          const nextCostEstimates = [
+            ...(current.regeneration_cost_estimates ?? []).filter((item) => item.type !== type),
+            { cost: regenerateResponse.data.cost, type },
+          ];
+          return {
+            ...current,
+            insights: nextInsights,
+            regeneration_cost_estimates: nextCostEstimates,
+          };
         });
       } else {
         setError(
@@ -203,31 +221,17 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
         </div>
       ) : null}
 
-      {!loading && !error && insights.length === 0 ? (
-        <div
-          style={{
-            padding: "22px 24px",
-            border: "1px solid #E4E2DA",
-            borderRadius: "16px",
-            background: "#fff",
-            fontSize: "13.5px",
-            color: "#666D66",
-          }}
-        >
-          No insights yet. Sync your inbox and classify your email first, then insights are
-          generated from your real application data.
-        </div>
-      ) : null}
-
-      {insights.map((insight) => {
-        const copy = INSIGHT_COPY[insight.type];
-        const fresh = insight.is_stale
+      {insightCards.map(({ insight, type }) => {
+        const copy = INSIGHT_COPY[type];
+        const fresh = insight?.is_stale
           ? `Stale · data changed since ${formatShortDate(insight.generated_at)}`
-          : `Fresh · ${formatShortDate(insight.generated_at)}`;
-        const isOpen = !!howOpen[insight.type];
+          : insight
+            ? `Fresh · ${formatShortDate(insight.generated_at)}`
+            : "Not generated";
+        const isOpen = !!howOpen[type];
         return (
           <div
-            key={insight.id}
+            key={type}
             style={{
               padding: "22px 24px",
               border: "1px solid #E4E2DA",
@@ -277,17 +281,23 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
                   fontWeight: 700,
                   padding: "3px 10px",
                   borderRadius: "999px",
-                  background: insight.is_stale ? "#F7EFDB" : "#E3EFE6",
-                  color: insight.is_stale ? "#8A6A14" : "#1E5136",
+                  background: insight?.is_stale ? "#F7EFDB" : insight ? "#E3EFE6" : "#F0EEE7",
+                  color: insight?.is_stale ? "#8A6A14" : insight ? "#1E5136" : "#666D66",
                 }}
               >
                 {fresh}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: "14px", color: "#33382F", lineHeight: 1.65 }}>
-              {insight.content}
-            </p>
-            {insight.citations && insight.citations.length > 0 ? (
+            {insight ? (
+              <p style={{ margin: 0, fontSize: "14px", color: "#33382F", lineHeight: 1.65 }}>
+                {insight.content}
+              </p>
+            ) : (
+              <p style={{ margin: 0, fontSize: "14px", color: "#666D66", lineHeight: 1.65 }}>
+                Not generated yet. Generate this insight from your classified application history.
+              </p>
+            )}
+            {insight?.citations && insight.citations.length > 0 ? (
               <div
                 style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}
               >
@@ -340,7 +350,7 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
             >
               <Button
                 disabled={regenerating !== null}
-                onClick={() => void regenerate(insight.type)}
+                onClick={() => void regenerate(type)}
                 style={{
                   minHeight: 0,
                   minWidth: 0,
@@ -358,11 +368,15 @@ export function InsightsPage({ openApp, reloadKey }: InsightsPageProps) {
                 }}
                 variant="ghost"
               >
-                {regenerating === insight.type ? "Rewriting…" : costLabel(response, insight.type)}
+                {regenerating === type
+                  ? insight
+                    ? "Rewriting…"
+                    : "Generating…"
+                  : costLabel(response, type, Boolean(insight))}
               </Button>
               <Button
                 onClick={() =>
-                  setHowOpen((current) => ({ ...current, [insight.type]: !current[insight.type] }))
+                  setHowOpen((current) => ({ ...current, [type]: !current[type] }))
                 }
                 style={{
                   minHeight: 0,

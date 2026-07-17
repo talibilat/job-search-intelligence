@@ -89,6 +89,55 @@ describe("InsightsPage", () => {
     expect(document.body.textContent?.toLowerCase()).not.toContain("inferred reasons");
   });
 
+  it("generates the first insight from an empty cache", async () => {
+    const generated = insight("why_rejected", {
+      content: "Generated rejection evidence.",
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/insights") {
+        return Promise.resolve(
+          jsonResponse({ insights: [], regeneration_cost_estimates: [] }),
+        );
+      }
+      if (path === "/insights/regenerate") {
+        const body = init?.body;
+        if (typeof body !== "string") {
+          throw new Error("Expected a JSON request body.");
+        }
+        expect(JSON.parse(body)).toEqual({ type: "why_rejected" });
+        return Promise.resolve(
+          jsonResponse({
+            cached: false,
+            cost: {
+              cost_estimate_available: false,
+              estimated_completion_tokens: 0,
+              estimated_prompt_tokens: 0,
+              estimated_total_tokens: 0,
+              token_estimate_method: "unavailable",
+            },
+            evidence_citation_ids: [],
+            insight: generated,
+          }),
+        );
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<InsightsPage openApp={() => undefined} reloadKey={0} />);
+
+    expect(await screen.findByRole("heading", { name: "Rejection themes" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Generate insight" })).toHaveLength(7);
+    fireEvent.click(screen.getAllByRole("button", { name: "Generate insight" })[0]);
+
+    expect(await screen.findByText("Generated rejection evidence.")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Generate insight" })).toHaveLength(6);
+    expect(
+      fetchMock.mock.calls.filter(([input]) => input === "/insights/regenerate"),
+    ).toHaveLength(1);
+  });
+
   it("keeps cached content, blocks repeat regeneration, and shows typed failures", async () => {
     const pending = deferredResponse();
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
