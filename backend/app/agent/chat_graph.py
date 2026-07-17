@@ -267,7 +267,7 @@ def _structured_request(
     normalized = question.casefold()
     filters = _structured_filters(normalized, anchor_at=anchor_at)
     if any(term in normalized for term in ("waiting on", "overdue", "follow-up", "follow up")):
-        return StructuredQueryRequest(template="live_applications")
+        return StructuredQueryRequest(template="live_applications", filters=filters)
     if "funnel" in normalized:
         return StructuredQueryRequest(template="funnel", filters=filters)
     for dimension, terms in _BREAKDOWN_DIMENSION_TERMS:

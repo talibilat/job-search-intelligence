@@ -12,7 +12,13 @@ from app.agent.tools.structured_query import (
     StructuredQueryTool,
 )
 from app.db.repositories import MetricsRepository, SyntheticFixtureRepository
-from app.models.records import ApplicationRecord
+from app.models.records import (
+    ApplicationRecord,
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from pydantic import ValidationError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -121,7 +127,19 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
 
 def test_live_applications_use_follow_up_policy_not_ghost_threshold() -> None:
     class ApplicationReader:
-        def list_applications(self) -> list[ApplicationRecord]:
+        def list_applications(
+            self,
+            *,
+            current_status: ApplicationStatus | None = None,
+            source: ApplicationSource | None = None,
+            sponsorship: SponsorshipStatus | None = None,
+            first_seen_from: str | None = None,
+            first_seen_to: str | None = None,
+            role: str | None = None,
+            salary_min: int | None = None,
+            salary_max: int | None = None,
+            work_mode: WorkMode | None = None,
+        ) -> list[ApplicationRecord]:
             return [
                 application("waiting", "Waiting Co", "applied", "2026-07-28T12:00:00Z"),
                 application("overdue", "Overdue Co", "in_review", "2026-07-25T12:00:00Z"),
@@ -144,6 +162,75 @@ def test_live_applications_use_follow_up_policy_not_ghost_threshold() -> None:
     assert [row.values["days_waiting"] for row in result.rows] == [4, 7, 12]
     assert [row.values["follow_up_due"] for row in result.rows] == [False, True, True]
     assert all(row.values["follow_up_threshold_days"] == 7 for row in result.rows)
+
+
+def test_live_applications_forward_typed_filters_to_application_reader() -> None:
+    class ApplicationReader:
+        received: dict[str, object] = {}
+
+        def list_applications(
+            self,
+            *,
+            current_status: ApplicationStatus | None = None,
+            source: ApplicationSource | None = None,
+            sponsorship: SponsorshipStatus | None = None,
+            first_seen_from: str | None = None,
+            first_seen_to: str | None = None,
+            role: str | None = None,
+            salary_min: int | None = None,
+            salary_max: int | None = None,
+            work_mode: WorkMode | None = None,
+        ) -> list[ApplicationRecord]:
+            self.received = {
+                "current_status": current_status,
+                "source": source,
+                "sponsorship": sponsorship,
+                "first_seen_from": first_seen_from,
+                "first_seen_to": first_seen_to,
+                "role": role,
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+                "work_mode": work_mode,
+            }
+            return []
+
+    reader = ApplicationReader()
+    with fixture_connection() as connection:
+        StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            application_reader=reader,
+            ghost_threshold_days=30,
+            clock=lambda: NOW,
+        ).run(
+            StructuredQueryRequest.model_validate(
+                {
+                    "template": "live_applications",
+                    "filters": {
+                        "status": "in_review",
+                        "source": "linkedin",
+                        "sponsorship": "offered",
+                        "first_seen_from": "2026-07-01T00:00:00Z",
+                        "first_seen_to": "2026-07-31T23:59:59Z",
+                        "role": "Platform Engineer",
+                        "salary_min": 100_000,
+                        "salary_max": 150_000,
+                        "work_mode": "remote",
+                    },
+                }
+            )
+        )
+
+    assert reader.received == {
+        "current_status": "in_review",
+        "source": "linkedin",
+        "sponsorship": "offered",
+        "first_seen_from": "2026-07-01T00:00:00+00:00",
+        "first_seen_to": "2026-07-31T23:59:59+00:00",
+        "role": "Platform Engineer",
+        "salary_min": 100_000,
+        "salary_max": 150_000,
+        "work_mode": "remote",
+    }
 
 
 def application(

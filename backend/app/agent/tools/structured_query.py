@@ -8,6 +8,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.repositories import MetricsRepository
 from app.models import MetricsFilter
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.metrics import MetricsBreakdownDimension
 from app.models.records import ApplicationRecord
 
@@ -178,8 +184,25 @@ class StructuredQueryTool:
             if self._application_reader is None:
                 raise ValueError("application_reader is required for live application queries")
             now = self._clock().astimezone(UTC)
+            filters = request.filters or MetricsFilter()
             rows = []
-            for application in self._application_reader.list_applications():
+            for application in self._application_reader.list_applications(
+                current_status=filters.status,
+                source=filters.source,
+                sponsorship=filters.sponsorship,
+                first_seen_from=(
+                    filters.first_seen_from.isoformat()
+                    if filters.first_seen_from is not None
+                    else None
+                ),
+                first_seen_to=(
+                    filters.first_seen_to.isoformat() if filters.first_seen_to is not None else None
+                ),
+                role=filters.role,
+                salary_min=filters.salary_min,
+                salary_max=filters.salary_max,
+                work_mode=filters.work_mode,
+            ):
                 if application.current_status not in {
                     "applied",
                     "in_review",
@@ -234,4 +257,16 @@ class StructuredQueryTool:
 
 
 class LiveApplicationReader(Protocol):
-    def list_applications(self) -> list[ApplicationRecord]: ...
+    def list_applications(
+        self,
+        *,
+        current_status: ApplicationStatus | None = None,
+        source: ApplicationSource | None = None,
+        sponsorship: SponsorshipStatus | None = None,
+        first_seen_from: str | None = None,
+        first_seen_to: str | None = None,
+        role: str | None = None,
+        salary_min: int | None = None,
+        salary_max: int | None = None,
+        work_mode: WorkMode | None = None,
+    ) -> list[ApplicationRecord]: ...

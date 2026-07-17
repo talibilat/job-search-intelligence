@@ -140,6 +140,28 @@ def test_structured_chat_composes_source_and_relative_window_filters() -> None:
     )
 
 
+def test_structured_chat_preserves_filters_for_live_application_queries() -> None:
+    request = _structured_request(
+        "Who am I waiting on from LinkedIn this month?",
+        anchor_at=datetime(2026, 7, 17, 15, 30, tzinfo=UTC),
+    )
+
+    assert request.template == "live_applications"
+    assert request.filters is not None
+    assert request.filters.source == "linkedin"
+    assert request.filters.first_seen_from == datetime(2026, 7, 1, tzinfo=UTC)
+    assert request.filters.first_seen_to == datetime(
+        2026,
+        7,
+        31,
+        23,
+        59,
+        59,
+        999999,
+        tzinfo=UTC,
+    )
+
+
 @pytest.mark.parametrize(
     ("question", "expected_work_mode"),
     (
@@ -577,6 +599,39 @@ def test_chat_api_role_count_reconciles_with_filtered_metrics(tmp_path: Path) ->
     assert chat_body["route"] == "quantitative"
     assert metric_response.json()["total_applications"] == 1
     assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_filters_waiting_applications_by_source(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-linkedin",
+            company="LinkedIn Live Co",
+            source="linkedin",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    application_response = client.get("/applications", params={"source": "linkedin"})
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Who am I waiting on from LinkedIn?"},
+    )
+
+    assert application_response.status_code == 200
+    assert [application["id"] for application in application_response.json()] == ["app-linkedin"]
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    rows = chat_body["tool_outputs"][0]["rows"]
+    assert chat_body["route"] == "quantitative"
+    assert [row["values"]["application_id"] for row in rows] == ["app-linkedin"]
+    assert chat_body["citations"][0]["application_id"] == "app-linkedin"
+    assert "Acme" not in chat_body["answer"]
     assert provider.embedding_inputs == []
 
 
