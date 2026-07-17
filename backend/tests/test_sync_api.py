@@ -546,7 +546,7 @@ def test_get_sync_recent_emails_orders_by_sent_at_by_default(tmp_path: Path) -> 
     ]
 
 
-def test_incremental_sync_applies_limits_without_provider_date_filters(
+def test_incremental_sync_persists_complete_delta_before_advancing_cursor(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
@@ -623,11 +623,27 @@ def test_incremental_sync_applies_limits_without_provider_date_filters(
 
     assert response.status_code == 200
     assert response.json()["target_message_count"] == 12
-    assert response.json()["message_count"] == 0
+    assert response.json()["message_count"] == 1
     assert len(provider.requests) == 1
     assert provider.requests[0].page_size == 12
     assert provider.requests[0].since_date is None
     assert provider.requests[0].before_date is None
+    with sqlite3.connect(database_path) as connection:
+        raw_email = connection.execute(
+            "SELECT id, sent_at FROM raw_emails WHERE provider = 'gmail'"
+        ).fetchone()
+        sync_state = connection.execute(
+            """
+            SELECT sync_cursor, next_page_token
+            FROM email_sync_state
+            WHERE provider = 'gmail' AND account_id = 'me@example.com'
+            """
+        ).fetchone()
+
+    # The message falls outside the requested window, but accepting Gmail's
+    # successor cursor is only safe after the complete history delta is stored.
+    assert raw_email == ("gmail-msg-1", NOW.isoformat())
+    assert sync_state == ("history-next", None)
 
 
 def test_bounded_first_sync_runs_complete_unbounded_backfill(tmp_path: Path) -> None:

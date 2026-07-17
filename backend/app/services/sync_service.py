@@ -186,7 +186,7 @@ class EmailSyncStatus(BaseModel):
 
 
 class EmailSyncOptions(BaseModel):
-    """User-selected bounds for a manual extraction run."""
+    """User-selected full-backfill bounds and per-run sync limits."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -777,11 +777,7 @@ class EmailSyncService:
 
         return EmailSyncPageResult(
             mode=EmailSyncMode.INCREMENTAL,
-            page=_filter_metadata_page(
-                page,
-                since_date=since_date,
-                before_date=sync_options.before_date,
-            ),
+            page=page,
         )
 
     async def run_backfill_page(
@@ -1273,45 +1269,6 @@ def _remaining_options(
 
 def _bounded_preview_limit(limit: int) -> int:
     return min(max(limit, 1), 50)
-
-
-def _filter_metadata_page(
-    page: EmailMetadataPage,
-    *,
-    since_date: date | None,
-    before_date: date | None,
-) -> EmailMetadataPage:
-    if since_date is None and before_date is None:
-        return page
-
-    return page.model_copy(
-        update={
-            "messages": tuple(
-                message
-                for message in page.messages
-                if _metadata_matches_date_bounds(
-                    message,
-                    since_date=since_date,
-                    before_date=before_date,
-                )
-            )
-        }
-    )
-
-
-def _metadata_matches_date_bounds(
-    message: EmailMessageMetadata,
-    *,
-    since_date: date | None,
-    before_date: date | None,
-) -> bool:
-    timestamp = message.sent_at or message.received_at
-    if timestamp is None:
-        return False
-    message_date = timestamp.date()
-    if since_date is not None and message_date < since_date:
-        return False
-    return before_date is None or message_date < before_date
 
 
 class BackfillReconciliationMetrics(BaseModel):
