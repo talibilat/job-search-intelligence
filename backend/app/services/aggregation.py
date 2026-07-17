@@ -179,7 +179,20 @@ class AggregationService:
 
         should_commit = not self._application_repository.connection.in_transaction
         with self._application_repository.transaction():
+            affected_application_ids, replacement_conflicts = _remove_stale_reclassified_events(
+                application_repository=self._application_repository,
+                event_repository=self._event_repository,
+                groups=groups,
+            )
+            for replacement_conflict in replacement_conflicts:
+                manual_conflict_count += 1
+                if replacement_conflict.application_id not in manual_conflict_application_ids:
+                    manual_conflict_application_ids.append(replacement_conflict.application_id)
+                self._record_conflict(replacement_conflict, created_at=now)
+
             for key, group in groups.items():
+                if not group:
+                    continue
                 application_upsert_outcome, application_conflict = _upsert_application(
                     application_repository=self._application_repository,
                     event_repository=self._event_repository,
@@ -215,6 +228,16 @@ class AggregationService:
                         manual_conflict_application_ids.append(application_id)
                     for event_conflict in event_conflicts:
                         self._record_conflict(event_conflict, created_at=now)
+
+            _refresh_reclassified_source_applications(
+                application_repository=self._application_repository,
+                event_repository=self._event_repository,
+                affected_application_ids=affected_application_ids,
+                current_application_ids={
+                    make_application_id(key) for key, group in groups.items() if group
+                },
+                now=now,
+            )
 
         if should_commit:
             self._application_repository.connection.commit()
@@ -817,6 +840,112 @@ def _upsert_events(
             continue
         events_upserted += 1
     return events_upserted, conflicts
+
+
+def _remove_stale_reclassified_events(
+    *,
+    application_repository: ApplicationRepository,
+    event_repository: EventRepository,
+    groups: dict[ApplicationGroupingKey, list[_EnrichedExtraction]],
+) -> tuple[set[str], list[_CorrectionConflict]]:
+    """Replace obsolete automatic events when extraction identity changes."""
+
+    affected_application_ids: set[str] = set()
+    conflicts: list[_CorrectionConflict] = []
+    blocked_email_ids: set[str] = set()
+
+    for key, group in groups.items():
+        target_application_id = make_application_id(key)
+        for result in group:
+            email_id = result.classification_email_id
+            event_type = _event_type_for_result(result)
+            event_at = _event_at_for_result(result).isoformat()
+            proposed_event_id = make_event_id(
+                application_id=target_application_id,
+                email_id=email_id,
+                event_type=event_type,
+                event_at=event_at,
+            )
+            stale_events = [
+                event
+                for event in event_repository.list_by_email_id(email_id)
+                if event.id != proposed_event_id
+            ]
+            for stale_event in stale_events:
+                source_application = application_repository.get_application(
+                    stale_event.application_id
+                )
+                if source_application is not None and source_application.manual_lock:
+                    if stale_event.application_id == target_application_id:
+                        continue
+                    outcome = "manual_conflict"
+                else:
+                    outcome = event_repository.delete_automatic_event(
+                        application_id=stale_event.application_id,
+                        event_id=stale_event.id,
+                    )
+                if outcome == "deleted":
+                    affected_application_ids.add(stale_event.application_id)
+                    continue
+                if outcome != "manual_conflict":
+                    continue
+                blocked_email_ids.add(email_id)
+                conflicts.append(
+                    _CorrectionConflict(
+                        application_id=stale_event.application_id,
+                        conflict_key=(f"application_event:{stale_event.application_id}:{email_id}"),
+                        conflict_type="application_event",
+                        existing_json={
+                            "event": dict(stale_event.model_dump(mode="json")),
+                        },
+                        proposed_json={
+                            "event": {
+                                "id": proposed_event_id,
+                                "application_id": target_application_id,
+                                "email_id": email_id,
+                                "event_type": event_type,
+                                "event_at": event_at,
+                                "extract_note": result.extraction.rejection_reason,
+                                "extracted_status": result.extraction.status,
+                            },
+                        },
+                        evidence_email_id=email_id,
+                    )
+                )
+
+    if blocked_email_ids:
+        for key, group in groups.items():
+            groups[key] = [
+                result
+                for result in group
+                if result.classification_email_id not in blocked_email_ids
+            ]
+    return affected_application_ids, conflicts
+
+
+def _refresh_reclassified_source_applications(
+    *,
+    application_repository: ApplicationRepository,
+    event_repository: EventRepository,
+    affected_application_ids: set[str],
+    current_application_ids: set[str],
+    now: datetime,
+) -> None:
+    for application_id in affected_application_ids - current_application_ids:
+        application = application_repository.get_application(application_id)
+        if application is None or application.manual_lock:
+            continue
+        events = event_repository.list_by_application_id(application_id)
+        if not events:
+            application_repository.delete_application(application_id)
+            continue
+        application_repository.update_timeline_bounds_and_status(
+            application_id=application_id,
+            first_seen_at=events[0].event_at.isoformat(),
+            current_status=derive_current_status_from_events(events),
+            last_activity_at=events[-1].event_at.isoformat(),
+            updated_at=now.isoformat(),
+        )
 
 
 def _event_at_for_result(result: _EnrichedExtraction) -> datetime:

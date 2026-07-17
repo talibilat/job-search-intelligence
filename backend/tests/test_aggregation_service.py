@@ -715,6 +715,50 @@ def test_aggregation_is_idempotent(tmp_path: Path) -> None:
     assert stored_events[0] == 1
 
 
+def test_aggregation_reclassification_replaces_changed_application_identity(
+    tmp_path: Path,
+) -> None:
+    connection = migrated_connection(tmp_path)
+    insert_raw_email(connection, "email-1", thread_id="thread-abc")
+    connection.commit()
+    service = make_service(connection)
+
+    service.run(
+        [
+            make_extraction(
+                email_id="email-1",
+                company="Acme Corp",
+                role_title="Software Engineer",
+                status="applied",
+                event_type="applied",
+                event_at=EVENT_AT,
+            )
+        ]
+    )
+    corrected = make_extraction(
+        email_id="email-1",
+        company="Beta Inc",
+        role_title="Platform Engineer",
+        status="applied",
+        event_type="applied",
+        event_at=EVENT_AT,
+        classified_at=datetime(2026, 7, 6, 12, 0, tzinfo=UTC),
+    )
+
+    service.run([corrected])
+    service.run([corrected])
+
+    applications = ApplicationRepository(connection).list_applications()
+    assert [(application.company, application.role_title) for application in applications] == [
+        ("Beta Inc", "Platform Engineer")
+    ]
+    events = connection.execute(
+        "SELECT application_id, email_id, event_type FROM application_events"
+    ).fetchall()
+    assert [tuple(event) for event in events] == [(applications[0].id, "email-1", "applied")]
+    assert MetricsRepository(connection).count_total_applications() == 1
+
+
 def test_aggregation_full_rerun_keeps_one_application_and_timeline_events(
     tmp_path: Path,
 ) -> None:

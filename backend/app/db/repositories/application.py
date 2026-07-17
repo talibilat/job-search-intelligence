@@ -213,6 +213,41 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
             self.connection.commit()
         return cursor.rowcount > 0
 
+    def update_timeline_bounds_and_status(
+        self,
+        *,
+        application_id: str,
+        first_seen_at: str,
+        current_status: str,
+        last_activity_at: str,
+        updated_at: str,
+    ) -> bool:
+        """Recompute timeline-derived fields after automatic evidence is replaced."""
+
+        should_commit = not self.connection.in_transaction
+        with self.transaction():
+            cursor = self.execute(
+                """
+                UPDATE applications
+                SET first_seen_at = ?,
+                    current_status = ?,
+                    last_activity_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                  AND manual_lock = 0
+                """,
+                (
+                    first_seen_at,
+                    current_status,
+                    last_activity_at,
+                    updated_at,
+                    application_id,
+                ),
+            )
+        if should_commit:
+            self.connection.commit()
+        return cursor.rowcount > 0
+
     def upsert_application(
         self,
         *,
