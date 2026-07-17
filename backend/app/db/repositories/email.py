@@ -257,6 +257,54 @@ class EmailRepository(BaseRepository[RawEmailRecord]):
         ).fetchall()
         return frozenset(str(row["thread_id"]) for row in rows)
 
+    def list_pending_thread_candidate_body_refs(
+        self,
+        *,
+        account: EmailAccountRef,
+    ) -> tuple[EmailMessageRef, ...]:
+        """Return low-signal messages whose thread was later established as a candidate."""
+
+        if not self._table_exists("email_filter_decisions"):
+            return ()
+        rows = self.execute(
+            """
+            SELECT raw_emails.id, raw_emails.thread_id
+            FROM raw_emails
+            INNER JOIN email_filter_decisions AS rejected_decision
+                ON rejected_decision.email_id = raw_emails.id
+                AND rejected_decision.strategy = ?
+                AND rejected_decision.outcome = 'rejected'
+                AND rejected_decision.reason = 'no_filter_signal'
+            WHERE raw_emails.provider = ?
+                AND raw_emails.body_retention_state = 'metadata_only'
+                AND raw_emails.thread_id IS NOT NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM raw_emails AS candidate_email
+                    INNER JOIN email_filter_decisions AS candidate_decision
+                        ON candidate_decision.email_id = candidate_email.id
+                        AND candidate_decision.strategy = ?
+                        AND candidate_decision.outcome = 'candidate'
+                    WHERE candidate_email.provider = raw_emails.provider
+                        AND candidate_email.thread_id = raw_emails.thread_id
+                )
+            ORDER BY raw_emails.id
+            """,
+            (
+                EmailCandidateQueryStrategy.BROAD_JOB_SEARCH.value,
+                account.provider.value,
+                EmailCandidateQueryStrategy.BROAD_JOB_SEARCH.value,
+            ),
+        ).fetchall()
+        return tuple(
+            EmailMessageRef(
+                account=account,
+                message_id=str(row["id"]),
+                thread_id=str(row["thread_id"]),
+            )
+            for row in rows
+        )
+
     def count_raw_emails_in_window(
         self,
         *,

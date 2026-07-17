@@ -14,6 +14,7 @@ from app.db.repositories import (
     EmailRepository,
 )
 from app.db.repositories.sync_state import SyncStateRepository
+from app.models.filter_decision import EmailCandidateQueryStrategy
 from app.models.raw_email import RawEmailPreviewOrder
 from app.models.records import (
     EmailBackfillStateRecord,
@@ -890,6 +891,11 @@ class EmailSyncService:
                                 body_batch.bodies,
                                 retention_state=RawEmailBodyRetentionState.RETAINED,
                             )
+                    retained_body_failure_count += (
+                        await self._promote_pending_candidate_thread_bodies(
+                            connection=connection,
+                        )
+                    )
 
                 state = backfill_state_service.record_backfill_page(
                     connection.account,
@@ -1043,6 +1049,46 @@ class EmailSyncService:
             )
         return len(body_batch.failures)
 
+    async def _promote_pending_candidate_thread_bodies(
+        self,
+        *,
+        connection: EmailConnection,
+    ) -> int:
+        if self._email_repository is None or self._filter_decision_repository is None:
+            return 0
+        pending_refs = self._email_repository.list_pending_thread_candidate_body_refs(
+            account=connection.account,
+        )
+        if not pending_refs:
+            return 0
+
+        decided_at = self._clock()
+        self._filter_decision_repository.upsert_filter_decisions(
+            EmailFilterDecisionRecord(
+                email_id=ref.message_id,
+                strategy=EmailCandidateQueryStrategy.BROAD_JOB_SEARCH,
+                outcome=EmailCandidateDecisionOutcome.CANDIDATE,
+                reason=EmailCandidateQuery.THREAD_SIGNAL_TOKEN,
+                decided_at=decided_at,
+            )
+            for ref in pending_refs
+        )
+        if not _can_fetch_retained_bodies(self._body_provider):
+            return 0
+
+        body_batch = await self.fetch_retained_bodies(
+            connection=connection,
+            metadata=(),
+            candidate_query=build_broad_candidate_query(),
+            reconciliation_or_debug_refs=pending_refs,
+        )
+        if body_batch.bodies:
+            self._email_repository.upsert_retained_bodies(
+                body_batch.bodies,
+                retention_state=RawEmailBodyRetentionState.RETAINED,
+            )
+        return len(body_batch.failures)
+
     async def _list_full_backfill_page(
         self,
         connection: EmailConnection,
@@ -1134,6 +1180,9 @@ class EmailSyncService:
                             body_batch.bodies,
                             retention_state=RawEmailBodyRetentionState.RETAINED,
                         )
+                retained_body_failure_count += await self._promote_pending_candidate_thread_bodies(
+                    connection=connection,
+                )
             if page_result.page.next_sync_cursor is not None:
                 latest_cursor = page_result.page.next_sync_cursor
             self._set_status(
