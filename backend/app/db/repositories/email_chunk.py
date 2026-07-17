@@ -399,6 +399,11 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
                 )
                   AND NOT EXISTS (
                     SELECT 1
+                    FROM json_each(raw_emails.labels)
+                    WHERE UPPER(TRIM(json_each.value)) = 'SENT'
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
                     FROM email_connections
                     WHERE email_connections.provider = raw_emails.provider
                       AND email_connections.display_email IS NOT NULL

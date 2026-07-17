@@ -2751,29 +2751,6 @@ def test_q47_last_recruiter_email_excludes_newer_candidate_authored_follow_up(
             "UPDATE raw_emails SET thread_id = ? WHERE id = ?",
             ("thread-acme", "email-job"),
         )
-        connection.execute(
-            """
-            INSERT INTO email_connections (
-                provider, account_id, display_email,
-                credential_ref_kind, credential_ref_provider, credential_ref_name,
-                granted_scopes, connected_at, credential_expires_at,
-                reauth_required, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "gmail",
-                "candidate@example.test",
-                "candidate@example.test",
-                "oauth_token",
-                "gmail",
-                "candidate@example.test",
-                '["https://www.googleapis.com/auth/gmail.readonly"]',
-                "2026-06-01T09:00:00+00:00",
-                None,
-                0,
-                "2026-06-01T09:00:00+00:00",
-            ),
-        )
         insert_raw_email(
             connection,
             email_id="email-candidate-follow-up",
@@ -2783,6 +2760,7 @@ def test_q47_last_recruiter_email_excludes_newer_candidate_authored_follow_up(
             retention="retained",
             sent_at="2026-06-06T10:00:00+00:00",
             from_addr="Candidate Name <candidate@example.test>",
+            labels=("SENT",),
         )
         insert_classification(
             connection,
@@ -3399,6 +3377,7 @@ def insert_raw_email(
     sent_at: str = "2026-06-05T10:00:00+00:00",
     thread_id: str | None = None,
     from_addr: str = "recruiter@example.test",
+    labels: tuple[str, ...] = (),
 ) -> None:
     connection.execute(
         """
@@ -3416,7 +3395,7 @@ def insert_raw_email(
             sent_at,
             body,
             retention,
-            "[]",
+            jsonlib.dumps(labels),
             "gmail",
             "2026-06-05T10:01:00+00:00",
         ),
