@@ -254,11 +254,17 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
   const [syncFlowTotalEmailCount, setSyncFlowTotalEmailCount] = useState(0);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
   const syncingRef = useRef(false);
+  const syncRunIdRef = useRef(0);
   const customRangeInvalid =
     syncScope === "custom" && (!customFrom || !customTo || customFrom >= customTo);
 
   const refresh = useCallback(() => {
     setReloadKey((value) => value + 1);
+  }, []);
+
+  useEffect(() => () => {
+    syncRunIdRef.current += 1;
+    syncingRef.current = false;
   }, []);
 
   const navigate = useCallback((next: RedesignRoute) => {
@@ -424,6 +430,8 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
     if (syncingRef.current || customRangeInvalid) {
       return;
     }
+    const syncRunId = ++syncRunIdRef.current;
+    const isActive = () => syncRunIdRef.current === syncRunId;
     syncingRef.current = true;
     setSyncing(true);
     setSyncError(null);
@@ -461,6 +469,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         }
       }
       const response = await syncRequest;
+      if (!isActive()) return;
       if (response === null) {
         throw syncRequestError;
       }
@@ -511,8 +520,10 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           }
           setSyncFlowStage("filtering");
           await new Promise((resolve) => setTimeout(resolve, 650));
+          if (!isActive()) return;
           setSyncFlowStage("retaining");
           await new Promise((resolve) => setTimeout(resolve, 500));
+          if (!isActive()) return;
           setSyncFlowStage("classifying");
           {
             const readiness = await providerReadinessConfigProvidersReadinessGet().catch(() => null);
@@ -614,12 +625,15 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         }
       }
     } catch (error) {
+      if (!isActive()) return;
       setSyncError(publicApiError(error, "Sync could not start. Check the local backend."));
       setSyncFlowStage("failed");
     } finally {
-      syncingRef.current = false;
-      setSyncing(false);
-      refresh();
+      if (isActive()) {
+        syncingRef.current = false;
+        setSyncing(false);
+        refresh();
+      }
     }
   }, [syncScope, customFrom, customTo, lastCount, customRangeInvalid, refresh, syncStats]);
 
