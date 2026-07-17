@@ -184,10 +184,12 @@ async def run_ghost_inference(
 @router.get(
     "/status-counts",
     response_model=ApplicationStatusCountsResponse,
+    responses={422: {"model": ApiErrorResponse}},
     summary="Get Application Status Counts",
     description=(
         "Returns deterministic application counts per canonical current status "
-        "from the local SQLite source of truth, zero-filled for unused statuses."
+        "from the local SQLite source of truth, zero-filled for unused statuses "
+        "and optionally scoped by the application-list filters."
     ),
 )
 def get_application_status_counts(
@@ -195,8 +197,41 @@ def get_application_status_counts(
         ApplicationDetailService,
         Depends(get_application_detail_service),
     ],
+    status: Annotated[ApplicationStatus | None, Query()] = None,
+    source: Annotated[ApplicationSource | None, Query()] = None,
+    sponsorship: Annotated[SponsorshipStatus | None, Query()] = None,
+    first_seen_from: Annotated[datetime | None, Query()] = None,
+    first_seen_to: Annotated[datetime | None, Query()] = None,
+    role: Annotated[str | None, Query(min_length=1)] = None,
+    salary_min: Annotated[int | None, Query(ge=0)] = None,
+    salary_max: Annotated[int | None, Query(ge=0)] = None,
+    work_mode: Annotated[WorkMode | None, Query()] = None,
 ) -> ApplicationStatusCountsResponse:
-    return service.get_status_counts()
+    try:
+        return service.get_status_counts(
+            status=status,
+            source=source,
+            sponsorship=sponsorship,
+            first_seen_from=first_seen_from,
+            first_seen_to=first_seen_to,
+            role=role,
+            salary_min=salary_min,
+            salary_max=salary_max,
+            work_mode=work_mode,
+        )
+    except ApplicationFilterValidationError as error:
+        raise ApiError(
+            status_code=422,
+            code=ApiErrorCode.VALIDATION_ERROR,
+            message="Request validation failed.",
+            details=(
+                ApiErrorDetail(
+                    field=f"query.{error.field}",
+                    message=error.message,
+                    type=error.error_type,
+                ),
+            ),
+        ) from error
 
 
 @router.get(

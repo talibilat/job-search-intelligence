@@ -1691,6 +1691,18 @@ export type ListRecentApplicationEventsApplicationsEventsRecentGetParams = {
   limit?: number;
 };
 
+export type GetApplicationStatusCountsApplicationsStatusCountsGetParams = {
+  status?: ApplicationStatus | null;
+  source?: ApplicationSource | null;
+  sponsorship?: SponsorshipStatus | null;
+  first_seen_from?: string | null;
+  first_seen_to?: string | null;
+  role?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  work_mode?: WorkMode | null;
+};
+
 export type GmailAuthCallbackAuthGmailCallbackGetParams = {
   /**
    * @minLength 1
@@ -2040,27 +2052,52 @@ export type getApplicationStatusCountsApplicationsStatusCountsGetResponse200 = {
   status: 200;
 };
 
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponse422 = {
+  data: ApiErrorResponse;
+  status: 422;
+};
+
 export type getApplicationStatusCountsApplicationsStatusCountsGetResponseSuccess =
   getApplicationStatusCountsApplicationsStatusCountsGetResponse200 & {
     headers: Headers;
   };
-export type getApplicationStatusCountsApplicationsStatusCountsGetResponse =
-  getApplicationStatusCountsApplicationsStatusCountsGetResponseSuccess;
-
-export const getGetApplicationStatusCountsApplicationsStatusCountsGetUrl =
-  () => {
-    return `/applications/status-counts`;
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponseError =
+  getApplicationStatusCountsApplicationsStatusCountsGetResponse422 & {
+    headers: Headers;
   };
 
+export type getApplicationStatusCountsApplicationsStatusCountsGetResponse =
+  | getApplicationStatusCountsApplicationsStatusCountsGetResponseSuccess
+  | getApplicationStatusCountsApplicationsStatusCountsGetResponseError;
+
+export const getGetApplicationStatusCountsApplicationsStatusCountsGetUrl = (
+  params?: GetApplicationStatusCountsApplicationsStatusCountsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/applications/status-counts?${stringifiedParams}`
+    : `/applications/status-counts`;
+};
+
 /**
- * Returns deterministic application counts per canonical current status from the local SQLite source of truth, zero-filled for unused statuses.
+ * Returns deterministic application counts per canonical current status from the local SQLite source of truth, zero-filled for unused statuses and optionally scoped by the application-list filters.
  * @summary Get Application Status Counts
  */
 export const getApplicationStatusCountsApplicationsStatusCountsGet = async (
+  params?: GetApplicationStatusCountsApplicationsStatusCountsGetParams,
   options?: RequestInit,
 ): Promise<getApplicationStatusCountsApplicationsStatusCountsGetResponse> => {
   const res = await fetch(
-    getGetApplicationStatusCountsApplicationsStatusCountsGetUrl(),
+    getGetApplicationStatusCountsApplicationsStatusCountsGetUrl(params),
     {
       ...options,
       method: "GET",

@@ -68,9 +68,38 @@ function renderApplications(reloadKey: number) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/applications");
 });
 
 describe("ApplicationsPage timeline refresh", () => {
+  it("applies active URL filters to both rows and status totals", async () => {
+    window.history.replaceState(null, "", "/applications?role=Platform&work_mode=remote");
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      requests.push(path);
+      if (path.startsWith("/applications/status-counts?")) {
+        return Promise.resolve(jsonResponse({ counts: { interview: 1 }, total: 1 }));
+      }
+      if (path.startsWith("/applications?")) {
+        return Promise.resolve(jsonResponse([application({ current_status: "interview" })]));
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+
+    render(renderApplications(0));
+
+    expect(await screen.findByRole("button", { name: "All 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Interview 1" })).toBeTruthy();
+    const applicationRequests = requests.filter((request) => request.startsWith("/applications"));
+    expect(applicationRequests).toHaveLength(2);
+    for (const request of applicationRequests) {
+      const params = new URL(request, "http://localhost").searchParams;
+      expect(params.get("role")).toBe("Platform");
+      expect(params.get("work_mode")).toBe("remote");
+    }
+  });
+
   it("explains that totals are partial when refreshed status counts fail", async () => {
     let applicationRequestCount = 0;
     let countRequestCount = 0;

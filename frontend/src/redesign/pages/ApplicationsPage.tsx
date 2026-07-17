@@ -150,7 +150,7 @@ export function ApplicationsPage({
             listApplicationsApplicationsGet({ ...params, status: status ?? undefined }).catch((error: unknown) => ({ error })),
           ),
         ),
-        getApplicationStatusCountsApplicationsStatusCountsGet().catch((error: unknown) => ({ error })),
+        getApplicationStatusCountsApplicationsStatusCountsGet(params).catch((error: unknown) => ({ error })),
       ]);
       if (cancelled) {
         return;

@@ -72,11 +72,13 @@ def insert_application(
     application_id: str,
     company: str = "Acme Corp",
     current_status: str = "interview",
+    role_title: str = "Software Engineer",
+    work_mode: str | None = None,
 ) -> None:
     ApplicationRepository(connection).upsert_application(
         id=application_id,
         company=company,
-        role_title="Software Engineer",
+        role_title=role_title,
         source="linkedin",
         first_seen_at="2026-07-01T09:00:00+00:00",
         current_status=current_status,
@@ -87,7 +89,7 @@ def insert_application(
         salary_max=None,
         currency=None,
         location=None,
-        work_mode=None,
+        work_mode=work_mode,
         seniority=None,
         sponsorship="unknown",
         tech_stack=[],
@@ -176,6 +178,44 @@ def test_status_counts_are_zero_filled_and_deterministic(tmp_path: Path) -> None
         "ghosted",
         "withdrawn",
     }
+
+
+def test_status_counts_apply_the_same_filters_as_application_rows(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-1",
+            current_status="interview",
+            role_title="Platform Engineer",
+            work_mode="remote",
+        )
+        insert_application(
+            connection,
+            application_id="app-2",
+            current_status="applied",
+            role_title="Platform Engineer",
+            work_mode="onsite",
+        )
+        insert_application(
+            connection,
+            application_id="app-3",
+            current_status="rejected",
+            role_title="Data Scientist",
+            work_mode="remote",
+        )
+
+    client = create_test_client(database_path)
+    query = "role=Platform&work_mode=remote"
+    rows_response = client.get(f"/applications?{query}")
+    counts_response = client.get(f"/applications/status-counts?{query}")
+
+    assert rows_response.status_code == 200
+    assert [row["id"] for row in rows_response.json()] == ["app-1"]
+    assert counts_response.status_code == 200
+    assert counts_response.json()["total"] == 1
+    assert counts_response.json()["counts"]["interview"] == 1
+    assert counts_response.json()["counts"]["applied"] == 0
 
 
 def test_recent_events_feed_spans_applications_newest_first(tmp_path: Path) -> None:

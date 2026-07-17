@@ -74,10 +74,33 @@ class ApplicationDetailService:
             raise ApplicationNotFoundError(application_id)
         return application
 
-    def get_status_counts(self) -> ApplicationStatusCountsResponse:
+    def get_status_counts(
+        self,
+        *,
+        status: ApplicationStatus | None = None,
+        source: ApplicationSource | None = None,
+        sponsorship: SponsorshipStatus | None = None,
+        first_seen_from: datetime | None = None,
+        first_seen_to: datetime | None = None,
+        role: str | None = None,
+        salary_min: int | None = None,
+        salary_max: int | None = None,
+        work_mode: WorkMode | None = None,
+    ) -> ApplicationStatusCountsResponse:
         """Return deterministic per-status application counts, with zero-filled statuses."""
 
-        stored_counts = self._application_repository.count_by_status()
+        _validate_salary_band(salary_min=salary_min, salary_max=salary_max)
+        stored_counts = self._application_repository.count_by_status(
+            current_status=status,
+            source=source,
+            sponsorship=sponsorship,
+            first_seen_from=_datetime_filter_value(first_seen_from, "first_seen_from"),
+            first_seen_to=_datetime_filter_value(first_seen_to, "first_seen_to"),
+            role=role,
+            salary_min=salary_min,
+            salary_max=salary_max,
+            work_mode=work_mode,
+        )
         counts: dict[ApplicationStatus, int] = {
             status: stored_counts.get(status, 0) for status in get_args(ApplicationStatus.__value__)
         }
