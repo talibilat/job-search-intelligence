@@ -149,6 +149,10 @@ class AggregationService:
             email_repository=self._email_repository,
             results=application_results,
         )
+        _inherit_sparse_thread_identity(
+            application_repository=self._application_repository,
+            results=application_results,
+        )
 
         groups = _group_by_key(
             application_results,
@@ -288,6 +292,83 @@ def _enrich_extractions_with_email_context(
         email_sent_at = email_repository.get_sent_at(result.classification_email_id)
         object.__setattr__(result, "thread_id", thread_id)
         object.__setattr__(result, "email_sent_at", email_sent_at)
+
+
+def _inherit_sparse_thread_identity(
+    *,
+    application_repository: ApplicationRepository,
+    results: list[_EnrichedExtraction],
+) -> None:
+    for result in results:
+        extraction = result.extraction
+        if result.thread_id is None or (
+            extraction.company is not None and extraction.role_title is not None
+        ):
+            continue
+
+        target_at = _event_at_for_result(result)
+        identity_candidates: list[tuple[str, str, datetime]] = []
+        for application in application_repository.list_by_email_thread_id(result.thread_id):
+            if application.company and application.role_title:
+                identity_candidates.append(
+                    (application.company, application.role_title, application.first_seen_at),
+                )
+        for candidate in results:
+            candidate_extraction = candidate.extraction
+            if (
+                candidate is result
+                or candidate.thread_id != result.thread_id
+                or candidate_extraction.company is None
+                or candidate_extraction.role_title is None
+            ):
+                continue
+            identity_candidates.append(
+                (
+                    candidate_extraction.company,
+                    candidate_extraction.role_title,
+                    _event_at_for_result(candidate),
+                ),
+            )
+
+        compatible_candidates = [
+            candidate
+            for candidate in identity_candidates
+            if (
+                extraction.company is None
+                or normalize_company_name(candidate[0])
+                == normalize_company_name(extraction.company)
+            )
+            and (
+                extraction.role_title is None
+                or normalize_role_title(candidate[1]) == normalize_role_title(extraction.role_title)
+            )
+        ]
+        prior_candidates = [
+            candidate for candidate in compatible_candidates if candidate[2] <= target_at
+        ]
+        if prior_candidates:
+            inherited_company, inherited_role, _ = max(
+                prior_candidates,
+                key=lambda candidate: candidate[2],
+            )
+        elif compatible_candidates:
+            inherited_company, inherited_role, _ = min(
+                compatible_candidates,
+                key=lambda candidate: candidate[2],
+            )
+        else:
+            continue
+
+        object.__setattr__(
+            result,
+            "extraction",
+            extraction.model_copy(
+                update={
+                    "company": extraction.company or inherited_company,
+                    "role_title": extraction.role_title or inherited_role,
+                },
+            ),
+        )
 
 
 def _group_by_key(
