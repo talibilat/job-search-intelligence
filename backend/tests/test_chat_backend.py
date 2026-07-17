@@ -438,6 +438,20 @@ def test_structured_chat_routes_negative_outcome_traits_to_diagnostics() -> None
     assert request.filters.status is None
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "Which single factor correlates most with getting a response?",
+        "Which role, source, salary, or sponsorship factor is most correlated with response?",
+    ),
+)
+def test_structured_chat_routes_strongest_response_correlate_to_diagnostics(
+    question: str,
+) -> None:
+    assert route_question(question) == "quantitative"
+    assert _structured_request(question).template == "strongest_response_correlate"
+
+
 def test_chat_api_successful_traits_reconcile_with_metrics_diagnostics(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
@@ -560,6 +574,73 @@ def test_chat_api_negative_traits_reports_insufficient_deterministic_evidence(
         client,
         "/chat",
         json={"message": "What do my rejected/ghosted applications have in common?"},
+    )
+
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["rows"] == []
+    assert "not enough deterministic evidence" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_strongest_response_correlate_reconciles_with_diagnostics(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        SyntheticFixtureRepository(connection).load_file(
+            BACKEND_ROOT / "tests" / "fixtures" / "synthetic" / "diagnostic_job_search.json"
+        )
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/diagnostics")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Which single factor correlates most with getting a response?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    diagnostics = metric_response.json()
+    segment = diagnostics["strongest_response_correlate"]
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["template"] == "strongest_response_correlate"
+    assert chat_body["tool_outputs"][0]["rows"] == [
+        {
+            "label": f"{segment['dimension']}:{segment['value']}",
+            "values": {
+                "dimension": segment["dimension"],
+                "value": segment["value"],
+                "application_count": segment["application_count"],
+                "response_count": segment["response_count"],
+                "response_rate": segment["response_rate"],
+                "response_rate_lift": segment["response_rate_lift"],
+                "baseline_response_count": diagnostics["baseline_response_count"],
+                "baseline_response_rate": diagnostics["baseline_response_rate"],
+                "total_applications": diagnostics["total_applications"],
+            },
+        }
+    ]
+    assert chat_body["citations"][0]["citation_id"] == "metric:strongest_response_correlate"
+    assert "correlation" in chat_body["answer"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_strongest_response_correlate_reports_insufficient_evidence(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "Which single factor correlates most with getting a response?"},
     )
 
     assert chat_response.status_code == 200

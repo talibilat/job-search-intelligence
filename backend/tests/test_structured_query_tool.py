@@ -210,6 +210,28 @@ def test_structured_query_tool_answers_negative_outcome_segments() -> None:
     }
 
 
+def test_structured_query_tool_answers_strongest_response_correlate() -> None:
+    with sqlite3.connect(":memory:") as connection:
+        SyntheticFixtureRepository(connection).load_file(DIAGNOSTIC_FIXTURE_PATH)
+        result = StructuredQueryTool(
+            metrics_repository=MetricsRepository(connection),
+            ghost_threshold_days=30,
+        ).run(StructuredQueryRequest(template="strongest_response_correlate"))
+
+    assert result.rows[0].label == "source:company_site"
+    assert result.rows[0].values == {
+        "dimension": "source",
+        "value": "company_site",
+        "application_count": 2,
+        "response_count": 2,
+        "response_rate": 1.0,
+        "response_rate_lift": 0.4,
+        "baseline_response_count": 3,
+        "baseline_response_rate": 0.6,
+        "total_applications": 5,
+    }
+
+
 def test_structured_query_tool_requires_breakdown_dimension() -> None:
     with pytest.raises(ValidationError, match="breakdown_dimension is required"):
         StructuredQueryRequest(template="breakdown")
@@ -249,6 +271,7 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "response_rate_timeseries",
         "successful_application_segments",
         "negative_outcome_segments",
+        "strongest_response_correlate",
         "breakdown",
         "live_applications",
     }

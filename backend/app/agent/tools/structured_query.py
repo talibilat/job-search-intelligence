@@ -29,6 +29,7 @@ StructuredQueryTemplate = Literal[
     "response_rate_timeseries",
     "successful_application_segments",
     "negative_outcome_segments",
+    "strongest_response_correlate",
     "breakdown",
     "live_applications",
 ]
@@ -322,6 +323,31 @@ class StructuredQueryTool:
                     for segment in diagnostics.negative_outcome_segments
                 ),
             )
+
+        if request.template == "strongest_response_correlate":
+            diagnostics = DiagnosticsService(
+                metrics_repository=self._metrics_repository
+            ).get_diagnostics(filters=request.filters)
+            segment = diagnostics.strongest_response_correlate
+            correlate_rows: tuple[StructuredQueryRow, ...] = ()
+            if segment is not None:
+                correlate_rows = (
+                    StructuredQueryRow(
+                        label=f"{segment.dimension}:{segment.value}",
+                        values={
+                            "dimension": segment.dimension,
+                            "value": segment.value,
+                            "application_count": segment.application_count,
+                            "response_count": segment.response_count,
+                            "response_rate": segment.response_rate,
+                            "response_rate_lift": segment.response_rate_lift,
+                            "baseline_response_count": diagnostics.baseline_response_count,
+                            "baseline_response_rate": diagnostics.baseline_response_rate,
+                            "total_applications": diagnostics.total_applications,
+                        },
+                    ),
+                )
+            return StructuredQueryResult(template=request.template, rows=correlate_rows)
 
         if request.template == "live_applications":
             if self._application_reader is None:
