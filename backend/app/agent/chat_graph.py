@@ -250,6 +250,7 @@ def route_question(question: str) -> ChatRoute:
         any(term in normalized for term in _QUANTITATIVE_TERMS)
         or any(term in normalized for term in _RELATIVE_WINDOW_TERMS)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
+        or len(_matched_sources(normalized)) > 1
     )
     content = any(term in normalized for term in _CONTENT_TERMS)
     if quantitative and content:
@@ -270,6 +271,12 @@ def _structured_request(
         return StructuredQueryRequest(template="live_applications", filters=filters)
     if "funnel" in normalized:
         return StructuredQueryRequest(template="funnel", filters=filters)
+    if len(_matched_sources(normalized)) > 1:
+        return StructuredQueryRequest(
+            template="breakdown",
+            filters=filters,
+            breakdown_dimension="source",
+        )
     for dimension, terms in _BREAKDOWN_DIMENSION_TERMS:
         if any(term in normalized for term in terms):
             return StructuredQueryRequest(
@@ -290,14 +297,8 @@ def _structured_filters(
     filters = _relative_window_filter(normalized_question, anchor_at=anchor_at)
     if filters is None:
         filters = _calendar_year_filter(normalized_question)
-    source = next(
-        (
-            source
-            for source, terms in _SOURCE_FILTER_TERMS
-            if any(term in normalized_question for term in terms)
-        ),
-        None,
-    )
+    matched_sources = _matched_sources(normalized_question)
+    source = next(iter(matched_sources)) if len(matched_sources) == 1 else None
     matched_work_modes = {
         work_mode
         for work_mode, terms in _WORK_MODE_FILTER_TERMS
@@ -355,6 +356,14 @@ def _structured_filters(
     if filters is None:
         return MetricsFilter.model_validate(updates)
     return filters.model_copy(update=updates)
+
+
+def _matched_sources(normalized_question: str) -> set[ApplicationSource]:
+    return {
+        source
+        for source, terms in _SOURCE_FILTER_TERMS
+        if any(term in normalized_question for term in terms)
+    }
 
 
 def _role_filter(normalized_question: str) -> str | None:

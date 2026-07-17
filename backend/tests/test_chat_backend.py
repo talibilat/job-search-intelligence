@@ -168,6 +168,23 @@ def test_structured_chat_composes_source_and_relative_window_filters() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "What is my conversion rate for LinkedIn vs company site?",
+        "Compare LinkedIn with referrals.",
+        "How do company website and Indeed applications convert?",
+    ),
+)
+def test_structured_chat_preserves_unfiltered_source_comparisons(question: str) -> None:
+    request = _structured_request(question)
+
+    assert route_question(question) == "quantitative"
+    assert request.template == "breakdown"
+    assert request.breakdown_dimension == "source"
+    assert request.filters is None
+
+
 def test_structured_chat_preserves_filters_for_live_application_queries() -> None:
     request = _structured_request(
         "Who am I waiting on from LinkedIn this month?",
@@ -483,6 +500,46 @@ def test_chat_api_source_count_reconciles_with_filtered_metrics(tmp_path: Path) 
     chat_values = chat_response.json()["tool_outputs"][0]["rows"][0]["values"]
     assert metric_response.json()["total_applications"] == 1
     assert chat_values["total_applications"] == metric_response.json()["total_applications"]
+    assert provider.embedding_inputs == []
+
+
+def test_chat_api_source_comparison_reconciles_with_breakdown_metrics(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(
+            connection,
+            application_id="app-company-site",
+            company="Company Site Source",
+        )
+        insert_application(
+            connection,
+            application_id="app-linkedin",
+            company="LinkedIn Source",
+            source="linkedin",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/breakdown", params={"dimension": "source"})
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What is my conversion rate for LinkedIn vs company site?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["template"] == "breakdown"
+    assert chat_body["tool_outputs"][0]["rows"] == [
+        {
+            "label": row["value"],
+            "values": {key: value for key, value in row.items() if key != "value"},
+        }
+        for row in metric_response.json()["rows"]
+    ]
     assert provider.embedding_inputs == []
 
 
