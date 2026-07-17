@@ -1079,6 +1079,7 @@ class EmailSyncService:
         message_count = 0
         retained_body_failure_count = 0
         recovered_from_expired_cursor = False
+        pagination_complete = False
         final_mode = (
             EmailSyncMode.INCREMENTAL if sync_cursor is not None else EmailSyncMode.FULL_BACKFILL
         )
@@ -1143,11 +1144,8 @@ class EmailSyncService:
                     ),
                 )
             )
-            if page_result.page.next_page_token is None or _sync_limit_reached(
-                options=options,
-                page_count=page_count,
-                message_count=message_count,
-            ):
+            if page_result.page.next_page_token is None:
+                pagination_complete = True
                 break
 
             page_token = page_result.page.next_page_token
@@ -1161,17 +1159,24 @@ class EmailSyncService:
             )
             if mode is EmailSyncMode.FULL_BACKFILL:
                 sync_cursor = None
+            if _sync_limit_reached(
+                options=options,
+                page_count=page_count,
+                message_count=message_count,
+            ):
+                break
 
-        if latest_cursor is not None:
-            self._sync_service.store_sync_cursor(
-                latest_cursor,
-                updated_at=self._clock(),
-            )
-        else:
-            self._sync_service.clear_page_progress(
-                connection.account,
-                updated_at=self._clock(),
-            )
+        if pagination_complete:
+            if latest_cursor is not None:
+                self._sync_service.store_sync_cursor(
+                    latest_cursor,
+                    updated_at=self._clock(),
+                )
+            else:
+                self._sync_service.clear_page_progress(
+                    connection.account,
+                    updated_at=self._clock(),
+                )
 
         return EmailSyncStatus(
             provider=connection.account.provider,

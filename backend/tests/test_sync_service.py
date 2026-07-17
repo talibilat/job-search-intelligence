@@ -33,6 +33,7 @@ from app.providers.email import (
 from app.security import SecretKind, SecretRef
 from app.services.sync_service import (
     SYNC_ON_OPEN_JOB_ID,
+    EmailSyncOptions,
     EmailSyncRunState,
     EmailSyncService,
     EmailSyncStatus,
@@ -672,6 +673,76 @@ def test_manual_sync_uses_incremental_mode_when_cursor_exists() -> None:
     stored_cursor = sync_state_repository.get_cursor(mailbox.account)
     assert stored_cursor is not None
     assert stored_cursor.value == "history-next"
+
+
+def test_bounded_incremental_sync_resumes_next_provider_page() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    mailbox = email_connection()
+    sync_state_repository = SyncStateRepository(connection)
+    sync_state_repository.save_cursor(
+        EmailProviderCursor(
+            account=mailbox.account,
+            value="history-current",
+            issued_at=NOW - timedelta(minutes=5),
+        ),
+        updated_at=NOW - timedelta(minutes=5),
+    )
+    provider = PagingHistoryProvider(
+        (
+            EmailMetadataPage(
+                messages=(metadata_message(mailbox, "gmail-msg-1"),),
+                next_page_token="page-2",
+            ),
+            EmailMetadataPage(
+                messages=(metadata_message(mailbox, "gmail-msg-2"),),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-next",
+                    issued_at=NOW,
+                ),
+            ),
+        )
+    )
+    email_repository = EmailRepository(connection)
+    service = EmailSyncService(
+        provider=provider,
+        page_size=100,
+        email_repository=email_repository,
+        sync_service=SyncService(sync_state_repository=sync_state_repository),
+        clock=lambda: NOW,
+    )
+
+    first_status = asyncio.run(
+        service.run_manual_sync(
+            connection=mailbox,
+            options=EmailSyncOptions(max_messages=1),
+        )
+    )
+
+    assert first_status.message_count == 1
+    pending_state = sync_state_repository.fetch_state(mailbox.account)
+    assert pending_state is not None
+    assert pending_state.sync_cursor == "history-current"
+    assert pending_state.in_progress_mode == "incremental"
+    assert pending_state.next_page_token == "page-2"
+
+    second_status = asyncio.run(
+        service.run_manual_sync(
+            connection=mailbox,
+            options=EmailSyncOptions(max_messages=1),
+        )
+    )
+
+    assert second_status.message_count == 1
+    assert [request.page_token for request in provider.requests] == [None, "page-2"]
+    assert email_repository.count_raw_emails(provider=EmailProviderName.GMAIL) == 2
+    completed_state = sync_state_repository.fetch_state(mailbox.account)
+    assert completed_state is not None
+    assert completed_state.sync_cursor == "history-next"
+    assert completed_state.in_progress_mode is None
+    assert completed_state.next_page_token is None
 
 
 def test_later_sync_retries_failed_candidate_body_when_incremental_page_is_empty() -> None:
