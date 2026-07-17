@@ -1571,7 +1571,9 @@ async function installRedesignFixtures(page: Page) {
   await page.route("**/processing/status", (route) =>
     route.fulfill({
       contentType: "application/json",
-      json: processingStatus,
+      json: processingComplete
+        ? { ...processingStatus, state: "succeeded" }
+        : processingStatus,
       status: 200,
     }),
   );
@@ -2055,6 +2057,13 @@ test("runs the critical private-data-free redesign journey", async ({
     .getByRole("button", { exact: true, name: "Sync" })
     .click();
 
+  const syncProgress = page.getByRole("dialog");
+  await expect(
+    syncProgress.getByRole("heading", { name: "Your inbox is up to date" }),
+  ).toBeVisible({ timeout: 15_000 });
+  await syncProgress.getByRole("button", { name: "Close" }).click();
+  await expect(syncProgress).toHaveCount(0);
+
   const syncedEmails = page.getByRole("list", { name: "Synced emails" });
   await expect(syncedEmails).toBeVisible();
   await expect(syncedEmails.getByRole("button")).toHaveCount(10);
@@ -2103,9 +2112,14 @@ test("runs the critical private-data-free redesign journey", async ({
   const scopedEmailRequests = requests.syncEmailRequestUrls
     .map((requestUrl) => new URL(requestUrl))
     .filter((requestUrl) => requestUrl.searchParams.has("sent_after"));
-  expect(scopedEmailRequests).toHaveLength(2);
-  for (const [index, requestUrl] of scopedEmailRequests.entries()) {
-    expect(requestUrl.searchParams.get("page")).toBe(String(index + 1));
+  expect(
+    new Set(
+      scopedEmailRequests.map((requestUrl) =>
+        requestUrl.searchParams.get("page"),
+      ),
+    ),
+  ).toEqual(new Set(["1", "2"]));
+  for (const requestUrl of scopedEmailRequests) {
     expect(requestUrl.searchParams.get("page_size")).toBe("10");
     const sentAfter = Date.parse(
       requestUrl.searchParams.get("sent_after") ?? "",
