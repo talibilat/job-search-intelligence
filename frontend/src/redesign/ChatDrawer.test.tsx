@@ -74,7 +74,18 @@ describe("ChatDrawer", () => {
 
   it("posts a question and progressively renders a dashboard-consistent cited answer", async () => {
     loadHistoryMock.mockResolvedValue([]);
-    sendTurnMock.mockResolvedValue({
+    sendTurnMock.mockImplementation((_request, onEvent) => {
+      onEvent?.({
+        conversation_id: "conversation-2",
+        route: "quantitative",
+        type: "route",
+      });
+      onEvent?.({
+        conversation_id: "conversation-2",
+        tool: "structured_query",
+        type: "tool",
+      });
+      return Promise.resolve({
       answer: "You have 23 applications.",
       citations: [
         {
@@ -91,6 +102,7 @@ describe("ChatDrawer", () => {
       ],
       route: "quantitative",
       tool_outputs: [],
+      });
     });
     renderDrawer();
 
@@ -98,13 +110,16 @@ describe("ChatDrawer", () => {
     fireEvent.change(message, { target: { value: "How many applications?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
 
-    expect(screen.getByText("Routing your question through local job-search data…")).toBeTruthy();
+    expect(screen.getByText("Reconciling the answer with dashboard metrics…")).toBeTruthy();
     expect(await screen.findByText("You have 23 applications.")).toBeTruthy();
     expect(screen.getByText("Dashboard metric · summary_counts")).toBeTruthy();
-    expect(sendTurnMock).toHaveBeenCalledWith({
-      conversation_id: null,
-      message: "How many applications?",
-    });
+    expect(sendTurnMock).toHaveBeenCalledWith(
+      {
+        conversation_id: null,
+        message: "How many applications?",
+      },
+      expect.any(Function),
+    );
   });
 
   it("labels an unsupported uncited answer as a grounded refusal", async () => {

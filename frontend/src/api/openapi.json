@@ -1471,6 +1471,89 @@
         ],
         "type": "string"
       },
+      "ChatStreamEvent": {
+        "additionalProperties": false,
+        "description": "One server-sent event emitted while a grounded chat turn runs.",
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatRoute"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "enum": [
+                  "structured_query",
+                  "semantic_search"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          },
+          "type": {
+            "enum": [
+              "route",
+              "tool",
+              "complete",
+              "error"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "conversation_id"
+        ],
+        "title": "ChatStreamEvent",
+        "type": "object"
+      },
       "ClassificationMode": {
         "enum": [
           "hybrid",
@@ -6678,7 +6761,7 @@
     },
     "/chat": {
       "post": {
-        "description": "Routes one question through constrained deterministic metrics, cited semantic retrieval, or both. Returns ordered route, tool, and answer increments after the complete turn is persisted.",
+        "description": "Routes one question through constrained deterministic metrics, cited semantic retrieval, or both. Streams route and completed-tool progress, then emits the grounded response after the complete turn is persisted.",
         "operationId": "post_chat_chat_post",
         "requestBody": {
           "content": {
@@ -6695,11 +6778,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatResponse"
+                  "$ref": "#/components/schemas/ChatStreamEvent"
                 }
-              }
+              },
+              "text/event-stream": {}
             },
-            "description": "Successful Response"
+            "description": "Ordered grounded chat events."
           },
           "422": {
             "content": {

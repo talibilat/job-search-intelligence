@@ -44,10 +44,6 @@ function messageStyle(role: "assistant" | "user"): CSSProperties {
       };
 }
 
-function delay(milliseconds: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-}
-
 function isProviderUnavailable(error: unknown): boolean {
   if (typeof error !== "object" || error === null || !("response" in error)) return false;
   const response = (error as { response?: { data?: unknown; status?: number } }).response;
@@ -159,40 +155,40 @@ export function ChatDrawer({
     setSending(true);
     setProgress("Routing your question through local job-search data…");
     try {
-      const response = await sendChatTurn({
-        conversation_id: conversationId,
-        message: trimmed,
-      });
+      const response = await sendChatTurn(
+        {
+          conversation_id: conversationId,
+          message: trimmed,
+        },
+        (event) => {
+          if (event.type === "route") {
+            const routeLabel = event.route === "quantitative"
+              ? "Checking deterministic dashboard facts…"
+              : event.route === "mixed"
+                ? "Checking metrics and cited email evidence…"
+                : "Searching cited email evidence…";
+            setProgress(routeLabel);
+          } else if (event.type === "tool") {
+            setProgress(
+              event.tool === "structured_query"
+                ? "Reconciling the answer with dashboard metrics…"
+                : "Reviewing safe retained email evidence…",
+            );
+          }
+        },
+      );
       setConversationId(response.conversation_id);
-      for (const increment of response.increments) {
-        if (increment.type === "route") {
-          const routeLabel = increment.content === "quantitative"
-            ? "Checking deterministic dashboard facts…"
-            : increment.content === "mixed"
-              ? "Checking metrics and cited email evidence…"
-              : "Searching cited email evidence…";
-          setProgress(routeLabel);
-        } else if (increment.type === "tool") {
-          setProgress(
-            increment.content === "structured_query"
-              ? "Reconciling the answer with dashboard metrics…"
-              : "Reviewing safe retained email evidence…",
-          );
-        } else {
-          setMessages((current) => [
-            ...current,
-            {
-              citations: response.citations,
-              content: increment.content,
-              conversation_id: response.conversation_id,
-              id: `assistant-${Date.now()}`,
-              role: "assistant",
-            },
-          ]);
-          setProgress(null);
-        }
-        await delay(90);
-      }
+      setMessages((current) => [
+        ...current,
+        {
+          citations: response.citations,
+          content: response.answer,
+          conversation_id: response.conversation_id,
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+        },
+      ]);
+      setProgress(null);
     } catch (error) {
       setProgress(null);
       setFailure(isProviderUnavailable(error) ? "provider" : "request");

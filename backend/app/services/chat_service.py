@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Literal, cast
 from uuid import uuid4
 
-from app.agent.chat_graph import ChatGraph
+from app.agent.chat_graph import ChatGraph, ChatGraphState
 from app.agent.tools import SemanticSearchTool, StructuredQueryTool
 from app.db.repositories import ChatRepository
-from app.models.chat import ChatIncrement, ChatRequest, ChatResponse
+from app.models.chat import ChatIncrement, ChatRequest, ChatResponse, ChatStreamEvent
 from app.services.chat_index import ChatIndexService
 
 
@@ -29,8 +31,36 @@ class ChatService:
         )
 
     async def answer(self, request: ChatRequest) -> ChatResponse:
+        response: ChatResponse | None = None
+        async for event in self.stream(request):
+            if event.type == "complete":
+                response = event.response
+        if response is None:  # pragma: no cover - the compiled graph always synthesizes
+            raise RuntimeError("Chat graph completed without an answer.")
+        return response
+
+    async def stream(self, request: ChatRequest) -> AsyncIterator[ChatStreamEvent]:
         conversation_id = request.conversation_id or uuid4().hex
-        graph_result = await self._graph.run(request)
+        graph_result = ChatGraphState(request=request)
+        async for node, update in self._graph.stream(request):
+            graph_result.update(update)
+            if node == "route":
+                route = update["route"]
+                yield ChatStreamEvent(
+                    type="route",
+                    conversation_id=conversation_id,
+                    route=route,
+                )
+            elif node in {"structured_query", "semantic_search", "mixed_tools"}:
+                for output in update.get("tool_outputs", []):
+                    tool = output.get("tool")
+                    if tool in {"structured_query", "semantic_search"}:
+                        yield ChatStreamEvent(
+                            type="tool",
+                            conversation_id=conversation_id,
+                            tool=cast("Literal['structured_query', 'semantic_search']", tool),
+                        )
+
         route = graph_result["route"]
         tool_outputs = graph_result.get("tool_outputs", [])
         citations = graph_result.get("citations", [])
@@ -68,11 +98,16 @@ class ChatService:
             created_at=now,
         )
         self._history_repository.connection.commit()
-        return ChatResponse(
+        response = ChatResponse(
             conversation_id=conversation_id,
             route=route,
             answer=answer,
             citations=citations,
             tool_outputs=tool_outputs,
             increments=increments,
+        )
+        yield ChatStreamEvent(
+            type="complete",
+            conversation_id=conversation_id,
+            response=response,
         )

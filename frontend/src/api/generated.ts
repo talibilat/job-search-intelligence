@@ -470,6 +470,37 @@ export interface ChatResponse {
   tool_outputs: JsonObjectList;
 }
 
+export type ChatStreamEventTool =
+  (typeof ChatStreamEventTool)[keyof typeof ChatStreamEventTool] | null;
+
+export const ChatStreamEventTool = {
+  structured_query: "structured_query",
+  semantic_search: "semantic_search",
+} as const;
+
+export type ChatStreamEventType =
+  (typeof ChatStreamEventType)[keyof typeof ChatStreamEventType];
+
+export const ChatStreamEventType = {
+  route: "route",
+  tool: "tool",
+  complete: "complete",
+  error: "error",
+} as const;
+
+/**
+ * One server-sent event emitted while a grounded chat turn runs.
+ */
+export interface ChatStreamEvent {
+  conversation_id: string;
+  error_code?: string | null;
+  error_message?: string | null;
+  response?: ChatResponse | null;
+  route?: ChatRoute | null;
+  tool?: ChatStreamEventTool;
+  type: ChatStreamEventType;
+}
+
 export type ClassificationMode =
   (typeof ClassificationMode)[keyof typeof ClassificationMode];
 
@@ -3023,7 +3054,7 @@ export const gmailAuthCallbackAuthGmailCallbackGet = async (
 };
 
 export type postChatChatPostResponse200 = {
-  data: ChatResponse;
+  data: ChatStreamEvent;
   status: 200;
 };
 
@@ -3061,7 +3092,7 @@ export const getPostChatChatPostUrl = () => {
 };
 
 /**
- * Routes one question through constrained deterministic metrics, cited semantic retrieval, or both. Returns ordered route, tool, and answer increments after the complete turn is persisted.
+ * Routes one question through constrained deterministic metrics, cited semantic retrieval, or both. Streams route and completed-tool progress, then emits the grounded response after the complete turn is persisted.
  * @summary Run Grounded Chat Turn
  */
 export const postChatChatPost = async (

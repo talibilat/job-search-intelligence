@@ -11,6 +11,7 @@ export default defineConfig({
     proxy: {
       "/auth": BACKEND_URL,
       "/attention": BACKEND_URL,
+      "/chat": BACKEND_URL,
       "/sync": BACKEND_URL,
       // "/setup" is both a backend API path (POST /setup, GET /setup/status)
       // and the frontend's own client-side page route. Bypass the proxy for

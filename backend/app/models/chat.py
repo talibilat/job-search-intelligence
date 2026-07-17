@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models._json import parse_json_column
 from app.models.correction import JsonObjectList
@@ -83,6 +83,34 @@ class ChatResponse(BaseModel):
     citations: list[ChatCitation]
     tool_outputs: JsonObjectList
     increments: list[ChatIncrement]
+
+
+class ChatStreamEvent(BaseModel):
+    """One server-sent event emitted while a grounded chat turn runs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["route", "tool", "complete", "error"]
+    conversation_id: str
+    route: ChatRoute | None = None
+    tool: Literal["structured_query", "semantic_search"] | None = None
+    response: ChatResponse | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+
+    @model_validator(mode="after")
+    def validate_event_payload(self) -> ChatStreamEvent:
+        required_field = {
+            "route": self.route,
+            "tool": self.tool,
+            "complete": self.response,
+            "error": self.error_code,
+        }[self.type]
+        if required_field is None:
+            raise ValueError(f"{self.type} stream event is missing its payload")
+        if self.type == "error" and self.error_message is None:
+            raise ValueError("error stream event is missing its public message")
+        return self
 
 
 class SemanticSearchResult(BaseModel):

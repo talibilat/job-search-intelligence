@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json as jsonlib
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from alembic import command
@@ -88,7 +91,8 @@ def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(
     client = create_chat_client(database_path, provider)
 
     metric_response = client.get("/metrics/summary")
-    quantitative = client.post(
+    quantitative = post_chat(
+        client,
         "/chat",
         json={"conversation_id": "q-count", "message": "How many jobs have I applied to?"},
     )
@@ -119,9 +123,13 @@ def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(
         "tool",
         "answer",
     ]
+    assert [event["type"] for event in quantitative.events] == ["route", "tool", "complete"]
+    assert quantitative.response.headers["cache-control"] == "no-cache"
+    assert quantitative.response.headers["x-accel-buffering"] == "no"
     assert provider.embedding_inputs == []
 
-    content = client.post(
+    content = post_chat(
+        client,
         "/chat",
         json={
             "conversation_id": "q-content",
@@ -152,7 +160,8 @@ def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(
     assert all("private shopping receipt" not in text for text in embedded_texts)
     assert all("debug-only body" not in text for text in embedded_texts)
 
-    mixed = client.post(
+    mixed = post_chat(
+        client,
         "/chat",
         json={
             "conversation_id": "q-mixed",
@@ -175,7 +184,8 @@ def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(
         == 1
     )
 
-    waiting = client.post(
+    waiting = post_chat(
+        client,
         "/chat",
         json={
             "conversation_id": "q-waiting",
@@ -226,7 +236,7 @@ def test_chat_index_removes_ineligible_vectors_and_refuses_unsupported_content(
     seed_chat_sources(database_path)
     provider = FakeChatProvider()
     client = create_chat_client(database_path, provider)
-    first = client.post("/chat", json={"message": "What exactly did Acme say?"})
+    first = post_chat(client, "/chat", json={"message": "What exactly did Acme say?"})
     assert first.status_code == 200
     assert first.json()["citations"]
 
@@ -237,7 +247,7 @@ def test_chat_index_removes_ineligible_vectors_and_refuses_unsupported_content(
         )
         connection.commit()
 
-    refused = client.post("/chat", json={"message": "What exactly did Acme say?"})
+    refused = post_chat(client, "/chat", json={"message": "What exactly did Acme say?"})
 
     assert refused.status_code == 200
     assert refused.json()["citations"] == []
@@ -282,7 +292,8 @@ def test_q47_last_email_uses_latest_company_evidence_not_nearest_vector(
     provider = FakeChatProvider()
     client = create_chat_client(database_path, provider)
 
-    response = client.post(
+    response = post_chat(
+        client,
         "/chat",
         json={
             "message": "What exactly did the recruiter at Acme say in the last email?",
@@ -353,7 +364,8 @@ def test_q48_every_rejection_returns_all_exact_matches_despite_retrieval_limit(
     provider = FakeChatProvider()
     client = create_chat_client(database_path, provider)
 
-    response = client.post(
+    response = post_chat(
+        client,
         "/chat",
         json={
             "message": "Show me every rejection email that mentioned experience.",
@@ -391,16 +403,10 @@ def test_chat_request_validates_blank_ids_and_openapi_has_incremental_contract(
 
     assert invalid.status_code == 422
     operation = schema["paths"]["/chat"]["post"]
-    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/ChatResponse"
-    }
-    assert schema["components"]["schemas"]["ChatResponse"]["required"] == [
+    assert "text/event-stream" in operation["responses"]["200"]["content"]
+    assert schema["components"]["schemas"]["ChatStreamEvent"]["required"] == [
+        "type",
         "conversation_id",
-        "route",
-        "answer",
-        "citations",
-        "tool_outputs",
-        "increments",
     ]
 
 
@@ -410,7 +416,8 @@ def test_wipe_removes_persisted_chat_and_embeddings(tmp_path: Path) -> None:
     seed_chat_sources(database_path)
     provider = FakeChatProvider()
     with create_chat_client(database_path, provider) as client:
-        response = client.post(
+        response = post_chat(
+            client,
             "/chat",
             json={"conversation_id": "wipe-me", "message": "What exactly did Acme say?"},
         )
@@ -438,6 +445,39 @@ def create_chat_client(database_path: Path, provider: FakeChatProvider) -> TestC
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_llm_provider] = lambda: provider
     return TestClient(app)
+
+
+@dataclass(frozen=True)
+class ChatStreamTestResponse:
+    response: Any
+    events: list[dict[str, Any]]
+
+    @property
+    def status_code(self) -> int:
+        return cast(int, self.response.status_code)
+
+    def json(self) -> dict[str, Any]:
+        complete = next(event for event in self.events if event["type"] == "complete")
+        return cast(dict[str, Any], complete["response"])
+
+
+def post_chat(
+    client: TestClient,
+    path: str,
+    *,
+    payload: dict[str, Any] | None = None,
+    json: dict[str, Any] | None = None,
+) -> ChatStreamTestResponse:
+    request_body = payload if payload is not None else json
+    assert request_body is not None
+    response = client.post(path, json=request_body)
+    events = []
+    for frame in response.text.split("\n\n"):
+        data = next((line[6:] for line in frame.splitlines() if line.startswith("data: ")), None)
+        if data is not None:
+            events.append(jsonlib.loads(data))
+    assert response.headers["content-type"].startswith("text/event-stream")
+    return ChatStreamTestResponse(response=response, events=events)
 
 
 def migrated_database(tmp_path: Path) -> Path:

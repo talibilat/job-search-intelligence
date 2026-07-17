@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Literal, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
@@ -83,6 +84,14 @@ class ChatGraph:
     async def run(self, request: ChatRequest) -> ChatGraphState:
         result = await self._graph.ainvoke({"request": request})
         return cast(ChatGraphState, result)
+
+    async def stream(self, request: ChatRequest) -> AsyncIterator[tuple[str, ChatGraphState]]:
+        async for update in self._graph.astream(
+            {"request": request},
+            stream_mode="updates",
+        ):
+            for node, state_update in update.items():
+                yield node, cast(ChatGraphState, state_update)
 
     def _route(self, state: ChatGraphState) -> ChatGraphState:
         return {"route": route_question(state["request"].message)}
