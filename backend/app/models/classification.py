@@ -8,7 +8,12 @@ from typing import Annotated, Self
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator, model_validator
 
 from app.config import ClassificationMode, EmailProviderName, LLMProviderName
-from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.event import ApplicationEventType
 
 NonEmptyString = Annotated[StrictStr, Field(min_length=1)]
@@ -130,6 +135,7 @@ class ClassificationPromptOutput(BaseModel):
     confidence: float = Field(ge=0, le=1)
     company: NonEmptyString | None
     role_title: NonEmptyString | None
+    source: ApplicationSource = "other"
     application_status: ApplicationStatus | None
     event_type: ApplicationEventType | None
     event_at: datetime | None
@@ -235,6 +241,7 @@ class ClassificationPromptOutput(BaseModel):
         )
         if (
             any(value is not None for value in extracted_values)
+            or self.source != "other"
             or self.sponsorship != "unknown"
             or self.tech_stack
         ):

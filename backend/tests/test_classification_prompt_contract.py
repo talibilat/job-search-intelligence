@@ -38,6 +38,7 @@ def test_classification_prompt_request_is_versioned_json_contract() -> None:
     assert request.messages[0].role is LLMMessageRole.SYSTEM
     assert f"Prompt version: {CLASSIFICATION_PROMPT_VERSION}" in request.messages[0].content
     assert "is_job_related" in request.messages[0].content
+    assert "source" in request.messages[0].content
     assert "rejection_reason" in request.messages[0].content
 
     assert request.messages[1].role is LLMMessageRole.USER
@@ -60,6 +61,7 @@ def test_classification_prompt_output_validates_structured_extraction() -> None:
                 "confidence": 0.92,
                 "company": "Example Systems",
                 "role_title": "Backend Engineer",
+                "source": "linkedin",
                 "application_status": "rejected",
                 "event_type": "rejection",
                 "event_at": "2026-07-05T12:00:00Z",
@@ -77,6 +79,7 @@ def test_classification_prompt_output_validates_structured_extraction() -> None:
     )
 
     assert output.category is models.JobEmailCategory.REJECTION
+    assert output.source == "linkedin"
     assert output.application_status == "rejected"
     assert output.event_type == "rejection"
     assert output.tech_stack == ("Python", "FastAPI")

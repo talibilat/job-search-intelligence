@@ -14,7 +14,12 @@ from app.db.repositories import (
     EventRepository,
     MetricsRepository,
 )
-from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.classification import EmailClassificationRecord, JobEmailCategory
 from app.models.event import ApplicationEventType
 from app.pipeline.classify import AcceptedLLMExtraction, JobApplicationExtraction
@@ -34,6 +39,7 @@ def test_aggregation_creates_one_application_from_single_extraction(tmp_path: Pa
         email_id="email-1",
         company="Acme Corp",
         role_title="Software Engineer",
+        source="linkedin",
         status="applied",
         event_type="applied",
         event_at=EVENT_AT,
@@ -50,7 +56,12 @@ def test_aggregation_creates_one_application_from_single_extraction(tmp_path: Pa
         "SELECT company, role_title, current_status, source FROM applications",
     ).fetchall()
     assert len(stored_apps) == 1
-    assert tuple(stored_apps[0]) == ("Acme Corp", "Software Engineer", "applied", "other")
+    assert tuple(stored_apps[0]) == (
+        "Acme Corp",
+        "Software Engineer",
+        "applied",
+        "linkedin",
+    )
 
     stored_events = connection.execute(
         "SELECT event_type, email_id FROM application_events",
@@ -825,6 +836,7 @@ def test_aggregation_sparse_incremental_evidence_preserves_application_details(
         email_id="application-email",
         company="Acme Corp",
         role_title="Software Engineer",
+        source="linkedin",
         status="applied",
         event_type="applied",
         event_at=EVENT_AT,
@@ -855,6 +867,7 @@ def test_aggregation_sparse_incremental_evidence_preserves_application_details(
     stored = ApplicationRepository(connection).list_applications()
     assert len(stored) == 1
     assert stored[0].current_status == "rejected"
+    assert stored[0].source == "linkedin"
     assert stored[0].salary_min == 120_000
     assert stored[0].salary_max == 150_000
     assert stored[0].currency == "GBP"
@@ -1385,6 +1398,7 @@ def make_extraction(
     is_job_related: bool = True,
     company: str | None = None,
     role_title: str | None = None,
+    source: ApplicationSource = "other",
     category: JobEmailCategory = JobEmailCategory.APPLICATION_CONFIRMATION,
     confidence: float = 0.95,
     classified_at: datetime = NOW,
@@ -1414,6 +1428,7 @@ def make_extraction(
         extraction=JobApplicationExtraction(
             company=company,
             role_title=role_title,
+            source=source,
             status=status,
             event_type=event_type,
             event_at=event_at,

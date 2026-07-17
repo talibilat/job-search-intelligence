@@ -593,6 +593,8 @@ def _upsert_application(
             seniority = ext.seniority
         if ext.sponsorship != "unknown" and sponsorship == "unknown":
             sponsorship = ext.sponsorship
+        if ext.source != "other" and source == "other":
+            source = ext.source
         tech_stack.extend(t for t in ext.tech_stack if t not in tech_stack)
 
     company = best_result.extraction.company or ""

@@ -15,7 +15,12 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.application import ApplicationStatus, SponsorshipStatus, WorkMode
+from app.models.application import (
+    ApplicationSource,
+    ApplicationStatus,
+    SponsorshipStatus,
+    WorkMode,
+)
 from app.models.classification import (
     ClassificationPromptOutput,
     EmailClassificationRecord,
@@ -34,7 +39,7 @@ from app.providers.llm import (
 
 type NonBlankString = Annotated[StrictStr, Field(min_length=1)]
 
-CLASSIFICATION_PROMPT_VERSION = "v1"
+CLASSIFICATION_PROMPT_VERSION = "v2"
 CLASSIFICATION_MAX_OUTPUT_TOKENS = 1200
 
 
@@ -84,6 +89,7 @@ class JobApplicationExtraction(BaseModel):
 
     company: NonBlankString | None = None
     role_title: NonBlankString | None = None
+    source: ApplicationSource = "other"
     status: ApplicationStatus | None = None
     event_type: ApplicationEventType | None = None
     event_at: datetime | None = None
@@ -262,6 +268,7 @@ def parse_classification_generation_response(
     extraction = JobApplicationExtraction(
         company=prompt_output.company,
         role_title=prompt_output.role_title,
+        source=prompt_output.source,
         status=prompt_output.application_status,
         event_type=prompt_output.event_type,
         event_at=prompt_output.event_at,
@@ -310,6 +317,7 @@ def parse_llm_extraction_response(
         extraction = JobApplicationExtraction(
             company=payload.company,
             role_title=payload.role_title,
+            source=payload.source,
             status=payload.application_status,
             event_type=payload.event_type,
             event_at=payload.event_at,
@@ -348,8 +356,8 @@ def _classification_system_prompt(*, prompt_version: str) -> str:
             f"Prompt version: {prompt_version}",
             "Return exactly one JSON object. Do not wrap it in Markdown.",
             f"Allowed categories: {categories}.",
-            "Use null for unknown nullable fields, sponsorship unknown when unclear, "
-            "and tech_stack as an array.",
+            "Use null for unknown nullable fields, source other and sponsorship unknown "
+            "when unclear, and tech_stack as an array.",
             "For non-job-related messages, set is_job_related false, category other, "
             "nullable extraction fields to null, sponsorship unknown, and tech_stack [].",
             "Do not include extra fields, raw SQL, counts, secrets, or provider payloads.",
