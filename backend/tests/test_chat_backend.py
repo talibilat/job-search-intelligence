@@ -243,6 +243,59 @@ def test_chat_index_removes_ineligible_vectors_and_refuses_unsupported_content(
         assert connection.execute("SELECT COUNT(*) FROM email_chunk_index_state").fetchone()[0] == 0
 
 
+def test_q47_last_email_uses_latest_company_evidence_not_nearest_vector(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_raw_email(
+            connection,
+            email_id="email-job-old",
+            subject="Earlier recruiter update",
+            body="Acme recruiter discussed a historical perfect match.",
+            retention="retained",
+            sent_at="2026-06-01T10:00:00+00:00",
+        )
+        insert_classification(connection, "email-job-old", is_job_related=True)
+        connection.execute(
+            """
+            INSERT INTO application_events (
+                id, application_id, email_id, event_type, event_at, extract_note
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "event-acme-old",
+                "app-acme",
+                "email-job-old",
+                "response",
+                "2026-06-01T10:00:00+00:00",
+                "Earlier recruiter response",
+            ),
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "What exactly did the recruiter at Acme say in the last email?",
+            "retrieval_limit": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "Technical interview moved to Friday" in body["answer"]
+    assert "historical perfect match" not in body["answer"]
+    assert body["citations"][0]["subject"] == "Interview update"
+    assert provider.embedding_inputs == [
+        ("Acme recruiter discussed a historical perfect match.",),
+        ("Acme recruiter: Technical interview moved to Friday.",),
+    ]
+
+
 def test_chat_request_validates_blank_ids_and_openapi_has_incremental_contract(
     tmp_path: Path,
 ) -> None:
@@ -394,6 +447,7 @@ def insert_raw_email(
     subject: str,
     body: str | None,
     retention: str,
+    sent_at: str = "2026-06-05T10:00:00+00:00",
 ) -> None:
     connection.execute(
         """
@@ -408,7 +462,7 @@ def insert_raw_email(
             "recruiter@example.test",
             "candidate@example.test",
             subject,
-            "2026-06-05T10:00:00+00:00",
+            sent_at,
             body,
             retention,
             "[]",

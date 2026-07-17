@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from datetime import datetime
 
@@ -131,30 +132,85 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
             """,
             (json.dumps(embedding), limit),
         ).fetchall()
-        results: list[SemanticSearchResult] = []
-        for row in rows:
-            application_rows = self.execute(
-                """
-                SELECT DISTINCT application_id
-                FROM application_events
-                WHERE email_id = ?
-                ORDER BY application_id
-                """,
-                (row["email_id"],),
-            ).fetchall()
-            results.append(
-                SemanticSearchResult(
-                    email_public_id=row["email_public_id"],
-                    application_ids=tuple(str(item[0]) for item in application_rows),
-                    chunk_index=row["chunk_index"],
-                    content=row["content"],
-                    subject=row["subject"],
-                    from_addr=row["from_addr"],
-                    sent_at=row["sent_at"],
-                    distance=row["distance"],
-                )
+        return tuple(self._semantic_result(row) for row in rows)
+
+    def latest_for_mentioned_company(
+        self,
+        question: str,
+        *,
+        limit: int,
+    ) -> tuple[SemanticSearchResult, ...]:
+        """Return newest indexed evidence when a question names a known company."""
+
+        company_rows = self.execute(
+            "SELECT DISTINCT company FROM applications ORDER BY LENGTH(company) DESC"
+        ).fetchall()
+        mentioned = tuple(
+            str(row[0])
+            for row in company_rows
+            if re.search(
+                rf"(?<!\w){re.escape(str(row[0]))}(?!\w)",
+                question,
+                flags=re.IGNORECASE,
             )
-        return tuple(results)
+        )
+        if not mentioned:
+            return ()
+
+        placeholders = ", ".join("?" for _ in mentioned)
+        rows = self.execute(
+            f"""
+            WITH matching_emails AS (
+                SELECT DISTINCT application_events.email_id
+                FROM application_events
+                INNER JOIN applications
+                    ON applications.id = application_events.application_id
+                WHERE applications.company IN ({placeholders})
+                  AND application_events.email_id IS NOT NULL
+            )
+            SELECT
+                email_chunks.email_id,
+                email_chunks.chunk_index,
+                email_chunks.content,
+                raw_emails.public_id AS email_public_id,
+                raw_emails.subject,
+                raw_emails.from_addr,
+                raw_emails.sent_at
+            FROM email_chunks
+            INNER JOIN matching_emails ON matching_emails.email_id = email_chunks.email_id
+            INNER JOIN raw_emails ON raw_emails.id = email_chunks.email_id
+            ORDER BY raw_emails.sent_at DESC, email_chunks.chunk_index, email_chunks.email_id
+            LIMIT ?
+            """,
+            (*mentioned, limit),
+        ).fetchall()
+        return tuple(self._semantic_result(row, distance=0.0) for row in rows)
+
+    def _semantic_result(
+        self,
+        row: sqlite3.Row,
+        *,
+        distance: float | None = None,
+    ) -> SemanticSearchResult:
+        application_rows = self.execute(
+            """
+            SELECT DISTINCT application_id
+            FROM application_events
+            WHERE email_id = ?
+            ORDER BY application_id
+            """,
+            (row["email_id"],),
+        ).fetchall()
+        return SemanticSearchResult(
+            email_public_id=row["email_public_id"],
+            application_ids=tuple(str(item[0]) for item in application_rows),
+            chunk_index=row["chunk_index"],
+            content=row["content"],
+            subject=row["subject"],
+            from_addr=row["from_addr"],
+            sent_at=row["sent_at"],
+            distance=row["distance"] if distance is None else distance,
+        )
 
     def map_row(self, row: sqlite3.Row) -> SemanticSearchResult:
         raise NotImplementedError

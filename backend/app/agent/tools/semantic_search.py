@@ -5,6 +5,7 @@ from app.models.chat import SemanticSearchResult
 from app.providers.llm import LLMEmbeddingRequest, LLMProvider, LLMProviderResponseError
 
 SQLITE_VEC_DIMENSIONS = 1536
+_RECENCY_TERMS = ("last email", "latest email", "most recent email")
 
 
 class SemanticSearchTool:
@@ -22,6 +23,10 @@ class SemanticSearchTool:
         self._embedding_model = embedding_model
 
     async def run(self, question: str, *, limit: int) -> tuple[SemanticSearchResult, ...]:
+        if any(term in question.casefold() for term in _RECENCY_TERMS):
+            latest = self._repository.latest_for_mentioned_company(question, limit=limit)
+            if latest:
+                return latest
         response = await self._llm_provider.embed(
             LLMEmbeddingRequest(inputs=(question,), model=self._embedding_model)
         )
