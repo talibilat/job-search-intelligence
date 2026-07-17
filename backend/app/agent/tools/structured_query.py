@@ -23,6 +23,7 @@ StructuredQueryTemplate = Literal[
     "rates",
     "funnel",
     "timing",
+    "application_timeseries",
     "breakdown",
     "live_applications",
 ]
@@ -205,6 +206,23 @@ class StructuredQueryTool:
                             "average_hours": rejection.average_hours,
                         },
                     ),
+                ),
+            )
+
+        if request.template == "application_timeseries":
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=point.period_start,
+                        values={
+                            "period_start": point.period_start,
+                            "application_count": point.application_count,
+                        },
+                    )
+                    for point in self._metrics_repository.get_application_timeseries(
+                        filters=request.filters
+                    )
                 ),
             )
 

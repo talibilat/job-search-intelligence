@@ -50,6 +50,11 @@ _TIMING_TERMS = (
     "time to rejection",
     "time-to-rejection",
 )
+_APPLICATION_TREND_TERMS = (
+    "application volume",
+    "applications trended",
+    "applications over time",
+)
 _SOURCE_FILTER_TERMS: tuple[tuple[ApplicationSource, tuple[str, ...]], ...] = (
     ("linkedin", ("linkedin",)),
     ("company_site", ("company site", "company website", "careers page")),
@@ -258,6 +263,7 @@ def route_question(question: str) -> ChatRoute:
         any(term in normalized for term in _QUANTITATIVE_TERMS)
         or any(term in normalized for term in _RELATIVE_WINDOW_TERMS)
         or any(term in normalized for term in _TIMING_TERMS)
+        or any(term in normalized for term in _APPLICATION_TREND_TERMS)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -282,6 +288,8 @@ def _structured_request(
         return StructuredQueryRequest(template="funnel", filters=filters)
     if any(term in normalized for term in _TIMING_TERMS):
         return StructuredQueryRequest(template="timing", filters=filters)
+    if any(term in normalized for term in _APPLICATION_TREND_TERMS):
+        return StructuredQueryRequest(template="application_timeseries", filters=filters)
     if len(_matched_sources(normalized)) > 1:
         return StructuredQueryRequest(
             template="breakdown",

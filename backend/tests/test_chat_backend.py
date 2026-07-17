@@ -387,6 +387,51 @@ def test_structured_chat_routes_timing_questions_to_whitelisted_metrics(question
     assert _structured_request(question).template == "timing"
 
 
+def test_structured_chat_routes_application_volume_trends_to_whitelisted_metrics() -> None:
+    question = "How has my application volume trended over time?"
+
+    assert route_question(question) == "quantitative"
+    assert _structured_request(question).template == "application_timeseries"
+
+
+def test_chat_api_application_volume_trend_reconciles_with_metrics_timeseries(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="app-january", company="January Co")
+        insert_application(connection, application_id="app-june", company="June Co")
+        connection.execute(
+            "UPDATE applications SET first_seen_at = ? WHERE id = ?",
+            ("2026-01-15T10:00:00+00:00", "app-january"),
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    metric_response = client.get("/metrics/timeseries")
+    chat_response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How has my application volume trended over time?"},
+    )
+
+    assert metric_response.status_code == 200
+    assert chat_response.status_code == 200
+    chat_body = chat_response.json()
+    assert chat_body["route"] == "quantitative"
+    assert chat_body["tool_outputs"][0]["template"] == "application_timeseries"
+    assert chat_body["tool_outputs"][0]["rows"] == [
+        {
+            "label": point["period_start"],
+            "values": point,
+        }
+        for point in metric_response.json()["points"]
+    ]
+    assert chat_body["citations"][0]["citation_id"] == "metric:application_timeseries"
+    assert provider.embedding_inputs == []
+
+
 def test_chat_api_response_timing_reconciles_with_metrics_summary(tmp_path: Path) -> None:
     database_path = migrated_database(tmp_path)
     seed_chat_sources(database_path)
