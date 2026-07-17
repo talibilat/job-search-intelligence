@@ -47,6 +47,21 @@ _CONTENT_TERMS = (
     "feedback",
     "why",
 )
+_EXCERPT_STOP_WORDS = frozenset(
+    {
+        "about",
+        "did",
+        "email",
+        "exactly",
+        "last",
+        "mentioned",
+        "recruiter",
+        "said",
+        "say",
+        "their",
+        "what",
+    }
+)
 _RELATIVE_WINDOW_TERMS = ("this week", "this month", "this year")
 _TIMING_TERMS = (
     "average time",
@@ -386,7 +401,7 @@ class ChatGraph:
                 application_id=item.application_ids[0] if item.application_ids else None,
                 subject=item.subject,
                 sent_at=item.sent_at,
-                snippet=" ".join(item.content.split())[:280],
+                snippet=_relevant_excerpt(item.content, request.message),
             )
             for item in results
         ]
@@ -828,7 +843,7 @@ def synthesize_grounded_answer(
         excerpts = []
         email_citations = [item for item in citations if item.source == "email"]
         for result, citation in zip(content_results, email_citations, strict=True):
-            excerpt = " ".join(result.content.split())[:280]
+            excerpt = citation.snippet or " ".join(result.content.split())[:280]
             excerpts.append(f'"{excerpt}" [{citation.citation_id}]')
         parts.append("Relevant source email evidence: " + " ".join(excerpts))
     elif route in {"content", "mixed"}:
@@ -837,6 +852,54 @@ def synthesize_grounded_answer(
             "source email was retrieved."
         )
     return " ".join(parts)
+
+
+def _relevant_excerpt(content: str, question: str, *, max_chars: int = 280) -> str:
+    normalized = " ".join(content.split())
+    if len(normalized) <= max_chars:
+        return normalized
+
+    query_terms = {
+        token
+        for token in re.findall(r"[a-z0-9]+", question.casefold())
+        if len(token) >= 3 and token not in _EXCERPT_STOP_WORDS
+    }
+    matches = [
+        match for match in re.finditer(r"[^.!?]+[.!?]?", normalized) if match.group().strip()
+    ]
+    ranked = sorted(
+        matches,
+        key=lambda match: (
+            sum(
+                len(term)
+                for term in query_terms
+                if re.search(rf"\b{re.escape(term)}\b", match.group().casefold())
+            ),
+            -match.start(),
+        ),
+        reverse=True,
+    )
+    best = ranked[0] if ranked else None
+    if best is None or not any(
+        re.search(rf"\b{re.escape(term)}\b", best.group().casefold()) for term in query_terms
+    ):
+        return normalized[:max_chars]
+
+    sentence = best.group().strip()
+    if len(sentence) <= max_chars:
+        return sentence
+
+    matching_positions = [
+        match.start()
+        for term in query_terms
+        if (match := re.search(rf"\b{re.escape(term)}\b", sentence.casefold())) is not None
+    ]
+    focus = min(matching_positions, default=0)
+    start = max(0, min(focus - max_chars // 2, len(sentence) - max_chars))
+    excerpt = sentence[start : start + max_chars].strip()
+    prefix = "... " if start else ""
+    suffix = " ..." if start + max_chars < len(sentence) else ""
+    return f"{prefix}{excerpt}{suffix}"
 
 
 def _synthesize_live_applications(rows: list[object]) -> str:

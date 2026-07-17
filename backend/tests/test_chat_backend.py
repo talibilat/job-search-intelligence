@@ -2938,7 +2938,14 @@ def test_generic_semantic_follow_up_cites_active_reapplication(tmp_path: Path) -
             connection,
             email_id="email-new-follow-up",
             subject="Sponsorship details",
-            body="Acme confirmed that this role offers visa sponsorship.",
+            body=(
+                "Thank you for your interest in Acme. We enjoyed learning about your background "
+                "and discussing the role, team structure, interview process, working environment, "
+                "and the projects planned for the coming year. The hiring team appreciated the "
+                "time you spent reviewing the position and answering our initial questions. We "
+                "also wanted to clarify one important detail. Unfortunately, this position cannot "
+                "provide visa sponsorship."
+            ),
             retention="retained",
             sent_at="2026-01-15T10:00:00+00:00",
             thread_id="reused-acme-thread",
@@ -2964,6 +2971,9 @@ def test_generic_semantic_follow_up_cites_active_reapplication(tmp_path: Path) -
     assert body["route"] == "content"
     assert body["citations"][0]["subject"] == "Sponsorship details"
     assert body["citations"][0]["application_id"] == "app-z-new"
+    assert "cannot provide visa sponsorship" in body["answer"]
+    assert "cannot provide visa sponsorship" in body["citations"][0]["snippet"]
+    assert "Thank you for your interest" not in body["citations"][0]["snippet"]
     assert ("What did Acme say about sponsorship?",) in provider.embedding_inputs
 
 
