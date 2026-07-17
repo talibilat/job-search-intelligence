@@ -335,6 +335,54 @@ def test_q47_last_email_uses_latest_company_evidence_not_nearest_vector(
     ]
 
 
+def test_q47_last_email_includes_newer_indexed_message_from_application_thread(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE raw_emails SET thread_id = ? WHERE id = ?",
+            ("thread-acme", "email-job"),
+        )
+        insert_raw_email(
+            connection,
+            email_id="email-job-follow-up",
+            thread_id="thread-acme",
+            subject="Friday interview details",
+            body="Acme recruiter: Please bring your architecture examples to Friday's interview.",
+            retention="retained",
+            sent_at="2026-06-06T10:00:00+00:00",
+        )
+        insert_classification(
+            connection,
+            "email-job-follow-up",
+            is_job_related=True,
+            category="follow_up",
+        )
+        connection.commit()
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "What exactly did the recruiter at Acme say in the last email?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "bring your architecture examples" in body["answer"]
+    assert "Technical interview moved" not in body["answer"]
+    assert len(body["citations"]) == 1
+    assert body["citations"][0]["subject"] == "Friday interview details"
+    assert body["citations"][0]["application_id"] == "app-acme"
+    assert provider.embedding_inputs == [
+        ("Acme recruiter: Technical interview moved to Friday.",),
+        ("Acme recruiter: Please bring your architecture examples to Friday's interview.",),
+    ]
+
+
 def test_q48_every_rejection_returns_all_exact_matches_despite_retrieval_limit(
     tmp_path: Path,
 ) -> None:
@@ -722,6 +770,7 @@ def insert_raw_email(
     body: str | None,
     retention: str,
     sent_at: str = "2026-06-05T10:00:00+00:00",
+    thread_id: str | None = None,
 ) -> None:
     connection.execute(
         """
@@ -732,7 +781,7 @@ def insert_raw_email(
         """,
         (
             email_id,
-            f"thread-{email_id}",
+            thread_id or f"thread-{email_id}",
             "recruiter@example.test",
             "candidate@example.test",
             subject,

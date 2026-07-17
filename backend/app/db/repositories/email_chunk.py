@@ -247,28 +247,60 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
         placeholders = ", ".join("?" for _ in mentioned)
         rows = self.execute(
             f"""
-            WITH matching_emails AS (
-                SELECT DISTINCT application_events.email_id
-                FROM application_events
-                INNER JOIN applications
-                    ON applications.id = application_events.application_id
+            WITH matching_applications AS (
+                SELECT applications.id
+                FROM applications
                 WHERE applications.company IN ({placeholders})
-                  AND application_events.email_id IS NOT NULL
+            ),
+            matching_threads AS (
+                SELECT DISTINCT
+                    raw_emails.provider,
+                    raw_emails.thread_id,
+                    application_events.application_id
+                FROM application_events
+                INNER JOIN matching_applications
+                    ON matching_applications.id = application_events.application_id
+                INNER JOIN raw_emails
+                    ON raw_emails.id = application_events.email_id
+                WHERE raw_emails.thread_id IS NOT NULL
+                  AND LENGTH(TRIM(raw_emails.thread_id)) > 0
+            ),
+            matching_emails AS (
+                SELECT application_events.email_id, application_events.application_id
+                FROM application_events
+                INNER JOIN matching_applications
+                    ON matching_applications.id = application_events.application_id
+                WHERE application_events.email_id IS NOT NULL
+                UNION
+                SELECT raw_emails.id, matching_threads.application_id
+                FROM raw_emails
+                INNER JOIN matching_threads
+                    ON matching_threads.provider = raw_emails.provider
+                    AND matching_threads.thread_id = raw_emails.thread_id
             ),
             latest_indexed_email AS (
-                SELECT raw_emails.id
+                SELECT
+                    raw_emails.id,
+                    matching_emails.application_id
                 FROM matching_emails
                 INNER JOIN raw_emails ON raw_emails.id = matching_emails.email_id
+                INNER JOIN applications
+                    ON applications.id = matching_emails.application_id
                 WHERE EXISTS (
                     SELECT 1
                     FROM email_chunks
                     WHERE email_chunks.email_id = raw_emails.id
                 )
-                ORDER BY raw_emails.sent_at DESC, raw_emails.id
+                ORDER BY
+                    raw_emails.sent_at DESC,
+                    applications.last_activity_at DESC,
+                    raw_emails.id,
+                    matching_emails.application_id
                 LIMIT 1
             )
             SELECT
                 raw_emails.id AS email_id,
+                latest_indexed_email.application_id,
                 0 AS chunk_index,
                 raw_emails.body_text AS content,
                 raw_emails.public_id AS email_public_id,
@@ -280,7 +312,14 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
             """,
             mentioned,
         ).fetchall()
-        return tuple(self._semantic_result(row, distance=0.0) for row in rows)
+        return tuple(
+            self._semantic_result(
+                row,
+                distance=0.0,
+                application_ids=(str(row["application_id"]),),
+            )
+            for row in rows
+        )
 
     def _semantic_result(
         self,
@@ -288,19 +327,22 @@ class EmailChunkRepository(BaseRepository[SemanticSearchResult]):
         *,
         distance: float | None = None,
         company: str | None = None,
+        application_ids: tuple[str, ...] | None = None,
     ) -> SemanticSearchResult:
-        application_rows = self.execute(
-            """
-            SELECT DISTINCT application_id
-            FROM application_events
-            WHERE email_id = ?
-            ORDER BY application_id
-            """,
-            (row["email_id"],),
-        ).fetchall()
+        if application_ids is None:
+            application_rows = self.execute(
+                """
+                SELECT DISTINCT application_id
+                FROM application_events
+                WHERE email_id = ?
+                ORDER BY application_id
+                """,
+                (row["email_id"],),
+            ).fetchall()
+            application_ids = tuple(str(item[0]) for item in application_rows)
         return SemanticSearchResult(
             email_public_id=row["email_public_id"],
-            application_ids=tuple(str(item[0]) for item in application_rows),
+            application_ids=application_ids,
             company=company,
             chunk_index=row["chunk_index"],
             content=row["content"],
