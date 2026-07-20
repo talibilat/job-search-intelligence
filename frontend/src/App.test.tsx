@@ -230,6 +230,11 @@ function setupStatusResponse(
       },
       ready_to_classify: true,
       ready_to_sync: true,
+      web_search: {
+        action: "Enable web search and add a Tavily API key.",
+        message: "Web search is disabled.",
+        state: "disabled",
+      },
     },
     recommended_classification_mode: "local",
     setup_complete: true,
@@ -2967,6 +2972,19 @@ describe("App", () => {
         setup_complete: false,
         status: "accepted",
       },
+      "/config/providers/llm/health": {
+        checks: [
+          { detail: null, kind: "chat", model: "llama3.1", status: "available" },
+          {
+            detail: null,
+            kind: "embedding",
+            model: "nomic-embed-text",
+            status: "available",
+          },
+        ],
+        provider_name: "ollama",
+        status: "available",
+      },
     });
 
     renderAtPath("/setup");
@@ -2987,7 +3005,7 @@ describe("App", () => {
         }),
       );
     });
-    expect(await screen.findByText("Setup choices saved")).toBeTruthy();
+    expect(await screen.findByText("API connected")).toBeTruthy();
   });
 
   it("opens the grounded chat workspace at the direct chat route", async () => {

@@ -22,6 +22,7 @@ import { publicApiError } from "./apiError";
 import { ChatDrawer } from "./ChatDrawer";
 import { formatCount, formatRelativeTime } from "./theme";
 import { ApplicationsPage } from "./pages/ApplicationsPage";
+import { ChatArchitecturePage } from "./pages/ChatArchitecturePage";
 import { DetailPage } from "./pages/DetailPage";
 import { DeveloperPage } from "./pages/DeveloperPage";
 import { InsightsPage } from "./pages/InsightsPage";
@@ -35,6 +36,7 @@ export type RedesignPage =
   | "detail"
   | "insights"
   | "chat"
+  | "chatArchitecture"
   | "settings"
   | "dev";
 
@@ -89,6 +91,9 @@ export function redesignRouteFromPath(pathname: string): RedesignRoute | null {
   if (path === "/chat") {
     return { page: "chat", detailId: null, statusFilter: "all" };
   }
+  if (path === "/chat/architecture") {
+    return { page: "chatArchitecture", detailId: null, statusFilter: "all" };
+  }
   if (path === "/settings") {
     return { page: "settings", detailId: null, statusFilter: "all" };
   }
@@ -120,6 +125,8 @@ export function pathForRoute(route: RedesignRoute, search = ""): string {
     path = "/";
   } else if (route.page === "detail" && route.detailId) {
     path = `/applications/${encodeURIComponent(route.detailId)}`;
+  } else if (route.page === "chatArchitecture") {
+    path = "/chat/architecture";
   } else {
     path = `/${route.page}`;
   }
@@ -135,6 +142,7 @@ const PAGE_TITLES: Record<RedesignPage, string> = {
   detail: "Application",
   insights: "Insights",
   chat: "Ask your job search",
+  chatArchitecture: "Chat architecture",
   settings: "Settings",
   dev: "For developers",
 };
@@ -1120,6 +1128,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
           </section>
         ) : null}
         {route.page === "insights" ? <InsightsPage openApp={openApp} reloadKey={reloadKey} /> : null}
+        {route.page === "chatArchitecture" ? <ChatArchitecturePage /> : null}
         {route.page === "settings" ? (
           <SettingsPage
             connections={connections}

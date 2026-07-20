@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json as jsonlib
 import sqlite3
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,10 +12,15 @@ from typing import Any, cast
 import pytest
 from alembic import command
 from alembic.config import Config
-from app.agent.chat_graph import _structured_request, route_question
+from app.agent.chat_graph import (
+    _cached_insight_type,
+    _structured_request,
+    route_question,
+    synthesize_grounded_answer,
+)
 from app.agent.tools import CachedInsightTool
-from app.api.dependencies import get_llm_provider
-from app.config import AppSettings, get_settings
+from app.api.dependencies import get_llm_provider, get_web_search_provider
+from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.engine import load_sqlite_vec_sync
 from app.db.repositories import (
     ApplicationRepository,
@@ -23,18 +29,22 @@ from app.db.repositories import (
 )
 from app.main import create_app
 from app.models.insight import InsightCitation
+from app.models.web_search import WebSearchRequest, WebSearchResponse, WebSearchResult
 from app.providers.llm import (
     LLMEmbedding,
     LLMEmbeddingRequest,
     LLMEmbeddingResponse,
+    LLMFinishReason,
+    LLMGenerationChunk,
     LLMGenerationRequest,
+    LLMGenerationResponse,
     LLMProviderHealthCheckRequest,
 )
 from app.security import SecretRef, SecretStore
 from app.services.insights_service import InsightInputBuilder, configured_chat_model
 from app.services.wipe_data import wipe_local_data
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
+from pydantic import HttpUrl, SecretStr
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
@@ -55,11 +65,139 @@ class FakeChatProvider:
             ),
         )
 
-    async def generate(self, request: LLMGenerationRequest) -> None:
-        raise AssertionError(f"chat must not ask an LLM to restate tool facts: {request!r}")
+    async def generate(self, request: LLMGenerationRequest) -> LLMGenerationResponse:
+        payload = jsonlib.loads(request.messages[-1].content)
+        if "Respond naturally without tools" in request.messages[0].content:
+            return LLMGenerationResponse(
+                content=jsonlib.dumps(
+                    {
+                        "answer": "Hello! I can chat normally or help with your job search.",
+                        "follow_up_prompts": [],
+                    }
+                ),
+                model=request.model or "fake-chat",
+                finish_reason=LLMFinishReason.STOP,
+            )
+        question = str(payload["question"])
+        if question.casefold().strip() in {"hi", "hello", "hey"}:
+            simple_plan: dict[str, object] = {"route": "conversation"}
+            return LLMGenerationResponse(
+                content=jsonlib.dumps(simple_plan),
+                model=request.model or "fake-chat",
+                finish_reason=LLMFinishReason.STOP,
+            )
+        if "people apply" in question.casefold():
+            web_plan: dict[str, object] = {
+                "route": "web",
+                "web_search": {"query": question, "max_results": 3},
+            }
+            return LLMGenerationResponse(
+                content=jsonlib.dumps(web_plan),
+                model=request.model or "fake-chat",
+                finish_reason=LLMFinishReason.STOP,
+            )
+        route = route_question(question)
+        insight_type = _cached_insight_type(question)
+        plan: dict[str, object] = {"route": route}
+        if route in {"quantitative", "mixed"}:
+            plan["structured_query"] = _structured_request(question).model_dump(mode="json")
+        if insight_type is not None:
+            plan["cached_insight_type"] = insight_type
+        elif route in {"content", "mixed"}:
+            previous_questions = [
+                str(item["content"])
+                for item in reversed(payload.get("conversation", []))
+                if item.get("role") == "user"
+            ]
+            contextual = bool(previous_questions) and (
+                "they" in question.casefold() or question.casefold().startswith("what else")
+            )
+            retrieval_query = question
+            if contextual:
+                retrieval_query = "\n".join(
+                    [
+                        *(f"Previous user question: {item}" for item in previous_questions),
+                        f"Current user question: {question}",
+                    ]
+                )
+            plan["retrieval"] = {"mode": "semantic", "query": retrieval_query}
+        return LLMGenerationResponse(
+            content=jsonlib.dumps(plan),
+            model=request.model or "fake-chat",
+            finish_reason=LLMFinishReason.STOP,
+        )
+
+    async def stream_generate(
+        self,
+        request: LLMGenerationRequest,
+    ) -> AsyncIterator[LLMGenerationChunk]:
+        payload = jsonlib.loads(request.messages[-1].content)
+        evidence = payload["evidence"]
+        if not evidence:
+            output = {
+                "claims": [],
+                "is_refusal": True,
+                "refusal_reason": "No retained email evidence answered the question.",
+            }
+        elif all(item.get("company") for item in evidence):
+            output = {
+                "claims": [
+                    {
+                        "citation_ids": [item["citation_id"] for item in evidence],
+                        "text": "Companies mentioning the requested term: "
+                        + ", ".join(str(item["company"]) for item in evidence)
+                        + ".",
+                    }
+                ],
+                "is_refusal": False,
+                "refusal_reason": None,
+            }
+        else:
+            output = {
+                "claims": [
+                    {
+                        "citation_ids": [item["citation_id"]],
+                        "text": (
+                            f'Relevant source {"email " if item.get("content") else ""}evidence: "'
+                            f'{item.get("content") or item.get("snippet")}"'
+                        ),
+                    }
+                    for item in evidence
+                ],
+                "is_refusal": False,
+                "refusal_reason": None,
+            }
+        yield LLMGenerationChunk(
+            content_delta=jsonlib.dumps(output),
+            model=request.model or "fake-chat",
+        )
+        yield LLMGenerationChunk(
+            content_delta="",
+            model=request.model or "fake-chat",
+            finish_reason=LLMFinishReason.STOP,
+        )
 
     async def health_check(self, request: LLMProviderHealthCheckRequest) -> None:
         raise AssertionError(f"chat request must not perform a readiness probe: {request!r}")
+
+
+class FakeWebSearchProvider:
+    provider_name = "tavily"
+
+    def __init__(self) -> None:
+        self.requests: list[WebSearchRequest] = []
+
+    async def search(self, request: WebSearchRequest) -> WebSearchResponse:
+        self.requests.append(request)
+        return WebSearchResponse(
+            results=(
+                WebSearchResult(
+                    title="Application benchmark",
+                    url=HttpUrl("https://example.test/application-benchmark"),
+                    snippet="A cited public benchmark for typical application volume.",
+                ),
+            )
+        )
 
 
 class EmptySecretStore(SecretStore):
@@ -194,6 +332,9 @@ def test_q40_chat_reads_cached_cited_insight_without_provider_calls(tmp_path: Pa
         "subject": "Application update",
         "sent_at": None,
         "snippet": None,
+        "company": "Acme",
+        "role_title": "Platform Engineer",
+        "first_seen_at": "2026-07-16T00:00:00Z",
     }
     assert [event.get("tool") for event in response.events if event["type"] == "tool"] == [
         "cached_insight"
@@ -258,8 +399,7 @@ def test_q40_compound_chat_combines_rejection_count_and_cached_insight(tmp_path:
         "cached_insight",
     ]
     assert body["tool_outputs"][0]["rows"][0]["values"]["total_applications"] == 1
-    assert "Deterministic result:" in body["answer"]
-    assert "'total_applications': 1" in body["answer"]
+    assert "You submitted 1 application" in body["answer"]
     assert "role-specific experience" in body["answer"]
     assert {citation["source"] for citation in body["citations"]} == {"metric", "email"}
     assert [event.get("tool") for event in response.events if event["type"] == "tool"] == [
@@ -304,7 +444,7 @@ def test_q40_compound_chat_preserves_count_when_insight_is_missing(tmp_path: Pat
         "structured_query",
         "cached_insight",
     ]
-    assert "'total_applications': 1" in body["answer"]
+    assert "You submitted 1 application" in body["answer"]
     assert "rejection-themes insight has not been generated" in body["answer"]
     assert [citation["source"] for citation in body["citations"]] == ["metric"]
     assert provider.embedding_inputs == []
@@ -400,6 +540,9 @@ def test_q41_chat_reads_cached_cited_feedback_without_provider_calls(tmp_path: P
     assert body["tool_outputs"][0]["insight_type"] == "recurring_feedback"
     assert body["tool_outputs"][0]["status"] == "available"
     assert body["citations"][0]["citation_id"] == ("application:app-acme:event:event-feedback")
+    assert body["citations"][0]["company"] == "Acme"
+    assert body["citations"][0]["role_title"] == "Platform Engineer"
+    assert body["citations"][0]["first_seen_at"] == "2026-07-16T00:00:00Z"
     assert provider.embedding_inputs == []
 
 
@@ -980,18 +1123,10 @@ def test_structured_chat_maps_explicit_calendar_year_to_typed_metric_filters(
     request = _structured_request(question)
 
     assert request.template == "summary_counts"
-    assert request.filters is not None
-    assert request.filters.first_seen_from == datetime(2025, 1, 1, tzinfo=UTC)
-    assert request.filters.first_seen_to == datetime(
-        2025,
-        12,
-        31,
-        23,
-        59,
-        59,
-        999999,
-        tzinfo=UTC,
-    )
+    assert request.filters is None
+    assert request.date_window is not None
+    assert request.date_window.kind == "calendar_year"
+    assert request.date_window.year == 2025
 
 
 def test_structured_chat_composes_source_and_relative_window_filters() -> None:
@@ -1013,6 +1148,87 @@ def test_structured_chat_composes_source_and_relative_window_filters() -> None:
         999999,
         tzinfo=UTC,
     )
+
+
+@pytest.mark.parametrize(
+    "question",
+    ("Show latest application", "Show my most recent application", "Show last application"),
+)
+def test_structured_chat_limits_singular_latest_application_requests(question: str) -> None:
+    request = _structured_request(question)
+
+    assert route_question(question) == "quantitative"
+    assert request.template == "application_list"
+    assert request.limit == 1
+
+
+def test_structured_chat_honors_explicit_list_limit() -> None:
+    request = _structured_request("Show the latest 3 applications")
+
+    assert request.template == "application_list"
+    assert request.limit == 3
+
+
+def test_latest_application_chat_returns_one_detailed_card(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        insert_application(connection, application_id="app-acme", company="Acme")
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+
+    response = post_chat(client, "/chat", json={"message": "Show latest application"})
+
+    body = response.json()
+    assert body["route"] == "quantitative"
+    assert body["answer"] == (
+        "Here is the matching application with its company, role, and status."
+    )
+    assert body["tool_outputs"][0]["template"] == "application_list"
+    assert body["tool_outputs"][0]["limit"] == 1
+    assert body["tool_outputs"][0]["returned_count"] == 1
+    assert len(body["citations"]) == 1
+    assert body["citations"][0] | {
+        "email_public_id": None,
+        "metric_template": None,
+        "sent_at": None,
+        "snippet": None,
+        "subject": None,
+    } == {
+        "application_id": "app-acme",
+        "citation_id": "application:app-acme",
+        "company": "Acme",
+        "current_status": "in_review",
+        "email_public_id": None,
+        "first_seen_at": "2026-06-01T10:00:00Z",
+        "metric_template": None,
+        "role_title": "Platform Engineer",
+        "sent_at": None,
+        "snippet": None,
+        "source": "application",
+        "subject": None,
+    }
+
+
+def test_structured_synthesis_never_exposes_schema_shaped_dictionary_output() -> None:
+    answer = synthesize_grounded_answer(
+        "quantitative",
+        [
+            {
+                "tool": "structured_query",
+                "template": "funnel",
+                "source": "metrics_repository",
+                "rows": [
+                    {"label": "applied", "values": {"count": 12}},
+                    {"label": "interview", "values": {"count": 3}},
+                ],
+            }
+        ],
+        (),
+        [],
+    )
+
+    assert answer == "Your application funnel is applied: 12; interview: 3."
+    assert "{" not in answer
 
 
 @pytest.mark.parametrize(
@@ -2520,7 +2736,12 @@ def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(
         "tool",
         "answer",
     ]
-    assert [event["type"] for event in quantitative.events] == ["route", "tool", "complete"]
+    assert [event["type"] for event in quantitative.events] == [
+        "route",
+        "tool",
+        "answer_delta",
+        "complete",
+    ]
     assert quantitative.response.headers["cache-control"] == "no-cache"
     assert quantitative.response.headers["x-accel-buffering"] == "no"
     assert provider.embedding_inputs == []
@@ -2630,6 +2851,9 @@ def test_chat_api_reconciles_metrics_retrieves_citations_and_persists_history(
         "subject": None,
         "sent_at": None,
         "snippet": None,
+        "company": "Acme",
+        "role_title": "Platform Engineer",
+        "current_status": "in_review",
     }
 
     history = client.get("/chat/history", params={"conversation_id": "q-mixed"})
@@ -2680,6 +2904,44 @@ def test_chat_index_removes_ineligible_vectors_and_refuses_unsupported_content(
         assert connection.execute("SELECT COUNT(*) FROM email_chunk_index_state").fetchone()[0] == 0
 
 
+def test_semantic_chat_reports_missing_embedding_deployment_as_stream_error(
+    tmp_path: Path,
+) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    settings = AppSettings(
+        _env_file=None,
+        database_url=f"sqlite:///{database_path}",
+        llm_provider=LLMProviderName.AZURE_OPENAI,
+        azure_openai_endpoint="https://example.openai.azure.com",
+        azure_openai_chat_deployment="chat",
+        azure_openai_embedding_deployment="",
+    )
+    app = create_app(settings=settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_llm_provider] = lambda: FakeChatProvider()
+
+    response = TestClient(app).post(
+        "/chat",
+        json={"message": "What exactly did Acme say?"},
+    )
+
+    events = [
+        jsonlib.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")
+    ]
+    assert response.status_code == 200
+    assert events[-1] == {
+        "type": "error",
+        "conversation_id": "pending",
+        "route": None,
+        "tool": None,
+        "answer_delta": None,
+        "response": None,
+        "error_code": "llm_provider_unavailable",
+        "error_message": "Configure an embedding model before using chat retrieval.",
+    }
+
+
 def test_q47_last_email_uses_latest_company_evidence_not_nearest_vector(
     tmp_path: Path,
 ) -> None:
@@ -2727,8 +2989,10 @@ def test_q47_last_email_uses_latest_company_evidence_not_nearest_vector(
     assert len(body["citations"]) == 1
     assert body["citations"][0]["subject"] == "Interview update"
     assert provider.embedding_inputs == [
-        ("Acme recruiter discussed a historical perfect match.",),
-        ("Acme recruiter: Technical interview moved to Friday.",),
+        (
+            "Acme recruiter discussed a historical perfect match.",
+            "Acme recruiter: Technical interview moved to Friday.",
+        ),
     ]
 
 
@@ -2775,8 +3039,10 @@ def test_q47_last_email_includes_newer_indexed_message_from_application_thread(
     assert body["citations"][0]["subject"] == "Friday interview details"
     assert body["citations"][0]["application_id"] == "app-acme"
     assert provider.embedding_inputs == [
-        ("Acme recruiter: Technical interview moved to Friday.",),
-        ("Acme recruiter: Please bring your architecture examples to Friday's interview.",),
+        (
+            "Acme recruiter: Technical interview moved to Friday.",
+            "Acme recruiter: Please bring your architecture examples to Friday's interview.",
+        ),
     ]
 
 
@@ -2824,8 +3090,10 @@ def test_q47_last_recruiter_email_excludes_newer_candidate_authored_follow_up(
     assert len(body["citations"]) == 1
     assert body["citations"][0]["subject"] == "Interview update"
     assert provider.embedding_inputs == [
-        ("Acme recruiter: Technical interview moved to Friday.",),
-        ("Thanks, I look forward to speaking with the Acme team.",),
+        (
+            "Acme recruiter: Technical interview moved to Friday.",
+            "Thanks, I look forward to speaking with the Acme team.",
+        ),
     ]
 
 
@@ -3380,6 +3648,91 @@ def test_chat_request_validates_blank_ids_and_openapi_has_incremental_contract(
     ]
 
 
+def test_casual_conversation_uses_no_tools_or_embeddings(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    provider = FakeChatProvider()
+    web_provider = FakeWebSearchProvider()
+    client = create_chat_client(database_path, provider, web_provider=web_provider)
+
+    response = post_chat(client, "/chat", json={"message": "Hi"})
+
+    body = response.json()
+    assert body["route"] == "conversation"
+    assert body["answer_kind"] == "conversation"
+    assert body["tool_outputs"] == []
+    assert body["citations"] == []
+    assert provider.embedding_inputs == []
+    assert web_provider.requests == []
+
+
+def test_broad_external_statistic_uses_cited_web_search(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    provider = FakeChatProvider()
+    web_provider = FakeWebSearchProvider()
+    client = create_chat_client(database_path, provider, web_provider=web_provider)
+
+    response = post_chat(
+        client,
+        "/chat",
+        json={"message": "How many jobs do people apply for?"},
+    )
+
+    body = response.json()
+    assert body["route"] == "web"
+    assert [item["tool"] for item in body["tool_outputs"]] == ["web_search"]
+    assert body["citations"][0]["source"] == "web"
+    assert body["citations"][0]["web_title"] == "Application benchmark"
+    assert body["citations"][0]["web_url"].startswith("https://")
+    assert len(web_provider.requests) == 1
+    assert provider.embedding_inputs == []
+
+
+def test_chat_retry_replays_completed_turn_without_duplicate_history(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+    request = {
+        "turn_id": "stable-turn",
+        "message": "How many applications have I submitted?",
+    }
+
+    first = post_chat(client, "/chat", json=request)
+    second = post_chat(client, "/chat", json=request)
+
+    assert first.json() == second.json()
+    assert [event["type"] for event in second.events] == ["answer_delta", "complete"]
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT role, COUNT(*) FROM chat_messages WHERE turn_id = ? "
+            "GROUP BY role ORDER BY role",
+            ("stable-turn",),
+        ).fetchall() == [("assistant", 1), ("tool", 1), ("user", 1)]
+
+
+def test_chat_rejects_reusing_turn_id_for_a_different_question(tmp_path: Path) -> None:
+    database_path = migrated_database(tmp_path)
+    seed_chat_sources(database_path)
+    provider = FakeChatProvider()
+    client = create_chat_client(database_path, provider)
+    post_chat(
+        client,
+        "/chat",
+        json={"turn_id": "stable-turn", "message": "How many applications?"},
+    )
+
+    response = client.post(
+        "/chat",
+        json={"turn_id": "stable-turn", "message": "How many offers?"},
+    )
+    events = [
+        jsonlib.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")
+    ]
+
+    assert events[-1]["type"] == "error"
+    assert events[-1]["error_code"] == "chat_turn_conflict"
+
+
 def test_wipe_removes_persisted_chat_and_embeddings(tmp_path: Path) -> None:
     data_dir = tmp_path / ".jobtracker"
     database_path = migrated_database(data_dir)
@@ -3414,6 +3767,7 @@ def create_chat_client(
     provider: FakeChatProvider,
     *,
     index_batch_size: int = 1000,
+    web_provider: FakeWebSearchProvider | None = None,
 ) -> TestClient:
     settings = AppSettings(
         _env_file=None,
@@ -3432,6 +3786,9 @@ def create_chat_client(
     app = create_app(settings=settings)
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_llm_provider] = lambda: provider
+    app.dependency_overrides[get_web_search_provider] = lambda: (
+        web_provider or FakeWebSearchProvider()
+    )
     return TestClient(app)
 
 

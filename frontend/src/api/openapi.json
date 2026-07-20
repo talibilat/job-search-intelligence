@@ -1201,6 +1201,14 @@
         "title": "CapabilityReadiness",
         "type": "object"
       },
+      "ChatAnswerKind": {
+        "enum": [
+          "conversation",
+          "grounded",
+          "refusal"
+        ],
+        "type": "string"
+      },
       "ChatCitation": {
         "properties": {
           "application_id": {
@@ -1219,6 +1227,28 @@
             "title": "Citation Id",
             "type": "string"
           },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "current_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Status"
+          },
           "email_public_id": {
             "anyOf": [
               {
@@ -1230,6 +1260,18 @@
             ],
             "title": "Email Public Id"
           },
+          "first_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen At"
+          },
           "metric_template": {
             "anyOf": [
               {
@@ -1240,6 +1282,17 @@
               }
             ],
             "title": "Metric Template"
+          },
+          "role_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Title"
           },
           "sent_at": {
             "anyOf": [
@@ -1277,6 +1330,39 @@
               }
             ],
             "title": "Subject"
+          },
+          "web_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Domain"
+          },
+          "web_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Title"
+          },
+          "web_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Url"
           }
         },
         "required": [
@@ -1290,9 +1376,33 @@
         "enum": [
           "email",
           "application",
-          "metric"
+          "metric",
+          "web"
         ],
         "type": "string"
+      },
+      "ChatFollowUpPrompt": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "message"
+        ],
+        "title": "ChatFollowUpPrompt",
+        "type": "object"
       },
       "ChatHistoryResponse": {
         "properties": {
@@ -1336,6 +1446,16 @@
       },
       "ChatMessageRecord": {
         "properties": {
+          "answer_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatAnswerKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "citations_json": {
             "$ref": "#/components/schemas/JsonObjectList"
           },
@@ -1352,6 +1472,9 @@
             "title": "Created At",
             "type": "string"
           },
+          "follow_up_prompts_json": {
+            "$ref": "#/components/schemas/JsonObjectList"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -1359,8 +1482,31 @@
           "role": {
             "$ref": "#/components/schemas/ChatMessageRole"
           },
+          "route": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatRoute"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "tool_outputs_json": {
             "$ref": "#/components/schemas/JsonObjectList"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
           }
         },
         "required": [
@@ -1413,6 +1559,19 @@
             "minimum": 1.0,
             "title": "Retrieval Limit",
             "type": "integer"
+          },
+          "timezone": {
+            "default": "UTC",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          },
+          "turn_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Turn Id",
+            "type": "string"
           }
         },
         "required": [
@@ -1427,6 +1586,10 @@
             "title": "Answer",
             "type": "string"
           },
+          "answer_kind": {
+            "$ref": "#/components/schemas/ChatAnswerKind",
+            "default": "grounded"
+          },
           "citations": {
             "items": {
               "$ref": "#/components/schemas/ChatCitation"
@@ -1437,6 +1600,13 @@
           "conversation_id": {
             "title": "Conversation Id",
             "type": "string"
+          },
+          "follow_up_prompts": {
+            "items": {
+              "$ref": "#/components/schemas/ChatFollowUpPrompt"
+            },
+            "title": "Follow Up Prompts",
+            "type": "array"
           },
           "increments": {
             "items": {
@@ -1465,8 +1635,10 @@
       },
       "ChatRoute": {
         "enum": [
+          "conversation",
           "quantitative",
           "content",
+          "web",
           "mixed"
         ],
         "type": "string"
@@ -1475,6 +1647,17 @@
         "additionalProperties": false,
         "description": "One server-sent event emitted while a grounded chat turn runs.",
         "properties": {
+          "answer_delta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Delta"
+          },
           "conversation_id": {
             "title": "Conversation Id",
             "type": "string"
@@ -1527,7 +1710,8 @@
                 "enum": [
                   "structured_query",
                   "semantic_search",
-                  "cached_insight"
+                  "cached_insight",
+                  "web_search"
                 ],
                 "type": "string"
               },
@@ -1541,6 +1725,7 @@
             "enum": [
               "route",
               "tool",
+              "answer_delta",
               "complete",
               "error"
             ],
@@ -4547,6 +4732,78 @@
               }
             ],
             "title": "Sync On Open"
+          },
+          "tavily_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tavily Api Key"
+          },
+          "tavily_base_url": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tavily Base Url"
+          },
+          "web_search_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Search Enabled"
+          },
+          "web_search_max_results": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Search Max Results"
+          },
+          "web_search_provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WebSearchProviderName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "web_search_timeout_seconds": {
+            "anyOf": [
+              {
+                "maximum": 120.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Search Timeout Seconds"
           }
         },
         "title": "ProviderConfigUpdateRequest",
@@ -4597,6 +4854,29 @@
           "sync_on_open": {
             "title": "Sync On Open",
             "type": "boolean"
+          },
+          "tavily_base_url": {
+            "title": "Tavily Base Url",
+            "type": "string"
+          },
+          "web_search_enabled": {
+            "title": "Web Search Enabled",
+            "type": "boolean"
+          },
+          "web_search_max_results": {
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Web Search Max Results",
+            "type": "integer"
+          },
+          "web_search_provider": {
+            "$ref": "#/components/schemas/WebSearchProviderName"
+          },
+          "web_search_timeout_seconds": {
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Web Search Timeout Seconds",
+            "type": "integer"
           }
         },
         "required": [
@@ -4609,7 +4889,12 @@
           "azure_openai_embedding_deployment",
           "ollama_base_url",
           "ollama_chat_model",
-          "ollama_embedding_model"
+          "ollama_embedding_model",
+          "web_search_provider",
+          "web_search_enabled",
+          "tavily_base_url",
+          "web_search_max_results",
+          "web_search_timeout_seconds"
         ],
         "title": "ProviderConfigValues",
         "type": "object"
@@ -4635,6 +4920,9 @@
           "ready_to_sync": {
             "title": "Ready To Sync",
             "type": "boolean"
+          },
+          "web_search": {
+            "$ref": "#/components/schemas/CapabilityReadiness"
           }
         },
         "required": [
@@ -4643,7 +4931,8 @@
           "gmail_sync",
           "classification_generation",
           "embedding_generation",
-          "chat_generation"
+          "chat_generation",
+          "web_search"
         ],
         "title": "ProviderReadinessResponse",
         "type": "object"
@@ -5003,7 +5292,8 @@
           "missing_credential",
           "unavailable",
           "reauth_required",
-          "not_implemented"
+          "not_implemented",
+          "disabled"
         ],
         "title": "ReadinessState",
         "type": "string"
@@ -5109,7 +5399,8 @@
         "enum": [
           "oauth_token",
           "oauth_client",
-          "llm_api_key"
+          "llm_api_key",
+          "web_search_api_key"
         ],
         "title": "SecretKind",
         "type": "string"
@@ -5606,6 +5897,13 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "WebSearchProviderName": {
+        "enum": [
+          "tavily"
+        ],
+        "title": "WebSearchProviderName",
+        "type": "string"
       },
       "WipeDataRequest": {
         "additionalProperties": false,

@@ -59,7 +59,7 @@ def create_app(
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     database_path = sqlite_database_path(resolved_settings.database_url)
-    if database_path.is_file():
+    if settings is None and database_path.is_file():
         connection = sqlite3.connect(database_path)
         try:
             apply_persisted_provider_config(

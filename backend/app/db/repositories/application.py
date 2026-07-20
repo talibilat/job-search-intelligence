@@ -6,6 +6,7 @@ from typing import Literal
 
 from app.db.repositories._row import row_to_dict
 from app.db.repositories.base import BaseRepository
+from app.models.chat import ApplicationFollowUpState
 from app.models.records import (
     ApplicationRecord,
     ApplicationSource,
@@ -61,6 +62,109 @@ class ApplicationRepository(BaseRepository[ApplicationRecord]):
             sql = f"{sql} WHERE {' AND '.join(clauses)}"
         sql = f"{sql} ORDER BY first_seen_at DESC, id ASC"
         return self.fetch_all(sql, tuple(parameters))
+
+    def get_follow_up_state(
+        self,
+        application_id: str,
+        *,
+        now: str,
+    ) -> ApplicationFollowUpState | None:
+        row = self.execute(
+            """
+            WITH latest_event AS (
+                SELECT
+                    application_events.application_id,
+                    application_events.event_type,
+                    application_events.event_at,
+                    application_events.email_id,
+                    raw_emails.labels,
+                    ROW_NUMBER() OVER (
+                        ORDER BY application_events.event_at DESC, application_events.id DESC
+                    ) AS event_rank
+                FROM application_events
+                LEFT JOIN raw_emails ON raw_emails.id = application_events.email_id
+                WHERE application_events.application_id = ?
+            )
+            SELECT
+                latest_event.application_id,
+                latest_event.event_at AS latest_event_at,
+                latest_event.event_type AS latest_event_type,
+                CASE
+                    WHEN latest_event.email_id IS NULL THEN 'unknown'
+                    WHEN EXISTS (
+                        SELECT 1 FROM json_each(latest_event.labels)
+                        WHERE UPPER(TRIM(json_each.value)) = 'SENT'
+                    ) THEN 'outbound'
+                    ELSE 'inbound'
+                END AS latest_direction,
+                EXISTS (
+                    SELECT 1
+                    FROM application_events AS future_events
+                    WHERE future_events.application_id = latest_event.application_id
+                      AND future_events.event_type = 'interview_scheduled'
+                      AND future_events.event_at > ?
+                ) AS has_future_interview
+            FROM latest_event
+            WHERE latest_event.event_rank = 1
+            """,
+            (application_id, now),
+        ).fetchone()
+        if row is None:
+            return None
+        return ApplicationFollowUpState.model_validate(row_to_dict(row))
+
+    def list_follow_up_states(
+        self,
+        application_ids: list[str],
+        *,
+        now: str,
+    ) -> dict[str, ApplicationFollowUpState]:
+        if not application_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in application_ids)
+        rows = self.execute(
+            f"""
+            WITH ranked_events AS (
+                SELECT
+                    application_events.application_id,
+                    application_events.event_type,
+                    application_events.event_at,
+                    application_events.email_id,
+                    raw_emails.labels,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY application_events.application_id
+                        ORDER BY application_events.event_at DESC, application_events.id DESC
+                    ) AS event_rank
+                FROM application_events
+                LEFT JOIN raw_emails ON raw_emails.id = application_events.email_id
+                WHERE application_events.application_id IN ({placeholders})
+            )
+            SELECT
+                ranked_events.application_id,
+                ranked_events.event_at AS latest_event_at,
+                ranked_events.event_type AS latest_event_type,
+                CASE
+                    WHEN ranked_events.email_id IS NULL THEN 'unknown'
+                    WHEN EXISTS (
+                        SELECT 1 FROM json_each(ranked_events.labels)
+                        WHERE UPPER(TRIM(json_each.value)) = 'SENT'
+                    ) THEN 'outbound'
+                    ELSE 'inbound'
+                END AS latest_direction,
+                EXISTS (
+                    SELECT 1
+                    FROM application_events AS future_events
+                    WHERE future_events.application_id = ranked_events.application_id
+                      AND future_events.event_type = 'interview_scheduled'
+                      AND future_events.event_at > ?
+                ) AS has_future_interview
+            FROM ranked_events
+            WHERE ranked_events.event_rank = 1
+            """,
+            (*application_ids, now),
+        ).fetchall()
+        states = (ApplicationFollowUpState.model_validate(row_to_dict(row)) for row in rows)
+        return {item.application_id: item for item in states}
 
     def count_by_status(
         self,

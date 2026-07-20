@@ -3,10 +3,13 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import {
   loadChatHistory,
   sendChatTurn,
+  type ChatAnswerKind,
   type ChatCitation,
+  type ChatFollowUpPrompt,
   type ChatHistoryMessage,
 } from "../api";
 import { publicApiError } from "./apiError";
+import { ChatCitationCards } from "./components/ChatCitationCards";
 import { EmailReaderDialog } from "./components/EmailReaderDialog";
 
 const SUGGESTIONS = [
@@ -16,12 +19,20 @@ const SUGGESTIONS = [
 ];
 
 type VisibleMessage = Pick<ChatHistoryMessage, "content" | "conversation_id" | "created_at"> & {
+  answerKind?: ChatAnswerKind;
   citations: ChatCitation[];
+  followUpPrompts: ChatFollowUpPrompt[];
   id: number | string;
   role: "assistant" | "user";
 };
 
-type ChatFailure = "history" | "provider" | "request" | null;
+type ChatFailure = "history" | "provider" | "request" | "web" | null;
+
+interface PendingTurn {
+  assistantId: string;
+  question: string;
+  turnId: string;
+}
 
 interface ConversationSummary {
   id: string;
@@ -36,10 +47,12 @@ function visibleMessages(history: ChatHistoryMessage[]): VisibleMessage[] {
         message.role === "assistant" || message.role === "user",
     )
     .map((message) => ({
+      answerKind: message.answer_kind,
       citations: message.citations,
       content: message.content,
       conversation_id: message.conversation_id,
       created_at: message.created_at,
+      followUpPrompts: message.follow_up_prompts ?? [],
       id: message.id,
       role: message.role,
     }));
@@ -86,22 +99,14 @@ function messageStyle(role: "assistant" | "user"): CSSProperties {
       };
 }
 
-function isProviderUnavailable(error: unknown): boolean {
-  if (typeof error !== "object" || error === null || !("response" in error)) return false;
+function chatErrorCode(error: unknown): string | null {
+  if (typeof error !== "object" || error === null || !("response" in error)) return null;
   const response = (error as { response?: { data?: unknown; status?: number } }).response;
-  if (response?.status === 503) return true;
   if (typeof response?.data !== "object" || response.data === null || !("error" in response.data)) {
-    return false;
+    return response?.status === 503 ? "llm_provider_unavailable" : null;
   }
   const detail = (response.data as { error?: { code?: unknown } }).error;
-  return detail?.code === "llm_provider_unavailable";
-}
-
-function citationTitle(citation: ChatCitation): string {
-  if (citation.subject?.trim()) return citation.subject;
-  if (citation.source === "application") return "Application record";
-  if (citation.source === "metric") return "Deterministic dashboard metric";
-  return "Email evidence";
+  return typeof detail?.code === "string" ? detail.code : null;
 }
 
 export function ChatDrawer({
@@ -120,13 +125,14 @@ export function ChatDrawer({
   const [historyLoading, setHistoryLoading] = useState(true);
   const [failure, setFailure] = useState<ChatFailure>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastQuestion, setLastQuestion] = useState<string | null>(null);
+  const [lastTurn, setLastTurn] = useState<PendingTurn | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [emailPublicId, setEmailPublicId] = useState<string | null>(null);
   const emailCitationTriggerRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const requestSequence = useRef(0);
+  const activeTurn = useRef<AbortController | null>(null);
 
   const fetchHistory = async (selectedConversationId?: string) => {
     const sequence = ++requestSequence.current;
@@ -164,17 +170,19 @@ export function ChatDrawer({
     queueMicrotask(() => void fetchHistory());
     return () => {
       requestSequence.current += 1;
+      activeTurn.current?.abort();
     };
   }, []);
 
   const startNewChat = () => {
+    activeTurn.current?.abort();
     requestSequence.current += 1;
     setMessages([]);
     setConversationId(null);
     setHistoryLoading(false);
     setFailure(null);
     setErrorMessage(null);
-    setLastQuestion(null);
+    setLastTurn(null);
     setProgress(null);
   };
 
@@ -188,12 +196,19 @@ export function ChatDrawer({
     }
   }, [messages, progress]);
 
-  const ask = async (question: string, appendUser = true) => {
+  const ask = async (question: string, retryTurn?: PendingTurn) => {
     const trimmed = question.trim();
     if (!trimmed || sending) return;
-    const optimisticId = `user-${Date.now()}`;
+    const turnId = retryTurn?.turnId ?? crypto.randomUUID();
+    const assistantId = retryTurn?.assistantId ?? `assistant-${turnId}`;
     const requestedAt = new Date().toISOString();
-    if (appendUser) {
+    if (retryTurn) {
+      setMessages((current) => current.map((message) =>
+        message.id === assistantId
+          ? { ...message, answerKind: undefined, citations: [], content: "", followUpPrompts: [] }
+          : message,
+      ));
+    } else {
       setMessages((current) => [
         ...current,
         {
@@ -201,40 +216,73 @@ export function ChatDrawer({
           content: trimmed,
           conversation_id: conversationId ?? "pending",
           created_at: requestedAt,
-          id: optimisticId,
+          id: `user-${turnId}`,
+          followUpPrompts: [],
           role: "user",
+        },
+        {
+          citations: [],
+          content: "",
+          conversation_id: conversationId ?? "pending",
+          created_at: requestedAt,
+          followUpPrompts: [],
+          id: assistantId,
+          role: "assistant",
         },
       ]);
     }
+    const pendingTurn = { assistantId, question: trimmed, turnId };
+    const controller = new AbortController();
+    activeTurn.current?.abort();
+    activeTurn.current = controller;
     setDraft("");
-    setLastQuestion(trimmed);
+    setLastTurn(pendingTurn);
     setFailure(null);
     setErrorMessage(null);
     setSending(true);
-    setProgress("Routing your question through local job-search data…");
+    setProgress("Planning the best way to answer…");
     try {
       const response = await sendChatTurn(
         {
           conversation_id: conversationId,
           message: trimmed,
+          turn_id: turnId,
         },
         (event) => {
           if (event.type === "route") {
             const routeLabel = event.route === "quantitative"
-              ? "Checking deterministic dashboard facts…"
+              ? "Checking deterministic local dashboard facts…"
+              : event.route === "web"
+                ? "Searching the web for current information…"
               : event.route === "mixed"
-                ? "Checking metrics and cited email evidence…"
-                : "Searching cited email evidence…";
+                ? "Searching web and local job-search evidence…"
+                : event.route === "conversation"
+                  ? "Preparing a conversational response…"
+                  : "Searching cited local email evidence…";
             setProgress(routeLabel);
           } else if (event.type === "tool") {
             const toolLabel = event.tool === "structured_query"
-              ? "Reconciling the answer with dashboard metrics…"
+              ? "Reconciling the answer with local dashboard metrics…"
+              : event.tool === "web_search"
+                ? "Reviewing current web results…"
               : event.tool === "cached_insight"
-                ? "Reading your cached cited insight…"
-                : "Reviewing safe retained email evidence…";
+                ? "Reading your cached local insight…"
+                : "Reviewing safe retained local email evidence…";
             setProgress(toolLabel);
+          } else if (event.type === "answer_delta") {
+            setProgress(null);
+            setMessages((current) => current.map((message) =>
+              message.id === assistantId
+                ? {
+                    ...message,
+                    content: message.content + event.answer_delta,
+                    conversation_id: event.conversation_id,
+                  }
+                : message,
+            ));
           }
         },
+        controller.signal,
       );
       setConversationId(response.conversation_id);
       setConversations((current) => {
@@ -248,31 +296,50 @@ export function ChatDrawer({
         };
         return [summary, ...current.filter((conversation) => conversation.id !== response.conversation_id)];
       });
-      setMessages((current) => [
-        ...current,
-        {
-          citations: response.citations,
-          content: response.answer,
-          conversation_id: response.conversation_id,
-          created_at: new Date().toISOString(),
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-        },
-      ]);
+      setMessages((current) => current.map((message) =>
+        message.id === assistantId
+          ? {
+              ...message,
+              answerKind: response.answer_kind,
+              citations: response.citations,
+              content: response.answer,
+              conversation_id: response.conversation_id,
+              created_at: new Date().toISOString(),
+              followUpPrompts: response.follow_up_prompts ?? [],
+            }
+          : message,
+      ));
       setProgress(null);
     } catch (error) {
+      if (controller.signal.aborted) return;
       setProgress(null);
-      setFailure(isProviderUnavailable(error) ? "provider" : "request");
+      setMessages((current) => current.map((message) =>
+        message.id === assistantId
+          ? { ...message, answerKind: undefined, citations: [], content: "", followUpPrompts: [] }
+          : message,
+      ));
+      const errorCode = chatErrorCode(error);
+      const nextFailure = errorCode === "web_search_unavailable"
+        ? "web"
+        : errorCode === "llm_provider_unavailable"
+          ? "provider"
+          : "request";
+      setFailure(nextFailure);
       setErrorMessage(
         publicApiError(
           error,
-          isProviderUnavailable(error)
+          nextFailure === "provider"
             ? "The configured AI provider is unavailable."
+            : nextFailure === "web"
+              ? "Web search is not configured or is currently unavailable."
             : "The grounded answer could not be completed.",
         ),
       );
     } finally {
-      setSending(false);
+      if (activeTurn.current === controller) {
+        activeTurn.current = null;
+        setSending(false);
+      }
     }
   };
 
@@ -337,40 +404,30 @@ export function ChatDrawer({
           ) : null}
 
           {messages.map((message) => {
-            const refusal = message.role === "assistant" && message.citations.length === 0;
+            const refusal = message.role === "assistant" && message.answerKind === "refusal";
             return (
               <article key={message.id} style={messageStyle(message.role)}>
                 {refusal ? <div className="rd-chat-refusal-label">Grounded refusal</div> : null}
                 <div className="rd-chat-message">{message.content}</div>
-                {message.citations.length > 0 ? (
-                  <div aria-label="Sources" className="rd-chat-citations">
-                    {message.citations.map((citation) => (
-                      <div className="rd-chat-citation" key={citation.citation_id}>
-                        <strong>{citationTitle(citation)}</strong>
-                        {citation.sent_at ? <span>{new Date(citation.sent_at).toLocaleDateString()}</span> : null}
-                        {citation.snippet ? <q>{citation.snippet}</q> : null}
-                        <div className="rd-chat-citation-actions">
-                          {citation.application_id ? (
-                            <button onClick={() => onOpenApplication(citation.application_id!)} type="button">
-                              View application
-                            </button>
-                          ) : null}
-                          {citation.source === "email" && citation.email_public_id ? (
-                            <button
-                              onClick={(event) => {
-                                emailCitationTriggerRef.current = event.currentTarget;
-                                setEmailPublicId(citation.email_public_id!);
-                              }}
-                              type="button"
-                            >
-                              Open email evidence
-                            </button>
-                          ) : null}
-                          {citation.source === "metric" ? (
-                            <span>Dashboard metric · {citation.metric_template ?? "verified query"}</span>
-                          ) : null}
-                        </div>
-                      </div>
+                <ChatCitationCards
+                  citations={message.citations}
+                  onOpenApplication={onOpenApplication}
+                  onOpenEmail={(publicId, trigger) => {
+                    emailCitationTriggerRef.current = trigger;
+                    setEmailPublicId(publicId);
+                  }}
+                />
+                {message.role === "assistant" && message.followUpPrompts.length > 0 ? (
+                  <div aria-label="Follow-up prompts" className="rd-chat-follow-ups">
+                    {message.followUpPrompts.map((prompt) => (
+                      <button
+                        disabled={sending}
+                        key={`${message.id}-${prompt.message}`}
+                        onClick={() => void ask(prompt.message)}
+                        type="button"
+                      >
+                        {prompt.label}
+                      </button>
                     ))}
                   </div>
                 ) : null}
@@ -379,13 +436,21 @@ export function ChatDrawer({
           })}
 
           {progress ? <div className="rd-chat-progress" role="status"><span />{progress}</div> : null}
-          {failure === "provider" || failure === "request" ? (
+          {failure === "provider" || failure === "request" || failure === "web" ? (
             <div className="rd-chat-error" role="alert">
-              <strong>{failure === "provider" ? "AI provider unavailable" : "Answer interrupted"}</strong>
+              <strong>
+                {failure === "provider"
+                  ? "AI provider unavailable"
+                  : failure === "web"
+                    ? "Web search unavailable"
+                    : "Answer interrupted"}
+              </strong>
               <span>{errorMessage}</span>
               <div>
-                <button disabled={sending} onClick={() => lastQuestion && void ask(lastQuestion, false)} type="button">Retry answer</button>
-                {failure === "provider" ? <button onClick={onOpenSettings} type="button">Open Settings</button> : null}
+                <button disabled={sending} onClick={() => lastTurn && void ask(lastTurn.question, lastTurn)} type="button">Retry answer</button>
+                {failure === "provider" || failure === "web" ? (
+                  <button onClick={onOpenSettings} type="button">Open Settings</button>
+                ) : null}
               </div>
             </div>
           ) : null}

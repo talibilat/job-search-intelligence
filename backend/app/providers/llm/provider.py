@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Protocol, runtime_checkable
 
 from .types import (
     LLMEmbeddingRequest,
     LLMEmbeddingResponse,
+    LLMGenerationChunk,
     LLMGenerationRequest,
     LLMGenerationResponse,
     LLMProviderHealthCheckRequest,
@@ -31,6 +33,18 @@ class LLMProvider(Protocol):
         request: LLMProviderHealthCheckRequest,
     ) -> LLMProviderHealthCheckResponse:
         """Verify the configured provider models can be used before a run starts."""
+        ...
+
+
+@runtime_checkable
+class LLMStreamingProvider(LLMProvider, Protocol):
+    """Generation provider that can emit real provider token deltas."""
+
+    def stream_generate(
+        self,
+        request: LLMGenerationRequest,
+    ) -> AsyncIterator[LLMGenerationChunk]:
+        """Stream provider-neutral content deltas and one final metadata chunk."""
         ...
 
 

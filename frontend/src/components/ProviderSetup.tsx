@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
+  checkLlmProviderHealth,
   gmailAuthUrlAuthGmailGet,
   loadProviderConfig,
   loadProviderReadiness,
@@ -23,6 +24,7 @@ interface ProviderSetupProps {
 }
 
 const stateLabel = {
+  disabled: "Disabled",
   missing_config: "Needs configuration",
   missing_credential: "Needs credential",
   not_implemented: "Not implemented",
@@ -45,10 +47,6 @@ export function ProviderSetup({
   const [classificationMode, setClassificationMode] =
     useState<ClassificationMode>(initialConfig?.selection.classification_mode ?? "local");
   const [gmailJson, setGmailJson] = useState("");
-  const [azureKey, setAzureKey] = useState("");
-  const [azureEndpoint, setAzureEndpoint] = useState(
-    initialConfig?.settings.azure_openai_endpoint ?? "",
-  );
   const [azureApiVersion, setAzureApiVersion] = useState(
     initialConfig?.settings.azure_openai_api_version ?? "2024-06-01",
   );
@@ -67,11 +65,29 @@ export function ProviderSetup({
   const [ollamaEmbedding, setOllamaEmbedding] = useState(
     initialConfig?.settings.ollama_embedding_model ?? "nomic-embed-text",
   );
+  const [webSearchEnabled, setWebSearchEnabled] = useState(
+    initialConfig?.settings.web_search_enabled ?? false,
+  );
+  const [tavilyApiKey, setTavilyApiKey] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
+  const messageTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (messageTimeout.current) clearTimeout(messageTimeout.current);
+  }, []);
+
+  const showTemporaryMessage = (value: string) => {
+    if (messageTimeout.current) clearTimeout(messageTimeout.current);
+    setMessage(value);
+    messageTimeout.current = setTimeout(() => {
+      setMessage(null);
+      messageTimeout.current = null;
+    }, 3000);
+  };
 
   const applyLoaded = (
     configResponse: Awaited<ReturnType<typeof loadProviderConfig>>,
@@ -85,13 +101,13 @@ export function ProviderSetup({
     setReadiness(readinessResponse.data);
     setLlmProvider(next.selection.llm_provider);
     setClassificationMode(next.selection.classification_mode);
-    setAzureEndpoint(next.settings.azure_openai_endpoint);
     setAzureApiVersion(next.settings.azure_openai_api_version);
     setAzureChat(next.settings.azure_openai_chat_deployment);
     setAzureEmbedding(next.settings.azure_openai_embedding_deployment);
     setOllamaUrl(next.settings.ollama_base_url);
     setOllamaChat(next.settings.ollama_chat_model);
     setOllamaEmbedding(next.settings.ollama_embedding_model);
+    setWebSearchEnabled(next.settings.web_search_enabled);
   };
 
   const refresh = async () => {
@@ -159,11 +175,9 @@ export function ProviderSetup({
       ...(gmailJson ? { gmail_oauth_client_json: gmailJson } : {}),
       ...(llmProvider === "azure_openai"
         ? {
-            azure_openai_api_key: azureKey || undefined,
             azure_openai_api_version: azureApiVersion,
             azure_openai_chat_deployment: azureChat,
             azure_openai_embedding_deployment: azureEmbedding,
-            azure_openai_endpoint: azureEndpoint,
           }
         : firstRun
           ? {}
@@ -176,18 +190,56 @@ export function ProviderSetup({
     try {
       const response = firstRun
         ? await saveInitialSetup(request)
-        : await updateProviderConfig(request satisfies ProviderConfigUpdateRequest);
+        : await updateProviderConfig({
+            ...request,
+            ...(tavilyApiKey ? { tavily_api_key: tavilyApiKey } : {}),
+            web_search_enabled: webSearchEnabled,
+          } satisfies ProviderConfigUpdateRequest);
       if (response.status !== 200) {
         throw new Error(apiMessage(response.data, "Provider setup could not be saved."));
       }
+      const savedFirstRunWebSearch = firstRun && (webSearchEnabled || Boolean(tavilyApiKey));
+      if (savedFirstRunWebSearch) {
+        const webResponse = await updateProviderConfig({
+          ...(tavilyApiKey ? { tavily_api_key: tavilyApiKey } : {}),
+          web_search_enabled: webSearchEnabled,
+        });
+        if (webResponse.status !== 200) {
+          throw new Error(apiMessage(webResponse.data, "Web search setup could not be saved."));
+        }
+      }
       setGmailJson("");
-      setAzureKey("");
-      setMessage(firstRun ? "Setup choices saved" : "Provider setup saved securely.");
+      setTavilyApiKey("");
+      const healthResponse = await checkLlmProviderHealth();
       if (firstRun) {
-        if ("readiness" in response.data) setReadiness(response.data.readiness);
+        if (savedFirstRunWebSearch) {
+          const readinessResponse = await loadProviderReadiness();
+          if (readinessResponse.status === 200) setReadiness(readinessResponse.data);
+        } else if ("readiness" in response.data) {
+          setReadiness(response.data.readiness);
+        }
       } else {
         await refresh();
       }
+      if (healthResponse.status !== 200) {
+        throw new Error(
+          apiMessage(
+            healthResponse.data,
+            "Provider settings were saved, but the API connection could not be verified.",
+          ),
+        );
+      }
+      if (healthResponse.data.status !== "available") {
+        const detail = healthResponse.data.checks.find(
+          (check) => check.status === "unavailable",
+        )?.detail;
+        throw new Error(
+          detail
+            ? `Provider settings were saved, but the API is unavailable. ${detail}`
+            : "Provider settings were saved, but the configured API models are unavailable.",
+        );
+      }
+      showTemporaryMessage("API connected");
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -231,10 +283,16 @@ export function ProviderSetup({
           Credentials and readiness
         </h2>
         <p style={helpStyle}>
-          Credentials are write-only and encrypted through the local SecretStore. Saved values are
-          never returned to this page.
+          AI API endpoints and credentials are configured in the backend. Gmail OAuth client
+          credentials remain write-only and are encrypted through the local SecretStore.
         </p>
       </div>
+
+      {message ? (
+        <p aria-label="API connection status" role="status" style={connectionSuccessStyle}>
+          {message}
+        </p>
+      ) : null}
 
       <label style={fieldStyle}>
         <span>AI provider</span>
@@ -251,6 +309,33 @@ export function ProviderSetup({
           <option value="azure_openai">Azure OpenAI</option>
         </select>
       </label>
+
+      <fieldset style={{ border: "1px solid #E4E2DA", borderRadius: "12px", margin: 0, padding: "12px" }}>
+        <legend style={{ fontSize: "12.5px", fontWeight: 700 }}>Current web search</legend>
+        <label style={{ alignItems: "center", display: "flex", fontSize: "12.5px", gap: "7px" }}>
+          <input
+            checked={webSearchEnabled}
+            onChange={(event) => setWebSearchEnabled(event.target.checked)}
+            type="checkbox"
+          />
+          Enable Tavily web search
+        </label>
+        <label style={{ ...fieldStyle, marginTop: "10px" }}>
+          <span>Tavily API key</span>
+          <input
+            aria-describedby="tavily-key-help"
+            autoComplete="off"
+            disabled={!webSearchEnabled}
+            onChange={(event) => setTavilyApiKey(event.target.value)}
+            placeholder="Leave blank to keep the stored key"
+            type="password"
+            value={tavilyApiKey}
+          />
+        </label>
+        <p id="tavily-key-help" style={{ ...helpStyle, margin: "5px 0 0" }}>
+          Write-only and encrypted by the local SecretStore. The saved key is never returned here.
+        </p>
+      </fieldset>
 
       <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
         <legend style={{ fontSize: "12.5px", fontWeight: 600 }}>Classification mode</legend>
@@ -273,7 +358,6 @@ export function ProviderSetup({
 
       {llmProvider === "azure_openai" ? (
         <div style={gridStyle}>
-          <TextField label="Azure endpoint" onChange={setAzureEndpoint} value={azureEndpoint} />
           <TextField
             label="Azure API version"
             onChange={setAzureApiVersion}
@@ -284,13 +368,6 @@ export function ProviderSetup({
             label="Embedding deployment"
             onChange={setAzureEmbedding}
             value={azureEmbedding}
-          />
-          <TextField
-            label="Azure API key"
-            onChange={setAzureKey}
-            placeholder="Leave blank to keep the stored key"
-            type="password"
-            value={azureKey}
           />
         </div>
       ) : (
@@ -325,6 +402,7 @@ export function ProviderSetup({
           />
           <ReadinessItem label="Embeddings" value={readiness.embedding_generation} />
           <ReadinessItem label="Chat" value={readiness.chat_generation} />
+          <ReadinessItem label="Web search" value={readiness.web_search} />
         </div>
       ) : (
         <p style={helpStyle}>Readiness has not been checked yet. Recheck after saving changes.</p>
@@ -337,7 +415,6 @@ export function ProviderSetup({
             : error}
         </p>
       ) : null}
-      {message ? <p role="status" style={successStyle}>{message}</p> : null}
       {gmailConnected || readiness?.gmail_sync.state === "ready" ? (
         <p role="status" style={successStyle}>Gmail callback complete</p>
       ) : null}
@@ -378,14 +455,10 @@ export function ProviderSetup({
 function TextField({
   label,
   onChange,
-  placeholder,
-  type = "text",
   value,
 }: {
   label: string;
   onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
   value: string;
 }) {
   return (
@@ -393,8 +466,7 @@ function TextField({
       <span>{label}</span>
       <input
         onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        type={type}
+        type="text"
         value={value}
       />
     </label>
@@ -443,6 +515,16 @@ const gridStyle = { display: "grid", gap: "10px", gridTemplateColumns: "repeat(a
 const readinessGridStyle = { display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))" } as const;
 const errorStyle = { color: "#96403C", fontSize: "12.5px", margin: 0 } as const;
 const successStyle = { color: "#1E5136", fontSize: "12.5px", margin: 0 } as const;
+const connectionSuccessStyle = {
+  background: "#EAF5EC",
+  border: "1px solid #B8D8BF",
+  borderRadius: "10px",
+  color: "#1E5136",
+  fontSize: "13px",
+  fontWeight: 700,
+  margin: 0,
+  padding: "10px 12px",
+} as const;
 
 function defaultConfig(
   provider: LLMProviderName,
@@ -468,6 +550,11 @@ function defaultConfig(
       ollama_embedding_model: "nomic-embed-text",
       sync_interval_seconds: 900,
       sync_on_open: true,
+      tavily_base_url: "https://api.tavily.com",
+      web_search_enabled: false,
+      web_search_max_results: 5,
+      web_search_provider: "tavily",
+      web_search_timeout_seconds: 15,
     },
   };
 }

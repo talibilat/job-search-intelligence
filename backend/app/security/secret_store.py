@@ -12,6 +12,7 @@ class SecretKind(StrEnum):
     OAUTH_TOKEN = "oauth_token"
     OAUTH_CLIENT = "oauth_client"
     LLM_API_KEY = "llm_api_key"
+    WEB_SEARCH_API_KEY = "web_search_api_key"
 
 
 class SecretRef(BaseModel):

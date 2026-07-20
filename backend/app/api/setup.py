@@ -18,6 +18,7 @@ from app.db.repositories import ProviderConfigurationRepository
 from app.db.repositories.connection import EmailConnectionRepository
 from app.models.setup import SetupStatusResponse, SetupSubmitRequest, SetupSubmitResponse
 from app.providers import ProviderRegistry
+from app.providers.llm import LLMProvider
 from app.security import SecretStore, SecretStoreError
 from app.services.provider_config import SyncSchedulerConfigurationError
 from app.services.readiness import ProviderReadinessService
@@ -61,6 +62,7 @@ async def setup_submit(
         Depends(get_provider_configuration_repository),
     ],
     secret_store: Annotated[SecretStore, Depends(get_llm_secret_store)],
+    llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
     connection_repository: Annotated[
         EmailConnectionRepository,
         Depends(get_email_connection_repository),
@@ -80,7 +82,7 @@ async def setup_submit(
                 registry=registry,
                 connection_reader=connection_repository,
                 secret_store=secret_store,
-                llm_provider=get_llm_provider(settings, secret_store),
+                llm_provider=llm_provider,
             ),
         )
     except SetupSubmissionValidationError as error:

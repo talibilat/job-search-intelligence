@@ -8,6 +8,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from app.api.dependencies import (
+    get_llm_provider,
     get_llm_secret_store,
     get_provider_configuration_repository,
 )
@@ -23,6 +24,11 @@ from app.config import (
 from app.db.repositories import EmailConnectionRepository
 from app.main import create_app
 from app.providers.email import EmailAccountRef, EmailAddress, EmailConnection
+from app.providers.llm import (
+    LLMProviderHealthCheckRequest,
+    LLMProviderHealthCheckResponse,
+    LLMProviderUnavailableError,
+)
 from app.security import GMAIL_OAUTH_CLIENT_REF, SecretKind, SecretRef
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -60,11 +66,20 @@ class MemorySecretStore:
         self.values.pop(ref, None)
 
 
+class UnavailableLLMProvider:
+    async def health_check(
+        self,
+        request: LLMProviderHealthCheckRequest,
+    ) -> LLMProviderHealthCheckResponse:
+        del request
+        raise LLMProviderUnavailableError(public_message="Provider unavailable in tests.")
+
+
 def create_test_app(
     settings: AppSettings,
     secret_store: MemorySecretStore | None = None,
 ) -> FastAPI:
-    fastapi_app = create_app()
+    fastapi_app = create_app(settings=settings)
 
     def override_settings() -> AppSettings:
         return settings
@@ -77,6 +92,7 @@ def create_test_app(
     fastapi_app.dependency_overrides[get_llm_secret_store] = lambda: (
         secret_store or MemorySecretStore()
     )
+    fastapi_app.dependency_overrides[get_llm_provider] = UnavailableLLMProvider
     return fastapi_app
 
 

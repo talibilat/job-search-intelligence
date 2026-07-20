@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import UTC, datetime
 
-from app.agent.tools.semantic_search import normalize_sqlite_vec_embedding
+from app.agent.tools.semantic_search import (
+    normalize_sqlite_vec_embedding,
+    require_embedding_model,
+)
 from app.db.repositories import EmailChunkRepository, EmailRepository
 from app.models.chunk import EmailTextChunk
 from app.providers.llm import LLMEmbeddingRequest, LLMProvider, LLMProviderResponseError
 from app.services.email_chunking import EmailChunkingService
+
+_MAX_CHUNKS_PER_EMBEDDING_REQUEST = 100
+_RECONCILE_LOCK = asyncio.Lock()
 
 
 class ChatIndexService:
@@ -29,6 +36,10 @@ class ChatIndexService:
         self._max_emails = max_emails
 
     async def reconcile(self) -> int:
+        async with _RECONCILE_LOCK:
+            return await self._reconcile()
+
+    async def _reconcile(self) -> int:
         eligible_ids = self._chunk_repository.eligible_email_ids()
         self._chunk_repository.delete_email_chunks(
             self._chunk_repository.indexed_email_ids() - eligible_ids
@@ -42,6 +53,8 @@ class ChatIndexService:
             for chunk in chunks:
                 chunks_by_email[chunk.email_id].append(chunk)
 
+            pending_chunks: list[EmailTextChunk] = []
+            pending_by_email: dict[str, tuple[EmailTextChunk, ...]] = {}
             for email_id, email_chunks_list in chunks_by_email.items():
                 email_chunks = tuple(email_chunks_list)
                 if not self._chunk_repository.needs_indexing(
@@ -51,24 +64,42 @@ class ChatIndexService:
                     model=self._embedding_model,
                 ):
                     continue
+                pending_by_email[email_id] = email_chunks
+                pending_chunks.extend(email_chunks)
+
+            embeddings_by_chunk: dict[tuple[str, int], tuple[float, ...]] = {}
+            for batch_start in range(
+                0,
+                len(pending_chunks),
+                _MAX_CHUNKS_PER_EMBEDDING_REQUEST,
+            ):
+                batch = pending_chunks[
+                    batch_start : batch_start + _MAX_CHUNKS_PER_EMBEDDING_REQUEST
+                ]
                 response = await self._llm_provider.embed(
                     LLMEmbeddingRequest(
-                        inputs=tuple(chunk.content for chunk in email_chunks),
-                        model=self._embedding_model,
+                        inputs=tuple(chunk.content for chunk in batch),
+                        model=require_embedding_model(self._embedding_model),
                     )
                 )
                 ordered = tuple(sorted(response.embeddings, key=lambda item: item.index))
-                if tuple(item.index for item in ordered) != tuple(range(len(email_chunks))):
+                if tuple(item.index for item in ordered) != tuple(range(len(batch))):
                     raise LLMProviderResponseError(
                         public_message="The embedding provider returned an invalid response."
                     )
-                embeddings = tuple(
-                    normalize_sqlite_vec_embedding(item.embedding) for item in ordered
-                )
+                for chunk, embedding in zip(batch, ordered, strict=True):
+                    embeddings_by_chunk[(chunk.email_id, chunk.chunk_index)] = (
+                        normalize_sqlite_vec_embedding(embedding.embedding)
+                    )
+
+            for email_id, email_chunks in pending_by_email.items():
                 self._chunk_repository.replace_email_chunks(
                     email_id,
                     email_chunks,
-                    embeddings,
+                    tuple(
+                        embeddings_by_chunk[(chunk.email_id, chunk.chunk_index)]
+                        for chunk in email_chunks
+                    ),
                     provider=self._llm_provider.provider_name,
                     model=self._embedding_model,
                     indexed_at=datetime.now(UTC),

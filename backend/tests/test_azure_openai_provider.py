@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 import pytest
@@ -11,6 +12,7 @@ from app.providers.llm import (
     LLMEmbeddingProvider,
     LLMEmbeddingRequest,
     LLMFinishReason,
+    LLMGenerationChunk,
     LLMGenerationOptions,
     LLMGenerationRequest,
     LLMMessage,
@@ -67,6 +69,26 @@ class FakeAzureTransport:
     response: dict[str, object] | None = None
     error: AzureOpenAITransportError | None = None
     calls: list[AzureTransportCall] = field(default_factory=list)
+    stream_events: tuple[dict[str, object] | None, ...] = (
+        {
+            "model": "gpt-4o-mini",
+            "choices": [{"delta": {"content": "Grounded "}, "finish_reason": None}],
+        },
+        {
+            "model": "gpt-4o-mini",
+            "choices": [{"delta": {"content": "answer"}, "finish_reason": None}],
+        },
+        {
+            "model": "gpt-4o-mini",
+            "choices": [{"delta": {}, "finish_reason": "stop"}],
+        },
+        {
+            "model": "gpt-4o-mini",
+            "choices": [],
+            "usage": {"prompt_tokens": 4, "completion_tokens": 2, "total_tokens": 6},
+        },
+        None,
+    )
 
     async def post_json(
         self,
@@ -108,6 +130,27 @@ class FakeAzureTransport:
                 "total_tokens": 18,
             },
         }
+
+    async def stream_sse(
+        self,
+        url: str,
+        *,
+        api_key: SecretStr,
+        payload: dict[str, object],
+        timeout_seconds: int,
+    ) -> AsyncIterator[dict[str, object] | None]:
+        self.calls.append(
+            AzureTransportCall(
+                url=url,
+                api_key=api_key,
+                payload=payload,
+                timeout_seconds=timeout_seconds,
+            )
+        )
+        if self.error is not None:
+            raise self.error
+        for event in self.stream_events:
+            yield event
 
 
 def azure_settings() -> AppSettings:
@@ -249,6 +292,97 @@ def test_azure_openai_provider_posts_chat_completion_request() -> None:
         completion_tokens=7,
         total_tokens=18,
     )
+
+
+def test_azure_openai_provider_streams_deltas_and_final_metadata() -> None:
+    async def collect(provider: AzureOpenAIProvider) -> list[LLMGenerationChunk]:
+        return [
+            chunk
+            async for chunk in provider.stream_generate(
+                generation_request(response_format=LLMResponseFormat.JSON_OBJECT)
+            )
+        ]
+
+    transport = FakeAzureTransport()
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=FakeSecretStore("secret-api-key"),
+        transport=transport,
+    )
+
+    chunks = asyncio.run(collect(provider))
+
+    assert [chunk.content_delta for chunk in chunks] == ["Grounded ", "answer", ""]
+    assert all(chunk.model == "gpt-4o-mini" for chunk in chunks)
+    assert chunks[-1].finish_reason is LLMFinishReason.STOP
+    assert chunks[-1].usage == LLMTokenUsage(
+        prompt_tokens=4,
+        completion_tokens=2,
+        total_tokens=6,
+    )
+    assert transport.calls[0].payload["stream"] is True
+    assert transport.calls[0].payload["stream_options"] == {"include_usage": True}
+    assert transport.calls[0].payload["response_format"] == {"type": "json_object"}
+
+
+def test_azure_openai_provider_stream_allows_content_filter_terminal_chunk() -> None:
+    transport = FakeAzureTransport(
+        stream_events=(
+            {
+                "model": "gpt-4o-mini",
+                "choices": [{"delta": {}, "finish_reason": "content_filter"}],
+            },
+            None,
+        )
+    )
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=FakeSecretStore("secret-api-key"),
+        transport=transport,
+    )
+
+    async def collect() -> list[LLMGenerationChunk]:
+        return [chunk async for chunk in provider.stream_generate(generation_request())]
+
+    chunks = asyncio.run(collect())
+
+    assert chunks == [
+        LLMGenerationChunk(
+            content_delta="",
+            model="gpt-4o-mini",
+            finish_reason=LLMFinishReason.CONTENT_FILTER,
+        )
+    ]
+
+
+def test_azure_openai_provider_rejects_incomplete_stream() -> None:
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=FakeSecretStore("secret-api-key"),
+        transport=FakeAzureTransport(stream_events=()),
+    )
+
+    async def collect() -> list[LLMGenerationChunk]:
+        return [chunk async for chunk in provider.stream_generate(generation_request())]
+
+    with pytest.raises(LLMProviderResponseError):
+        asyncio.run(collect())
+
+
+def test_azure_openai_provider_maps_stream_timeout() -> None:
+    provider = AzureOpenAIProvider(
+        settings=azure_settings(),
+        secret_store=FakeSecretStore("secret-api-key"),
+        transport=FakeAzureTransport(
+            error=AzureOpenAITransportError(status_code=None, reason="timeout")
+        ),
+    )
+
+    async def collect() -> list[LLMGenerationChunk]:
+        return [chunk async for chunk in provider.stream_generate(generation_request())]
+
+    with pytest.raises(LLMProviderTimeoutError):
+        asyncio.run(collect())
 
 
 def test_azure_openai_provider_posts_embedding_request() -> None:

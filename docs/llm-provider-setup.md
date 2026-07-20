@@ -3,8 +3,8 @@
 This guide explains the values a user needs before the first-run setup wizard can configure an LLM provider.
 It maps to FR-0, FR-6, NFR-5, NFR-8, and Phase 0.
 
-The current app has a typed provider registry, setup status shell, Gmail OAuth setup action, Azure OpenAI and local Ollama chat adapters behind `LLMProvider`, the classification prompt contract, and the structured extraction service.
-Embedding calls and later insight, aggregation, and chat provider use remain deferred, so this document is the setup contract for those screens and adapters.
+The current app has a typed provider registry, Gmail OAuth setup, classification and extraction services, cached insights, and a grounded conversational RAG agent behind `LLMProvider`.
+Azure OpenAI and Ollama support generation, token streaming, health checks, and embeddings through the same provider-neutral boundary.
 The current backend has the `SecretStore` protocol, backend selector settings, the default keyring adapter, and the encrypted Fernet fallback.
 
 ## Setup Principles
@@ -35,7 +35,7 @@ Use `llm` only when you intentionally want every ingested email to go through th
 
 Azure OpenAI requires a user-owned Azure OpenAI resource, one chat deployment, one embedding deployment, and one API key stored through `SecretStore`.
 The API key is secret material and must not be placed in `backend/.env`.
-The current Azure adapter supports chat-completions generation; embedding usage remains a later provider slice.
+The Azure adapter supports chat-completions generation, SSE token streaming, and embeddings.
 
 Set these non-secret values through the setup wizard or local environment overrides:
 
@@ -104,7 +104,7 @@ Leave pricing rates at `0` when provider pricing is unknown; the endpoint still 
 ## Ollama
 
 Ollama requires a local Ollama server and locally pulled chat and embedding models.
-The current backend can call the configured chat model through `OllamaLLMProvider`; embedding calls are still deferred.
+The backend uses `OllamaLLMProvider` for local chat generation, NDJSON token streaming, and embeddings.
 It does not require an API key in the provider registry.
 
 Install Ollama from `https://ollama.com/`, start the local server, then pull the configured models:
@@ -140,6 +140,17 @@ For Ollama, the checked values are `ollama_chat_model` and `ollama_embedding_mod
 
 Provider failures return sanitized typed API errors such as `llm_provider_unavailable`, `llm_provider_request_failed`, `llm_provider_invalid_response`, or `llm_provider_timeout`.
 The shared API route exists before concrete Azure OpenAI and Ollama adapter HTTP checks land; until an adapter is dependency-injected, the route reports that the LLM provider adapter is not configured.
+
+## Tavily Web Search
+
+Web search is optional and disabled by default.
+Enable Tavily in Settings and enter a user-owned API key through the write-only credential field.
+The key is stored through `SecretStore` and never returned by the configuration API.
+
+Tavily receives only the public search query and a bounded result count.
+It never receives retained email bodies, application records, OAuth credentials, or conversation tool output.
+Web-grounded answers must cite the HTTPS source URLs returned by Tavily.
+If Tavily is disabled or missing a credential, broader external questions return a public-safe configuration error instead of a fabricated answer.
 
 ## Readiness Checklist
 

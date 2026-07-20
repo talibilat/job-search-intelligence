@@ -364,6 +364,7 @@ export const ReadinessState = {
   unavailable: "unavailable",
   reauth_required: "reauth_required",
   not_implemented: "not_implemented",
+  disabled: "disabled",
 } as const;
 
 export interface CapabilityReadiness {
@@ -372,6 +373,15 @@ export interface CapabilityReadiness {
   state: ReadinessState;
 }
 
+export type ChatAnswerKind =
+  (typeof ChatAnswerKind)[keyof typeof ChatAnswerKind];
+
+export const ChatAnswerKind = {
+  conversation: "conversation",
+  grounded: "grounded",
+  refusal: "refusal",
+} as const;
+
 export type ChatCitationSource =
   (typeof ChatCitationSource)[keyof typeof ChatCitationSource];
 
@@ -379,18 +389,39 @@ export const ChatCitationSource = {
   email: "email",
   application: "application",
   metric: "metric",
+  web: "web",
 } as const;
 
 export interface ChatCitation {
   application_id?: string | null;
   /** @minLength 1 */
   citation_id: string;
+  company?: string | null;
+  current_status?: string | null;
   email_public_id?: string | null;
+  first_seen_at?: string | null;
   metric_template?: string | null;
+  role_title?: string | null;
   sent_at?: string | null;
   snippet?: string | null;
   source: ChatCitationSource;
   subject?: string | null;
+  web_domain?: string | null;
+  web_title?: string | null;
+  web_url?: string | null;
+}
+
+export interface ChatFollowUpPrompt {
+  /**
+   * @minLength 1
+   * @maxLength 160
+   */
+  label: string;
+  /**
+   * @minLength 1
+   * @maxLength 4000
+   */
+  message: string;
 }
 
 export type JsonObjectList = JsonObject[];
@@ -405,14 +436,28 @@ export const ChatMessageRole = {
   system: "system",
 } as const;
 
+export type ChatRoute = (typeof ChatRoute)[keyof typeof ChatRoute];
+
+export const ChatRoute = {
+  conversation: "conversation",
+  quantitative: "quantitative",
+  content: "content",
+  web: "web",
+  mixed: "mixed",
+} as const;
+
 export interface ChatMessageRecord {
+  answer_kind?: ChatAnswerKind | null;
   citations_json: JsonObjectList;
   content: string;
   conversation_id: string;
   created_at: string;
+  follow_up_prompts_json?: JsonObjectList;
   id: number;
   role: ChatMessageRole;
+  route?: ChatRoute | null;
   tool_outputs_json: JsonObjectList;
+  turn_id?: string | null;
 }
 
 export interface ChatHistoryResponse {
@@ -451,20 +496,24 @@ export interface ChatRequest {
    * @maximum 20
    */
   retrieval_limit?: number;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  timezone?: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  turn_id?: string;
 }
-
-export type ChatRoute = (typeof ChatRoute)[keyof typeof ChatRoute];
-
-export const ChatRoute = {
-  quantitative: "quantitative",
-  content: "content",
-  mixed: "mixed",
-} as const;
 
 export interface ChatResponse {
   answer: string;
+  answer_kind?: ChatAnswerKind;
   citations: ChatCitation[];
   conversation_id: string;
+  follow_up_prompts?: ChatFollowUpPrompt[];
   increments: ChatIncrement[];
   route: ChatRoute;
   tool_outputs: JsonObjectList;
@@ -477,6 +526,7 @@ export const ChatStreamEventTool = {
   structured_query: "structured_query",
   semantic_search: "semantic_search",
   cached_insight: "cached_insight",
+  web_search: "web_search",
 } as const;
 
 export type ChatStreamEventType =
@@ -485,6 +535,7 @@ export type ChatStreamEventType =
 export const ChatStreamEventType = {
   route: "route",
   tool: "tool",
+  answer_delta: "answer_delta",
   complete: "complete",
   error: "error",
 } as const;
@@ -493,6 +544,7 @@ export const ChatStreamEventType = {
  * One server-sent event emitted while a grounded chat turn runs.
  */
 export interface ChatStreamEvent {
+  answer_delta?: string | null;
   conversation_id: string;
   error_code?: string | null;
   error_message?: string | null;
@@ -722,6 +774,7 @@ export const SecretKind = {
   oauth_token: "oauth_token",
   oauth_client: "oauth_client",
   llm_api_key: "llm_api_key",
+  web_search_api_key: "web_search_api_key",
 } as const;
 
 /**
@@ -1415,6 +1468,13 @@ export interface ProviderSelection {
   llm_provider: LLMProviderName;
 }
 
+export type WebSearchProviderName =
+  (typeof WebSearchProviderName)[keyof typeof WebSearchProviderName];
+
+export const WebSearchProviderName = {
+  tavily: "tavily",
+} as const;
+
 /**
  * Non-secret provider settings visible at the API boundary.
  */
@@ -1429,6 +1489,19 @@ export interface ProviderConfigValues {
   ollama_embedding_model: string;
   sync_interval_seconds: number;
   sync_on_open: boolean;
+  tavily_base_url: string;
+  web_search_enabled: boolean;
+  /**
+   * @minimum 1
+   * @maximum 10
+   */
+  web_search_max_results: number;
+  web_search_provider: WebSearchProviderName;
+  /**
+   * @minimum 1
+   * @maximum 120
+   */
+  web_search_timeout_seconds: number;
 }
 
 /**
@@ -1460,6 +1533,12 @@ export interface ProviderConfigUpdateRequest {
   ollama_embedding_model?: string | null;
   sync_interval_seconds?: number | null;
   sync_on_open?: boolean | null;
+  tavily_api_key?: string | null;
+  tavily_base_url?: string | null;
+  web_search_enabled?: boolean | null;
+  web_search_max_results?: number | null;
+  web_search_provider?: WebSearchProviderName | null;
+  web_search_timeout_seconds?: number | null;
 }
 
 export interface ProviderReadinessResponse {
@@ -1469,6 +1548,7 @@ export interface ProviderReadinessResponse {
   gmail_sync: CapabilityReadiness;
   ready_to_classify: boolean;
   ready_to_sync: boolean;
+  web_search: CapabilityReadiness;
 }
 
 /**

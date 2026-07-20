@@ -5,7 +5,12 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from app.config import ClassificationMode, EmailProviderName, LLMProviderName
+from app.config import (
+    ClassificationMode,
+    EmailProviderName,
+    LLMProviderName,
+    WebSearchProviderName,
+)
 from app.providers import ProviderRequirementEnforcement
 from app.security import SecretRef
 
@@ -31,6 +36,11 @@ class ProviderConfigValues(BaseModel):
     ollama_base_url: str
     ollama_chat_model: str
     ollama_embedding_model: str
+    web_search_provider: WebSearchProviderName
+    web_search_enabled: bool
+    tavily_base_url: str
+    web_search_max_results: int = Field(ge=1, le=10)
+    web_search_timeout_seconds: int = Field(ge=1, le=120)
 
 
 class ProviderConfigRequirementResponse(BaseModel):
@@ -90,6 +100,7 @@ class ProviderConfigUpdateRequest(BaseModel):
     classification_mode: ClassificationMode | None = None
     gmail_oauth_client_json: SecretStr | None = None
     azure_openai_api_key: SecretStr | None = None
+    tavily_api_key: SecretStr | None = None
     sync_on_open: bool | None = None
     sync_interval_seconds: int | None = Field(default=None, ge=60, le=86_400)
     azure_openai_endpoint: str | None = None
@@ -99,6 +110,11 @@ class ProviderConfigUpdateRequest(BaseModel):
     ollama_base_url: str | None = Field(default=None, min_length=1)
     ollama_chat_model: str | None = Field(default=None, min_length=1)
     ollama_embedding_model: str | None = Field(default=None, min_length=1)
+    web_search_enabled: bool | None = None
+    web_search_provider: WebSearchProviderName | None = None
+    tavily_base_url: str | None = Field(default=None, min_length=1)
+    web_search_max_results: int | None = Field(default=None, ge=1, le=10)
+    web_search_timeout_seconds: int | None = Field(default=None, ge=1, le=120)
 
 
 class LLMProviderHealthCheckApiRequest(BaseModel):
@@ -122,6 +138,11 @@ class ProviderConfigurationRecord(BaseModel):
     ollama_base_url: str
     ollama_chat_model: str
     ollama_embedding_model: str
+    web_search_enabled: bool
+    web_search_provider: WebSearchProviderName
+    tavily_base_url: str
+    web_search_max_results: int = Field(ge=1, le=10)
+    web_search_timeout_seconds: int = Field(ge=1, le=120)
     updated_at: datetime
 
 
@@ -132,6 +153,7 @@ class ReadinessState(StrEnum):
     UNAVAILABLE = "unavailable"
     REAUTH_REQUIRED = "reauth_required"
     NOT_IMPLEMENTED = "not_implemented"
+    DISABLED = "disabled"
 
 
 class CapabilityReadiness(BaseModel):
@@ -147,3 +169,4 @@ class ProviderReadinessResponse(BaseModel):
     classification_generation: CapabilityReadiness
     embedding_generation: CapabilityReadiness
     chat_generation: CapabilityReadiness
+    web_search: CapabilityReadiness

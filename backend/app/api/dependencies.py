@@ -6,7 +6,14 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.agent.tools import CachedInsightTool, SemanticSearchTool, StructuredQueryTool
+from app.agent.planner import ChatPlanner
+from app.agent.synthesis import ChatSynthesizer
+from app.agent.tools import (
+    CachedInsightTool,
+    SemanticSearchTool,
+    StructuredQueryTool,
+    WebSearchTool,
+)
 from app.api.errors import ApiError, ApiErrorCode
 from app.config import AppSettings, LLMProviderName, get_settings
 from app.db.engine import load_sqlite_vec_sync, verify_sqlite_vec
@@ -27,8 +34,14 @@ from app.db.repositories.connection import EmailConnectionRepository
 from app.db.repositories.email import EmailRepository
 from app.db.sqlite_url import sqlite_database_path
 from app.providers import provider_registry
-from app.providers.llm import LLMProvider, LLMProviderUnavailableError, OllamaLLMProvider
+from app.providers.llm import (
+    LLMProvider,
+    LLMProviderUnavailableError,
+    LLMStreamingProvider,
+    OllamaLLMProvider,
+)
 from app.providers.llm.azure_openai import AzureOpenAIProvider
+from app.providers.web_search import TavilyWebSearchProvider, WebSearchProvider
 from app.security import SecretRef, SecretStore, create_secret_store
 from app.services.aggregation import AggregationService
 from app.services.application_corrections import ApplicationCorrectionService
@@ -177,10 +190,26 @@ def get_chat_history_service(
         connection.close()
 
 
+def get_web_search_provider(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> WebSearchProvider:
+    return TavilyWebSearchProvider(
+        settings=settings,
+        secret_store=create_secret_store(settings),
+    )
+
+
 def get_chat_service(
     settings: Annotated[AppSettings, Depends(get_settings)],
     llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    web_search_provider: Annotated[WebSearchProvider, Depends(get_web_search_provider)],
 ) -> Iterator[ChatService]:
+    if not isinstance(llm_provider, LLMStreamingProvider):
+        raise ApiError(
+            status_code=503,
+            code=ApiErrorCode.LLM_PROVIDER_UNAVAILABLE,
+            message="The selected LLM provider does not support chat streaming.",
+        )
     database_path = sqlite_database_path(settings.database_url)
     database_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(database_path, check_same_thread=False)
@@ -197,6 +226,14 @@ def get_chat_service(
         )
         yield ChatService(
             history_repository=ChatRepository(connection),
+            planner=ChatPlanner(
+                llm_provider,
+                model=configured_chat_model(settings),
+            ),
+            synthesizer=ChatSynthesizer(
+                llm_provider,
+                model=configured_chat_model(settings),
+            ),
             index_service=ChatIndexService(
                 email_repository=email_repository,
                 chunk_repository=chunk_repository,
@@ -214,6 +251,7 @@ def get_chat_service(
                 repository=chunk_repository,
                 llm_provider=llm_provider,
                 embedding_model=embedding_model,
+                max_distance=settings.chat_max_vector_distance,
             ),
             cached_insight=CachedInsightTool(
                 insight_repository,
@@ -222,6 +260,7 @@ def get_chat_service(
                     configured_chat_model(settings),
                 ),
             ),
+            web_search=WebSearchTool(web_search_provider),
         )
     finally:
         connection.close()
@@ -385,13 +424,35 @@ def get_processing_orchestration_service(
         GhostInferenceService,
         Depends(get_ghost_inference_service),
     ],
+    llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
 ) -> ProcessingOrchestrationService:
+    async def reconcile_chat_index() -> int:
+        database_path = sqlite_database_path(settings.database_url)
+        connection = sqlite3.connect(database_path, check_same_thread=False)
+        load_sqlite_vec_sync(connection, settings.sqlite_vec_extension_path)
+        verify_sqlite_vec(connection)
+        try:
+            return await ChatIndexService(
+                email_repository=EmailRepository(connection),
+                chunk_repository=EmailChunkRepository(connection),
+                llm_provider=llm_provider,
+                embedding_model=(
+                    settings.azure_openai_embedding_deployment
+                    if settings.llm_provider is LLMProviderName.AZURE_OPENAI
+                    else settings.ollama_embedding_model
+                ),
+                max_emails=settings.chat_index_max_emails,
+            ).reconcile()
+        finally:
+            connection.close()
+
     return ProcessingOrchestrationService(
         settings=settings,
         email_repository=email_repository,
         extraction_service=extraction_service,
         aggregation_service=aggregation_service,
         ghost_inference_service=ghost_inference_service,
+        index_reconciler=reconcile_chat_index,
     )
 
 

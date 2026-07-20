@@ -387,6 +387,9 @@ def test_structured_query_template_is_explicit_whitelist() -> None:
         "adjacent_role_suggestions",
         "breakdown",
         "live_applications",
+        "application_list",
+        "company_list",
+        "busiest_application_month",
     }
 
 

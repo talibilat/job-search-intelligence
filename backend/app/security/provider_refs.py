@@ -10,3 +10,8 @@ GMAIL_OAUTH_CLIENT_REF = SecretRef(
     provider="gmail",
     name="desktop_client_json",
 )
+TAVILY_API_KEY_REF = SecretRef(
+    kind=SecretKind.WEB_SEARCH_API_KEY,
+    provider="tavily",
+    name="api_key",
+)

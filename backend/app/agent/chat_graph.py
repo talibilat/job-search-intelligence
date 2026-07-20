@@ -4,14 +4,18 @@ import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Literal, TypedDict, cast
+from urllib.parse import urlparse
 
 from langgraph.graph import END, START, StateGraph
 
+from app.agent.planner import ChatPlan, ChatPlanner
 from app.agent.tools import (
     CachedInsightTool,
+    DateWindowSpec,
     SemanticSearchTool,
     StructuredQueryRequest,
     StructuredQueryTool,
+    WebSearchTool,
 )
 from app.models.application import (
     ApplicationSource,
@@ -19,9 +23,17 @@ from app.models.application import (
     SponsorshipStatus,
     WorkMode,
 )
-from app.models.chat import ChatCitation, ChatRequest, ChatRoute, SemanticSearchResult
+from app.models.chat import (
+    ChatCitation,
+    ChatMessageRecord,
+    ChatRequest,
+    ChatRoute,
+    SemanticSearchResult,
+)
 from app.models.insight import InsightType
 from app.models.metrics import MetricsBreakdownDimension, MetricsFilter
+from app.models.web_search import WebSearchRequest, WebSearchResult
+from app.providers.llm import LLMProviderResponseError
 from app.services.chat_index import ChatIndexService
 
 _QUANTITATIVE_TERMS = (
@@ -36,6 +48,16 @@ _QUANTITATIVE_TERMS = (
     "follow up",
     "which roles",
     "which sources",
+    "which companies",
+    "what companies",
+    "list companies",
+    "which month",
+    "busiest month",
+    "most applications",
+    "list applications",
+    "latest application",
+    "most recent application",
+    "last application",
 )
 _EXPLICIT_QUANTITATIVE_TERMS = (
     "how many",
@@ -73,7 +95,16 @@ _EXCERPT_STOP_WORDS = frozenset(
         "what",
     }
 )
-_RELATIVE_WINDOW_TERMS = ("this week", "this month", "this year")
+_RELATIVE_WINDOW_TERMS = (
+    "this week",
+    "last week",
+    "this month",
+    "last month",
+    "this year",
+    "last year",
+    "past 7 days",
+    "last 7 days",
+)
 _TIMING_TERMS = (
     "average time",
     "how long does it take",
@@ -272,8 +303,10 @@ _BREAKDOWN_DIMENSION_TERMS: tuple[tuple[MetricsBreakdownDimension, tuple[str, ..
 )
 type ToolOutput = dict[str, object]
 type ToolBranch = Literal[
+    "conversation",
     "quantitative",
     "content",
+    "web",
     "mixed",
     "cached_insight",
     "mixed_cached_insight",
@@ -282,10 +315,13 @@ type ToolBranch = Literal[
 
 class ChatGraphState(TypedDict, total=False):
     request: ChatRequest
+    history: tuple[ChatMessageRecord, ...]
+    plan: ChatPlan
     route: ChatRoute
     tool_outputs: list[ToolOutput]
     citations: list[ChatCitation]
     content_results: tuple[SemanticSearchResult, ...]
+    web_results: tuple[WebSearchResult, ...]
     answer: str
 
 
@@ -295,15 +331,19 @@ class ChatGraph:
     def __init__(
         self,
         *,
+        planner: ChatPlanner,
         index_service: ChatIndexService,
         structured_query: StructuredQueryTool,
         semantic_search: SemanticSearchTool,
         cached_insight: CachedInsightTool,
+        web_search: WebSearchTool,
     ) -> None:
+        self._planner = planner
         self._index_service = index_service
         self._structured_query = structured_query
         self._semantic_search = semantic_search
         self._cached_insight = cached_insight
+        self._web_search = web_search
 
         builder = StateGraph(ChatGraphState)
         builder.add_node("route", self._route)
@@ -312,7 +352,8 @@ class ChatGraph:
         builder.add_node("cached_insight", self._run_cached_insight)
         builder.add_node("mixed_tools", self._run_mixed_tools)
         builder.add_node("mixed_cached_insight", self._run_mixed_cached_insight)
-        builder.add_node("synthesize", self._synthesize)
+        builder.add_node("conversation", self._run_conversation)
+        builder.add_node("web_search", self._run_web_search)
         builder.add_edge(START, "route")
         builder.add_conditional_edges(
             "route",
@@ -323,44 +364,131 @@ class ChatGraph:
                 "mixed": "mixed_tools",
                 "cached_insight": "cached_insight",
                 "mixed_cached_insight": "mixed_cached_insight",
+                "conversation": "conversation",
+                "web": "web_search",
             },
         )
-        builder.add_edge("structured_query", "synthesize")
-        builder.add_edge("semantic_search", "synthesize")
-        builder.add_edge("cached_insight", "synthesize")
-        builder.add_edge("mixed_tools", "synthesize")
-        builder.add_edge("mixed_cached_insight", "synthesize")
-        builder.add_edge("synthesize", END)
+        builder.add_edge("structured_query", END)
+        builder.add_edge("semantic_search", END)
+        builder.add_edge("cached_insight", END)
+        builder.add_edge("mixed_tools", END)
+        builder.add_edge("mixed_cached_insight", END)
+        builder.add_edge("conversation", END)
+        builder.add_edge("web_search", END)
         self._graph = builder.compile()
 
-    async def run(self, request: ChatRequest) -> ChatGraphState:
-        result = await self._graph.ainvoke({"request": request})
+    async def run(
+        self,
+        request: ChatRequest,
+        *,
+        history: tuple[ChatMessageRecord, ...] = (),
+    ) -> ChatGraphState:
+        result = await self._graph.ainvoke({"request": request, "history": history})
         return cast(ChatGraphState, result)
 
-    async def stream(self, request: ChatRequest) -> AsyncIterator[tuple[str, ChatGraphState]]:
+    async def stream(
+        self,
+        request: ChatRequest,
+        *,
+        history: tuple[ChatMessageRecord, ...] = (),
+    ) -> AsyncIterator[tuple[str, ChatGraphState]]:
         async for update in self._graph.astream(
-            {"request": request},
+            {"request": request, "history": history},
             stream_mode="updates",
         ):
             for node, state_update in update.items():
                 yield node, cast(ChatGraphState, state_update)
 
-    def _route(self, state: ChatGraphState) -> ChatGraphState:
-        return {"route": route_question(state["request"].message)}
+    async def _route(self, state: ChatGraphState) -> ChatGraphState:
+        question = state["request"].message
+        plan = await self._planner.plan(
+            question,
+            state.get("history", ()),
+            timezone=state["request"].timezone,
+        )
+        if plan.route == "conversation" and _requires_web_search(question):
+            plan = ChatPlan(
+                route="web",
+                web_search=WebSearchRequest(query=question, max_results=5),
+            )
+        deterministic_route = route_question(question)
+        if deterministic_route == "quantitative" and plan.route not in {"conversation", "web"}:
+            trusted_query = _structured_request(question)
+            if plan.structured_query is not None:
+                trusted_query = trusted_query.model_copy(
+                    update={
+                        "date_window": (
+                            plan.structured_query.date_window or trusted_query.date_window
+                        ),
+                        "timezone": state["request"].timezone,
+                    }
+                )
+            plan = ChatPlan(
+                route="quantitative",
+                structured_query=trusted_query,
+            )
+        elif deterministic_route == "mixed" and plan.route not in {"conversation", "web"}:
+            if (
+                plan.retrieval is None
+                and plan.cached_insight_type is None
+                and plan.web_search is None
+            ):
+                raise LLMProviderResponseError(
+                    public_message="The AI planner omitted the content tool for a mixed question."
+                )
+            plan = ChatPlan(
+                route="mixed",
+                structured_query=_structured_request(question),
+                retrieval=plan.retrieval,
+                cached_insight_type=plan.cached_insight_type,
+                web_search=plan.web_search,
+            )
+        return {"route": plan.route, "plan": plan}
 
     def _tool_branch(self, state: ChatGraphState) -> ToolBranch:
-        if _cached_insight_type(state["request"].message) is not None:
-            if state["route"] == "mixed":
-                return "mixed_cached_insight"
+        if state["route"] == "mixed":
+            return "mixed"
+        if state["plan"].cached_insight_type is not None:
             return "cached_insight"
         return state["route"]
 
+    def _run_conversation(self, state: ChatGraphState) -> ChatGraphState:
+        return {"tool_outputs": [], "citations": [], "content_results": (), "web_results": ()}
+
+    async def _run_web_search(self, state: ChatGraphState) -> ChatGraphState:
+        request = state["plan"].web_search
+        if request is None:  # pragma: no cover - guarded by ChatPlan
+            raise RuntimeError("web plan is missing web_search")
+        response = await self._web_search.run(request)
+        citations = [
+            ChatCitation(
+                citation_id=f"web:{index}",
+                source="web",
+                web_title=result.title,
+                web_url=str(result.url),
+                web_domain=urlparse(str(result.url)).netloc,
+                snippet=result.snippet,
+            )
+            for index, result in enumerate(response.results, 1)
+        ]
+        return {
+            "tool_outputs": [
+                {
+                    "tool": "web_search",
+                    "results": [item.model_dump(mode="json") for item in response.results],
+                }
+            ],
+            "citations": citations,
+            "content_results": (),
+            "web_results": response.results,
+        }
+
     def _run_structured_query(self, state: ChatGraphState) -> ChatGraphState:
-        output, citations = self._structured_result(state["request"].message)
+        output, citations = self._structured_result(state["plan"])
         return {"tool_outputs": [output], "citations": citations, "content_results": ()}
 
     async def _run_semantic_search(self, state: ChatGraphState) -> ChatGraphState:
-        results, output, citations = await self._semantic_result(state["request"])
+        results, output, citations = await self._semantic_result(state["request"], state["plan"])
         return {
             "tool_outputs": [output],
             "citations": citations,
@@ -368,7 +496,7 @@ class ChatGraph:
         }
 
     def _run_cached_insight(self, state: ChatGraphState) -> ChatGraphState:
-        insight_type = _cached_insight_type(state["request"].message)
+        insight_type = state["plan"].cached_insight_type
         if insight_type is None:  # pragma: no cover - guarded by the graph branch
             raise RuntimeError("Cached insight node received an unsupported question.")
         result = self._cached_insight.run(insight_type)
@@ -379,6 +507,9 @@ class ChatGraph:
                 email_public_id=item.email_public_id,
                 application_id=item.application_id,
                 subject=item.email_subject,
+                company=item.company,
+                role_title=item.role_title,
+                first_seen_at=item.event_at,
             )
             for item in result.citations
         ]
@@ -389,17 +520,37 @@ class ChatGraph:
         }
 
     async def _run_mixed_tools(self, state: ChatGraphState) -> ChatGraphState:
-        request = state["request"]
-        structured_output, structured_citations = self._structured_result(request.message)
-        results, semantic_output, semantic_citations = await self._semantic_result(request)
+        plan = state["plan"]
+        outputs: list[ToolOutput] = []
+        citations: list[ChatCitation] = []
+        content_results: tuple[SemanticSearchResult, ...] = ()
+        web_results: tuple[WebSearchResult, ...] = ()
+        if plan.structured_query is not None:
+            output, items = self._structured_result(plan)
+            outputs.append(output)
+            citations.extend(items)
+        if plan.retrieval is not None:
+            content_results, output, items = await self._semantic_result(state["request"], plan)
+            outputs.append(output)
+            citations.extend(items)
+        if plan.cached_insight_type is not None:
+            cached = self._run_cached_insight(state)
+            outputs.extend(cached["tool_outputs"])
+            citations.extend(cached["citations"])
+        if plan.web_search is not None:
+            web = await self._run_web_search(state)
+            outputs.extend(web["tool_outputs"])
+            citations.extend(web["citations"])
+            web_results = web["web_results"]
         return {
-            "tool_outputs": [structured_output, semantic_output],
-            "citations": [*structured_citations, *semantic_citations],
-            "content_results": results,
+            "tool_outputs": outputs,
+            "citations": citations,
+            "content_results": content_results,
+            "web_results": web_results,
         }
 
     def _run_mixed_cached_insight(self, state: ChatGraphState) -> ChatGraphState:
-        structured_output, structured_citations = self._structured_result(state["request"].message)
+        structured_output, structured_citations = self._structured_result(state["plan"])
         cached_state = self._run_cached_insight(state)
         return {
             "tool_outputs": [structured_output, *cached_state["tool_outputs"]],
@@ -407,17 +558,23 @@ class ChatGraph:
             "content_results": (),
         }
 
-    def _structured_result(self, question: str) -> tuple[ToolOutput, list[ChatCitation]]:
-        result = self._structured_query.run(_structured_request(question))
-        output = result.model_dump(mode="json")
+    def _structured_result(self, plan: ChatPlan) -> tuple[ToolOutput, list[ChatCitation]]:
+        if plan.structured_query is None:  # pragma: no cover - guarded by ChatPlan
+            raise RuntimeError("quantitative plan is missing its structured query")
+        result = self._structured_query.run(plan.structured_query)
+        output = result.model_dump(mode="json", exclude_none=True)
         return output, _structured_citations(result.template, output)
 
     async def _semantic_result(
-        self, request: ChatRequest
+        self,
+        request: ChatRequest,
+        plan: ChatPlan,
     ) -> tuple[tuple[SemanticSearchResult, ...], ToolOutput, list[ChatCitation]]:
         await self._index_service.reconcile()
-        results = await self._semantic_search.run(
-            request.message,
+        if plan.retrieval is None:  # pragma: no cover - guarded by ChatPlan
+            raise RuntimeError("content plan is missing retrieval")
+        results = await self._semantic_search.run_plan(
+            plan.retrieval,
             limit=request.retrieval_limit,
         )
         output: ToolOutput = {
@@ -438,16 +595,6 @@ class ChatGraph:
         ]
         return results, output, citations
 
-    def _synthesize(self, state: ChatGraphState) -> ChatGraphState:
-        return {
-            "answer": synthesize_grounded_answer(
-                state["route"],
-                state.get("tool_outputs", []),
-                state.get("content_results", ()),
-                state.get("citations", []),
-            )
-        }
-
 
 def route_question(question: str) -> ChatRoute:
     normalized = question.casefold()
@@ -466,6 +613,7 @@ def route_question(question: str) -> ChatRoute:
         or _asks_sponsorship_response_impact(normalized)
         or _asks_skill_signals(normalized)
         or _asks_adjacent_roles(normalized)
+        or _asks_for_application_list(normalized)
         or any(term in normalized for _, terms in _BREAKDOWN_DIMENSION_TERMS for term in terms)
         or len(_matched_sources(normalized)) > 1
     )
@@ -480,6 +628,24 @@ def route_question(question: str) -> ChatRoute:
     if quantitative:
         return "quantitative"
     return "content"
+
+
+def _requires_web_search(question: str) -> bool:
+    normalized = question.casefold()
+    return any(
+        term in normalized
+        for term in (
+            "evidence-based",
+            "cite sources",
+            "cite useful sources",
+            "with sources",
+            "current statistics",
+            "industry benchmark",
+            "people typically",
+            "people usually",
+            "latest research",
+        )
+    )
 
 
 def _cached_insight_type(question: str) -> InsightType | None:
@@ -509,6 +675,26 @@ def _structured_request(
     normalized = question.casefold()
     current_normalized = _current_user_question(question).casefold()
     filters = _structured_filters(current_normalized, anchor_at=anchor_at)
+    date_window = _date_window_spec(current_normalized)
+    list_limit = _requested_list_limit(current_normalized)
+    if any(term in normalized for term in ("which month", "busiest month", "most applications")):
+        return StructuredQueryRequest(
+            template="busiest_application_month", filters=filters, date_window=date_window
+        )
+    if any(term in normalized for term in ("which companies", "what companies", "list companies")):
+        return StructuredQueryRequest(
+            template="company_list",
+            filters=filters,
+            date_window=date_window,
+            limit=list_limit,
+        )
+    if _asks_for_application_list(normalized):
+        return StructuredQueryRequest(
+            template="application_list",
+            filters=filters,
+            date_window=date_window,
+            limit=(1 if _asks_for_latest_application(current_normalized) else list_limit),
+        )
     if any(term in normalized for term in ("waiting on", "overdue", "follow-up", "follow up")):
         return StructuredQueryRequest(template="live_applications", filters=filters)
     if "funnel" in normalized:
@@ -556,7 +742,60 @@ def _structured_request(
             )
     if any(term in normalized for term in ("rate", "conversion")):
         return StructuredQueryRequest(template="rates", filters=filters)
-    return StructuredQueryRequest(template="summary_counts", filters=filters)
+    return StructuredQueryRequest(
+        template="summary_counts", filters=filters, date_window=date_window
+    )
+
+
+def _asks_for_latest_application(normalized_question: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:latest|last|most recent)\s+application\b",
+            normalized_question,
+        )
+    )
+
+
+def _asks_for_application_list(normalized_question: str) -> bool:
+    return any(
+        term in normalized_question
+        for term in ("show those applications", "show the applications", "list applications")
+    ) or bool(
+        re.search(
+            r"\b(?:latest|last|most recent)\s+(?:\d{1,3}\s+)?applications?\b",
+            normalized_question,
+        )
+    )
+
+
+def _requested_list_limit(normalized_question: str) -> int:
+    match = re.search(
+        r"\b(?:show|list|give me|return)?\s*(?:the\s+)?(?:latest|last|top)?\s*(\d{1,3})\b",
+        normalized_question,
+    )
+    if match is None:
+        return 20
+    return min(max(int(match.group(1)), 1), 100)
+
+
+def _date_window_spec(normalized_question: str) -> DateWindowSpec | None:
+    for phrase, kind in (
+        ("last week", "last_week"),
+        ("this week", "this_week"),
+        ("last month", "last_month"),
+        ("this month", "this_month"),
+        ("last year", "last_year"),
+        ("this year", "this_year"),
+    ):
+        if phrase in normalized_question:
+            return DateWindowSpec.model_validate({"kind": kind})
+    rolling = re.search(r"\b(?:past|last)\s+(\d{1,4})\s+days?\b", normalized_question)
+    if rolling is not None:
+        return DateWindowSpec(kind="rolling_days", days=int(rolling.group(1)))
+    year = re.search(r"\b(?:in|during)\s+((?:19|20)\d{2})\b", normalized_question)
+    if year is not None:
+        return DateWindowSpec(kind="calendar_year", year=int(year.group(1)))
+    return None
 
 
 def _current_user_question(question: str) -> str:
@@ -571,9 +810,11 @@ def _structured_filters(
     *,
     anchor_at: datetime | None,
 ) -> MetricsFilter | None:
-    filters = _relative_window_filter(normalized_question, anchor_at=anchor_at)
-    if filters is None:
-        filters = _calendar_year_filter(normalized_question)
+    filters = None
+    if _date_window_spec(normalized_question) is None or anchor_at is not None:
+        filters = _relative_window_filter(normalized_question, anchor_at=anchor_at)
+        if filters is None:
+            filters = _calendar_year_filter(normalized_question)
     matched_sources = _matched_sources(normalized_question)
     source = next(iter(matched_sources)) if len(matched_sources) == 1 else None
     matched_work_modes = {
@@ -813,7 +1054,11 @@ def synthesize_grounded_answer(
     structured = next((item for item in tool_outputs if item["tool"] == "structured_query"), None)
     if structured is not None:
         rows = structured.get("rows")
-        if structured.get("template") == "successful_application_segments" and isinstance(
+        if structured.get("template") == "summary_counts" and isinstance(rows, list):
+            parts.append(_synthesize_summary_counts(rows))
+        elif structured.get("template") == "rates" and isinstance(rows, list):
+            parts.append(_synthesize_rates(rows))
+        elif structured.get("template") == "successful_application_segments" and isinstance(
             rows, list
         ):
             parts.append(_synthesize_successful_application_segments(rows))
@@ -833,15 +1078,31 @@ def synthesize_grounded_answer(
             parts.append(_synthesize_skill_signal_segments(rows))
         elif structured.get("template") == "adjacent_role_suggestions" and isinstance(rows, list):
             parts.append(_synthesize_adjacent_role_suggestions(rows))
+        elif structured.get("template") == "application_list" and isinstance(rows, list):
+            parts.append(_synthesize_application_list(rows, structured))
+        elif structured.get("template") == "company_list" and isinstance(rows, list):
+            parts.append(_synthesize_company_list(rows, structured))
+        elif structured.get("template") == "busiest_application_month" and isinstance(rows, list):
+            parts.append(_synthesize_busiest_month(rows))
+        elif structured.get("template") == "total_applications" and isinstance(rows, list):
+            parts.append(_synthesize_total_applications(rows))
+        elif structured.get("template") == "funnel" and isinstance(rows, list):
+            parts.append(_synthesize_funnel(rows))
+        elif structured.get("template") == "timing" and isinstance(rows, list):
+            parts.append(_synthesize_timing(rows))
+        elif structured.get("template") == "personal_ghost_threshold" and isinstance(rows, list):
+            parts.append(_synthesize_ghost_threshold(rows))
+        elif structured.get("template") == "application_timeseries" and isinstance(rows, list):
+            parts.append(_synthesize_application_timeseries(rows))
+        elif structured.get("template") == "response_rate_timeseries" and isinstance(rows, list):
+            parts.append(_synthesize_response_rate_timeseries(rows))
+        elif structured.get("template") == "breakdown" and isinstance(rows, list):
+            parts.append(_synthesize_breakdown(rows))
         elif isinstance(rows, list) and rows:
             if structured.get("template") == "live_applications":
                 parts.append(_synthesize_live_applications(rows))
             else:
-                rendered_rows = []
-                for row in rows:
-                    if isinstance(row, dict):
-                        rendered_rows.append(f"{row.get('label')}: {row.get('values')}")
-                parts.append("Deterministic result: " + "; ".join(rendered_rows) + ".")
+                parts.append(_synthesize_generic_rows(rows))
         else:
             parts.append("The deterministic query found no matching applications.")
     if cached_insight is not None:
@@ -947,11 +1208,13 @@ def _relevant_excerpt(content: str, question: str, *, max_chars: int = 280) -> s
 
 
 def _synthesize_live_applications(rows: list[object]) -> str:
-    waiting: list[str] = []
-    overdue: list[str] = []
+    waiting: list[tuple[int, str]] = []
+    overdue: list[tuple[int, str]] = []
     for row in rows:
         values = row.get("values") if isinstance(row, dict) else None
         if not isinstance(values, dict):
+            continue
+        if values.get("waiting_on_employer") is False:
             continue
         company = values.get("company")
         role = values.get("role_title")
@@ -960,15 +1223,209 @@ def _synthesize_live_applications(rows: list[object]) -> str:
             continue
         citation_id = f"application:{application_id}"
         label = f"{company} - {role} [{citation_id}]"
-        waiting.append(label)
+        days_waiting = values.get("days_waiting")
+        days = days_waiting if isinstance(days_waiting, int) else 0
+        waiting.append((days, label))
         if values.get("follow_up_due") is True:
-            days_waiting = values.get("days_waiting")
-            overdue.append(f"{label} ({days_waiting} days waiting)")
+            overdue.append((days, f"{label} ({days} days waiting)"))
 
     if not waiting:
         return "The deterministic query found no applications awaiting an employer response."
-    overdue_text = ", ".join(overdue) if overdue else "None"
-    return f"Waiting on: {', '.join(waiting)}. Overdue for follow-up: {overdue_text}."
+    waiting.sort(reverse=True)
+    overdue.sort(reverse=True)
+    visible_waiting = [label for _, label in waiting[:25]]
+    visible_overdue = [label for _, label in overdue[:25]]
+    waiting_suffix = f"; plus {len(waiting) - 25} more" if len(waiting) > 25 else ""
+    overdue_suffix = f"; plus {len(overdue) - 25} more" if len(overdue) > 25 else ""
+    overdue_text = ", ".join(visible_overdue) if visible_overdue else "None"
+    return (
+        f"Waiting on: {', '.join(visible_waiting)}{waiting_suffix}. "
+        f"Overdue for follow-up: {overdue_text}{overdue_suffix}."
+    )
+
+
+def _synthesize_application_list(rows: list[object], output: ToolOutput) -> str:
+    total = output.get("total_matching_count", len(rows))
+    if not rows:
+        return "I found no submitted applications matching that request."
+    returned = output.get("returned_count", len(rows))
+    if returned == 1:
+        return "Here is the matching application with its company, role, and status."
+    suffix = f" Showing the first {returned}." if returned != total else ""
+    return f"I found {total} matching submitted applications.{suffix}"
+
+
+def _synthesize_total_applications(rows: list[object]) -> str:
+    values = rows[0].get("values") if rows and isinstance(rows[0], dict) else None
+    count = values.get("application_count") if isinstance(values, dict) else None
+    if not isinstance(count, int):
+        return "I found no matching submitted applications."
+    label = "application" if count == 1 else "applications"
+    return f"You submitted {count} matching {label}."
+
+
+def _synthesize_funnel(rows: list[object]) -> str:
+    stages = [
+        f"{str(row.get('label')).replace('_', ' ')}: {row['values']['count']}"
+        for row in rows
+        if isinstance(row, dict)
+        and isinstance(row.get("values"), dict)
+        and isinstance(row["values"].get("count"), int)
+    ]
+    return "Your application funnel is " + "; ".join(stages) + "."
+
+
+def _synthesize_timing(rows: list[object]) -> str:
+    summaries: list[str] = []
+    labels = {
+        "time_to_first_response": "first response",
+        "time_to_rejection": "rejection",
+    }
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        values = row.get("values")
+        if not isinstance(values, dict):
+            continue
+        hours = values.get("average_hours")
+        sample_size = values.get("application_count")
+        if not isinstance(hours, int | float) or not isinstance(sample_size, int):
+            continue
+        label = labels.get(str(row.get("label")), str(row.get("label")).replace("_", " "))
+        summaries.append(f"{label}: {hours / 24:.1f} days across {sample_size} applications")
+    return "Average timing for the matching applications is " + "; ".join(summaries) + "."
+
+
+def _synthesize_ghost_threshold(rows: list[object]) -> str:
+    values = rows[0].get("values") if rows and isinstance(rows[0], dict) else None
+    if not isinstance(values, dict) or not isinstance(values.get("threshold_days"), int):
+        return "There is not enough history to estimate a ghost threshold."
+    days = values["threshold_days"]
+    sample_size = values.get("response_sample_size")
+    sample = f" based on {sample_size} responses" if isinstance(sample_size, int) else ""
+    return f"Your effective ghost threshold is {days} days{sample}."
+
+
+def _synthesize_application_timeseries(rows: list[object]) -> str:
+    points = [
+        f"{row['values']['period_start']}: {row['values']['application_count']}"
+        for row in rows
+        if isinstance(row, dict)
+        and isinstance(row.get("values"), dict)
+        and isinstance(row["values"].get("period_start"), str)
+        and isinstance(row["values"].get("application_count"), int)
+    ]
+    return "Application volume by period is " + "; ".join(points) + "."
+
+
+def _synthesize_response_rate_timeseries(rows: list[object]) -> str:
+    points = [
+        f"{row['values']['period_start']}: {row['values']['response_rate']:.1%} "
+        f"({row['values']['response_count']} of {row['values']['application_count']})"
+        for row in rows
+        if isinstance(row, dict)
+        and isinstance(row.get("values"), dict)
+        and isinstance(row["values"].get("period_start"), str)
+        and isinstance(row["values"].get("response_rate"), int | float)
+        and isinstance(row["values"].get("response_count"), int)
+        and isinstance(row["values"].get("application_count"), int)
+    ]
+    return "Response rate by period is " + "; ".join(points) + "."
+
+
+def _synthesize_breakdown(rows: list[object]) -> str:
+    segments = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        values = row.get("values")
+        if not isinstance(values, dict):
+            continue
+        count = values.get("application_count")
+        response_rate = values.get("response_rate")
+        interview_rate = values.get("interview_rate")
+        if not isinstance(count, int):
+            continue
+        detail = f"{row.get('label')}: {count} applications"
+        if isinstance(response_rate, int | float):
+            detail += f", {response_rate:.1%} response rate"
+        if isinstance(interview_rate, int | float):
+            detail += f", {interview_rate:.1%} interview rate"
+        segments.append(detail)
+    return "The matching breakdown is " + "; ".join(segments) + "."
+
+
+def _synthesize_generic_rows(rows: list[object]) -> str:
+    summaries: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        values = row.get("values")
+        if not isinstance(values, dict):
+            continue
+        details = ", ".join(
+            f"{str(key).replace('_', ' ')} {value}"
+            for key, value in values.items()
+            if value is not None
+        )
+        summaries.append(f"{row.get('label')}: {details}")
+    return "The deterministic data shows " + "; ".join(summaries) + "."
+
+
+def _synthesize_summary_counts(rows: list[object]) -> str:
+    values = rows[0].get("values") if rows and isinstance(rows[0], dict) else None
+    if not isinstance(values, dict):
+        return "I found no matching submitted applications."
+    total = int(values.get("total_applications", 0))
+    companies = int(values.get("distinct_company_count", 0))
+    responses = int(values.get("human_response_count", 0))
+    interviews = int(values.get("interview_invitation_count", 0))
+    offers = int(values.get("offers_received", 0))
+    application_label = "application" if total == 1 else "applications"
+    company_label = "company" if companies == 1 else "companies"
+    return (
+        f"You submitted {total} {application_label} across {companies} {company_label} in that "
+        "scope. "
+        f"{responses} received a response, {interviews} reached an interview, and {offers} "
+        "received an offer."
+    )
+
+
+def _synthesize_rates(rows: list[object]) -> str:
+    summaries: list[str] = []
+    for row in rows:
+        values = row.get("values") if isinstance(row, dict) else None
+        if not isinstance(values, dict):
+            continue
+        label = str(row.get("label", "rate")).replace("_", " ") if isinstance(row, dict) else "rate"
+        rate = values.get("rate")
+        if isinstance(rate, int | float):
+            summaries.append(f"{label}: {rate:.1%}")
+    return "Your matching rates are " + "; ".join(summaries) + "."
+
+
+def _synthesize_company_list(rows: list[object], output: ToolOutput) -> str:
+    total = output.get("total_matching_count", len(rows))
+    if not rows:
+        return "I found no companies matching that request."
+    companies = [
+        str(row.get("values", {}).get("company"))
+        for row in rows[:20]
+        if isinstance(row, dict) and isinstance(row.get("values"), dict)
+    ]
+    suffix = "" if len(rows) <= 20 else f", plus {len(rows) - 20} more"
+    return f"You applied to {total} matching companies: {', '.join(companies)}{suffix}."
+
+
+def _synthesize_busiest_month(rows: list[object]) -> str:
+    if not rows:
+        return "There is not enough application history to identify a busiest month."
+    summaries = [
+        f"{row['values']['month_start']}: {row['values']['application_count']} applications"
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("values"), dict)
+    ]
+    return "Your busiest application month was " + "; tied with ".join(summaries) + "."
 
 
 def _synthesize_successful_application_segments(rows: list[object]) -> str:
@@ -1277,19 +1734,31 @@ def _synthesize_adjacent_role_suggestions(rows: list[object]) -> str:
 
 
 def _structured_citations(template: str, output: ToolOutput) -> list[ChatCitation]:
-    if template == "live_applications":
+    if template in {"live_applications", "application_list"}:
         rows = output.get("rows")
         if isinstance(rows, list):
             result = []
             for row in rows:
                 values = row.get("values") if isinstance(row, dict) else None
-                application_id = values.get("application_id") if isinstance(values, dict) else None
+                if not isinstance(values, dict):
+                    continue
+                application_id = values.get("application_id")
                 if isinstance(application_id, str):
                     result.append(
                         ChatCitation(
                             citation_id=f"application:{application_id}",
                             source="application",
                             application_id=application_id,
+                            company=(str(values.get("company")) if values.get("company") else None),
+                            role_title=(
+                                str(values.get("role_title")) if values.get("role_title") else None
+                            ),
+                            current_status=(
+                                str(values.get("current_status") or values.get("status"))
+                                if values.get("current_status") or values.get("status")
+                                else None
+                            ),
+                            first_seen_at=values.get("first_seen_at"),
                         )
                     )
             return result

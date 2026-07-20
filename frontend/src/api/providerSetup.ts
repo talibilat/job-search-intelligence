@@ -1,4 +1,5 @@
 import {
+  checkLlmProviderHealthConfigProvidersLlmHealthPost,
   getProviderConfigConfigProvidersGet,
   providerReadinessConfigProvidersReadinessGet,
   setupSubmitSetupPost,
@@ -12,6 +13,7 @@ export const loadProviderReadiness =
   providerReadinessConfigProvidersReadinessGet;
 export const loadSetupStatus = setupStatusSetupStatusGet;
 export const updateProviderConfig = updateProviderConfigConfigProvidersPut;
+export const checkLlmProviderHealth = checkLlmProviderHealthConfigProvidersLlmHealthPost;
 
 export function saveInitialSetup(request: SetupSubmitRequest) {
   return setupSubmitSetupPost(request);

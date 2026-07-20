@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import sqlite3
+from collections import Counter
 from collections.abc import Sequence
+from datetime import datetime
+from typing import cast
+from zoneinfo import ZoneInfo
 
 from app.db.repositories.base import BaseRepository
+from app.models.application import ApplicationStatus
 from app.models.event import RESPONSE_LIKE_APPLICATION_EVENT_TYPES
 from app.models.metrics import (
+    MetricApplicationListRow,
     MetricBreakdownRow,
+    MetricBusiestApplicationMonthRow,
+    MetricCompanyListRow,
     MetricFunnelStage,
     MetricRateName,
     MetricRateRow,
@@ -50,6 +58,114 @@ class MetricsRepository(BaseRepository[int]):
         if row is None:
             return 0
         return int(row[0])
+
+    def list_applications(
+        self,
+        *,
+        filters: MetricsFilter | None = None,
+        limit: int = 100,
+    ) -> tuple[MetricApplicationListRow, ...]:
+        _validate_list_limit(limit)
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        rows = self.execute(
+            f"""
+            SELECT id, company, role_title, current_status, first_seen_at, last_activity_at
+            FROM applications
+            {where_clause}
+            ORDER BY first_seen_at DESC,
+                LOWER(TRIM(company)) ASC,
+                LOWER(TRIM(role_title)) ASC,
+                id ASC
+            LIMIT ?
+            """,
+            (*filter_parameters, limit),
+        ).fetchall()
+        return tuple(
+            MetricApplicationListRow(
+                application_id=str(row["id"]),
+                company=str(row["company"]).strip() or "Unknown company",
+                role_title=str(row["role_title"]).strip() or "Role not available",
+                status=cast(ApplicationStatus, str(row["current_status"])),
+                first_seen_at=datetime.fromisoformat(
+                    str(row["first_seen_at"]).replace("Z", "+00:00")
+                ),
+                last_activity_at=datetime.fromisoformat(
+                    str(row["last_activity_at"]).replace("Z", "+00:00")
+                ),
+            )
+            for row in rows
+        )
+
+    def list_companies(
+        self,
+        *,
+        filters: MetricsFilter | None = None,
+        limit: int = 100,
+    ) -> tuple[MetricCompanyListRow, ...]:
+        _validate_list_limit(limit)
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        rows = self.execute(
+            f"""
+            SELECT id, company, role_title
+            FROM applications
+            {where_clause}
+              AND TRIM(company) != ''
+            ORDER BY LOWER(TRIM(company)) ASC,
+                LOWER(TRIM(role_title)) ASC,
+                TRIM(role_title) ASC,
+                id ASC
+            """,
+            filter_parameters,
+        ).fetchall()
+        application_ids_by_company: dict[str, list[str]] = {}
+        role_titles_by_company: dict[str, dict[str, str]] = {}
+        for row in rows:
+            company = str(row["company"]).strip().lower()
+            application_ids_by_company.setdefault(company, []).append(str(row["id"]))
+            role_title = str(row["role_title"]).strip()
+            role_titles_by_company.setdefault(company, {}).setdefault(
+                role_title.lower(), role_title
+            )
+
+        return tuple(
+            MetricCompanyListRow(
+                company=company,
+                application_count=len(application_ids),
+                role_titles=tuple(role_titles_by_company[company].values()),
+                application_ids=tuple(application_ids),
+            )
+            for company, application_ids in list(application_ids_by_company.items())[:limit]
+        )
+
+    def get_busiest_application_months(
+        self,
+        *,
+        timezone: str,
+        filters: MetricsFilter | None = None,
+    ) -> tuple[MetricBusiestApplicationMonthRow, ...]:
+        where_clause, filter_parameters = _metrics_filter_where_clause(filters)
+        rows = self.execute(
+            f"SELECT first_seen_at FROM applications {where_clause}",
+            filter_parameters,
+        ).fetchall()
+        local_timezone = ZoneInfo(timezone)
+        month_counts = Counter(
+            datetime.fromisoformat(str(row["first_seen_at"]).replace("Z", "+00:00"))
+            .astimezone(local_timezone)
+            .strftime("%Y-%m-01")
+            for row in rows
+        )
+        if not month_counts:
+            return ()
+        busiest_count = max(month_counts.values())
+        return tuple(
+            MetricBusiestApplicationMonthRow(
+                month_start=month_start,
+                application_count=application_count,
+            )
+            for month_start, application_count in sorted(month_counts.items())
+            if application_count == busiest_count
+        )
 
     def count_distinct_companies(self, filters: MetricsFilter | None = None) -> int:
         where_clause, filter_parameters = _metrics_filter_where_clause(filters)
@@ -984,6 +1100,11 @@ class MetricsRepository(BaseRepository[int]):
 
 def _response_placeholders() -> str:
     return ", ".join("?" for _ in _RESPONSE_LIKE_EVENT_TYPES)
+
+
+def _validate_list_limit(limit: int) -> None:
+    if not 1 <= limit <= 100:
+        raise ValueError("list limit must be between 1 and 100")
 
 
 def _newer_event_predicate(left_alias: str, right_alias: str) -> str:

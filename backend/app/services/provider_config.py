@@ -29,6 +29,7 @@ from app.providers.email.gmail import GoogleOAuthClientConfig
 from app.security import (
     AZURE_OPENAI_API_KEY_REF,
     GMAIL_OAUTH_CLIENT_REF,
+    TAVILY_API_KEY_REF,
     SecretStore,
 )
 from app.services.classification_mode_config import recommend_classification_mode
@@ -47,8 +48,13 @@ _PERSISTED_FIELDS = (
     "ollama_base_url",
     "ollama_chat_model",
     "ollama_embedding_model",
+    "web_search_enabled",
+    "web_search_provider",
+    "tavily_base_url",
+    "web_search_max_results",
+    "web_search_timeout_seconds",
 )
-_SECRET_FIELDS = {"azure_openai_api_key", "gmail_oauth_client_json"}
+_SECRET_FIELDS = {"azure_openai_api_key", "gmail_oauth_client_json", "tavily_api_key"}
 
 
 class SyncSchedulerConfigurationError(RuntimeError):
@@ -90,6 +96,11 @@ def build_provider_config_response(
             ollama_base_url=settings.ollama_base_url,
             ollama_chat_model=settings.ollama_chat_model,
             ollama_embedding_model=settings.ollama_embedding_model,
+            web_search_provider=settings.web_search_provider,
+            web_search_enabled=settings.web_search_enabled,
+            tavily_base_url=settings.tavily_base_url,
+            web_search_max_results=settings.web_search_max_results,
+            web_search_timeout_seconds=settings.web_search_timeout_seconds,
         ),
         email_providers=tuple(
             EmailProviderConfigResponse(
@@ -174,6 +185,11 @@ async def _store_credentials(
         if not api_key:
             raise ValueError("Azure OpenAI API key cannot be blank.")
         await secret_store.set_secret(AZURE_OPENAI_API_KEY_REF, SecretStr(api_key))
+    if request.tavily_api_key is not None:
+        api_key = request.tavily_api_key.get_secret_value().strip()
+        if not api_key:
+            raise ValueError("Tavily API key cannot be blank.")
+        await secret_store.set_secret(TAVILY_API_KEY_REF, SecretStr(api_key))
 
 
 async def import_azure_openai_api_key_from_environment(secret_store: SecretStore) -> None:

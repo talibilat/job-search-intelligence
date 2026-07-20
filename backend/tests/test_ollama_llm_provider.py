@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import cast
 
 import pytest
@@ -10,6 +11,7 @@ from app.providers.llm import (
     LLMEmbeddingProvider,
     LLMEmbeddingRequest,
     LLMFinishReason,
+    LLMGenerationChunk,
     LLMGenerationOptions,
     LLMGenerationRequest,
     LLMMessage,
@@ -27,6 +29,7 @@ from app.providers.llm import (
 )
 from app.providers.llm.ollama import (
     OllamaChatResponse,
+    OllamaChatStreamResponse,
     OllamaChatTransportRequest,
     OllamaEmbeddingResponse,
     OllamaEmbeddingTransportRequest,
@@ -61,10 +64,12 @@ class FakeOllamaTransport:
         response: OllamaChatResponse | None = None,
         embedding_response: OllamaEmbeddingResponse | None = None,
         error: Exception | None = None,
+        stream_responses: tuple[OllamaChatStreamResponse, ...] | None = None,
     ) -> None:
         self._response = response or _ollama_response()
         self._embedding_response = embedding_response or _ollama_embedding_response()
         self._error = error
+        self._stream_responses = stream_responses or _ollama_stream_responses()
         self.calls: list[OllamaChatTransportRequest] = []
         self.embedding_calls: list[OllamaEmbeddingTransportRequest] = []
 
@@ -85,6 +90,16 @@ class FakeOllamaTransport:
         if self._error is not None:
             raise self._error
         return self._embedding_response
+
+    async def stream_json(
+        self,
+        request: OllamaChatTransportRequest,
+    ) -> AsyncIterator[OllamaChatStreamResponse]:
+        self.calls.append(request)
+        if self._error is not None:
+            raise self._error
+        for response in self._stream_responses:
+            yield response
 
 
 class SequencedOllamaTransport:
@@ -107,6 +122,14 @@ class SequencedOllamaTransport:
         request: OllamaEmbeddingTransportRequest,
     ) -> OllamaEmbeddingResponse:
         raise AssertionError("embedding requests are not used by retry tests")
+
+    async def stream_json(
+        self,
+        request: OllamaChatTransportRequest,
+    ) -> AsyncIterator[OllamaChatStreamResponse]:
+        if request.path:
+            raise AssertionError("stream requests are not used by retry tests")
+        yield _ollama_stream_responses()[0]
 
 
 def _settings() -> AppSettings:
@@ -168,6 +191,35 @@ def _ollama_embedding_response(
             "embeddings": [list(EMBEDDING_1536), list(EMBEDDING_1536)],
             "prompt_eval_count": 13,
         }
+    )
+
+
+def _ollama_stream_responses() -> tuple[OllamaChatStreamResponse, ...]:
+    return (
+        OllamaChatStreamResponse.model_validate(
+            {
+                "model": "llama3.1",
+                "message": {"role": "assistant", "content": "application_"},
+                "done": False,
+            }
+        ),
+        OllamaChatStreamResponse.model_validate(
+            {
+                "model": "llama3.1",
+                "message": {"role": "assistant", "content": "confirmation"},
+                "done": False,
+            }
+        ),
+        OllamaChatStreamResponse.model_validate(
+            {
+                "model": "llama3.1",
+                "message": {"role": "assistant", "content": ""},
+                "done": True,
+                "done_reason": "stop",
+                "prompt_eval_count": 7,
+                "eval_count": 11,
+            }
+        ),
     )
 
 
@@ -234,6 +286,72 @@ def test_ollama_provider_uses_request_model_override_and_json_format() -> None:
     assert payload["model"] == "mistral"
     assert payload["format"] == "json"
     assert "options" not in payload
+
+
+def test_ollama_provider_streams_ndjson_deltas_and_final_metadata() -> None:
+    transport = FakeOllamaTransport()
+    provider = OllamaLLMProvider(settings=_settings(), transport=transport)
+
+    async def collect() -> list[LLMGenerationChunk]:
+        return [
+            chunk
+            async for chunk in provider.stream_generate(
+                _generation_request(response_format=LLMResponseFormat.JSON_OBJECT)
+            )
+        ]
+
+    chunks = asyncio.run(collect())
+
+    assert [chunk.content_delta for chunk in chunks] == [
+        "application_",
+        "confirmation",
+        "",
+    ]
+    assert chunks[-1].finish_reason is LLMFinishReason.STOP
+    assert chunks[-1].usage == LLMTokenUsage(
+        prompt_tokens=7,
+        completion_tokens=11,
+        total_tokens=18,
+    )
+    payload = transport.calls[0].payload.model_dump(exclude_none=True, mode="json")
+    assert payload["stream"] is True
+    assert payload["format"] == "json"
+
+
+def test_ollama_provider_rejects_stream_without_final_record() -> None:
+    provider = OllamaLLMProvider(
+        settings=_settings(),
+        transport=FakeOllamaTransport(
+            stream_responses=(
+                OllamaChatStreamResponse.model_validate(
+                    {
+                        "model": "llama3.1",
+                        "message": {"role": "assistant", "content": "partial"},
+                        "done": False,
+                    }
+                ),
+            )
+        ),
+    )
+
+    async def collect() -> list[LLMGenerationChunk]:
+        return [chunk async for chunk in provider.stream_generate(_generation_request())]
+
+    with pytest.raises(LLMProviderResponseError):
+        asyncio.run(collect())
+
+
+def test_ollama_provider_maps_stream_timeout_without_content() -> None:
+    provider = OllamaLLMProvider(
+        settings=AppSettings(_env_file=None, llm_max_retries=0),
+        transport=FakeOllamaTransport(error=OllamaTransportTimeoutError()),
+    )
+
+    async def collect() -> list[LLMGenerationChunk]:
+        return [chunk async for chunk in provider.stream_generate(_generation_request())]
+
+    with pytest.raises(LLMProviderTimeoutError):
+        asyncio.run(collect())
 
 
 def test_ollama_provider_posts_embedding_request() -> None:

@@ -275,6 +275,10 @@ def test_alembic_upgrade_creates_jt020_core_schema(tmp_path: Path) -> None:
             "citations_json",
             "tool_outputs_json",
             "created_at",
+            "turn_id",
+            "route",
+            "answer_kind",
+            "follow_up_prompts_json",
         ]
         assert sqlite_column_names(connection, "insights") == [
             "id",

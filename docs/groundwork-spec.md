@@ -321,11 +321,15 @@ Request validation errors, Starlette HTTP errors, and unhandled exceptions are m
 question -> router -> quantitative -> structured_query tool -> synthesize -> answer (+ citations)
 question -> router -> content -> semantic_search tool -> synthesize -> answer (+ citations)
 question -> router -> mixed -> both tools -> synthesize -> answer (+ citations)
+question -> router -> conversation -> direct conversational answer (no factual tool claims)
+question -> router -> web -> Tavily search -> synthesize -> answer (+ web citations)
 ```
 
 - **`structured_query`** - answers counts/rates/breakdowns. **Security: the LLM never emits raw SQL.** It fills parameters on a **constrained query builder / whitelisted templates** over `applications`/`metrics`. Guarantees dashboard-consistent numbers.
 - **`semantic_search`** - sqlite-vec retrieval over `email_chunks` for "what did the recruiter say" style questions; returns citations to real emails/applications.
 - **synthesize** - composes the final answer, always grounded in tool output (no free-floating claims).
+- **conversation** - handles greetings, drafting, and ordinary non-factual discussion without unnecessary tools.
+- **web_search** - the explicitly approved external-search extension; sends only a public query to user-configured Tavily and requires HTTPS citations.
 
 This is why counts are right (vectors can't count) _and_ content recall works.
 

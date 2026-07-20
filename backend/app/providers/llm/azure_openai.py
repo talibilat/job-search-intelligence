@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import NoReturn, Protocol, cast
 from urllib.error import HTTPError, URLError
@@ -23,6 +24,7 @@ from app.providers.llm.types import (
     LLMEmbeddingRequest,
     LLMEmbeddingResponse,
     LLMFinishReason,
+    LLMGenerationChunk,
     LLMGenerationOptions,
     LLMGenerationRequest,
     LLMGenerationResponse,
@@ -73,6 +75,27 @@ class AzureOpenAIChatCompletionResponse(BaseModel):
     usage: AzureOpenAIUsageResponse | None = None
 
 
+class AzureOpenAIChatDeltaResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    content: str | None = None
+
+
+class AzureOpenAIChatStreamChoiceResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    delta: AzureOpenAIChatDeltaResponse
+    finish_reason: str | None = None
+
+
+class AzureOpenAIChatStreamResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    choices: tuple[AzureOpenAIChatStreamChoiceResponse, ...] = ()
+    model: str | None = None
+    usage: AzureOpenAIUsageResponse | None = None
+
+
 class AzureOpenAIEmbeddingDataResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -98,6 +121,17 @@ class AzureOpenAITransport(Protocol):
         timeout_seconds: int,
     ) -> dict[str, object]:
         """POST JSON to Azure OpenAI without exposing API key material."""
+        ...
+
+    def stream_sse(
+        self,
+        url: str,
+        *,
+        api_key: SecretStr,
+        payload: dict[str, object],
+        timeout_seconds: int,
+    ) -> AsyncIterator[dict[str, object] | None]:
+        """Stream decoded SSE data events, using None for the done sentinel."""
         ...
 
 
@@ -175,6 +209,71 @@ class UrllibAzureOpenAITransport:
             raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE)
         return cast(dict[str, object], decoded_response)
 
+    async def stream_sse(
+        self,
+        url: str,
+        *,
+        api_key: SecretStr,
+        payload: dict[str, object],
+        timeout_seconds: int,
+    ) -> AsyncIterator[dict[str, object] | None]:
+        request = Request(
+            url,
+            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+            headers={
+                "Accept": "text/event-stream",
+                "Content-Type": "application/json",
+                "api-key": api_key.get_secret_value(),
+            },
+            method="POST",
+        )
+        response = None
+        try:
+            response = await asyncio.to_thread(urlopen, request, timeout=timeout_seconds)
+            data_lines: list[str] = []
+            while True:
+                raw_line = await asyncio.to_thread(response.readline)
+                if not raw_line:
+                    if data_lines:
+                        yield _decode_sse_event(data_lines)
+                    return
+                try:
+                    line = raw_line.decode("utf-8").rstrip("\r\n")
+                except UnicodeDecodeError:
+                    raise LLMProviderResponseError(
+                        public_message=_INVALID_RESPONSE_MESSAGE
+                    ) from None
+                if not line:
+                    if data_lines:
+                        event = _decode_sse_event(data_lines)
+                        data_lines = []
+                        yield event
+                    continue
+                if line.startswith(":"):
+                    continue
+                if line.startswith("data:"):
+                    data_lines.append(line[5:].lstrip())
+        except HTTPError as error:
+            raise AzureOpenAITransportError(
+                status_code=error.code,
+                reason=error.reason,
+            ) from error
+        except TimeoutError as error:
+            raise AzureOpenAITransportError(
+                status_code=None,
+                reason="timeout",
+                is_timeout=True,
+            ) from error
+        except URLError as error:
+            raise AzureOpenAITransportError(
+                status_code=None,
+                reason=str(error.reason),
+                is_timeout=isinstance(error.reason, TimeoutError),
+            ) from error
+        finally:
+            if response is not None:
+                await asyncio.to_thread(response.close)
+
 
 class AzureOpenAIProvider:
     """Azure OpenAI chat-completions adapter for provider-neutral LLM generation."""
@@ -236,6 +335,83 @@ class AzureOpenAIProvider:
             model=azure_response.model or deployment,
             finish_reason=finish_reason,
             usage=_token_usage(azure_response.usage),
+        )
+
+    async def stream_generate(
+        self,
+        request: LLMGenerationRequest,
+    ) -> AsyncIterator[LLMGenerationChunk]:
+        deployment = (request.model or self._chat_deployment).strip()
+        if not self._endpoint or not self._api_version or not deployment:
+            raise LLMProviderUnavailableError(
+                public_message="Azure OpenAI provider is not configured."
+            )
+
+        api_key = await self._read_api_key()
+        uses_completion_token_limit = _uses_completion_token_limit(deployment)
+        payload = _chat_completion_payload(
+            request,
+            use_completion_token_limit=uses_completion_token_limit,
+            supports_temperature=not uses_completion_token_limit,
+        )
+        payload["stream"] = True
+        payload["stream_options"] = {"include_usage": True}
+        finish_reason: LLMFinishReason | None = None
+        usage: LLMTokenUsage | None = None
+        response_model = deployment
+        saw_done = False
+        try:
+            events = self._transport.stream_sse(
+                _chat_completions_url(
+                    endpoint=self._endpoint,
+                    deployment=deployment,
+                    api_version=self._api_version,
+                ),
+                api_key=api_key,
+                payload=payload,
+                timeout_seconds=self._timeout_seconds,
+            )
+            async for response_payload in events:
+                if response_payload is None:
+                    saw_done = True
+                    break
+                try:
+                    event = AzureOpenAIChatStreamResponse.model_validate(response_payload)
+                except ValidationError as error:
+                    raise LLMProviderResponseError(
+                        public_message=_INVALID_RESPONSE_MESSAGE
+                    ) from error
+                response_model = event.model or response_model
+                if event.usage is not None:
+                    usage = _token_usage(event.usage)
+                if not event.choices:
+                    continue
+                if len(event.choices) != 1 or finish_reason is not None:
+                    raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE)
+                choice = event.choices[0]
+                content_delta = choice.delta.content or ""
+                event_finish_reason = (
+                    _finish_reason(choice.finish_reason)
+                    if choice.finish_reason is not None
+                    else None
+                )
+                if event_finish_reason is not None:
+                    finish_reason = event_finish_reason
+                if content_delta:
+                    yield LLMGenerationChunk(
+                        content_delta=content_delta,
+                        model=response_model,
+                    )
+        except AzureOpenAITransportError as error:
+            _raise_provider_error_for_transport_error(error)
+
+        if not saw_done or finish_reason is None:
+            raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE)
+        yield LLMGenerationChunk(
+            content_delta="",
+            model=response_model,
+            finish_reason=finish_reason,
+            usage=usage,
         )
 
     async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
@@ -367,6 +543,19 @@ def _chat_completion_payload(
     if request.response_format is LLMResponseFormat.JSON_OBJECT:
         payload["response_format"] = {"type": "json_object"}
     return payload
+
+
+def _decode_sse_event(data_lines: list[str]) -> dict[str, object] | None:
+    data = "\n".join(data_lines)
+    if data == "[DONE]":
+        return None
+    try:
+        decoded = json.loads(data)
+    except json.JSONDecodeError:
+        raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from None
+    if not isinstance(decoded, dict):
+        raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE)
+    return cast(dict[str, object], decoded)
 
 
 def _uses_completion_token_limit(deployment: str) -> bool:

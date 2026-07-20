@@ -16,8 +16,9 @@ from app.providers.llm import (
     LLMProviderTimeoutError,
     LLMProviderUnavailableError,
 )
+from app.providers.web_search import WebSearchProviderError
 from app.services.chat_history import ChatHistoryService
-from app.services.chat_service import ChatService
+from app.services.chat_service import ChatService, ChatTurnConflictError
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -54,6 +55,33 @@ async def post_chat(
                 yield _sse(event)
         except LLMProviderError as error:
             yield _sse(_provider_error_event(request, error))
+        except ChatTurnConflictError:
+            yield _sse(
+                ChatStreamEvent(
+                    type="error",
+                    conversation_id=request.conversation_id or "pending",
+                    error_code="chat_turn_conflict",
+                    error_message="This chat turn ID was already used for another question.",
+                )
+            )
+        except WebSearchProviderError as error:
+            yield _sse(
+                ChatStreamEvent(
+                    type="error",
+                    conversation_id=request.conversation_id or "pending",
+                    error_code="web_search_unavailable",
+                    error_message=error.public_message,
+                )
+            )
+        except Exception:
+            yield _sse(
+                ChatStreamEvent(
+                    type="error",
+                    conversation_id=request.conversation_id or "pending",
+                    error_code="chat_internal_error",
+                    error_message="The grounded chat turn could not be completed.",
+                )
+            )
 
     return StreamingResponse(
         events(),

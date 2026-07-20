@@ -132,6 +132,26 @@ export function DeveloperPage() {
           </div>
         ))}
       </div>
+      <a
+        href="/chat/architecture"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "18px",
+          padding: "18px 20px",
+          border: "1px solid #D9D2EE",
+          borderRadius: "14px",
+          background: "#F4F2FB",
+          color: "#3E347F",
+          fontSize: "13px",
+          fontWeight: 700,
+          textDecoration: "none",
+        }}
+      >
+        <span><strong style={{ display: "block" }}>Explore the chat architecture</strong><span style={{ display: "block", marginTop: "2px", color: "#6D648E", fontSize: "11.5px", fontWeight: 500 }}>Interactive function graph, schemas, routing, retrieval, and persistence</span></span>
+        <span aria-hidden="true">Open atlas →</span>
+      </a>
     </section>
   );
 }

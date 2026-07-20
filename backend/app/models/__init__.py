@@ -45,7 +45,10 @@ from .insight import (
 )
 from .metrics import (
     ApplicationWindowMetric,
+    MetricApplicationListRow,
     MetricBreakdownRow,
+    MetricBusiestApplicationMonthRow,
+    MetricCompanyListRow,
     MetricFunnelStage,
     MetricRate,
     MetricRateRow,
@@ -176,6 +179,9 @@ __all__ = [
     "LLMProviderConfigResponse",
     "LLMProviderHealthCheckApiRequest",
     "MetricBreakdownRow",
+    "MetricApplicationListRow",
+    "MetricBusiestApplicationMonthRow",
+    "MetricCompanyListRow",
     "MetricsBreakdownResponse",
     "MetricsDiagnosticsResponse",
     "MetricFunnelStage",

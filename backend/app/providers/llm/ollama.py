@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from ipaddress import ip_address
 from typing import Protocol, cast
@@ -24,6 +25,7 @@ from .types import (
     LLMEmbeddingRequest,
     LLMEmbeddingResponse,
     LLMFinishReason,
+    LLMGenerationChunk,
     LLMGenerationOptions,
     LLMGenerationRequest,
     LLMGenerationResponse,
@@ -51,6 +53,13 @@ class OllamaTransport(Protocol):
         request: OllamaChatTransportRequest,
     ) -> OllamaChatResponse:
         """POST a JSON request to Ollama without logging prompt content."""
+        ...
+
+    def stream_json(
+        self,
+        request: OllamaChatTransportRequest,
+    ) -> AsyncIterator[OllamaChatStreamResponse]:
+        """Stream validated NDJSON chat responses without logging content."""
         ...
 
     async def post_embedding_json(
@@ -96,6 +105,54 @@ class UrllibOllamaTransport:
             self._post_embedding_json_sync,
             request,
         )
+
+    async def stream_json(
+        self,
+        transport_request: OllamaChatTransportRequest,
+    ) -> AsyncIterator[OllamaChatStreamResponse]:
+        http_request = Request(
+            _join_ollama_url(self._base_url, transport_request.path),
+            data=json.dumps(
+                transport_request.payload.model_dump(exclude_none=True, mode="json"),
+                separators=(",", ":"),
+            ).encode("utf-8"),
+            headers={
+                "Accept": "application/x-ndjson",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        response = None
+        try:
+            response = await asyncio.to_thread(
+                self._opener.open,
+                http_request,
+                timeout=transport_request.timeout_seconds,
+            )
+            while True:
+                raw_line = await asyncio.to_thread(response.readline)
+                if not raw_line:
+                    return
+                if not raw_line.strip():
+                    continue
+                try:
+                    decoded = json.loads(raw_line.decode("utf-8"))
+                    if not isinstance(decoded, dict):
+                        raise OllamaTransportInvalidResponseError
+                    yield OllamaChatStreamResponse.model_validate(cast(dict[str, object], decoded))
+                except (UnicodeDecodeError, json.JSONDecodeError, ValidationError):
+                    raise OllamaTransportInvalidResponseError from None
+        except TimeoutError as error:
+            raise OllamaTransportTimeoutError from error
+        except HTTPError as error:
+            raise OllamaTransportError(status_code=error.code) from error
+        except URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                raise OllamaTransportTimeoutError from error
+            raise OllamaTransportError(status_code=None) from error
+        finally:
+            if response is not None:
+                await asyncio.to_thread(response.close)
 
     def _post_json_sync(
         self,
@@ -259,6 +316,24 @@ class OllamaChatResponse(BaseModel):
     eval_count: int | None = Field(default=None, ge=0)
 
 
+class OllamaChatStreamResponseMessage(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    role: str = Field(min_length=1)
+    content: str
+
+
+class OllamaChatStreamResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    model: str = Field(min_length=1)
+    message: OllamaChatStreamResponseMessage
+    done: bool
+    done_reason: str | None = None
+    prompt_eval_count: int | None = Field(default=None, ge=0)
+    eval_count: int | None = Field(default=None, ge=0)
+
+
 class OllamaLLMProvider:
     """Local Ollama chat adapter for provider-neutral LLM generation."""
 
@@ -303,6 +378,58 @@ class OllamaLLMProvider:
                 raise LLMProviderRequestError(public_message="Ollama request failed.") from error
 
         return _generation_response(response)
+
+    async def stream_generate(
+        self,
+        request: LLMGenerationRequest,
+    ) -> AsyncIterator[LLMGenerationChunk]:
+        transport_request = OllamaChatTransportRequest(
+            path=_OLLAMA_CHAT_PATH,
+            payload=_chat_request_payload(
+                request,
+                default_model=self._chat_model,
+                stream=True,
+            ),
+            timeout_seconds=self._timeout_seconds,
+        )
+        emitted_content = False
+        for attempt_index in range(self._max_retries + 1):
+            final_response: OllamaChatStreamResponse | None = None
+            try:
+                async for response in self._transport.stream_json(transport_request):
+                    if final_response is not None:
+                        raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE)
+                    if response.done:
+                        final_response = response
+                    elif response.message.content:
+                        emitted_content = True
+                        yield LLMGenerationChunk(
+                            content_delta=response.message.content,
+                            model=response.model,
+                        )
+                if final_response is None:
+                    raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE)
+                yield LLMGenerationChunk(
+                    content_delta=final_response.message.content,
+                    model=final_response.model,
+                    finish_reason=_finish_reason(final_response.done_reason),
+                    usage=_stream_token_usage(final_response),
+                )
+                return
+            except OllamaTransportTimeoutError as error:
+                if not emitted_content and attempt_index < self._max_retries:
+                    continue
+                raise LLMProviderTimeoutError(public_message="Ollama request timed out.") from error
+            except OllamaTransportInvalidResponseError as error:
+                raise LLMProviderResponseError(public_message=_INVALID_RESPONSE_MESSAGE) from error
+            except OllamaTransportError as error:
+                if _is_unavailable_status(error.status_code):
+                    if not emitted_content and attempt_index < self._max_retries:
+                        continue
+                    raise LLMProviderUnavailableError(
+                        public_message="Ollama is unavailable."
+                    ) from error
+                raise LLMProviderRequestError(public_message="Ollama request failed.") from error
 
     async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
         transport_request = OllamaEmbeddingTransportRequest(
@@ -383,6 +510,7 @@ def _chat_request_payload(
     request: LLMGenerationRequest,
     *,
     default_model: str,
+    stream: bool = False,
 ) -> OllamaChatRequestPayload:
     return OllamaChatRequestPayload(
         model=request.model or default_model,
@@ -390,7 +518,7 @@ def _chat_request_payload(
             OllamaChatMessagePayload(role=message.role.value, content=message.content)
             for message in request.messages
         ),
-        stream=False,
+        stream=stream,
         format=(
             _OLLAMA_JSON_FORMAT
             if request.response_format is LLMResponseFormat.JSON_OBJECT
@@ -431,6 +559,18 @@ def _token_usage(response: OllamaChatResponse) -> LLMTokenUsage | None:
     if response.prompt_eval_count is None and response.eval_count is None:
         return None
 
+    prompt_tokens = response.prompt_eval_count or 0
+    completion_tokens = response.eval_count or 0
+    return LLMTokenUsage(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_tokens + completion_tokens,
+    )
+
+
+def _stream_token_usage(response: OllamaChatStreamResponse) -> LLMTokenUsage | None:
+    if response.prompt_eval_count is None and response.eval_count is None:
+        return None
     prompt_tokens = response.prompt_eval_count or 0
     completion_tokens = response.eval_count or 0
     return LLMTokenUsage(

@@ -152,3 +152,22 @@ class LLMGenerationResponse(BaseModel):
     model: str = Field(min_length=1)
     finish_reason: LLMFinishReason = LLMFinishReason.UNKNOWN
     usage: LLMTokenUsage | None = None
+
+
+class LLMGenerationChunk(BaseModel):
+    """One immutable delta from a provider-neutral generation stream."""
+
+    model_config = ConfigDict(frozen=True)
+
+    content_delta: str
+    model: str = Field(min_length=1)
+    finish_reason: LLMFinishReason | None = None
+    usage: LLMTokenUsage | None = None
+
+    @model_validator(mode="after")
+    def validate_terminal_metadata(self) -> LLMGenerationChunk:
+        if self.usage is not None and self.finish_reason is None:
+            raise ValueError("stream usage is only valid on a final chunk")
+        if not self.content_delta and self.finish_reason is None:
+            raise ValueError("a non-final stream chunk requires content")
+        return self

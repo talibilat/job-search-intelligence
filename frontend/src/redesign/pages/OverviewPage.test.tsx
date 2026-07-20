@@ -124,8 +124,9 @@ describe("OverviewPage request states", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mark Aviva interview done" }));
 
     await waitFor(() => {
+      expect(attentionReads).toBeGreaterThanOrEqual(2);
       expect(screen.queryByRole("button", { name: "Mark Aviva interview done" })).toBeNull();
-    });
+    }, { timeout: 5_000 });
     expect(fetchMock.mock.calls.some(([input]) => new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://localhost").pathname === "/attention/interviews/event-aviva/complete")).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Interview 1" }));

@@ -3,7 +3,8 @@ import type { IncomingMessage } from "node:http";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
-const BACKEND_URL = "http://127.0.0.1:8000";
+const BACKEND_URL =
+  process.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
   plugins: [react()],

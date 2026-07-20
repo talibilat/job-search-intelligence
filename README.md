@@ -5,6 +5,20 @@ A local-first web app that connects to your email (Gmail first), mines your enti
 The supported end-to-end setup, sync, processing, dashboard, insights, grounded chat, and local wipe flow is documented in [`docs/operational-flow.md`](docs/operational-flow.md).
 The current product workspace is `/`; older standalone routes are retained only as visibly marked diagnostic compatibility surfaces.
 
+## Docker
+
+Start the frontend and backend containers from the repository root:
+
+```sh
+docker compose up --build
+```
+
+The frontend is available at `http://localhost:5173` and proxies API requests to the backend container.
+The backend API is also available directly at `http://localhost:8000`, with its health endpoint at `http://localhost:8000/health`.
+SQLite data and Fernet-encrypted secrets persist in the `jobtracker-data` Docker volume.
+On its first startup, Compose seeds that volume from an existing root `jobtracker.sqlite3` so previously ingested local data remains available.
+Run `docker compose down` to stop the containers without deleting that data.
+
 ## Core principle
 
 All factual job-search answers come from one clean `applications` table and its event timeline (`application_events`).

@@ -97,6 +97,27 @@ class MetricsFilter(BaseModel):
         return self
 
 
+class MetricApplicationListRow(BaseModel):
+    application_id: str
+    company: str
+    role_title: str
+    status: ApplicationStatus
+    first_seen_at: datetime
+    last_activity_at: datetime
+
+
+class MetricCompanyListRow(BaseModel):
+    company: str
+    application_count: int = Field(ge=1)
+    role_titles: tuple[str, ...]
+    application_ids: tuple[str, ...]
+
+
+class MetricBusiestApplicationMonthRow(BaseModel):
+    month_start: str = Field(pattern=r"^\d{4}-\d{2}-01$")
+    application_count: int = Field(ge=1)
+
+
 class ResponseSilenceMetric(BaseModel):
     question_id: Literal["Q-04"] = "Q-04"
     total_applications: int = Field(ge=0)

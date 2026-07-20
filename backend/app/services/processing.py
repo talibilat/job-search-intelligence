@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -20,6 +20,7 @@ from app.services.structured_extraction import StructuredExtractionService
 type Clock = Callable[[], datetime]
 type RunIdFactory = Callable[[], str]
 type StatusCallback = Callable[[ProcessingStatus], None]
+type IndexReconciler = Callable[[], Awaitable[int]]
 
 
 class ProcessingOrchestrationService:
@@ -33,6 +34,7 @@ class ProcessingOrchestrationService:
         extraction_service: StructuredExtractionService,
         aggregation_service: AggregationService,
         ghost_inference_service: GhostInferenceService,
+        index_reconciler: IndexReconciler | None = None,
         clock: Clock | None = None,
         run_id_factory: RunIdFactory | None = None,
     ) -> None:
@@ -41,6 +43,7 @@ class ProcessingOrchestrationService:
         self._extraction_service = extraction_service
         self._aggregation_service = aggregation_service
         self._ghost_inference_service = ghost_inference_service
+        self._index_reconciler = index_reconciler
         self._clock = clock or (lambda: datetime.now(UTC))
         self._run_id_factory = run_id_factory or (lambda: uuid4().hex)
 
@@ -135,6 +138,8 @@ class ProcessingOrchestrationService:
 
         ghosts = self._ghost_inference_service.run()
         manual_conflict_count += ghosts.manual_conflict_count
+        if self._index_reconciler is not None and accepted_count:
+            await self._index_reconciler()
         result = ProcessingRunResult(
             state=ProcessingRunState.SUCCEEDED,
             run_id=run_id,

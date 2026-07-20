@@ -20,5 +20,8 @@ describe("DeveloperPage", () => {
     render(<DeveloperPage />);
 
     expect(screen.getByText("Wired to Grounded chat drawer")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: /Explore the chat architecture/ }).getAttribute("href"),
+    ).toBe("/chat/architecture");
   });
 });

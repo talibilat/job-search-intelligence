@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import Any, get_type_hints
 
 import pytest
@@ -11,6 +12,7 @@ from app.providers.llm import (
     LLMEmbeddingRequest,
     LLMEmbeddingResponse,
     LLMFinishReason,
+    LLMGenerationChunk,
     LLMGenerationOptions,
     LLMGenerationRequest,
     LLMGenerationResponse,
@@ -48,6 +50,19 @@ class FakeLLMProvider:
                 completion_tokens=5,
                 total_tokens=8,
             ),
+        )
+
+    async def stream_generate(
+        self,
+        request: LLMGenerationRequest,
+    ) -> AsyncIterator[LLMGenerationChunk]:
+        model = request.model or "fake-model"
+        yield LLMGenerationChunk(content_delta=request.messages[-1].content, model=model)
+        yield LLMGenerationChunk(
+            content_delta="",
+            model=model,
+            finish_reason=LLMFinishReason.STOP,
+            usage=LLMTokenUsage(prompt_tokens=3, completion_tokens=5, total_tokens=8),
         )
 
     async def embed(self, request: LLMEmbeddingRequest) -> LLMEmbeddingResponse:
@@ -170,6 +185,43 @@ def test_llm_provider_generation_round_trip() -> None:
         completion_tokens=5,
         total_tokens=8,
     )
+
+
+def test_llm_provider_stream_generation_round_trip() -> None:
+    async def collect() -> list[LLMGenerationChunk]:
+        provider = FakeLLMProvider()
+        request = LLMGenerationRequest(
+            messages=(LLMMessage(role=LLMMessageRole.USER, content="Grounded answer."),),
+            model="fake-chat-model",
+        )
+        return [chunk async for chunk in provider.stream_generate(request)]
+
+    chunks = asyncio.run(collect())
+
+    assert chunks == [
+        LLMGenerationChunk(content_delta="Grounded answer.", model="fake-chat-model"),
+        LLMGenerationChunk(
+            content_delta="",
+            model="fake-chat-model",
+            finish_reason=LLMFinishReason.STOP,
+            usage=LLMTokenUsage(prompt_tokens=3, completion_tokens=5, total_tokens=8),
+        ),
+    ]
+
+
+def test_generation_chunk_is_immutable_and_restricts_terminal_metadata() -> None:
+    chunk = LLMGenerationChunk(content_delta="delta", model="fake-chat-model")
+
+    with pytest.raises(ValidationError):
+        chunk.content_delta = "changed"
+    with pytest.raises(ValidationError):
+        LLMGenerationChunk(content_delta="", model="fake-chat-model")
+    with pytest.raises(ValidationError):
+        LLMGenerationChunk(
+            content_delta="delta",
+            model="fake-chat-model",
+            usage=LLMTokenUsage(total_tokens=1),
+        )
 
 
 def test_llm_provider_health_check_round_trip() -> None:
@@ -296,6 +348,7 @@ def test_llm_boundary_models_do_not_define_credential_fields() -> None:
         LLMMessage,
         LLMGenerationOptions,
         LLMGenerationRequest,
+        LLMGenerationChunk,
         LLMGenerationResponse,
         LLMEmbeddingRequest,
         LLMEmbeddingResponse,

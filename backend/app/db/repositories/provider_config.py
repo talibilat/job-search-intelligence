@@ -22,14 +22,53 @@ class ProviderConfigurationRepository(BaseRepository[ProviderConfigurationRecord
                        azure_openai_chat_deployment,
                        azure_openai_embedding_deployment,
                        ollama_base_url, ollama_chat_model,
-                       ollama_embedding_model, updated_at
+                       ollama_embedding_model, web_search_enabled,
+                       web_search_provider, tavily_base_url,
+                       web_search_max_results, web_search_timeout_seconds,
+                       updated_at
                 FROM provider_configuration WHERE singleton_id = 1
                 """
             )
         except sqlite3.OperationalError as error:
             if "no such table: provider_configuration" in str(error):
                 return None
+            if "no such column" in str(error) and any(
+                column_name in str(error)
+                for column_name in (
+                    "web_search_enabled",
+                    "web_search_provider",
+                    "tavily_base_url",
+                    "web_search_max_results",
+                    "web_search_timeout_seconds",
+                )
+            ):
+                return self._fetch_pre_tavily_record()
             raise
+
+    def _fetch_pre_tavily_record(self) -> ProviderConfigurationRecord | None:
+        row = self.execute(
+            """
+            SELECT email_provider, llm_provider, classification_mode,
+                   sync_on_open, sync_interval_seconds,
+                   azure_openai_endpoint, azure_openai_api_version,
+                   azure_openai_chat_deployment,
+                   azure_openai_embedding_deployment,
+                   ollama_base_url, ollama_chat_model,
+                   ollama_embedding_model, updated_at
+            FROM provider_configuration WHERE singleton_id = 1
+            """
+        ).fetchone()
+        if row is None:
+            return None
+        values = row_to_dict(row)
+        values.update(
+            web_search_enabled=False,
+            web_search_provider="tavily",
+            tavily_base_url="https://api.tavily.com",
+            web_search_max_results=5,
+            web_search_timeout_seconds=10,
+        )
+        return ProviderConfigurationRecord.model_validate(values)
 
     def save(self, settings: AppSettings) -> ProviderConfigurationRecord:
         updated_at = datetime.now(UTC)
@@ -40,8 +79,10 @@ class ProviderConfigurationRepository(BaseRepository[ProviderConfigurationRecord
                 sync_on_open, sync_interval_seconds, azure_openai_endpoint,
                 azure_openai_api_version, azure_openai_chat_deployment,
                 azure_openai_embedding_deployment, ollama_base_url,
-                ollama_chat_model, ollama_embedding_model, updated_at
-            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ollama_chat_model, ollama_embedding_model, updated_at,
+                web_search_enabled, web_search_provider, tavily_base_url,
+                web_search_max_results, web_search_timeout_seconds
+            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(singleton_id) DO UPDATE SET
                 email_provider = excluded.email_provider,
                 llm_provider = excluded.llm_provider,
@@ -55,6 +96,11 @@ class ProviderConfigurationRepository(BaseRepository[ProviderConfigurationRecord
                 ollama_base_url = excluded.ollama_base_url,
                 ollama_chat_model = excluded.ollama_chat_model,
                 ollama_embedding_model = excluded.ollama_embedding_model,
+                web_search_enabled = excluded.web_search_enabled,
+                web_search_provider = excluded.web_search_provider,
+                tavily_base_url = excluded.tavily_base_url,
+                web_search_max_results = excluded.web_search_max_results,
+                web_search_timeout_seconds = excluded.web_search_timeout_seconds,
                 updated_at = excluded.updated_at
             """,
             (
@@ -71,6 +117,11 @@ class ProviderConfigurationRepository(BaseRepository[ProviderConfigurationRecord
                 settings.ollama_chat_model,
                 settings.ollama_embedding_model,
                 updated_at.isoformat(),
+                int(settings.web_search_enabled),
+                settings.web_search_provider.value,
+                settings.tavily_base_url,
+                settings.web_search_max_results,
+                settings.web_search_timeout_seconds,
             ),
         )
         self.connection.commit()

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -36,6 +36,15 @@ function renderDrawer() {
   return { onClose, onOpenApplication, onOpenSettings };
 }
 
+function expectSentQuestion(message: string, callIndex = 0) {
+  const [request, onEvent, signal] = sendTurnMock.mock.calls[callIndex];
+  expect(request).toMatchObject({ conversation_id: null, message });
+  expect(request.turn_id).toEqual(expect.any(String));
+  expect(onEvent).toEqual(expect.any(Function));
+  expect(signal).toBeInstanceOf(AbortSignal);
+  return request;
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -58,6 +67,10 @@ describe("ChatDrawer", () => {
           {
             application_id: "app-acme",
             citation_id: "application:app-acme",
+            company: "Acme Labs",
+            current_status: "in_review",
+            first_seen_at: "2026-07-01T10:00:00Z",
+            role_title: "Platform Engineer",
             source: "application",
           },
         ],
@@ -72,6 +85,9 @@ describe("ChatDrawer", () => {
     const { onOpenApplication } = renderDrawer();
 
     expect(await screen.findByText("You are waiting on Acme.")).toBeTruthy();
+    expect(screen.getByText("Acme Labs")).toBeTruthy();
+    expect(screen.getByText("Platform Engineer")).toBeTruthy();
+    expect(screen.queryByText("Application record")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "View application" }));
 
     expect(onOpenApplication).toHaveBeenCalledWith("app-acme");
@@ -101,6 +117,7 @@ describe("ChatDrawer", () => {
     );
     sendTurnMock.mockResolvedValue({
       answer: "A grounded new answer.",
+      answer_kind: "grounded",
       citations: [{ citation_id: "metric:summary_counts", source: "metric" }],
       conversation_id: "conversation-new",
       increments: [{ content: "A grounded new answer.", type: "answer" }],
@@ -127,10 +144,7 @@ describe("ChatDrawer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
 
     await screen.findByText("A grounded new answer.");
-    expect(sendTurnMock).toHaveBeenCalledWith(
-      { conversation_id: null, message: "Start fresh" },
-      expect.any(Function),
-    );
+    expectSentQuestion("Start fresh");
   });
 
   it("opens complete cited email evidence and restores focus to its trigger", async () => {
@@ -191,34 +205,12 @@ describe("ChatDrawer", () => {
 
   it("posts a question and progressively renders a dashboard-consistent cited answer", async () => {
     loadHistoryMock.mockResolvedValue([]);
+    let emit: Parameters<typeof sendChatTurn>[1];
+    let completeTurn: ((value: Awaited<ReturnType<typeof sendChatTurn>>) => void) | undefined;
     sendTurnMock.mockImplementation((_request, onEvent) => {
-      onEvent?.({
-        conversation_id: "conversation-2",
-        route: "quantitative",
-        type: "route",
-      });
-      onEvent?.({
-        conversation_id: "conversation-2",
-        tool: "structured_query",
-        type: "tool",
-      });
-      return Promise.resolve({
-      answer: "You have 23 applications.",
-      citations: [
-        {
-          citation_id: "metric:summary_counts",
-          metric_template: "summary_counts",
-          source: "metric",
-        },
-      ],
-      conversation_id: "conversation-2",
-      increments: [
-        { content: "quantitative", type: "route" },
-        { content: "structured_query", type: "tool" },
-        { content: "You have 23 applications.", type: "answer" },
-      ],
-      route: "quantitative",
-      tool_outputs: [],
+      emit = onEvent;
+      return new Promise((resolve) => {
+        completeTurn = resolve;
       });
     });
     renderDrawer();
@@ -227,16 +219,58 @@ describe("ChatDrawer", () => {
     fireEvent.change(message, { target: { value: "How many applications?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
 
-    expect(screen.getByText("Reconciling the answer with dashboard metrics…")).toBeTruthy();
+    act(() => {
+      emit?.({
+        conversation_id: "conversation-2",
+        route: "quantitative",
+        type: "route",
+      });
+      emit?.({
+        conversation_id: "conversation-2",
+        tool: "structured_query",
+        type: "tool",
+      });
+    });
+    expect(screen.getByText("Reconciling the answer with local dashboard metrics…")).toBeTruthy();
+    act(() => {
+      emit?.({
+        answer_delta: "You have 23 ",
+        conversation_id: "conversation-2",
+        type: "answer_delta",
+      });
+      emit?.({
+        answer_delta: "applications.",
+        conversation_id: "conversation-2",
+        type: "answer_delta",
+      });
+    });
+    expect(screen.getByText("You have 23 applications.")).toBeTruthy();
+    act(() => {
+      completeTurn?.({
+        answer: "You have 23 applications.",
+        answer_kind: "grounded",
+        citations: [
+          {
+            citation_id: "metric:summary_counts",
+            metric_template: "summary_counts",
+            source: "metric",
+          },
+        ],
+        conversation_id: "conversation-2",
+        increments: [
+          { content: "quantitative", type: "route" },
+          { content: "structured_query", type: "tool" },
+          { content: "You have 23 applications.", type: "answer" },
+        ],
+        route: "quantitative",
+        tool_outputs: [],
+      });
+    });
     expect(await screen.findByText("You have 23 applications.")).toBeTruthy();
+    expect(screen.getAllByText("You have 23 applications.")).toHaveLength(1);
+    expect(screen.getByRole("log").querySelectorAll(":scope > article")).toHaveLength(2);
     expect(screen.getByText("Dashboard metric · summary_counts")).toBeTruthy();
-    expect(sendTurnMock).toHaveBeenCalledWith(
-      {
-        conversation_id: null,
-        message: "How many applications?",
-      },
-      expect.any(Function),
-    );
+    expectSentQuestion("How many applications?");
   });
 
   it("shows progress while reading a cached cited insight", async () => {
@@ -263,9 +297,10 @@ describe("ChatDrawer", () => {
     fireEvent.change(message, { target: { value: "Why am I getting rejected?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
 
-    expect(screen.getByText("Reading your cached cited insight…")).toBeTruthy();
+    expect(screen.getByText("Reading your cached local insight…")).toBeTruthy();
     completeTurn?.({
       answer: "Experience was the recurring cited theme.",
+      answer_kind: "grounded",
       citations: [],
       conversation_id: "conversation-insight",
       increments: [],
@@ -273,12 +308,14 @@ describe("ChatDrawer", () => {
       tool_outputs: [],
     });
     expect(await screen.findByText("Experience was the recurring cited theme.")).toBeTruthy();
+    expect(screen.queryByText("Grounded refusal")).toBeNull();
   });
 
   it("submits the exhaustive rejection-email suggestion supported by chat retrieval", async () => {
     loadHistoryMock.mockResolvedValue([]);
     sendTurnMock.mockResolvedValue({
       answer: "I found one matching rejection email.",
+      answer_kind: "grounded",
       citations: [{ citation_id: "email:email-acme", source: "email" }],
       conversation_id: "conversation-suggestion",
       increments: [{ content: "I found one matching rejection email.", type: "answer" }],
@@ -293,19 +330,14 @@ describe("ChatDrawer", () => {
     fireEvent.click(suggestion);
 
     expect(await screen.findByText("I found one matching rejection email.")).toBeTruthy();
-    expect(sendTurnMock).toHaveBeenCalledWith(
-      {
-        conversation_id: null,
-        message: "Show me every rejection email that mentioned experience.",
-      },
-      expect.any(Function),
-    );
+    expectSentQuestion("Show me every rejection email that mentioned experience.");
   });
 
-  it("labels an unsupported uncited answer as a grounded refusal", async () => {
+  it("uses explicit answer kind instead of citation count for refusal rendering", async () => {
     loadHistoryMock.mockResolvedValue([
       {
-        citations: [],
+        answer_kind: "refusal",
+        citations: [{ citation_id: "metric:summary_counts", source: "metric" }],
         content: "I cannot answer that from the retained job-search evidence.",
         conversation_id: "conversation-refusal",
         created_at: "2026-07-15T10:00:00Z",
@@ -318,6 +350,94 @@ describe("ChatDrawer", () => {
 
     const refusal = await screen.findByText("Grounded refusal");
     expect(within(refusal.closest("article")!).getByText(/cannot answer/)).toBeTruthy();
+  });
+
+  it("renders casual conversation without refusal or source labels", async () => {
+    loadHistoryMock.mockResolvedValue([]);
+    sendTurnMock.mockResolvedValue({
+      answer: "Hello. I can help with your search or just talk it through.",
+      answer_kind: "conversation",
+      citations: [],
+      conversation_id: "conversation-casual",
+      follow_up_prompts: [],
+      increments: [],
+      route: "conversation",
+      tool_outputs: [],
+    });
+    renderDrawer();
+
+    const message = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText("Hello. I can help with your search or just talk it through.")).toBeTruthy();
+    expect(screen.queryByText("Grounded refusal")).toBeNull();
+    expect(screen.queryByLabelText("Sources")).toBeNull();
+  });
+
+  it("sends the exact follow-up prompt message after completion", async () => {
+    loadHistoryMock.mockResolvedValue([]);
+    sendTurnMock
+      .mockResolvedValueOnce({
+        answer: "You have 23 applications.",
+        answer_kind: "grounded",
+        citations: [],
+        conversation_id: "conversation-follow-up",
+        follow_up_prompts: [{
+          label: "Break down by role",
+          message: "Break down my 23 applications by role title.",
+        }],
+        increments: [],
+        route: "quantitative",
+        tool_outputs: [],
+      })
+      .mockResolvedValueOnce({
+        answer: "Here is the role breakdown.",
+        answer_kind: "grounded",
+        citations: [],
+        conversation_id: "conversation-follow-up",
+        follow_up_prompts: [],
+        increments: [],
+        route: "quantitative",
+        tool_outputs: [],
+      });
+    renderDrawer();
+
+    const message = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "How many applications?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Break down by role" }));
+
+    await screen.findByText("Here is the role breakdown.");
+    expect(sendTurnMock.mock.calls[1][0]).toMatchObject({
+      conversation_id: "conversation-follow-up",
+      message: "Break down my 23 applications by role title.",
+    });
+  });
+
+  it("offers Settings when web search configuration is unavailable", async () => {
+    loadHistoryMock.mockResolvedValue([]);
+    sendTurnMock.mockRejectedValue({
+      response: {
+        data: {
+          error: {
+            code: "web_search_unavailable",
+            details: [],
+            message: "Enable web search and add a Tavily API key.",
+          },
+        },
+        status: 502,
+      },
+    });
+    const { onOpenSettings } = renderDrawer();
+
+    const message = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "What is Acme hiring for today?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText("Web search unavailable")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 
   it("shows provider recovery and retries without duplicating the user question", async () => {
@@ -337,6 +457,7 @@ describe("ChatDrawer", () => {
       })
       .mockResolvedValueOnce({
         answer: "You have 23 applications.",
+        answer_kind: "grounded",
         citations: [{ citation_id: "metric:summary_counts", source: "metric" }],
         conversation_id: "conversation-retry",
         increments: [{ content: "You have 23 applications.", type: "answer" }],
@@ -357,5 +478,9 @@ describe("ChatDrawer", () => {
     expect(await screen.findByText("You have 23 applications.")).toBeTruthy();
     await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(2));
     expect(within(screen.getByRole("log")).getAllByText("How many applications?")).toHaveLength(1);
+    const [firstRequest] = sendTurnMock.mock.calls[0];
+    const [retryRequest] = sendTurnMock.mock.calls[1];
+    expect(firstRequest.turn_id).toEqual(expect.any(String));
+    expect(retryRequest.turn_id).toBe(firstRequest.turn_id);
   });
 });

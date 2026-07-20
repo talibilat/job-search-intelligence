@@ -23,6 +23,7 @@ from app.providers.llm import (
 from app.security import (
     AZURE_OPENAI_API_KEY_REF,
     GMAIL_OAUTH_CLIENT_REF,
+    TAVILY_API_KEY_REF,
     SecretStore,
     SecretStoreError,
 )
@@ -55,6 +56,7 @@ class ProviderReadinessService:
         gmail = await self._gmail_readiness()
         classification, embedding = await self._llm_readiness()
         chat = _chat_readiness(classification, embedding)
+        web_search = await self._web_search_readiness()
         return ProviderReadinessResponse(
             ready_to_sync=gmail.state is ReadinessState.READY,
             ready_to_classify=classification.state is ReadinessState.READY,
@@ -62,6 +64,33 @@ class ProviderReadinessService:
             classification_generation=classification,
             embedding_generation=embedding,
             chat_generation=chat,
+            web_search=web_search,
+        )
+
+    async def _web_search_readiness(self) -> CapabilityReadiness:
+        if not self._settings.web_search_enabled:
+            return CapabilityReadiness(
+                state=ReadinessState.DISABLED,
+                message="Web search is disabled.",
+                action="Enable web search to use Tavily.",
+            )
+        try:
+            api_key = await self._secret_store.get_secret(TAVILY_API_KEY_REF)
+        except SecretStoreError:
+            return CapabilityReadiness(
+                state=ReadinessState.UNAVAILABLE,
+                message="Credential storage is unavailable.",
+                action="Check the configured SecretStore and retry.",
+            )
+        if api_key is None or not api_key.get_secret_value().strip():
+            return CapabilityReadiness(
+                state=ReadinessState.MISSING_CREDENTIAL,
+                message="Tavily API key is required.",
+                action="Enter your Tavily API key.",
+            )
+        return CapabilityReadiness(
+            state=ReadinessState.READY,
+            message="Tavily web search is configured.",
         )
 
     async def _gmail_readiness(self) -> CapabilityReadiness:

@@ -38,6 +38,11 @@ function providerConfig(): ProviderConfigResponse {
       ollama_embedding_model: "nomic-embed-text",
       sync_interval_seconds: 3600,
       sync_on_open: false,
+      tavily_base_url: "https://api.tavily.com",
+      web_search_enabled: false,
+      web_search_max_results: 5,
+      web_search_provider: "tavily",
+      web_search_timeout_seconds: 15,
     },
   };
 }

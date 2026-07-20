@@ -189,7 +189,8 @@ Gmail ingestion · classification + extraction + aggregation · deterministic da
 - **FR-5.4 Streaming chat UI** *(P0)* - In-app chat with streamed responses.
   *Accept:* responses stream; history is viewable.
 - **FR-5.5 Grounded answers** *(P0)* - Every answer is grounded in tool output.
-  *Accept:* no unsupported claims; answers reference data/emails.
+  Casual non-factual conversation may use no tool; local factual claims must reference deterministic data or emails, and explicitly approved external web answers must cite Tavily results.
+  *Accept:* no unsupported factual claims; local answers reference data/emails and web answers cite returned HTTPS sources.
 - **FR-5.6 Persisted chat history** *(P0)* - Store chat history in SQLite with compact citations and tool outputs.
   *Accept:* `GET /chat/history` returns prior local conversations, and wipe-data removes chat history.
 

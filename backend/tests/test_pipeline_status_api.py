@@ -19,11 +19,12 @@ def migrate_database(database_path: Path) -> None:
 
 
 def make_client(database_path: Path) -> TestClient:
-    app = create_app()
-    app.dependency_overrides[get_settings] = lambda: AppSettings(
+    settings = AppSettings(
         _env_file=None,
         database_url=f"sqlite+aiosqlite:///{database_path}",
     )
+    app = create_app(settings=settings)
+    app.dependency_overrides[get_settings] = lambda: settings
     return TestClient(app)
 
 

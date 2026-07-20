@@ -320,6 +320,7 @@ def test_wipe_local_data_deletes_connection_and_configured_secrets_before_files(
     assert not settings.data_dir.exists()
     assert any("person-example.com" in event for event in events)
     assert any("azure_openai" in event and "api_key" in event for event in events)
+    assert any("tavily" in event and "api_key" in event for event in events)
     assert any("gmail" in event and "refresh_token" in event for event in events)
 
 

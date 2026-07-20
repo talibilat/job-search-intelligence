@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal, Protocol, Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.repositories import MetricsRepository
 from app.models import MetricsFilter
@@ -37,8 +38,73 @@ StructuredQueryTemplate = Literal[
     "adjacent_role_suggestions",
     "breakdown",
     "live_applications",
+    "application_list",
+    "company_list",
+    "busiest_application_month",
 ]
 StructuredQueryScalar = str | int | float | None
+DateWindowKind = Literal[
+    "this_week",
+    "last_week",
+    "this_month",
+    "last_month",
+    "this_year",
+    "last_year",
+    "rolling_days",
+    "calendar_year",
+    "custom",
+]
+
+
+class DateWindowSpec(BaseModel):
+    """Planner-safe local calendar window, resolved by the tool rather than the LLM."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: DateWindowKind
+    days: int | None = Field(default=None, ge=1, le=3660)
+    year: int | None = Field(default=None, ge=1, le=9998)
+    start_date: date | None = None
+    end_date_exclusive: date | None = None
+
+    @model_validator(mode="after")
+    def validate_kind_parameters(self) -> Self:
+        expected_fields: set[str] = set()
+        if self.kind == "rolling_days":
+            expected_fields = {"days"}
+        elif self.kind == "calendar_year":
+            expected_fields = {"year"}
+        elif self.kind == "custom":
+            expected_fields = {"start_date", "end_date_exclusive"}
+
+        values = {
+            "days": self.days,
+            "year": self.year,
+            "start_date": self.start_date,
+            "end_date_exclusive": self.end_date_exclusive,
+        }
+        supplied_fields = {name for name, value in values.items() if value is not None}
+        if supplied_fields != expected_fields:
+            msg = f"{self.kind} date window requires exactly {sorted(expected_fields)}"
+            raise ValueError(msg)
+        if (
+            self.kind == "custom"
+            and self.start_date is not None
+            and self.end_date_exclusive is not None
+            and self.start_date >= self.end_date_exclusive
+        ):
+            msg = "start_date must be before end_date_exclusive"
+            raise ValueError(msg)
+        return self
+
+
+class ResolvedDateWindow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    kind: DateWindowKind
+    timezone: str
+    start_at: datetime
+    end_at: datetime
 
 
 class StructuredQueryRequest(BaseModel):
@@ -49,6 +115,19 @@ class StructuredQueryRequest(BaseModel):
     template: StructuredQueryTemplate
     filters: MetricsFilter | None = None
     breakdown_dimension: MetricsBreakdownDimension | None = None
+    date_window: DateWindowSpec | None = None
+    timezone: str = "UTC"
+    limit: int = Field(default=20, ge=1, le=100)
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as error:
+            msg = "timezone must be a valid IANA timezone name"
+            raise ValueError(msg) from error
+        return value
 
     @model_validator(mode="after")
     def validate_template_parameters(self) -> Self:
@@ -58,6 +137,15 @@ class StructuredQueryRequest(BaseModel):
         if self.template != "breakdown" and self.breakdown_dimension is not None:
             msg = "breakdown_dimension is only accepted for breakdown structured queries"
             raise ValueError(msg)
+        if self.date_window is not None and self.template not in {
+            "total_applications",
+            "summary_counts",
+            "application_list",
+            "company_list",
+            "busiest_application_month",
+        }:
+            msg = "date_window is not accepted for this structured query template"
+            raise ValueError(msg)
         return self
 
 
@@ -65,7 +153,7 @@ class StructuredQueryRow(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     label: str = Field(min_length=1)
-    values: dict[str, StructuredQueryScalar]
+    values: dict[str, StructuredQueryScalar | tuple[str, ...]]
 
 
 class StructuredQueryResult(BaseModel):
@@ -77,6 +165,11 @@ class StructuredQueryResult(BaseModel):
     template: StructuredQueryTemplate
     rows: tuple[StructuredQueryRow, ...]
     source: Literal["metrics_repository"] = "metrics_repository"
+    resolved_date_window: ResolvedDateWindow | None = None
+    total_matching_count: int | None = Field(default=None, ge=0)
+    returned_count: int | None = Field(default=None, ge=0)
+    limit: int | None = Field(default=None, ge=1, le=100)
+    truncated: bool | None = None
 
 
 class StructuredQueryTool:
@@ -104,6 +197,98 @@ class StructuredQueryTool:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def run(self, request: StructuredQueryRequest) -> StructuredQueryResult:
+        resolved_window = self._resolve_date_window(request)
+        if resolved_window is not None:
+            request = request.model_copy(
+                update={
+                    "filters": _compose_date_window_filter(
+                        request.filters,
+                        resolved_window=resolved_window,
+                    )
+                }
+            )
+
+        if request.template == "application_list":
+            limit = request.limit
+            application_metric_rows = self._metrics_repository.list_applications(
+                filters=request.filters,
+                limit=limit,
+            )
+            total_matching_count = self._metrics_repository.count_total_applications(
+                filters=request.filters
+            )
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=row.application_id,
+                        values={
+                            "application_id": row.application_id,
+                            "company": row.company,
+                            "role_title": row.role_title,
+                            "status": row.status,
+                            "first_seen_at": row.first_seen_at.isoformat(),
+                            "last_activity_at": row.last_activity_at.isoformat(),
+                        },
+                    )
+                    for row in application_metric_rows
+                ),
+                resolved_date_window=resolved_window,
+                total_matching_count=total_matching_count,
+                returned_count=len(application_metric_rows),
+                limit=limit,
+                truncated=len(application_metric_rows) < total_matching_count,
+            )
+
+        if request.template == "company_list":
+            limit = request.limit
+            company_metric_rows = self._metrics_repository.list_companies(
+                filters=request.filters,
+                limit=limit,
+            )
+            total_matching_count = self._metrics_repository.count_distinct_companies(
+                filters=request.filters
+            )
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=row.company,
+                        values={
+                            "company": row.company,
+                            "application_count": row.application_count,
+                            "role_titles": row.role_titles,
+                            "application_ids": row.application_ids,
+                        },
+                    )
+                    for row in company_metric_rows
+                ),
+                resolved_date_window=resolved_window,
+                total_matching_count=total_matching_count,
+                returned_count=len(company_metric_rows),
+                limit=limit,
+                truncated=len(company_metric_rows) < total_matching_count,
+            )
+
+        if request.template == "busiest_application_month":
+            return StructuredQueryResult(
+                template=request.template,
+                rows=tuple(
+                    StructuredQueryRow(
+                        label=row.month_start,
+                        values={
+                            "month_start": row.month_start,
+                            "application_count": row.application_count,
+                        },
+                    )
+                    for row in self._metrics_repository.get_busiest_application_months(
+                        timezone=request.timezone,
+                        filters=request.filters,
+                    )
+                ),
+                resolved_date_window=resolved_window,
+            )
+
         if request.template == "total_applications":
             return StructuredQueryResult(
                 template=request.template,
@@ -117,6 +302,7 @@ class StructuredQueryTool:
                         },
                     ),
                 ),
+                resolved_date_window=resolved_window,
             )
 
         if request.template == "summary_counts":
@@ -160,6 +346,7 @@ class StructuredQueryTool:
                         },
                     ),
                 ),
+                resolved_date_window=resolved_window,
             )
 
         if request.template == "rates":
@@ -483,41 +670,80 @@ class StructuredQueryTool:
             now = self._clock().astimezone(UTC)
             filters = request.filters or MetricsFilter()
             rows = []
-            for application in self._application_reader.list_applications(
-                current_status=filters.status,
-                source=filters.source,
-                sponsorship=filters.sponsorship,
-                first_seen_from=(
-                    filters.first_seen_from.isoformat()
-                    if filters.first_seen_from is not None
-                    else None
-                ),
-                first_seen_to=(
-                    filters.first_seen_to.isoformat() if filters.first_seen_to is not None else None
-                ),
-                role=filters.role,
-                salary_min=filters.salary_min,
-                salary_max=filters.salary_max,
-                work_mode=filters.work_mode,
-            ):
-                if application.current_status not in {
+            applications = [
+                application
+                for application in self._application_reader.list_applications(
+                    current_status=filters.status,
+                    source=filters.source,
+                    sponsorship=filters.sponsorship,
+                    first_seen_from=(
+                        filters.first_seen_from.isoformat()
+                        if filters.first_seen_from is not None
+                        else None
+                    ),
+                    first_seen_to=(
+                        filters.first_seen_to.isoformat()
+                        if filters.first_seen_to is not None
+                        else None
+                    ),
+                    role=filters.role,
+                    salary_min=filters.salary_min,
+                    salary_max=filters.salary_max,
+                    work_mode=filters.work_mode,
+                )
+                if application.current_status
+                in {
                     "applied",
                     "in_review",
                     "interview",
-                }:
+                }
+            ]
+            batch_reader = getattr(self._application_reader, "list_follow_up_states", None)
+            follow_up_states = (
+                batch_reader([item.id for item in applications], now=now.isoformat())
+                if batch_reader is not None
+                else {}
+            )
+            for application in applications:
+                follow_up_state = follow_up_states.get(application.id)
+                follow_up_reader = getattr(self._application_reader, "get_follow_up_state", None)
+                follow_up_state = follow_up_state or (
+                    follow_up_reader(application.id, now=now.isoformat())
+                    if batch_reader is None and follow_up_reader is not None
+                    else None
+                )
+                if follow_up_state is not None and follow_up_state.has_future_interview:
                     continue
-                days_waiting = max(0, (now - application.last_activity_at.astimezone(UTC)).days)
+                latest_at = (
+                    follow_up_state.latest_event_at
+                    if follow_up_state is not None
+                    else application.last_activity_at
+                )
+                days_waiting = max(0, (now - latest_at.astimezone(UTC)).days)
+                waiting_on_employer = follow_up_state is None or (
+                    follow_up_state.latest_direction != "inbound"
+                    or follow_up_state.latest_event_type == "applied"
+                )
                 rows.append(
                     StructuredQueryRow(
-                        label=application.company,
+                        label=application.company.strip() or "Unknown company",
                         values={
                             "application_id": application.id,
-                            "company": application.company,
+                            "company": application.company.strip() or "Unknown company",
                             "role_title": application.role_title,
                             "current_status": application.current_status,
                             "last_activity_at": application.last_activity_at.isoformat(),
                             "days_waiting": days_waiting,
-                            "follow_up_due": days_waiting >= self._follow_up_threshold_days,
+                            "waiting_on_employer": waiting_on_employer,
+                            "latest_direction": (
+                                follow_up_state.latest_direction
+                                if follow_up_state is not None
+                                else "unknown"
+                            ),
+                            "follow_up_due": (
+                                waiting_on_employer
+                                and days_waiting >= self._follow_up_threshold_days
+                            ),
                             "follow_up_threshold_days": self._follow_up_threshold_days,
                         },
                     )
@@ -551,6 +777,83 @@ class StructuredQueryTool:
 
     def _ghost_cutoff_at(self) -> datetime:
         return self._clock().astimezone(UTC) - timedelta(days=self._ghost_threshold_days)
+
+    def _resolve_date_window(
+        self,
+        request: StructuredQueryRequest,
+    ) -> ResolvedDateWindow | None:
+        spec = request.date_window
+        if spec is None:
+            return None
+        timezone = ZoneInfo(request.timezone)
+        now = self._clock()
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("clock must return a timezone-aware datetime")
+        local_today = now.astimezone(timezone).date()
+
+        if spec.kind in {"this_week", "last_week"}:
+            start_date = local_today - timedelta(days=local_today.weekday())
+            if spec.kind == "last_week":
+                start_date -= timedelta(days=7)
+            end_date = start_date + timedelta(days=7)
+        elif spec.kind in {"this_month", "last_month"}:
+            start_date = local_today.replace(day=1)
+            if spec.kind == "last_month":
+                start_date = (start_date - timedelta(days=1)).replace(day=1)
+            end_date = _next_month(start_date)
+        elif spec.kind in {"this_year", "last_year"}:
+            year = local_today.year - (1 if spec.kind == "last_year" else 0)
+            start_date = date(year, 1, 1)
+            end_date = date(year + 1, 1, 1)
+        elif spec.kind == "rolling_days":
+            assert spec.days is not None
+            start_date = local_today - timedelta(days=spec.days - 1)
+            end_date = local_today + timedelta(days=1)
+        elif spec.kind == "calendar_year":
+            assert spec.year is not None
+            start_date = date(spec.year, 1, 1)
+            end_date = date(spec.year + 1, 1, 1)
+        else:
+            assert spec.start_date is not None
+            assert spec.end_date_exclusive is not None
+            start_date = spec.start_date
+            end_date = spec.end_date_exclusive
+
+        return ResolvedDateWindow(
+            kind=spec.kind,
+            timezone=request.timezone,
+            start_at=datetime.combine(start_date, time.min, timezone).astimezone(UTC),
+            end_at=datetime.combine(end_date, time.min, timezone).astimezone(UTC),
+        )
+
+
+def _next_month(value: date) -> date:
+    if value.month == 12:
+        return date(value.year + 1, 1, 1)
+    return date(value.year, value.month + 1, 1)
+
+
+def _compose_date_window_filter(
+    filters: MetricsFilter | None,
+    *,
+    resolved_window: ResolvedDateWindow,
+) -> MetricsFilter:
+    filters = filters or MetricsFilter()
+    start_at = resolved_window.start_at
+    if filters.first_seen_from is not None:
+        start_at = max(start_at, filters.first_seen_from)
+
+    # MetricsFilter's legacy upper bound is inclusive, so one microsecond preserves
+    # exact [start, end) semantics without widening the public dashboard contract.
+    end_at = resolved_window.end_at - timedelta(microseconds=1)
+    if filters.first_seen_to is not None:
+        end_at = min(end_at, filters.first_seen_to)
+    return filters.model_copy(
+        update={
+            "first_seen_from": start_at,
+            "first_seen_to": end_at,
+        }
+    )
 
 
 class LiveApplicationReader(Protocol):

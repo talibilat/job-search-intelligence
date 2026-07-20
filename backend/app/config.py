@@ -57,6 +57,10 @@ class LLMProviderName(StrEnum):
     OLLAMA = "ollama"
 
 
+class WebSearchProviderName(StrEnum):
+    TAVILY = "tavily"
+
+
 class ClassificationMode(StrEnum):
     HYBRID = "hybrid"
     LLM = "llm"
@@ -92,6 +96,8 @@ class AppSettings(BaseSettings):
 
     email_provider: EmailProviderName = EmailProviderName.GMAIL
     llm_provider: LLMProviderName = LLMProviderName.OLLAMA
+    web_search_provider: WebSearchProviderName = WebSearchProviderName.TAVILY
+    web_search_enabled: bool = False
     classification_mode: ClassificationMode = ClassificationMode.LOCAL
 
     gmail_client_config_file: Path = Path("~/.config/jobtracker/google-oauth-client.json")
@@ -115,8 +121,12 @@ class AppSettings(BaseSettings):
     insight_input_cost_per_1k_units_usd: float = Field(default=0.0, ge=0)
     insight_output_cost_per_1k_units_usd: float = Field(default=0.0, ge=0)
     chat_index_max_emails: int = Field(default=1000, ge=1, le=100_000)
+    chat_max_vector_distance: float = Field(default=1.35, gt=0, le=2)
     llm_timeout_seconds: int = Field(default=60, ge=1)
     llm_max_retries: int = Field(default=2, ge=0)
+    tavily_base_url: str = "https://api.tavily.com"
+    web_search_max_results: int = Field(default=5, ge=1, le=10)
+    web_search_timeout_seconds: int = Field(default=10, ge=1, le=120)
 
     azure_openai_endpoint: str = ""
     azure_openai_api_version: str = Field(default="2024-06-01", min_length=1)
@@ -168,6 +178,15 @@ class AppSettings(BaseSettings):
             raise ValueError("gmail_scopes must only include gmail.readonly in v1")
 
         return value
+
+    @field_validator("tavily_base_url")
+    @classmethod
+    def validate_tavily_base_url(cls, value: str) -> str:
+        normalized = value.strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        if parsed.scheme != "https" or not parsed.netloc or parsed.query or parsed.fragment:
+            raise ValueError("tavily_base_url must be an absolute HTTPS URL")
+        return normalized
 
     @field_validator("sqlite_vec_extension_path", mode="before")
     @classmethod

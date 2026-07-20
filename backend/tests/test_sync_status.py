@@ -1,9 +1,10 @@
+from app.config import AppSettings
 from app.main import create_app
 from fastapi.testclient import TestClient
 
 
 def test_sync_status_endpoint_exposes_typed_idle_status() -> None:
-    client = TestClient(create_app())
+    client = TestClient(create_app(settings=AppSettings(_env_file=None, sync_on_open=False)))
 
     response = client.get("/sync/status")
 
@@ -23,7 +24,7 @@ def test_sync_status_endpoint_exposes_typed_idle_status() -> None:
 
 
 def test_sync_status_endpoint_is_documented_in_openapi() -> None:
-    client = TestClient(create_app())
+    client = TestClient(create_app(settings=AppSettings(_env_file=None, sync_on_open=False)))
 
     response = client.get("/openapi.json")
 

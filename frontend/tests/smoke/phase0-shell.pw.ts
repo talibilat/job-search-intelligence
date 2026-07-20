@@ -246,6 +246,11 @@ const legacySetupStatus = {
     },
     ready_to_classify: true,
     ready_to_sync: false,
+    web_search: {
+      action: "Enable web search and add a Tavily API key.",
+      message: "Web search is disabled.",
+      state: "disabled",
+    },
   },
   setup_complete: false,
 } satisfies SetupStatusResponse;
@@ -381,6 +386,18 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
       status: 200,
     });
   });
+  await page.route("**/attention", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        follow_up: [],
+        interviewed: [],
+        prepare: [],
+        unique_interviewed_company_count: 0,
+      },
+      status: 200,
+    });
+  });
   await page.route("**/sync/recent-emails?**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -439,6 +456,53 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
     await route.fulfill({
       contentType: "application/json",
       json: legacyTimeseries,
+      status: 200,
+    });
+  });
+  await page.route("**/metrics/funnel**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: redesignFunnel,
+      status: 200,
+    });
+  });
+  await page.route("**/metrics/response-rate-trend**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: { points: [] },
+      status: 200,
+    });
+  });
+  await page.route("**/metrics/response-silence**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        human_response_count: 2,
+        question_id: "Q-04",
+        silent_count: 1,
+        total_applications: 3,
+      },
+      status: 200,
+    });
+  });
+  await page.route("**/metrics/diagnostics**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        adjacent_role_suggestions: [],
+        baseline_negative_count: 1,
+        baseline_response_count: 2,
+        baseline_success_count: 1,
+        dead_weight_skill_segments: [],
+        negative_outcome_segments: [],
+        segments: [],
+        selling_skill_segments: [],
+        strongest_response_segments: [],
+        successful_application_segments: [],
+        total_applications: 3,
+        wasted_effort_segments: [],
+        weakest_response_segments: [],
+      },
       status: 200,
     });
   });
@@ -679,7 +743,7 @@ test("renders setup, sync, and fixture-backed dashboard metrics", async ({
   ).toBeVisible();
   await expect(page.getByText("Gmail has not been authorized.")).toBeVisible();
   await expect(
-    page.getByText(/Credentials are write-only and encrypted/),
+    page.getByText(/AI API endpoints and credentials are configured in the backend/),
   ).toBeVisible();
 });
 
@@ -854,6 +918,11 @@ const providerConfig = {
     ollama_embedding_model: "fixture-embedding",
     sync_interval_seconds: 1800,
     sync_on_open: true,
+    tavily_base_url: "https://api.tavily.com",
+    web_search_enabled: true,
+    web_search_max_results: 5,
+    web_search_provider: "tavily",
+    web_search_timeout_seconds: 15,
   },
 } satisfies ProviderConfigResponse;
 
@@ -1021,16 +1090,22 @@ const processingReadiness = {
   classification_generation: { state: "ready", message: "Classification is ready." },
   embedding_generation: { state: "ready", message: "Embeddings are ready." },
   chat_generation: { state: "ready", message: "Grounded chat is ready." },
+  web_search: { state: "ready", message: "Tavily web search is ready." },
 } satisfies ProviderReadinessResponse;
 
 const quantitativeChatResponse = {
   answer: "You have 23 applications.",
+  answer_kind: "grounded",
   citations: [{
     citation_id: "metric:summary_counts",
     metric_template: "summary_counts",
     source: "metric",
   }],
   conversation_id: "release-smoke-chat",
+  follow_up_prompts: [{
+    label: "Break down by role",
+    message: "Break down my applications by role title.",
+  }],
   increments: [
     { content: "quantitative", type: "route" },
     { content: "structured_query", type: "tool" },
@@ -1042,6 +1117,7 @@ const quantitativeChatResponse = {
 
 const contentChatResponse = {
   answer: "Fixture Systems said the role requires deeper distributed-systems design experience.",
+  answer_kind: "grounded",
   citations: [{
     application_id: "app-fixture",
     citation_id: "email:fixture-rejection-public",
@@ -1052,6 +1128,10 @@ const contentChatResponse = {
     subject: "Rejection decision",
   }],
   conversation_id: "release-smoke-chat",
+  follow_up_prompts: [{
+    label: "View related applications",
+    message: "Show related Fixture Systems applications.",
+  }],
   increments: [
     { content: "content", type: "route" },
     { content: "semantic_search", type: "tool" },
@@ -1253,6 +1333,7 @@ const schedulerError = {
 async function installRedesignFixtures(page: Page) {
   const timelineRequestEvents: string[] = [];
   const chatRequestEvents: string[] = [];
+  const chatRequestTimezones: string[] = [];
   const classificationRequestEvents: string[] = [];
   const emailContentRequestEvents: string[] = [];
   const mutationRequestEvents: string[] = [];
@@ -1310,6 +1391,18 @@ async function installRedesignFixtures(page: Page) {
     unclassified_retained_count: 12,
   };
 
+  await page.route("**/attention", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      json: {
+        follow_up: [],
+        interviewed: [],
+        prepare: [],
+        unique_interviewed_company_count: 0,
+      },
+      status: 200,
+    }),
+  );
   await page.route("**/auth/connections", (route) =>
     route.fulfill({
       contentType: "application/json",
@@ -1706,10 +1799,15 @@ async function installRedesignFixtures(page: Page) {
       return;
     }
     chatRequestEvents.push(`${route.request().method()} /chat`);
-    const request = route.request().postDataJSON() as { message: string };
+    const request = route.request().postDataJSON() as {
+      message: string;
+      timezone: string;
+      turn_id: string;
+    };
     const response = request.message.toLowerCase().includes("how many")
       ? quantitativeChatResponse
       : contentChatResponse;
+    chatRequestTimezones.push(request.timezone);
     const createdAt = "2026-07-15T10:00:00Z";
     persistedChatMessages.push(
       {
@@ -1719,24 +1817,31 @@ async function installRedesignFixtures(page: Page) {
         created_at: createdAt,
         id: persistedChatMessages.length + 1,
         role: "user",
+        turn_id: request.turn_id,
         tool_outputs_json: [],
       },
       {
+        answer_kind: response.answer_kind,
         citations_json: response.citations,
         content: response.answer,
         conversation_id: response.conversation_id,
         created_at: createdAt,
+        follow_up_prompts_json: response.follow_up_prompts,
         id: persistedChatMessages.length + 2,
         role: "assistant",
+        route: response.route,
+        turn_id: request.turn_id,
         tool_outputs_json: response.tool_outputs,
       },
     );
     const conversationId = response.conversation_id;
     const tool = response.route === "quantitative" ? "structured_query" : "semantic_search";
+    const streamedResponse = response;
     const stream = [
       `event: route\ndata: ${JSON.stringify({ conversation_id: conversationId, route: response.route, type: "route" })}`,
       `event: tool\ndata: ${JSON.stringify({ conversation_id: conversationId, tool, type: "tool" })}`,
-      `event: complete\ndata: ${JSON.stringify({ conversation_id: conversationId, response, type: "complete" })}`,
+      `event: answer_delta\ndata: ${JSON.stringify({ answer_delta: response.answer, conversation_id: conversationId, type: "answer_delta" })}`,
+      `event: complete\ndata: ${JSON.stringify({ conversation_id: conversationId, response: streamedResponse, type: "complete" })}`,
       "",
     ].join("\n\n");
     await route.fulfill({ body: stream, contentType: "text/event-stream", status: 200 });
@@ -1774,6 +1879,7 @@ async function installRedesignFixtures(page: Page) {
 
   return {
     chatRequestEvents,
+    chatRequestTimezones,
     classificationRequestEvents,
     emailContentRequestEvents,
     mutationRequestEvents,
@@ -2011,6 +2117,7 @@ test("runs the critical private-data-free redesign journey", async ({
   await chat.getByRole("button", { name: "Ask" }).click();
   await expect(chat.getByText("You have 23 applications.")).toBeVisible();
   await expect(chat.getByText("Dashboard metric · summary_counts")).toBeVisible();
+  expect(requests.chatRequestTimezones[0]).toBeTruthy();
 
   await chat.getByRole("textbox", { name: "Message" }).fill("What exactly did Fixture Systems say?");
   await chat.getByRole("button", { name: "Ask" }).click();

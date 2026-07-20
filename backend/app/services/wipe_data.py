@@ -9,7 +9,7 @@ from typing import Literal
 from app.config import AppSettings
 from app.db.sqlite_url import sqlite_database_path
 from app.providers.registry import provider_registry
-from app.security import SecretRef, SecretStore, SecretStoreError
+from app.security import TAVILY_API_KEY_REF, SecretRef, SecretStore, SecretStoreError
 
 APP_OWNED_DATA_DIR_MARKER = ".jobtracker-data"
 
@@ -76,6 +76,7 @@ def _delete_targets(
 def _wipe_secret_refs(connection_secret_refs: list[SecretRef]) -> list[SecretRef]:
     refs = [
         *connection_secret_refs,
+        TAVILY_API_KEY_REF,
         *(
             requirement.ref
             for provider in provider_registry.email_providers()

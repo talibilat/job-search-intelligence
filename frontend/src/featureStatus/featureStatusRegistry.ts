@@ -147,9 +147,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       { label: "SetupStatusService", type: "service" },
       { label: "Runtime settings", type: "runtime_config" },
     ],
-    remainingWork: [
-      "Implement the Phase 5 hybrid RAG route, grounded response flow, persisted history, semantic retrieval, and chat UI before exposing chat as runnable.",
-    ],
+    remainingWork: [],
     routes: ["/setup"],
     screens: ["Setup"],
     sharedUi: ["Button", "Alert", "FormField", "TextInput"],
@@ -343,7 +341,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
       "GET /sync/emails/{public_id}/content",
     ],
     description:
-      "Phase 5 grounded chat progressively renders the backend increment contract, restores local history, and links only to application records or public-safe retained email evidence.",
+      "Conversational chat uses no tools for ordinary discussion, constrained local tools for private job-search facts, and optional cited Tavily search for broader external facts.",
     endpoints: ["POST /chat", "GET /chat/history", "GET /sync/emails/{public_id}/content"],
     files: [
       "frontend/src/redesign/ChatDrawer.tsx",
@@ -351,7 +349,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     ],
     howToUse: {
       expectedBehaviour:
-        "Ask AI opens the grounded drawer, restores persisted local history, visibly progresses through route and tool increments, and renders linked citations with every supported answer.",
+        "Ask AI restores persisted history, avoids unnecessary tools, renders company-and-role application cards for local lists, and shows safe cited web cards for Tavily results.",
       expectedSuccessResult:
         "QA can ask a quantitative fixture question that matches the dashboard and a content question that links to safe source evidence.",
       navigationPath: "Current workspace -> Ask AI, or /chat",
@@ -371,7 +369,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     },
     id: "frontend-chat-ui",
     implementationStatus:
-      "Implemented in the operational redesign with progressive increments, persisted history, grounded refusals, retries, and safe citation navigation.",
+      "Implemented with optional-tool conversation, deterministic local filters and lists, cited semantic retrieval, optional Tavily search, application and web cards, follow-up prompts, and idempotent history.",
     name: "Grounded chat workspace",
     relationship: [
       { label: "POST /chat", type: "api" },
@@ -385,7 +383,7 @@ export const featureStatusRegistry: readonly FeatureStatusRecord[] = [
     routes: ["/chat"],
     screens: ["Grounded chat drawer"],
     sharedUi: ["EmailReaderDialog"],
-    stateConnections: ["Persisted chat history", "Increment progress", "Citation evidence reader"],
+    stateConnections: ["Persisted chat history", "Token stream", "Citation evidence reader"],
     status: "completed",
     testing: {
       canTestNow: true,
