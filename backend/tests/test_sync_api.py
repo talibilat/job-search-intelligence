@@ -52,6 +52,7 @@ from app.security import SecretKind, SecretRef, create_secret_store
 from app.services.sync_service import (
     EmailSyncOptions,
     EmailSyncRunState,
+    EmailSyncStage,
     EmailSyncStatus,
     SyncAlreadyRunningError,
 )
@@ -71,6 +72,7 @@ class FakeSyncRuntime:
         self.last_options = options
         self.status = EmailSyncStatus(
             state=EmailSyncRunState.SUCCEEDED,
+            stage=EmailSyncStage.FINALIZING,
             provider=EmailProviderName.GMAIL,
             account_id="me@example.com",
             mode=EmailSyncMode.FULL_BACKFILL,
@@ -219,6 +221,7 @@ def test_post_sync_runs_injected_manual_sync_runtime() -> None:
     assert runtime.run_count == 1
     assert response.json() == {
         "state": "succeeded",
+        "stage": "finalizing",
         "provider": "gmail",
         "account_id": "me@example.com",
         "mode": "full_backfill",
@@ -228,6 +231,8 @@ def test_post_sync_runs_injected_manual_sync_runtime() -> None:
         "message_count": 2,
         "raw_email_count": 2,
         "retained_body_failure_count": 0,
+        "filtered_candidate_count": 0,
+        "retained_body_count": 0,
         "target_message_count": None,
         "progress": 1.0,
         "recovered_from_expired_cursor": False,
@@ -546,7 +551,7 @@ def test_get_sync_recent_emails_orders_by_sent_at_by_default(tmp_path: Path) -> 
     ]
 
 
-def test_incremental_sync_persists_complete_delta_before_advancing_cursor(
+def test_windowed_sync_with_existing_cursor_uses_full_listing_without_changing_backfill(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
@@ -626,27 +631,28 @@ def test_incremental_sync_persists_complete_delta_before_advancing_cursor(
     assert response.json()["message_count"] == 1
     assert len(provider.requests) == 1
     assert provider.requests[0].page_size == 12
-    assert provider.requests[0].since_date is None
-    assert provider.requests[0].before_date is None
+    assert provider.requests[0].mode is EmailSyncMode.FULL_BACKFILL
+    assert provider.requests[0].sync_cursor is None
+    assert provider.requests[0].since_date is not None
+    assert provider.requests[0].before_date is not None
+    assert provider.requests[0].before_date.isoformat() == "2026-07-01"
     with sqlite3.connect(database_path) as connection:
         raw_email = connection.execute(
             "SELECT id, sent_at FROM raw_emails WHERE provider = 'gmail'"
         ).fetchone()
-        sync_state = connection.execute(
+        backfill_state = connection.execute(
             """
-            SELECT sync_cursor, next_page_token
-            FROM email_sync_state
+            SELECT status, processed_page_count, processed_message_count
+            FROM email_backfill_state
             WHERE provider = 'gmail' AND account_id = 'me@example.com'
             """
         ).fetchone()
 
-    # The message falls outside the requested window, but accepting Gmail's
-    # successor cursor is only safe after the complete history delta is stored.
     assert raw_email == ("gmail-msg-1", NOW.isoformat())
-    assert sync_state == ("history-next", None)
+    assert backfill_state == ("completed", 1, 1)
 
 
-def test_bounded_first_sync_runs_complete_unbounded_backfill(tmp_path: Path) -> None:
+def test_bounded_first_sync_passes_options_to_windowed_path(tmp_path: Path) -> None:
     database_path = tmp_path / "jobtracker.sqlite3"
     create_sync_tables(database_path)
     provider = PagingMetadataProvider()
@@ -667,16 +673,16 @@ def test_bounded_first_sync_runs_complete_unbounded_backfill(tmp_path: Path) -> 
     )
 
     assert status.state is EmailSyncRunState.SUCCEEDED
-    assert [request.page_token for request in provider.requests] == [None, "page-2"]
-    assert all(request.since_date is None for request in provider.requests)
-    assert all(request.before_date is None for request in provider.requests)
-    assert all(request.page_size == settings.gmail_page_size for request in provider.requests)
+    assert [request.page_token for request in provider.requests] == [None]
+    assert provider.requests[0].mode is EmailSyncMode.FULL_BACKFILL
+    assert provider.requests[0].since_date is not None
+    assert provider.requests[0].page_size == 1
     with sqlite3.connect(database_path) as connection:
-        row = connection.execute(
-            "SELECT sync_cursor FROM email_sync_state WHERE provider = ? AND account_id = ?",
+        backfill_row = connection.execute(
+            "SELECT status FROM email_backfill_state WHERE provider = ? AND account_id = ?",
             ("gmail", "me@example.com"),
         ).fetchone()
-    assert row == ("replacement-cursor",)
+    assert backfill_row is None
 
 
 def test_sync_marks_connection_for_reauthorization_after_provider_auth_failure(
@@ -740,7 +746,7 @@ def test_cursor_without_completed_backfill_runs_lifetime_backfill(tmp_path: Path
         status_store=EmailSyncStatusStore(),
     )
 
-    status = asyncio.run(runtime.run_manual_sync(EmailSyncOptions(max_messages=1)))
+    status = asyncio.run(runtime.run_manual_sync())
 
     assert status.state is EmailSyncRunState.SUCCEEDED
     assert [request.mode for request in provider.requests] == [

@@ -235,6 +235,23 @@ def test_gmail_auth_endpoint_uses_injected_email_provider() -> None:
     assert fake_provider.start_request.redirect_uri == "http://127.0.0.1:8000/auth/gmail/callback"
 
 
+def test_gmail_auth_endpoint_uses_configured_public_api_url() -> None:
+    fastapi_app = create_app()
+    fake_provider = FakeGmailProvider()
+    fastapi_app.dependency_overrides[get_gmail_email_provider] = lambda: fake_provider
+    fastapi_app.dependency_overrides[get_settings] = lambda: AppSettings(
+        _env_file=None,
+        api_public_url="http://localhost:8000",
+    )
+    client = TestClient(fastapi_app, base_url="http://backend:8000")
+
+    response = client.get("/auth/gmail")
+
+    assert response.status_code == 200
+    assert fake_provider.start_request is not None
+    assert fake_provider.start_request.redirect_uri == "http://localhost:8000/auth/gmail/callback"
+
+
 def test_disconnect_connection_maps_secret_store_failure_and_keeps_metadata() -> None:
     connection = EmailConnection(
         account=EmailAccountRef(provider=EmailProviderName.GMAIL, account_id="me@example.com"),

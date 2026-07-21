@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import {
   checkLlmProviderHealth,
@@ -21,6 +22,7 @@ interface ProviderSetupProps {
   checkReadinessOnMount?: boolean;
   firstRun?: boolean;
   initialConfig?: ProviderConfigResponse;
+  oauthClientJsonRef?: RefObject<HTMLTextAreaElement | null>;
 }
 
 const stateLabel = {
@@ -38,6 +40,7 @@ export function ProviderSetup({
   checkReadinessOnMount = false,
   firstRun = false,
   initialConfig,
+  oauthClientJsonRef,
 }: ProviderSetupProps) {
   const [config, setConfig] = useState<ProviderConfigResponse | null>(initialConfig ?? null);
   const [readiness, setReadiness] = useState<ProviderReadinessResponse | null>(null);
@@ -388,6 +391,7 @@ export function ProviderSetup({
           aria-label="Google Desktop OAuth client JSON"
           onChange={(event) => setGmailJson(event.target.value)}
           placeholder='Paste the downloaded JSON. Leave blank to keep the stored client.'
+          ref={oauthClientJsonRef}
           rows={4}
           value={gmailJson}
         />

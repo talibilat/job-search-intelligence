@@ -30,6 +30,7 @@ from app.providers.email.provider import (
     EmailBodySource,
     EmailConnection,
     EmailMessageBody,
+    EmailMessageCountRequest,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
@@ -64,10 +65,13 @@ GMAIL_METADATA_HEADERS = (
 GMAIL_API_BASE_URL = "https://gmail.googleapis.com"
 GMAIL_MAX_METADATA_PAGE_SIZE = 500
 _GMAIL_MAX_BODY_BATCH_SIZE = 100
+_GMAIL_METADATA_FETCH_CONCURRENCY = 8
 _PROFILE_PATH = "/gmail/v1/users/me/profile"
 _MESSAGES_PATH = "/gmail/v1/users/me/messages"
 _HISTORY_PATH = "/gmail/v1/users/me/history"
-_MESSAGE_LIST_FIELDS = "messages(id,threadId),nextPageToken"
+_MESSAGE_LIST_FIELDS = "messages(id,threadId),nextPageToken,resultSizeEstimate"
+_MESSAGE_COUNT_FIELDS = "messages(id),nextPageToken,resultSizeEstimate"
+_MESSAGE_COUNT_MAX_PAGES = 20
 _MESSAGE_METADATA_FIELDS = "id,threadId,labelIds,sizeEstimate,payload/headers(name,value)"
 _PROFILE_EMAIL_FIELDS = "emailAddress"
 _PROFILE_HISTORY_FIELDS = "historyId"
@@ -344,6 +348,16 @@ class GmailEmailProvider:
             raise EmailProviderError(public_message="Gmail metadata sync is not implemented yet.")
         refreshed_connection = await self._refresh_connection_if_needed(connection)
         return await self._message_lister.list_message_metadata(refreshed_connection, request)
+
+    async def count_messages(
+        self,
+        connection: EmailConnection,
+        request: EmailMessageCountRequest,
+    ) -> int | None:
+        if self._message_lister is None:
+            return None
+        refreshed_connection = await self._refresh_connection_if_needed(connection)
+        return await self._message_lister.count_messages(refreshed_connection, request)
 
     async def fetch_message_bodies(
         self,
@@ -703,6 +717,7 @@ class GmailMessageListResponse(BaseModel):
 
     messages: tuple[GmailMessageListItem, ...] = ()
     next_page_token: str | None = Field(default=None, alias="nextPageToken")
+    result_size_estimate: int | None = Field(default=None, ge=0, alias="resultSizeEstimate")
 
 
 class GmailProfileResponse(BaseModel):
@@ -830,6 +845,52 @@ class GmailMessageLister:
             access_token=access_token,
         )
 
+    async def count_messages(
+        self,
+        connection: EmailConnection,
+        request: EmailMessageCountRequest,
+    ) -> int | None:
+        stored_token = await self._secret_store.get_secret(connection.credential_ref)
+        if stored_token is None:
+            raise EmailProviderAuthError(public_message="Gmail authorization is required")
+        access_token = _stored_access_token(stored_token)
+        page_token: str | None = None
+        counted = 0
+        latest_estimate: int | None = None
+
+        for _ in range(_MESSAGE_COUNT_MAX_PAGES):
+            query = [
+                ("fields", _MESSAGE_COUNT_FIELDS),
+                ("maxResults", str(GMAIL_MAX_METADATA_PAGE_SIZE)),
+            ]
+            date_query = _gmail_count_date_query(request)
+            if date_query is not None:
+                query.append(("q", date_query))
+            if page_token is not None:
+                query.append(("pageToken", page_token))
+            response = _validate_gmail_response(
+                GmailMessageListResponse,
+                await self._get_metadata_json(
+                    _MESSAGES_PATH,
+                    query=tuple(query),
+                    access_token=access_token,
+                ),
+            )
+            counted += len(response.messages)
+            if response.result_size_estimate is not None:
+                latest_estimate = response.result_size_estimate
+            if request.max_messages is not None and counted >= request.max_messages:
+                return request.max_messages
+            page_token = response.next_page_token
+            if page_token is None:
+                return counted
+
+        if latest_estimate is None:
+            return None
+        if request.max_messages is not None:
+            return min(latest_estimate, request.max_messages)
+        return latest_estimate
+
     async def _list_full_backfill_metadata(
         self,
         *,
@@ -861,15 +922,11 @@ class GmailMessageLister:
             ),
         )
 
-        metadata_messages: list[EmailMessageMetadata] = []
-        for list_item in list_response.messages:
-            message_metadata = await self._fetch_message_metadata(
-                connection=connection,
-                message=list_item,
-                access_token=access_token,
-            )
-            if message_metadata is not None:
-                metadata_messages.append(message_metadata)
+        metadata_messages = await self._fetch_metadata_messages(
+            connection=connection,
+            messages=list_response.messages,
+            access_token=access_token,
+        )
 
         next_page_token = None
         next_sync_cursor: EmailProviderCursor | None = sync_cursor
@@ -881,9 +938,10 @@ class GmailMessageLister:
             next_sync_cursor = None
 
         return EmailMetadataPage(
-            messages=tuple(metadata_messages),
+            messages=metadata_messages,
             next_page_token=next_page_token,
             next_sync_cursor=next_sync_cursor,
+            scope_size_estimate=list_response.result_size_estimate,
         )
 
     async def _list_incremental_metadata(
@@ -902,15 +960,11 @@ class GmailMessageLister:
             ),
         )
 
-        metadata_messages: list[EmailMessageMetadata] = []
-        for list_item in _history_added_messages(history_response):
-            message_metadata = await self._fetch_message_metadata(
-                connection=connection,
-                message=list_item,
-                access_token=access_token,
-            )
-            if message_metadata is not None:
-                metadata_messages.append(message_metadata)
+        metadata_messages = await self._fetch_metadata_messages(
+            connection=connection,
+            messages=_history_added_messages(history_response),
+            access_token=access_token,
+        )
 
         next_sync_cursor = None
         if history_response.next_page_token is None:
@@ -921,10 +975,32 @@ class GmailMessageLister:
             )
 
         return EmailMetadataPage(
-            messages=tuple(metadata_messages),
+            messages=metadata_messages,
             next_page_token=history_response.next_page_token,
             next_sync_cursor=next_sync_cursor,
         )
+
+    async def _fetch_metadata_messages(
+        self,
+        *,
+        connection: EmailConnection,
+        messages: tuple[GmailMessageListItem, ...],
+        access_token: SecretStr,
+    ) -> tuple[EmailMessageMetadata, ...]:
+        """Fetch one Gmail page concurrently without exceeding a modest request bound."""
+
+        semaphore = asyncio.Semaphore(_GMAIL_METADATA_FETCH_CONCURRENCY)
+
+        async def fetch_one(message: GmailMessageListItem) -> EmailMessageMetadata | None:
+            async with semaphore:
+                return await self._fetch_message_metadata(
+                    connection=connection,
+                    message=message,
+                    access_token=access_token,
+                )
+
+        results = await asyncio.gather(*(fetch_one(message) for message in messages))
+        return tuple(result for result in results if result is not None)
 
     async def _fetch_current_history_cursor(
         self,
@@ -961,11 +1037,11 @@ class GmailMessageLister:
             raise EmailProviderAuthError(public_message="Gmail authorization is required")
         access_token = _stored_access_token(stored_token)
 
-        bodies: list[EmailMessageBody] = []
-        failures: list[EmailBodyFetchFailure] = []
         fetched_at = datetime.now(UTC)
 
-        for ref in request.refs:
+        async def fetch_one(
+            ref: EmailMessageRef,
+        ) -> EmailMessageBody | EmailBodyFetchFailure:
             try:
                 gmail_body = _validate_gmail_response(
                     GmailMessageBodyResponse,
@@ -978,21 +1054,15 @@ class GmailMessageLister:
                 )
             except GmailApiRequestError as error:
                 if error.status_code == 404:
-                    failures.append(
-                        EmailBodyFetchFailure(
-                            ref=ref,
-                            reason=EmailBodyFetchFailureReason.NOT_FOUND,
-                        )
+                    return EmailBodyFetchFailure(
+                        ref=ref,
+                        reason=EmailBodyFetchFailureReason.NOT_FOUND,
                     )
-                    continue
                 if error.status_code == 403:
-                    failures.append(
-                        EmailBodyFetchFailure(
-                            ref=ref,
-                            reason=EmailBodyFetchFailureReason.PERMISSION_DENIED,
-                        )
+                    return EmailBodyFetchFailure(
+                        ref=ref,
+                        reason=EmailBodyFetchFailureReason.PERMISSION_DENIED,
                     )
-                    continue
                 if error.status_code in {429, 500, 502, 503, 504, None}:
                     raise EmailProviderTransientError(
                         public_message="Gmail body fetching is temporarily unavailable"
@@ -1005,21 +1075,15 @@ class GmailMessageLister:
             except EmailProviderError:
                 # One malformed provider payload must not abort the whole
                 # batch, or a resumable backfill can never advance past it.
-                failures.append(
-                    EmailBodyFetchFailure(
-                        ref=ref,
-                        reason=EmailBodyFetchFailureReason.INVALID_DATA,
-                    )
+                return EmailBodyFetchFailure(
+                    ref=ref,
+                    reason=EmailBodyFetchFailureReason.INVALID_DATA,
                 )
-                continue
             if gmail_body.id != ref.message_id:
-                failures.append(
-                    EmailBodyFetchFailure(
-                        ref=ref,
-                        reason=EmailBodyFetchFailureReason.INVALID_DATA,
-                    )
+                return EmailBodyFetchFailure(
+                    ref=ref,
+                    reason=EmailBodyFetchFailureReason.INVALID_DATA,
                 )
-                continue
 
             try:
                 retained_body = _retained_body_from_payload(
@@ -1027,35 +1091,36 @@ class GmailMessageLister:
                     max_body_bytes=request.max_body_bytes,
                 )
             except EmailProviderError:
-                failures.append(
-                    EmailBodyFetchFailure(
-                        ref=ref,
-                        reason=EmailBodyFetchFailureReason.INVALID_DATA,
-                    )
+                return EmailBodyFetchFailure(
+                    ref=ref,
+                    reason=EmailBodyFetchFailureReason.INVALID_DATA,
                 )
-                continue
             if isinstance(retained_body, EmailBodyFetchFailureReason):
-                failures.append(EmailBodyFetchFailure(ref=ref, reason=retained_body))
-                continue
+                return EmailBodyFetchFailure(ref=ref, reason=retained_body)
 
             try:
-                bodies.append(
-                    EmailMessageBody(
-                        ref=ref,
-                        body_text=retained_body.body_text,
-                        body_source=retained_body.body_source,
-                        truncated=retained_body.truncated,
-                        fetched_at=fetched_at,
-                    )
+                return EmailMessageBody(
+                    ref=ref,
+                    body_text=retained_body.body_text,
+                    body_source=retained_body.body_source,
+                    truncated=retained_body.truncated,
+                    fetched_at=fetched_at,
                 )
             except ValidationError:
-                failures.append(
-                    EmailBodyFetchFailure(
-                        ref=ref,
-                        reason=EmailBodyFetchFailureReason.INVALID_DATA,
-                    )
+                return EmailBodyFetchFailure(
+                    ref=ref,
+                    reason=EmailBodyFetchFailureReason.INVALID_DATA,
                 )
 
+        semaphore = asyncio.Semaphore(_GMAIL_METADATA_FETCH_CONCURRENCY)
+
+        async def fetch_bounded(ref: EmailMessageRef) -> EmailMessageBody | EmailBodyFetchFailure:
+            async with semaphore:
+                return await fetch_one(ref)
+
+        results = await asyncio.gather(*(fetch_bounded(ref) for ref in request.refs))
+        bodies = tuple(result for result in results if isinstance(result, EmailMessageBody))
+        failures = tuple(result for result in results if isinstance(result, EmailBodyFetchFailure))
         return EmailBodyBatch(bodies=tuple(bodies), failures=tuple(failures))
 
     async def _get_metadata_json(
@@ -1164,6 +1229,15 @@ def _gmail_date_query(request: EmailMetadataListRequest) -> str | None:
     if not terms:
         return None
     return " ".join(terms)
+
+
+def _gmail_count_date_query(request: EmailMessageCountRequest) -> str | None:
+    terms: list[str] = []
+    if request.since_date is not None:
+        terms.append(f"after:{request.since_date:%Y/%m/%d}")
+    if request.before_date is not None:
+        terms.append(f"before:{request.before_date:%Y/%m/%d}")
+    return " ".join(terms) or None
 
 
 def _encode_full_backfill_page_token(

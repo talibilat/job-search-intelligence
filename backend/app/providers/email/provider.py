@@ -376,6 +376,27 @@ class EmailMetadataListRequest(BaseModel):
         return self
 
 
+class EmailMessageCountRequest(BaseModel):
+    """Provider-neutral bounds for a fast scoped message count."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    since_date: date | None = None
+    before_date: date | None = None
+    max_messages: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def validate_date_window(self) -> EmailMessageCountRequest:
+        if (
+            self.since_date is not None
+            and self.before_date is not None
+            and self.since_date >= self.before_date
+        ):
+            msg = "since_date must be before before_date"
+            raise ValueError(msg)
+        return self
+
+
 class EmailMessageRef(BaseModel):
     """Provider-neutral stable reference to a single email message.
 
@@ -428,6 +449,7 @@ class EmailMetadataPage(BaseModel):
     messages: tuple[EmailMessageMetadata, ...]
     next_page_token: str | None = None
     next_sync_cursor: EmailProviderCursor | None = None
+    scope_size_estimate: int | None = Field(default=None, ge=0)
 
 
 class EmailBodyFetchRequest(BaseModel):
@@ -607,6 +629,14 @@ class EmailProvider(Protocol):
         request: EmailMetadataListRequest,
     ) -> EmailMetadataPage:
         """Return one metadata-only page for full backfill or incremental sync."""
+        ...
+
+    async def count_messages(
+        self,
+        connection: EmailConnection,
+        request: EmailMessageCountRequest,
+    ) -> int | None:
+        """Return a fast scoped count, or None when the provider cannot count."""
         ...
 
     async def fetch_message_bodies(

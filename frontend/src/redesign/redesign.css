@@ -812,3 +812,17 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+@keyframes rd-sync-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.rd-sync-progress-indeterminate {
+  width: 30% !important;
+  animation: rd-sync-progress-slide 1.2s ease-in-out infinite;
+}

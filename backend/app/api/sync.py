@@ -97,6 +97,7 @@ class ConfiguredEmailSyncRuntime:
         self._status_store = status_store
 
     async def run_manual_sync(self, options: EmailSyncOptions | None = None) -> EmailSyncStatus:
+        sync_options = options or EmailSyncOptions()
         connection = self._connection_resolver()
         if connection is None:
             raise SyncConnectionNotConfiguredError("Gmail connection is not configured yet.")
@@ -130,6 +131,11 @@ class ConfiguredEmailSyncRuntime:
                     or backfill_state.status is not EmailBackfillStatus.COMPLETED
                 )
                 try:
+                    if sync_options.is_windowed:
+                        return await sync_service.run_manual_sync(
+                            connection=connection,
+                            options=sync_options,
+                        )
                     if should_run_full_backfill:
                         return await sync_service.run_full_backfill(
                             connection=connection,
@@ -137,11 +143,11 @@ class ConfiguredEmailSyncRuntime:
                                 backfill_state_repository=backfill_state_repository,
                                 sync_state_repository=sync_state_repository,
                             ),
-                            options=EmailSyncOptions(),
+                            options=sync_options,
                         )
                     return await sync_service.run_manual_sync(
                         connection=connection,
-                        options=options,
+                        options=sync_options,
                     )
                 except EmailProviderAuthError:
                     EmailConnectionRepository(sqlite_connection).mark_reauth_required(

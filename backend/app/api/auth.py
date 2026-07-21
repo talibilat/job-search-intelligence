@@ -145,11 +145,12 @@ async def disconnect_email_connection(
 )
 async def gmail_auth_url(
     request: Request,
+    settings: Annotated[AppSettings, Depends(get_settings)],
     email_provider: Annotated[EmailProvider, Depends(get_gmail_email_provider)],
     state_factory: Annotated[OAuthStateFactory, Depends(get_oauth_state_factory)],
     state_store: Annotated[OAuthStateStore, Depends(get_oauth_state_store)],
 ) -> EmailAuthorizationStartResult:
-    redirect_uri = f"{str(request.base_url).rstrip('/')}/auth/gmail/callback"
+    redirect_uri = _gmail_redirect_uri(request, settings)
     try:
         return await start_gmail_authorization(
             email_provider=email_provider,
@@ -182,7 +183,7 @@ async def gmail_auth_callback(
         Depends(get_email_connection_repository),
     ],
 ) -> RedirectResponse:
-    redirect_uri = f"{str(request.base_url).rstrip('/')}/auth/gmail/callback"
+    redirect_uri = _gmail_redirect_uri(request, settings)
     try:
         await complete_gmail_authorization(
             email_provider=email_provider,
@@ -220,3 +221,10 @@ async def gmail_auth_callback(
             code=ApiErrorCode.BAD_GATEWAY,
             message=error.public_message,
         ) from error
+
+
+def _gmail_redirect_uri(request: Request, settings: AppSettings) -> str:
+    """Use an explicit host URL when a reverse proxy hides the public callback host."""
+
+    base_url = settings.api_public_url or str(request.base_url)
+    return f"{base_url.rstrip('/')}/auth/gmail/callback"

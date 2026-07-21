@@ -94,6 +94,7 @@ export function SettingsPage({
   const [disconnectSuccess, setDisconnectSuccess] = useState<string | null>(null);
   const [wipeError, setWipeError] = useState<string | null>(null);
   const [wipeSuccess, setWipeSuccess] = useState<string | null>(null);
+  const oauthClientJsonRef = useRef<HTMLTextAreaElement | null>(null);
   const configRequestPending = useRef(true);
   const confirmedNonLlmModes = useRef<Partial<Record<string, NonLlmClassificationMode>>>({});
   const wipeTimer = useRef<number | null>(null);
@@ -249,12 +250,16 @@ export function SettingsPage({
       try {
         const response = await gmailAuthUrlAuthGmailGet();
         if (response.status !== 200) {
-          setGmailAuthError(
-            publicApiError(
-              { response },
-              "Gmail authorization could not start. Check your OAuth configuration.",
-            ),
+          const message = publicApiError(
+            { response },
+            "Gmail authorization could not start. Check your OAuth configuration.",
           );
+          setGmailAuthError(message);
+          if (message.includes("OAuth client config")) {
+            const oauthClientInput = oauthClientJsonRef.current;
+            oauthClientInput?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+            oauthClientInput?.focus();
+          }
           return;
         }
         window.location.assign(response.data.authorization_url);
@@ -410,6 +415,7 @@ export function SettingsPage({
           checkReadinessOnMount
           initialConfig={config}
           key={`${config.selection.llm_provider}:${config.selection.classification_mode}`}
+          oauthClientJsonRef={oauthClientJsonRef}
         />
       ) : null}
 

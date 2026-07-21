@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ClassificationPreRunEstimate, ProviderConfigResponse } from "../../api";
@@ -84,6 +84,33 @@ afterEach(() => {
 });
 
 describe("SettingsPage cost control", () => {
+  it("focuses the OAuth client field when Gmail cannot start without it", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (path === "/config/providers") return Promise.resolve(jsonResponse(providerConfig()));
+      if (path === "/classification/estimate") return Promise.resolve(jsonResponse(classificationEstimate()));
+      if (path === "/auth/gmail") {
+        return Promise.resolve(
+          jsonResponse(
+            { error: { code: "bad_request", message: "Google OAuth client config file was not found.", details: [] } },
+            400,
+          ),
+        );
+      }
+      return Promise.reject(new Error(`Unhandled fetch request: ${path}`));
+    }));
+
+    renderSettings();
+
+    await screen.findByLabelText("Google Desktop OAuth client JSON");
+    fireEvent.click(screen.getByRole("button", { name: "+ Add another inbox" }));
+    fireEvent.click(screen.getByRole("button", { name: "G Gmail" }));
+
+    const oauthClientInput = await screen.findByLabelText("Google Desktop OAuth client JSON");
+    await waitFor(() => expect(document.activeElement).toBe(oauthClientInput));
+    expect(screen.getByText("Google OAuth client config file was not found.")).toBeTruthy();
+  });
+
   it("reveals the real cost-estimate math behind the scan cost figure instead of a fabricated explanation", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;

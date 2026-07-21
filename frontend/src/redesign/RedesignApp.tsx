@@ -154,6 +154,31 @@ type CompletedSyncScope = Readonly<{
   sentBefore?: string;
 }>;
 
+export type SyncFlowStage =
+  | "syncing"
+  | "filtering"
+  | "retaining"
+  | "classifying"
+  | "complete"
+  | "failed";
+
+export function syncFlowStageForStatus(status: EmailSyncStatus): SyncFlowStage | null {
+  if (status.state !== "running") return null;
+  return status.stage === "counting" ? "syncing" : "filtering";
+}
+
+export function syncPortionProgressPercent(status: EmailSyncStatus | null): number | null {
+  if (
+    status === null
+    || status.stage === "counting"
+    || status.target_message_count === null
+    || status.target_message_count === undefined
+  ) {
+    return null;
+  }
+  return Math.round(55 * (status.progress ?? 0));
+}
+
 const SYNC_SCOPES: { key: SyncScopeKey; label: string; note: string }[] = [
   { key: "new", label: "New mail since last sync", note: "Recommended — fastest" },
   { key: "7", label: "Last 7 days", note: "Re-checks the past week" },
@@ -257,9 +282,10 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
   const [syncing, setSyncing] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [syncFlowOpen, setSyncFlowOpen] = useState(false);
-  const [syncFlowStage, setSyncFlowStage] = useState<"syncing" | "filtering" | "retaining" | "classifying" | "complete" | "failed">("syncing");
+  const [syncFlowStage, setSyncFlowStage] = useState<SyncFlowStage>("syncing");
   const [syncFlowEmailCount, setSyncFlowEmailCount] = useState(0);
   const [syncFlowTotalEmailCount, setSyncFlowTotalEmailCount] = useState(0);
+  const [syncBackendStatus, setSyncBackendStatus] = useState<EmailSyncStatus | null>(null);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
   const syncingRef = useRef(false);
   const syncRunIdRef = useRef(0);
@@ -447,9 +473,16 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
     setSyncFlowStage("syncing");
     setSyncFlowEmailCount(0);
     setSyncFlowTotalEmailCount(syncStats?.total_raw_emails ?? 0);
+    setSyncBackendStatus(null);
     setProcessingStatus(null);
     try {
       const options = syncOptionsForScope(syncScope, customFrom, customTo, lastCount);
+      const applySyncStatus = (status: EmailSyncStatus) => {
+        setSyncBackendStatus(status);
+        setSyncFlowEmailCount(status.message_count ?? 0);
+        const nextStage = syncFlowStageForStatus(status);
+        if (nextStage !== null) setSyncFlowStage(nextStage);
+      };
       let syncRequestSettled = false;
       let syncRequestError: unknown = null;
       const syncRequest = syncNowSyncPost(options).catch((error: unknown) => {
@@ -471,7 +504,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         }
         const status = await syncStatusSyncStatusGet().catch(() => null);
         if (status?.status === 200 && status.data.state === "running") {
-          setSyncFlowEmailCount(status.data.message_count ?? 0);
+          applySyncStatus(status.data);
           const stats = await syncStatsSyncStatsGet().catch(() => null);
           if (stats?.status === 200) setSyncFlowTotalEmailCount(stats.data.total_raw_emails);
         }
@@ -484,11 +517,12 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
       let state: EmailSyncStatus;
       if (response.status === 200) {
         state = response.data;
+        applySyncStatus(state);
       } else if (response.status === 409) {
         const current = await syncStatusSyncStatusGet().catch(() => null);
         if (current?.status === 200 && current.data.state === "running") {
           state = current.data;
-          setSyncFlowEmailCount(state.message_count ?? 0);
+          applySyncStatus(state);
           const stats = await syncStatsSyncStatsGet().catch(() => null);
           if (stats?.status === 200) setSyncFlowTotalEmailCount(stats.data.total_raw_emails);
         } else {
@@ -505,7 +539,7 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
           const status = await syncStatusSyncStatusGet();
           state = status.data;
-          setSyncFlowEmailCount(state.message_count ?? 0);
+          applySyncStatus(state);
           const stats = await syncStatsSyncStatsGet().catch(() => null);
           if (stats?.status === 200) setSyncFlowTotalEmailCount(stats.data.total_raw_emails);
           if (state.state !== "running") {
@@ -521,17 +555,11 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
         case "succeeded":
           setCompletedScope(completedSyncScope(syncScope, customFrom, customTo));
           setSyncMenuOpen(false);
-          setSyncFlowEmailCount(state.message_count ?? 0);
+          applySyncStatus(state);
           {
             const stats = await syncStatsSyncStatsGet().catch(() => null);
             if (stats?.status === 200) setSyncFlowTotalEmailCount(stats.data.total_raw_emails);
           }
-          setSyncFlowStage("filtering");
-          await new Promise((resolve) => setTimeout(resolve, 650));
-          if (!isActive()) return;
-          setSyncFlowStage("retaining");
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          if (!isActive()) return;
           setSyncFlowStage("classifying");
           {
             const readiness = await providerReadinessConfigProvidersReadinessGet().catch(() => null);
@@ -645,15 +673,26 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
     }
   }, [syncScope, customFrom, customTo, lastCount, customRangeInvalid, refresh, syncStats]);
 
-  const progressPercent = syncFlowStage === "syncing"
-    ? 12
-    : syncFlowStage === "filtering"
-      ? 38
-      : syncFlowStage === "retaining"
-        ? 52
-        : syncFlowStage === "classifying"
-          ? 55 + Math.round(42 * ((processingStatus?.processed_count ?? 0) / Math.max(processingStatus?.candidate_limit ?? 500, 1)))
-          : 100;
+  const syncPortionPercent = syncPortionProgressPercent(syncBackendStatus);
+  const syncProgressDeterminate = syncPortionPercent !== null;
+  const progressPercent = syncFlowStage === "classifying"
+    ? 55 + Math.round(42 * ((processingStatus?.processed_count ?? 0) / Math.max(processingStatus?.candidate_limit ?? 500, 1)))
+    : syncFlowStage === "complete"
+      ? 100
+      : syncPortionPercent ?? 0;
+  const syncSucceeded = syncBackendStatus?.state === "succeeded";
+  const countExtracted = syncBackendStatus?.stage !== "counting"
+    && syncBackendStatus?.target_message_count !== null
+    && syncBackendStatus?.target_message_count !== undefined;
+  const retrieving = syncBackendStatus?.state === "running"
+    && syncBackendStatus.stage === "retrieving";
+  const syncScopeDetail = countExtracted
+    ? `Found ${formatCount(syncBackendStatus?.target_message_count ?? 0)} emails in scope`
+    : syncBackendStatus?.stage === "counting"
+      ? `Counting emails in scope · ${formatCount(syncFlowTotalEmailCount)} emails already stored locally`
+      : syncSucceeded
+        ? `${formatCount(syncFlowEmailCount)} emails retrieved for this run`
+        : "Retrieving new email changes · total count unavailable";
 
   const navItems = useMemo(
     () =>
@@ -1175,13 +1214,13 @@ export function RedesignApp({ initialRoute }: { initialRoute: RedesignRoute }) {
                 {syncFlowStage === "complete" || syncFlowStage === "failed" ? "Close" : "Continue in background"}
               </button>
             </div>
-            <div style={{ height: "8px", margin: "22px 0 20px", overflow: "hidden", borderRadius: "999px", background: "#EEEDE7" }}>
-              <div style={{ width: `${progressPercent}%`, height: "100%", borderRadius: "inherit", background: "linear-gradient(90deg, #1E5136, #5E9A71)", transition: "width 500ms ease" }} />
+            <div aria-label="Inbox processing progress" aria-valuemax={100} aria-valuemin={0} aria-valuenow={syncProgressDeterminate || syncFlowStage === "classifying" || syncFlowStage === "complete" ? progressPercent : undefined} role="progressbar" style={{ height: "8px", margin: "22px 0 20px", overflow: "hidden", borderRadius: "999px", background: "#EEEDE7" }}>
+              <div className={!syncProgressDeterminate && ["syncing", "filtering", "retaining"].includes(syncFlowStage) ? "rd-sync-progress-indeterminate" : undefined} style={{ width: `${progressPercent}%`, height: "100%", borderRadius: "inherit", background: "linear-gradient(90deg, #1E5136, #5E9A71)", transition: "width 500ms ease" }} />
             </div>
             <ol style={{ display: "grid", gap: "14px", margin: 0, padding: 0, listStyle: "none" }}>
-              <SyncFlowStep active={syncFlowStage === "syncing"} complete={!["syncing", "failed"].includes(syncFlowStage)} title="Syncing emails" detail={`${formatCount(syncFlowEmailCount)} new for this run · ${formatCount(syncFlowTotalEmailCount)} total emails synced`} />
-              <SyncFlowStep active={syncFlowStage === "filtering"} complete={["retaining", "classifying", "complete"].includes(syncFlowStage)} title="Applying job-search filters" detail="Filtering runs locally against sender, subject, and message metadata." />
-              <SyncFlowStep active={syncFlowStage === "retaining"} complete={["classifying", "complete"].includes(syncFlowStage)} title="Candidate bodies retained" detail="Only broad job-search candidates keep body text for classification and reconciliation." />
+              <SyncFlowStep active={syncBackendStatus?.stage === "counting"} complete={countExtracted || syncSucceeded || ["classifying", "complete"].includes(syncFlowStage)} title="Syncing emails" detail={syncScopeDetail} />
+              <SyncFlowStep active={retrieving} complete={syncSucceeded || ["classifying", "complete"].includes(syncFlowStage)} title="Applying job-search filters" detail={`${formatCount(syncFlowEmailCount)} of ${syncBackendStatus?.target_message_count === null || syncBackendStatus?.target_message_count === undefined ? "an unknown number of" : formatCount(syncBackendStatus.target_message_count)} emails retrieved · ${formatCount(syncBackendStatus?.filtered_candidate_count ?? 0)} candidates found.`} />
+              <SyncFlowStep active={retrieving} complete={syncSucceeded || ["classifying", "complete"].includes(syncFlowStage)} title="Candidate bodies retained" detail={`${formatCount(syncBackendStatus?.retained_body_count ?? 0)} candidate bodies retained locally for classification.`} />
               <SyncFlowStep active={syncFlowStage === "classifying"} complete={syncFlowStage === "complete"} title="Classifying with Azure OpenAI" detail={processingStatus ? `${formatCount(processingStatus.processed_count)} candidate emails processed · ${formatCount(processingStatus.pending_candidate_count)} remaining.` : "Preparing the first bounded classification run."} />
             </ol>
             {syncFlowStage === "complete" && processingStatus ? <p role="status" style={{ margin: "20px 0 0", color: "#1E5136", fontSize: "13px", fontWeight: 600 }}>Saved {formatCount(processingStatus.accepted_count)} classifications and updated {formatCount(processingStatus.applications_upserted)} applications.</p> : null}

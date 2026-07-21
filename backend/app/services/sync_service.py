@@ -39,6 +39,7 @@ from app.providers.email import (
     EmailCandidateQuery,
     EmailConnection,
     EmailMessageBody,
+    EmailMessageCountRequest,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
@@ -167,12 +168,19 @@ class EmailSyncRunState(StrEnum):
     FAILED = "failed"
 
 
+class EmailSyncStage(StrEnum):
+    COUNTING = "counting"
+    RETRIEVING = "retrieving"
+    FINALIZING = "finalizing"
+
+
 class EmailSyncStatus(BaseModel):
     """Current or last manual sync run status exposed at the API boundary."""
 
     provider: EmailProviderName | None = None
     account_id: str | None = None
     state: EmailSyncRunState
+    stage: EmailSyncStage | None = None
     mode: EmailSyncMode | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -180,7 +188,9 @@ class EmailSyncStatus(BaseModel):
     message_count: int = Field(default=0, ge=0)
     raw_email_count: int = Field(default=0, ge=0)
     retained_body_failure_count: int = Field(default=0, ge=0)
-    target_message_count: int | None = Field(default=None, ge=1)
+    filtered_candidate_count: int = Field(default=0, ge=0)
+    retained_body_count: int = Field(default=0, ge=0)
+    target_message_count: int | None = Field(default=None, ge=0)
     progress: float = Field(default=0, ge=0, le=1)
     recovered_from_expired_cursor: bool = False
     last_error: str | None = None
@@ -212,6 +222,18 @@ class EmailSyncOptions(BaseModel):
     @property
     def target_message_count(self) -> int | None:
         return self.max_messages
+
+    @property
+    def is_windowed(self) -> bool:
+        return any(
+            value is not None
+            for value in (
+                self.max_messages,
+                self.since_date,
+                self.before_date,
+                self.max_age_days,
+            )
+        )
 
     @model_validator(mode="after")
     def validate_date_window(self) -> EmailSyncOptions:
@@ -564,6 +586,16 @@ class MetadataListingProvider(Protocol):
         ...
 
 
+class MessageCountingProvider(Protocol):
+    async def count_messages(
+        self,
+        connection: EmailConnection,
+        request: EmailMessageCountRequest,
+    ) -> int | None:
+        """Return a fast scoped count when supported by the provider."""
+        ...
+
+
 class RetainedBodyProvider(Protocol):
     async def fetch_message_bodies(
         self,
@@ -642,24 +674,34 @@ class EmailSyncService:
         started_at = self._clock()
         sync_state = self._sync_service.get_sync_state(connection.account)
         existing_cursor = self._sync_service.get_sync_cursor(connection.account)
-        resume_page_token = sync_state.next_page_token if sync_state is not None else None
+        windowed = sync_options.is_windowed
+        resume_page_token = (
+            sync_state.next_page_token if sync_state is not None and not windowed else None
+        )
         resume_mode = (
             EmailSyncMode(sync_state.in_progress_mode)
             if sync_state is not None
             and sync_state.in_progress_mode is not None
             and sync_state.next_page_token is not None
+            and not windowed
             else None
         )
-        requested_mode = resume_mode or (
-            EmailSyncMode.INCREMENTAL
-            if existing_cursor is not None
-            else EmailSyncMode.FULL_BACKFILL
+        requested_mode = (
+            EmailSyncMode.FULL_BACKFILL
+            if windowed
+            else resume_mode
+            or (
+                EmailSyncMode.INCREMENTAL
+                if existing_cursor is not None
+                else EmailSyncMode.FULL_BACKFILL
+            )
         )
         self._set_status(
             EmailSyncStatus(
                 provider=connection.account.provider,
                 account_id=connection.account.account_id,
                 state=EmailSyncRunState.RUNNING,
+                stage=(EmailSyncStage.COUNTING if windowed else EmailSyncStage.RETRIEVING),
                 mode=requested_mode,
                 started_at=started_at,
                 target_message_count=sync_options.target_message_count,
@@ -667,7 +709,22 @@ class EmailSyncService:
         )
 
         try:
-            retry_failure_count = await self._retry_pending_candidate_bodies(
+            target_message_count = sync_options.target_message_count
+            if windowed:
+                target_message_count = await self._count_scope_messages(
+                    connection=connection,
+                    options=sync_options,
+                    started_at=started_at,
+                )
+                self._set_status(
+                    self._status.model_copy(
+                        update={
+                            "stage": EmailSyncStage.RETRIEVING,
+                            "target_message_count": target_message_count,
+                        }
+                    )
+                )
+            retry_failure_count, retried_body_count = await self._retry_pending_candidate_bodies(
                 connection=connection,
             )
             result = await self._run_metadata_pages(
@@ -677,13 +734,16 @@ class EmailSyncService:
                 initial_page_token=resume_page_token,
                 started_at=started_at,
                 options=sync_options,
+                forced_mode=EmailSyncMode.FULL_BACKFILL if windowed else None,
+                target_message_count=target_message_count,
             )
-            if retry_failure_count:
+            if retry_failure_count or retried_body_count:
                 result = result.model_copy(
                     update={
                         "retained_body_failure_count": (
                             result.retained_body_failure_count + retry_failure_count
-                        )
+                        ),
+                        "retained_body_count": result.retained_body_count + retried_body_count,
                     }
                 )
         except Exception as error:
@@ -700,6 +760,25 @@ class EmailSyncService:
 
         self._set_status(result)
         return result
+
+    async def _count_scope_messages(
+        self,
+        *,
+        connection: EmailConnection,
+        options: EmailSyncOptions,
+        started_at: datetime,
+    ) -> int | None:
+        count_messages = getattr(self._provider, "count_messages", None)
+        if not callable(count_messages):
+            return options.target_message_count
+        return await cast(MessageCountingProvider, self._provider).count_messages(
+            connection,
+            EmailMessageCountRequest(
+                since_date=options.effective_since_date(now=started_at),
+                before_date=options.before_date,
+                max_messages=options.max_messages,
+            ),
+        )
 
     def _set_status(self, status: EmailSyncStatus) -> None:
         self._status = status
@@ -841,6 +920,7 @@ class EmailSyncService:
                 provider=connection.account.provider,
                 account_id=connection.account.account_id,
                 state=EmailSyncRunState.RUNNING,
+                stage=EmailSyncStage.RETRIEVING,
                 mode=EmailSyncMode.FULL_BACKFILL,
                 started_at=started_at,
                 target_message_count=sync_options.target_message_count,
@@ -850,8 +930,13 @@ class EmailSyncService:
         page_count = 0
         message_count = 0
         retained_body_failure_count = 0
+        filtered_candidate_count = 0
+        retained_body_count = 0
         try:
-            retained_body_failure_count = await self._retry_pending_candidate_bodies(
+            (
+                retained_body_failure_count,
+                retained_body_count,
+            ) = await self._retry_pending_candidate_bodies(
                 connection=connection,
             )
             while True:
@@ -870,7 +955,7 @@ class EmailSyncService:
                     known_candidate_thread_ids = self._email_repository.list_candidate_thread_ids(
                         account=connection.account,
                     )
-                    self._persist_filter_decisions(
+                    filtered_candidate_count += self._persist_filter_decisions(
                         page.messages,
                         candidate_query=build_broad_candidate_query(),
                         known_candidate_thread_ids=known_candidate_thread_ids,
@@ -891,11 +976,17 @@ class EmailSyncService:
                                 body_batch.bodies,
                                 retention_state=RawEmailBodyRetentionState.RETAINED,
                             )
-                    retained_body_failure_count += (
-                        await self._promote_pending_candidate_thread_bodies(
-                            connection=connection,
-                        )
+                            retained_body_count += len(body_batch.bodies)
+                    (
+                        promotion_failures,
+                        promotion_candidates,
+                        promotion_bodies,
+                    ) = await self._promote_pending_candidate_thread_bodies(
+                        connection=connection,
                     )
+                    retained_body_failure_count += promotion_failures
+                    filtered_candidate_count += promotion_candidates
+                    retained_body_count += promotion_bodies
 
                 state = backfill_state_service.record_backfill_page(
                     connection.account,
@@ -910,6 +1001,7 @@ class EmailSyncService:
                         provider=connection.account.provider,
                         account_id=connection.account.account_id,
                         state=EmailSyncRunState.RUNNING,
+                        stage=EmailSyncStage.RETRIEVING,
                         mode=EmailSyncMode.FULL_BACKFILL,
                         started_at=started_at,
                         page_count=page_count,
@@ -918,6 +1010,8 @@ class EmailSyncService:
                             provider=connection.account.provider,
                         ),
                         retained_body_failure_count=retained_body_failure_count,
+                        filtered_candidate_count=filtered_candidate_count,
+                        retained_body_count=retained_body_count,
                         target_message_count=sync_options.target_message_count,
                         progress=_sync_progress(
                             processed_messages=message_count,
@@ -949,10 +1043,12 @@ class EmailSyncService:
             )
             raise
 
+        self._set_status(self._status.model_copy(update={"stage": EmailSyncStage.FINALIZING}))
         status = EmailSyncStatus(
             provider=connection.account.provider,
             account_id=connection.account.account_id,
             state=EmailSyncRunState.SUCCEEDED,
+            stage=EmailSyncStage.FINALIZING,
             mode=EmailSyncMode.FULL_BACKFILL,
             started_at=started_at,
             finished_at=self._clock(),
@@ -962,6 +1058,8 @@ class EmailSyncService:
                 provider=connection.account.provider,
             ),
             retained_body_failure_count=retained_body_failure_count,
+            filtered_candidate_count=filtered_candidate_count,
+            retained_body_count=retained_body_count,
             target_message_count=sync_options.target_message_count,
             progress=_sync_progress(
                 processed_messages=message_count,
@@ -1028,14 +1126,14 @@ class EmailSyncService:
         self,
         *,
         connection: EmailConnection,
-    ) -> int:
+    ) -> tuple[int, int]:
         if self._email_repository is None or not _can_fetch_retained_bodies(self._body_provider):
-            return 0
+            return 0, 0
         pending_refs = self._email_repository.list_pending_candidate_body_refs(
             account=connection.account,
         )
         if not pending_refs:
-            return 0
+            return 0, 0
         body_batch = await self.fetch_retained_bodies(
             connection=connection,
             metadata=(),
@@ -1047,20 +1145,20 @@ class EmailSyncService:
                 body_batch.bodies,
                 retention_state=RawEmailBodyRetentionState.RETAINED,
             )
-        return len(body_batch.failures)
+        return len(body_batch.failures), len(body_batch.bodies)
 
     async def _promote_pending_candidate_thread_bodies(
         self,
         *,
         connection: EmailConnection,
-    ) -> int:
+    ) -> tuple[int, int, int]:
         if self._email_repository is None or self._filter_decision_repository is None:
-            return 0
+            return 0, 0, 0
         pending_refs = self._email_repository.list_pending_thread_candidate_body_refs(
             account=connection.account,
         )
         if not pending_refs:
-            return 0
+            return 0, 0, 0
 
         decided_at = self._clock()
         self._filter_decision_repository.upsert_filter_decisions(
@@ -1074,7 +1172,7 @@ class EmailSyncService:
             for ref in pending_refs
         )
         if not _can_fetch_retained_bodies(self._body_provider):
-            return 0
+            return 0, len(pending_refs), 0
 
         body_batch = await self.fetch_retained_bodies(
             connection=connection,
@@ -1087,7 +1185,7 @@ class EmailSyncService:
                 body_batch.bodies,
                 retention_state=RawEmailBodyRetentionState.RETAINED,
             )
-        return len(body_batch.failures)
+        return len(body_batch.failures), len(pending_refs), len(body_batch.bodies)
 
     async def _list_full_backfill_page(
         self,
@@ -1118,12 +1216,14 @@ class EmailSyncService:
         initial_page_token: str | None,
         started_at: datetime,
         options: EmailSyncOptions,
+        forced_mode: EmailSyncMode | None = None,
+        target_message_count: int | None = None,
     ) -> EmailSyncStatus:
         if self._email_repository is None or self._sync_service is None:
             raise SyncConnectionNotConfiguredError("Sync repositories are not configured.")
 
         page_token = initial_page_token
-        mode = initial_mode
+        mode = forced_mode or initial_mode
         latest_cursor: EmailProviderCursor | None = (
             sync_cursor
             if initial_mode is EmailSyncMode.FULL_BACKFILL and initial_page_token is not None
@@ -1132,9 +1232,11 @@ class EmailSyncService:
         page_count = 0
         message_count = 0
         retained_body_failure_count = 0
+        filtered_candidate_count = 0
+        retained_body_count = 0
         recovered_from_expired_cursor = False
         pagination_complete = False
-        final_mode = (
+        final_mode = forced_mode or (
             EmailSyncMode.INCREMENTAL if sync_cursor is not None else EmailSyncMode.FULL_BACKFILL
         )
 
@@ -1162,7 +1264,7 @@ class EmailSyncService:
                 known_candidate_thread_ids = self._email_repository.list_candidate_thread_ids(
                     account=connection.account,
                 )
-                self._persist_filter_decisions(
+                filtered_candidate_count += self._persist_filter_decisions(
                     page_result.page.messages,
                     candidate_query=build_broad_candidate_query(),
                     known_candidate_thread_ids=known_candidate_thread_ids,
@@ -1180,9 +1282,15 @@ class EmailSyncService:
                             body_batch.bodies,
                             retention_state=RawEmailBodyRetentionState.RETAINED,
                         )
-                retained_body_failure_count += await self._promote_pending_candidate_thread_bodies(
-                    connection=connection,
-                )
+                        retained_body_count += len(body_batch.bodies)
+                (
+                    promotion_failures,
+                    promotion_candidates,
+                    promotion_bodies,
+                ) = await self._promote_pending_candidate_thread_bodies(connection=connection)
+                retained_body_failure_count += promotion_failures
+                filtered_candidate_count += promotion_candidates
+                retained_body_count += promotion_bodies
             if page_result.page.next_sync_cursor is not None:
                 latest_cursor = page_result.page.next_sync_cursor
             self._set_status(
@@ -1190,6 +1298,7 @@ class EmailSyncService:
                     provider=connection.account.provider,
                     account_id=connection.account.account_id,
                     state=EmailSyncRunState.RUNNING,
+                    stage=EmailSyncStage.RETRIEVING,
                     mode=final_mode,
                     started_at=started_at,
                     page_count=page_count,
@@ -1198,11 +1307,13 @@ class EmailSyncService:
                         provider=connection.account.provider,
                     ),
                     retained_body_failure_count=retained_body_failure_count,
+                    filtered_candidate_count=filtered_candidate_count,
+                    retained_body_count=retained_body_count,
                     recovered_from_expired_cursor=recovered_from_expired_cursor,
-                    target_message_count=options.target_message_count,
+                    target_message_count=target_message_count,
                     progress=_sync_progress(
                         processed_messages=message_count,
-                        target_messages=options.target_message_count,
+                        target_messages=target_message_count,
                     ),
                 )
             )
@@ -1212,13 +1323,14 @@ class EmailSyncService:
 
             page_token = page_result.page.next_page_token
             mode = page_result.mode
-            self._sync_service.store_page_progress(
-                connection.account,
-                mode=mode,
-                next_page_token=page_token,
-                sync_cursor=latest_cursor or sync_cursor,
-                updated_at=self._clock(),
-            )
+            if forced_mode is None:
+                self._sync_service.store_page_progress(
+                    connection.account,
+                    mode=mode,
+                    next_page_token=page_token,
+                    sync_cursor=latest_cursor or sync_cursor,
+                    updated_at=self._clock(),
+                )
             if mode is EmailSyncMode.FULL_BACKFILL:
                 sync_cursor = None
             if _sync_limit_reached(
@@ -1228,6 +1340,7 @@ class EmailSyncService:
             ):
                 break
 
+        self._set_status(self._status.model_copy(update={"stage": EmailSyncStage.FINALIZING}))
         if pagination_complete:
             if latest_cursor is not None:
                 self._sync_service.store_sync_cursor(
@@ -1244,6 +1357,7 @@ class EmailSyncService:
             provider=connection.account.provider,
             account_id=connection.account.account_id,
             state=EmailSyncRunState.SUCCEEDED,
+            stage=EmailSyncStage.FINALIZING,
             mode=final_mode,
             started_at=started_at,
             finished_at=self._clock(),
@@ -1253,11 +1367,13 @@ class EmailSyncService:
                 provider=connection.account.provider,
             ),
             retained_body_failure_count=retained_body_failure_count,
+            filtered_candidate_count=filtered_candidate_count,
+            retained_body_count=retained_body_count,
             recovered_from_expired_cursor=recovered_from_expired_cursor,
-            target_message_count=options.target_message_count,
+            target_message_count=target_message_count,
             progress=_sync_progress(
                 processed_messages=message_count,
-                target_messages=options.target_message_count,
+                target_messages=target_message_count,
                 finished=True,
             ),
         )
@@ -1268,25 +1384,26 @@ class EmailSyncService:
         *,
         candidate_query: EmailCandidateQuery,
         known_candidate_thread_ids: Iterable[str] = (),
-    ) -> None:
-        if self._filter_decision_repository is None:
-            return
-
+    ) -> int:
         metadata_messages = tuple(metadata)
         decisions = candidate_query.evaluate_metadata_batch(
             metadata_messages,
             known_candidate_thread_ids=known_candidate_thread_ids,
         )
-        decided_at = self._clock()
-        self._filter_decision_repository.upsert_filter_decisions(
-            EmailFilterDecisionRecord(
-                email_id=message.ref.message_id,
-                strategy=decision.strategy,
-                outcome=decision.outcome,
-                reason=decision.reason,
-                decided_at=decided_at,
+        if self._filter_decision_repository is not None:
+            decided_at = self._clock()
+            self._filter_decision_repository.upsert_filter_decisions(
+                EmailFilterDecisionRecord(
+                    email_id=message.ref.message_id,
+                    strategy=decision.strategy,
+                    outcome=decision.outcome,
+                    reason=decision.reason,
+                    decided_at=decided_at,
+                )
+                for message, decision in zip(metadata_messages, decisions, strict=True)
             )
-            for message, decision in zip(metadata_messages, decisions, strict=True)
+        return sum(
+            decision.outcome is EmailCandidateDecisionOutcome.CANDIDATE for decision in decisions
         )
 
 
@@ -1309,6 +1426,8 @@ def _sync_progress(
 ) -> float:
     if target_messages is None:
         return 1 if finished else 0
+    if target_messages == 0:
+        return 1
     return min(processed_messages / target_messages, 1)
 
 

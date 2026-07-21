@@ -85,6 +85,7 @@ class AppSettings(BaseSettings):
         "http://localhost:5173",
     )
     frontend_url: str = "http://127.0.0.1:5173"
+    api_public_url: str | None = None
     log_level: LogLevel = LogLevel.INFO
 
     data_dir: Path = Path("./.jobtracker")
@@ -104,7 +105,7 @@ class AppSettings(BaseSettings):
     gmail_scopes: CommaSeparatedTuple = (GMAIL_READONLY_SCOPE,)
     sync_on_open: bool = True
     sync_interval_seconds: int = Field(default=900, ge=1)
-    gmail_page_size: int = Field(default=500, ge=1)
+    gmail_page_size: int = Field(default=50, ge=1)
     backfill_batch_size: int = Field(default=1000, ge=1)
     retain_debug_email_bodies: bool = False
 

@@ -11,6 +11,7 @@ from app.config import EmailProviderName
 from app.providers.email import (
     EmailAccountRef,
     EmailConnection,
+    EmailMessageCountRequest,
     EmailMetadataListRequest,
     EmailProviderAuthError,
     EmailProviderCursor,
@@ -67,6 +68,7 @@ class FakeGmailTransport:
                     {"id": "msg-2", "threadId": "thread-2"},
                 ],
                 "nextPageToken": "next-page",
+                "resultSizeEstimate": 42,
             }
 
         if path == "/gmail/v1/users/me/messages/msg-1":
@@ -124,6 +126,7 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
     assert page.next_page_token is not None
     assert page.next_page_token != "next-page"
     assert page.next_sync_cursor is None
+    assert page.scope_size_estimate == 42
     assert [message.ref.message_id for message in page.messages] == ["msg-1", "msg-2"]
     assert page.messages[0].ref.thread_id == "thread-1"
     assert page.messages[0].from_addr is not None
@@ -151,7 +154,7 @@ def test_gmail_message_lister_pages_metadata_without_body_content() -> None:
     list_path, list_query, list_token = transport.calls[1]
     assert list_path == "/gmail/v1/users/me/messages"
     assert dict(list_query) == {
-        "fields": "messages(id,threadId),nextPageToken",
+        "fields": "messages(id,threadId),nextPageToken,resultSizeEstimate",
         "maxResults": "2",
     }
     assert list_token == "access-token"
@@ -188,6 +191,55 @@ def test_gmail_message_lister_applies_full_backfill_date_bounds() -> None:
 
     _list_path, list_query, _list_token = transport.calls[1]
     assert dict(list_query)["q"] == "after:2026/01/01 before:2026/07/01"
+
+
+def test_gmail_message_lister_counts_scoped_ids_without_fetching_metadata() -> None:
+    class CountingTransport(FakeGmailTransport):
+        async def get_json(
+            self,
+            path: str,
+            *,
+            query: tuple[tuple[str, str], ...],
+            access_token: SecretStr,
+        ) -> dict[str, object]:
+            self.calls.append((path, query, access_token.get_secret_value()))
+            query_values = dict(query)
+            assert path == "/gmail/v1/users/me/messages"
+            if "pageToken" not in query_values:
+                return {
+                    "messages": [{"id": "msg-1"}, {"id": "msg-2"}],
+                    "nextPageToken": "count-page-2",
+                    "resultSizeEstimate": 3,
+                }
+            return {
+                "messages": [{"id": "msg-3"}],
+                "resultSizeEstimate": 3,
+            }
+
+    transport = CountingTransport()
+    lister = GmailMessageLister(
+        secret_store=FakeSecretStore(SecretStr("access-token")),
+        transport=transport,
+    )
+
+    count = asyncio.run(
+        lister.count_messages(
+            _connection(),
+            EmailMessageCountRequest(
+                since_date=date(2026, 6, 1),
+                before_date=date(2026, 7, 1),
+            ),
+        )
+    )
+
+    assert count == 3
+    assert len(transport.calls) == 2
+    assert dict(transport.calls[0][1]) == {
+        "fields": "messages(id),nextPageToken,resultSizeEstimate",
+        "maxResults": "500",
+        "q": "after:2026/06/01 before:2026/07/01",
+    }
+    assert dict(transport.calls[1][1])["pageToken"] == "count-page-2"
 
 
 def test_gmail_message_lister_normalizes_metadata_fields() -> None:

@@ -21,6 +21,7 @@ from app.providers.email import (
     EmailBodySource,
     EmailConnection,
     EmailMessageBody,
+    EmailMessageCountRequest,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
@@ -36,6 +37,7 @@ from app.services.sync_service import (
     EmailSyncOptions,
     EmailSyncRunState,
     EmailSyncService,
+    EmailSyncStage,
     EmailSyncStatus,
     SyncScheduler,
     SyncService,
@@ -238,6 +240,22 @@ class PagingHistoryProvider:
         del connection
         self.requests.append(request)
         return self._pages.pop(0)
+
+
+class CountingPagingProvider(PagingHistoryProvider):
+    def __init__(self, pages: tuple[EmailMetadataPage, ...], count: int) -> None:
+        super().__init__(pages)
+        self.count = count
+        self.count_requests: list[EmailMessageCountRequest] = []
+
+    async def count_messages(
+        self,
+        connection: EmailConnection,
+        request: EmailMessageCountRequest,
+    ) -> int | None:
+        del connection
+        self.count_requests.append(request)
+        return self.count
 
 
 class FailingHistoryProvider:
@@ -675,7 +693,60 @@ def test_manual_sync_uses_incremental_mode_when_cursor_exists() -> None:
     assert stored_cursor.value == "history-next"
 
 
-def test_bounded_incremental_sync_resumes_next_provider_page() -> None:
+def test_windowed_sync_counts_scope_and_reports_live_progress_stages() -> None:
+    connection = sqlite3.connect(":memory:")
+    create_raw_emails_table(connection)
+    create_email_sync_state_table(connection)
+    mailbox = email_connection()
+    provider = CountingPagingProvider(
+        (
+            EmailMetadataPage(
+                messages=(
+                    metadata_message(mailbox, "gmail-msg-1"),
+                    metadata_message(mailbox, "gmail-msg-2"),
+                ),
+                next_sync_cursor=EmailProviderCursor(
+                    account=mailbox.account,
+                    value="history-window-complete",
+                    issued_at=NOW,
+                ),
+            ),
+        ),
+        count=2,
+    )
+    statuses: list[EmailSyncStatus] = []
+    service = EmailSyncService(
+        provider=provider,
+        page_size=100,
+        email_repository=EmailRepository(connection),
+        sync_service=SyncService(sync_state_repository=SyncStateRepository(connection)),
+        status_callback=statuses.append,
+        clock=lambda: NOW,
+    )
+
+    status = asyncio.run(
+        service.run_manual_sync(
+            connection=mailbox,
+            options=EmailSyncOptions(max_age_days=7),
+        )
+    )
+
+    assert provider.count_requests[0].since_date is not None
+    assert provider.requests[0].mode is EmailSyncMode.FULL_BACKFILL
+    assert [item.stage for item in statuses[:2]] == [
+        EmailSyncStage.COUNTING,
+        EmailSyncStage.RETRIEVING,
+    ]
+    assert statuses[1].target_message_count == 2
+    assert any(item.state is EmailSyncRunState.RUNNING and item.progress == 1 for item in statuses)
+    assert status.state is EmailSyncRunState.SUCCEEDED
+    assert status.stage is EmailSyncStage.FINALIZING
+    assert status.target_message_count == 2
+    assert status.message_count == 2
+    assert status.progress == 1
+
+
+def test_message_capped_sync_does_not_persist_window_continuation() -> None:
     connection = sqlite3.connect(":memory:")
     create_raw_emails_table(connection)
     create_email_sync_state_table(connection)
@@ -725,8 +796,8 @@ def test_bounded_incremental_sync_resumes_next_provider_page() -> None:
     pending_state = sync_state_repository.fetch_state(mailbox.account)
     assert pending_state is not None
     assert pending_state.sync_cursor == "history-current"
-    assert pending_state.in_progress_mode == "incremental"
-    assert pending_state.next_page_token == "page-2"
+    assert pending_state.in_progress_mode is None
+    assert pending_state.next_page_token is None
 
     second_status = asyncio.run(
         service.run_manual_sync(
@@ -736,7 +807,11 @@ def test_bounded_incremental_sync_resumes_next_provider_page() -> None:
     )
 
     assert second_status.message_count == 1
-    assert [request.page_token for request in provider.requests] == [None, "page-2"]
+    assert [request.mode for request in provider.requests] == [
+        EmailSyncMode.FULL_BACKFILL,
+        EmailSyncMode.FULL_BACKFILL,
+    ]
+    assert [request.page_token for request in provider.requests] == [None, None]
     assert email_repository.count_raw_emails(provider=EmailProviderName.GMAIL) == 2
     completed_state = sync_state_repository.fetch_state(mailbox.account)
     assert completed_state is not None

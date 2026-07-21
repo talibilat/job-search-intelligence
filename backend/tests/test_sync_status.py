@@ -11,6 +11,7 @@ def test_sync_status_endpoint_exposes_typed_idle_status() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["state"] == "idle"
+    assert payload["stage"] is None
     assert payload["provider"] is None
     assert payload["account_id"] is None
     assert payload["mode"] is None
@@ -19,6 +20,8 @@ def test_sync_status_endpoint_exposes_typed_idle_status() -> None:
     assert payload["page_count"] == 0
     assert payload["message_count"] == 0
     assert payload["raw_email_count"] == 0
+    assert payload["filtered_candidate_count"] == 0
+    assert payload["retained_body_count"] == 0
     assert payload["recovered_from_expired_cursor"] is False
     assert payload["last_error"] is None
 

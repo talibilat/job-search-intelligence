@@ -4095,20 +4095,41 @@ describe("App", () => {
     },
   );
 
-  it("redesign sync polls live progress before the sync request finishes", async () => {
+  it("redesign sync completes counting and shows live backend progress", async () => {
     vi.useFakeTimers();
     let resolveSyncRequest: (response: Response) => void = () => {
       throw new Error("Sync request was not started.");
     };
     const fallbackFetch = mockFetchResponses({
       "/sync/stats": { last_run_at: null, total_raw_emails: 47 },
-      "/sync/status": { message_count: 37, state: "running" },
     });
+    let statusCallCount = 0;
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       if (requestPath(input) === "/sync") {
         return new Promise<Response>((resolve) => {
           resolveSyncRequest = resolve;
         });
+      }
+      if (requestPath(input) === "/sync/status") {
+        statusCallCount += 1;
+        return Promise.resolve(new Response(JSON.stringify(statusCallCount === 1 ? {
+          message_count: 0,
+          progress: 0,
+          stage: "counting",
+          state: "running",
+          target_message_count: null,
+        } : {
+          filtered_candidate_count: 9,
+          message_count: 37,
+          progress: 0.37,
+          retained_body_count: 6,
+          stage: "retrieving",
+          state: "running",
+          target_message_count: 100,
+        }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }));
       }
       return fallbackFetch(input);
     });
@@ -4116,6 +4137,7 @@ describe("App", () => {
 
     renderAtPath("/");
     fireEvent.click(screen.getByRole("button", { name: "Sync ▾" }));
+    fireEvent.click(screen.getByRole("button", { name: /Last 7 days/ }));
     const menu = screen.getByText("What should I check?").parentElement;
     expect(menu).toBeTruthy();
     fireEvent.click(within(menu!).getByRole("button", { name: "Sync" }));
@@ -4124,10 +4146,22 @@ describe("App", () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
 
-    expect(screen.getByText("37 new for this run · 47 total emails synced")).toBeTruthy();
+    expect(screen.getByText(/Counting emails in scope/)).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    expect(screen.getByText("Found 100 emails in scope")).toBeTruthy();
+    expect(screen.getByText("37 of 100 emails retrieved · 9 candidates found.")).toBeTruthy();
+    expect(
+      screen.getByText("6 candidate bodies retained locally for classification."),
+    ).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("20");
     expect(
       fetchMock.mock.calls.filter(([input]) => requestPath(input) === "/sync/status"),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
 
     resolveSyncRequest(
       new Response(JSON.stringify({ last_error: "Test run stopped.", state: "failed" }), {

@@ -2491,6 +2491,15 @@
         "title": "EmailSyncRunState",
         "type": "string"
       },
+      "EmailSyncStage": {
+        "enum": [
+          "counting",
+          "retrieving",
+          "finalizing"
+        ],
+        "title": "EmailSyncStage",
+        "type": "string"
+      },
       "EmailSyncStatus": {
         "description": "Current or last manual sync run status exposed at the API boundary.",
         "properties": {
@@ -2504,6 +2513,12 @@
               }
             ],
             "title": "Account Id"
+          },
+          "filtered_candidate_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Filtered Candidate Count",
+            "type": "integer"
           },
           "finished_at": {
             "anyOf": [
@@ -2578,11 +2593,27 @@
             "title": "Recovered From Expired Cursor",
             "type": "boolean"
           },
+          "retained_body_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Retained Body Count",
+            "type": "integer"
+          },
           "retained_body_failure_count": {
             "default": 0,
             "minimum": 0.0,
             "title": "Retained Body Failure Count",
             "type": "integer"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailSyncStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "started_at": {
             "anyOf": [
@@ -2602,7 +2633,7 @@
           "target_message_count": {
             "anyOf": [
               {
-                "minimum": 1.0,
+                "minimum": 0.0,
                 "type": "integer"
               },
               {

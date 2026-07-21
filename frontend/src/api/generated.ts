@@ -876,11 +876,22 @@ export const EmailSyncRunState = {
   failed: "failed",
 } as const;
 
+export type EmailSyncStage =
+  (typeof EmailSyncStage)[keyof typeof EmailSyncStage];
+
+export const EmailSyncStage = {
+  counting: "counting",
+  retrieving: "retrieving",
+  finalizing: "finalizing",
+} as const;
+
 /**
  * Current or last manual sync run status exposed at the API boundary.
  */
 export interface EmailSyncStatus {
   account_id?: string | null;
+  /** @minimum 0 */
+  filtered_candidate_count?: number;
   finished_at?: string | null;
   last_error?: string | null;
   /** @minimum 0 */
@@ -898,7 +909,10 @@ export interface EmailSyncStatus {
   raw_email_count?: number;
   recovered_from_expired_cursor?: boolean;
   /** @minimum 0 */
+  retained_body_count?: number;
+  /** @minimum 0 */
   retained_body_failure_count?: number;
+  stage?: EmailSyncStage | null;
   started_at?: string | null;
   state: EmailSyncRunState;
   target_message_count?: number | null;

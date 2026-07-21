@@ -18,6 +18,7 @@ from app.providers.email import (
     EmailBodySource,
     EmailConnection,
     EmailMessageBody,
+    EmailMessageCountRequest,
     EmailMessageMetadata,
     EmailMessageRef,
     EmailMetadataListRequest,
@@ -99,6 +100,7 @@ class FakeEmailProvider:
             message_id="msg-1",
             thread_id="thread-1",
         )
+
         return EmailMetadataPage(
             messages=(
                 EmailMessageMetadata(
@@ -122,6 +124,14 @@ class FakeEmailProvider:
                 issued_at=NOW,
             ),
         )
+
+    async def count_messages(
+        self,
+        connection: EmailConnection,
+        request: EmailMessageCountRequest,
+    ) -> int | None:
+        del connection, request
+        return 1
 
     async def fetch_message_bodies(
         self,
